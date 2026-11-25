@@ -802,11 +802,19 @@ static void BootAsmReport(const CDrv &dvd, CTask &task)
   BootFileProgramReport(dvd, "/AsmHelloWorld.HC");
   BootFileProgramReport(dvd, "/MulByHand.HC");
   BootFileProgramReport(dvd, "/PutDec.HC");
+  BootFileProgramReport(dvd, "/AsmAndC3.HC");
+  BootFileProgramReport(dvd, "/InlineAsmProbe.HC");
   auto rejected = ExePutS("asm { _ASM_REJECTED:: LOOP @@0 }", nullptr, 0);
-  if (!rejected.okay &&
-      !HashFind("_ASM_REJECTED", task.hash_table, HTT_EXPORT_SYS_SYM))
+  auto inline_rejected = ExePutS(
+      "U0 InlineAsmRejected() { asm { _INLINE_ASM_REJECTED:: LOOP @@0 } }",
+      nullptr, 0);
+  if (!rejected.okay && !inline_rejected.okay &&
+      !HashFind("_ASM_REJECTED", task.hash_table, HTT_EXPORT_SYS_SYM) &&
+      !HashFind("_INLINE_ASM_REJECTED", task.hash_table, HTT_EXPORT_SYS_SYM) &&
+      !HashFind("InlineAsmRejected", task.hash_table, HTT_FUN))
     SerialPutS("UnholyOS: asm rejected unresolved local\r\n");
-  const char *paths[]{"/AsmProbe.BIN.Z", "/DivByHand.BIN.Z"};
+  const char *paths[]{"/AsmProbe.BIN.Z", "/DivByHand.BIN.Z",
+                      "/InlineAsmProbe.BIN.Z"};
   for (const char *path : paths) {
     SerialPutS("UnholyOS: executing ");
     SerialPutS(path);

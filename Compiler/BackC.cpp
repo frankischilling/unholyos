@@ -41,6 +41,14 @@ public:
     Immediate(0, name ? 8 : 4);
   }
 
+  bool Asm(CAsm &as)
+  {
+    if (buf && !AsmEmit(as, buf, size))
+      return false;
+    size += AsmLayout(as, size);
+    return true;
+  }
+
   bool AOT() const { return aot != nullptr; }
   bool failed = false;
 
@@ -559,6 +567,10 @@ static bool EmitBody(CCodeOut &out, CCodeCtrl &coc, CRawType type,
   for (auto i = coc.first; i != NO_IC; i = code[i].next) {
     auto &node = code[i];
     switch (node.code) {
+    case IC_ASM:
+      if (!out.Asm(*reinterpret_cast<CAsm *>(node.data)))
+        return false;
+      break;
     case IC_LABEL:
       node.data = out.size;
       break;
@@ -637,7 +649,8 @@ uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
   if (!result)
     return nullptr;
   CCodeOut out(result, aot);
-  if (!EmitFunction(out, coc, root, type, fun) || out.failed) {
+  if (!EmitFunction(out, coc, root, type, fun) || out.failed ||
+      (coc.asm_first && !AsmPublish(*coc.asm_first, result))) {
     Free(result);
     return nullptr;
   }

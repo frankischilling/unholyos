@@ -205,8 +205,23 @@ narrow register operands. PutDec prints `122333221` through the raw
 text entry point and uses the original `PUSH_C_REGS` and `POP_C_REGS`
 macro expansions.
 
-Assembly inside HolyC functions, full opcode and operand coverage,
-and the remaining directives are pending.
+Inside functions, the compiler emits both `asm { }` blocks and
+assembly instructions written directly in the function body. The
+byte-for-byte copy of Terry A. Davis's `Demo/Asm/AsmAndC3.HC` printed
+`Meaning of life:42` three times in both guests with QEMU 9.2.0, PC,
+`qemu64`, and 512 MiB. The demo uses carry arithmetic, a kernel
+register-call routine, and the compile-time value of
+`cnts.time_stamp_freq`.
+
+The startup suite also runs `InlineAsmProbe.HC` directly and after
+guest-side `Cmp` and `Load`. It checks a branch across assembly blocks,
+frame-relative argument and local addresses, an imported routine, and a
+counter field read from the loaded module. The suite also checks that
+an unresolved inline label leaves no published function or assembly
+symbol. It saves `InlineAsmProbe.BIN.Z` under `BUILD`.
+
+Full opcode, operand, and directive coverage and branches between
+assembly and HolyC `goto` labels are pending.
 
 ## RedSea descriptor verification
 

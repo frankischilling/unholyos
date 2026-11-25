@@ -66,6 +66,11 @@ adapter implement the reference's `UndefinedExtern` path.
 references there. The pinned compiler splits that work into
 `AOTLocalsResolve` and `AOTGlblsResolve` in `Compiler/AsmResolve.HC`.
 JIT assembly publishes its labels after resolving the block.
+For assembly inside a function, `Compiler/PrsStmt.cpp` records
+`IC_ASM` as in `PrsStmt` in `Compiler/PrsStmt.HC`. The assembler
+retains the references until `Compiler/BackC.cpp` assigns code
+offsets, following the `IC_ASM` case in `Compiler/OptPass789A.HC`.
+The statement compiler and assembler share the function's frame offsets.
 `Compiler/CMain.cpp` emits TOSB exports at assembly label offsets,
 `IET_REL_I32` and `IET_IMM_I64` for named imports, and
 `IET_ABS_ADDR` for image-base fixups.
@@ -79,6 +84,10 @@ early for a negative width to keep its 17-byte buffer in bounds.
 `Compiler/AsmInit.cpp` installs the `PUSH_C_REGS` and `POP_C_REGS`
 definitions from `Kernel/KernelA.HH` in the compiler's bootstrap hash.
 The source lexer expands them through the same path as `#define`.
+The compiler also registers the 65-byte `CCntsGlbls` guest class
+from `Kernel/KernelA.HH`. Its typed `cnts` symbol aliases the
+kernel storage defined in `Kernel/KGlbls.cpp` and uses the export
+from `Kernel/KLoad.cpp` when linked in a TOSB module.
 
 ## Remaining structural work
 
