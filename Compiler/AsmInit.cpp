@@ -255,6 +255,30 @@ static CHashClass *FindType(const char *name, CHashTable *table)
   return reinterpret_cast<CHashClass *>(HashFind(name, table, type_mask));
 }
 
+static bool CmpKernelGlobal(CHashTable *table, const char *name, CHashClass *cls,
+                            void *addr)
+{
+  auto *heap = CurrentTask()->data_heap;
+  auto *var =
+      reinterpret_cast<CHashGlblVar *>(CAlloc(sizeof(CHashGlblVar), heap));
+  if (!var)
+    return false;
+  var->sym.hash.type = HTT_GLBL_VAR | HTF_PUBLIC;
+  var->sym.hash.str = StrNew(name, heap);
+  var->sym.import_name = StrNew(name, heap);
+  if (!var->sym.hash.str || !var->sym.import_name) {
+    HashDel(&var->sym.hash);
+    return false;
+  }
+  var->size = cls->size;
+  var->flags = GVF_IMPORT | GVF_ALIAS;
+  var->var_class = cls;
+  var->dim.cnt = var->dim.total_cnt = 1;
+  var->data_addr = reinterpret_cast<uint8_t *>(addr);
+  HashAdd(&var->sym.hash, table);
+  return true;
+}
+
 static bool CmpRuntimeData(CHashTable *table)
 {
   auto *heap = CurrentTask()->data_heap;
@@ -293,24 +317,7 @@ static bool CmpRuntimeData(CHashTable *table)
     }
   }
 
-  auto *var =
-      reinterpret_cast<CHashGlblVar *>(CAlloc(sizeof(CHashGlblVar), heap));
-  if (!var)
-    return false;
-  var->sym.hash.type = HTT_GLBL_VAR | HTF_PUBLIC;
-  var->sym.hash.str = StrNew("cnts", heap);
-  var->sym.import_name = StrNew("cnts", heap);
-  if (!var->sym.hash.str || !var->sym.import_name) {
-    HashDel(&var->sym.hash);
-    return false;
-  }
-  var->size = cls->size;
-  var->flags = GVF_IMPORT | GVF_ALIAS;
-  var->var_class = cls;
-  var->dim.cnt = var->dim.total_cnt = 1;
-  var->data_addr = reinterpret_cast<uint8_t *>(&cnts);
-  HashAdd(&var->sym.hash, table);
-  return true;
+  return CmpKernelGlobal(table, "cnts", cls, &cnts);
 }
 
 static CHashClass *CmpKernelClass(CHashTable *table, const char *name, size_t size)
@@ -399,6 +406,10 @@ static bool CmpTaskData(CHashTable *table)
       {"addr", cls + 1, offsetof(CTask, addr)},
       {"task_signature", u32, offsetof(CTask, task_signature)},
       {"win_inhibit", u32, offsetof(CTask, win_inhibit)},
+      {"pix_left", i64, offsetof(CTask, pix_left)},
+      {"pix_top", i64, offsetof(CTask, pix_top)},
+      {"scroll_x", i64, offsetof(CTask, scroll_x)},
+      {"scroll_y", i64, offsetof(CTask, scroll_y)},
       {"wake_jiffy", i64, offsetof(CTask, wake_jiffy)},
       {"task_flags", u32, offsetof(CTask, task_flags)},
       {"display_flags", u32, offsetof(CTask, display_flags)},
@@ -450,24 +461,87 @@ static bool CmpKbdData(CHashTable *table)
       return false;
     }
   }
-  auto *var =
-      reinterpret_cast<CHashGlblVar *>(CAlloc(sizeof(CHashGlblVar), heap));
-  if (!var)
+  return CmpKernelGlobal(table, "kbd", cls, &kbd);
+}
+
+static bool CmpMouseData(CHashTable *table)
+{
+  auto *i_pt = CmpKernelClass(table, "CD3I64", sizeof(CD3I64));
+  auto *f_pt = CmpKernelClass(table, "CD3", sizeof(CD3));
+  auto *state = CmpKernelClass(table, "CMsStateGlbls", sizeof(CMsStateGlbls));
+  auto *hard = CmpKernelClass(table, "CMsHardStateGlbls", sizeof(CMsHardStateGlbls));
+  auto *grid = CmpKernelClass(table, "CGridGlbls", sizeof(CGridGlbls));
+  if (!i_pt || !f_pt || !state || !hard || !grid)
     return false;
-  var->sym.hash.type = HTT_GLBL_VAR | HTF_PUBLIC;
-  var->sym.hash.str = StrNew("kbd", heap);
-  var->sym.import_name = StrNew("kbd", heap);
-  if (!var->sym.hash.str || !var->sym.import_name) {
-    HashDel(&var->sym.hash);
-    return false;
+  auto *heap = CurrentTask()->data_heap;
+  auto *i64 = FindType("I64", table);
+  auto *f64 = FindType("F64", table);
+  auto *boolean = FindType("Bool", table);
+  const struct {
+    const char *name;
+    CHashClass *record, *type;
+    size_t offset;
+  } members[]{
+      {"x", i_pt, i64, offsetof(CD3I64, x)},
+      {"y", i_pt, i64, offsetof(CD3I64, y)},
+      {"z", i_pt, i64, offsetof(CD3I64, z)},
+      {"x", f_pt, f64, offsetof(CD3, x)},
+      {"y", f_pt, f64, offsetof(CD3, y)},
+      {"z", f_pt, f64, offsetof(CD3, z)},
+      {"pos", state, i_pt, offsetof(CMsStateGlbls, pos)},
+      {"pos_text", state, i_pt, offsetof(CMsStateGlbls, pos_text)},
+      {"presnap", state, i_pt, offsetof(CMsStateGlbls, presnap)},
+      {"offset", state, i_pt, offsetof(CMsStateGlbls, offset)},
+      {"scale", state, f_pt, offsetof(CMsStateGlbls, scale)},
+      {"speed", state, f64, offsetof(CMsStateGlbls, speed)},
+      {"dbl_time", state, f64, offsetof(CMsStateGlbls, dbl_time)},
+      {"left_dbl_time", state, f64, offsetof(CMsStateGlbls, left_dbl_time)},
+      {"right_dbl_time", state, f64, offsetof(CMsStateGlbls, right_dbl_time)},
+      {"timestamp", state, i64, offsetof(CMsStateGlbls, timestamp)},
+      {"lb", state, boolean, offsetof(CMsStateGlbls, lb)},
+      {"rb", state, boolean, offsetof(CMsStateGlbls, rb)},
+      {"show", state, boolean, offsetof(CMsStateGlbls, show)},
+      {"has_wheel", state, boolean, offsetof(CMsStateGlbls, has_wheel)},
+      {"left_dbl", state, boolean, offsetof(CMsStateGlbls, left_dbl)},
+      {"right_dbl", state, boolean, offsetof(CMsStateGlbls, right_dbl)},
+      {"left_down_sent", state, boolean, offsetof(CMsStateGlbls, left_down_sent)},
+      {"right_down_sent", state, boolean, offsetof(CMsStateGlbls, right_down_sent)},
+      {"pos", hard, i_pt, offsetof(CMsHardStateGlbls, pos)},
+      {"prescale", hard, i_pt, offsetof(CMsHardStateGlbls, prescale)},
+      {"scale", hard, f_pt, offsetof(CMsHardStateGlbls, scale)},
+      {"speed", hard, f64, offsetof(CMsHardStateGlbls, speed)},
+      {"timestamp", hard, i64, offsetof(CMsHardStateGlbls, timestamp)},
+      {"install_attempts", hard, i64, offsetof(CMsHardStateGlbls, install_attempts)},
+      {"pkt_size", hard, i64, offsetof(CMsHardStateGlbls, pkt_size)},
+      {"has_wheel", hard, boolean, offsetof(CMsHardStateGlbls, has_wheel)},
+      {"has_ext_bttns", hard, boolean, offsetof(CMsHardStateGlbls, has_ext_bttns)},
+      {"evt", hard, boolean, offsetof(CMsHardStateGlbls, evt)},
+      {"installed", hard, boolean, offsetof(CMsHardStateGlbls, installed)},
+      {"install_in_progress", hard, boolean, offsetof(CMsHardStateGlbls, install_in_progress)},
+      {"irqs_working", hard, boolean, offsetof(CMsHardStateGlbls, irqs_working)},
+      {"snap", grid, boolean, offsetof(CGridGlbls, snap)},
+      {"show", grid, boolean, offsetof(CGridGlbls, show)},
+      {"coord", grid, boolean, offsetof(CGridGlbls, coord)},
+      {"x", grid, f64, offsetof(CGridGlbls, x)},
+      {"y", grid, f64, offsetof(CGridGlbls, y)},
+      {"z", grid, f64, offsetof(CGridGlbls, z)},
+      {"x_offset", grid, f64, offsetof(CGridGlbls, x_offset)},
+      {"y_offset", grid, f64, offsetof(CGridGlbls, y_offset)},
+      {"z_offset", grid, f64, offsetof(CGridGlbls, z_offset)},
+      {"x_speed", grid, f64, offsetof(CGridGlbls, x_speed)},
+      {"y_speed", grid, f64, offsetof(CGridGlbls, y_speed)},
+      {"z_speed", grid, f64, offsetof(CGridGlbls, z_speed)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    if (!name || !MemberAdd(*member.record, name, *member.type, member.offset)) {
+      Free(name);
+      return false;
+    }
   }
-  var->size = cls->size;
-  var->flags = GVF_IMPORT | GVF_ALIAS;
-  var->var_class = cls;
-  var->dim.cnt = var->dim.total_cnt = 1;
-  var->data_addr = reinterpret_cast<uint8_t *>(&kbd);
-  HashAdd(&var->sym.hash, table);
-  return true;
+  return CmpKernelGlobal(table, "ms", state, &ms) &&
+         CmpKernelGlobal(table, "ms_hard", hard, &ms_hard) &&
+         CmpKernelGlobal(table, "ms_grid", grid, &ms_grid);
 }
 
 static bool CmpRuntimeHeaders(CHashTable *table)
@@ -539,6 +613,11 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Char2ScanCode", I64, FF_RET1, {{"ch", I64}, {"sc_flags", I64, true}}},
       {"ScanCode2Char", U8, FF_RET1, {{"sc", I64}}},
       {"KbdTypeMatic", U0, FF_RET1, {{"delay", U8}}},
+      {"GridInit", U0, FF_RET1, {}},
+      {"MsSet", U0, FF_RET1,
+       {{"x", I64, true, INT64_MAX}, {"y", I64, true, INT64_MAX},
+        {"z", I64, true, INT64_MAX}, {"l", I64, true, INT64_MAX},
+        {"r", I64, true, INT64_MAX}}},
       {"PutKey", U0, FF_RET1, {{"ch", I64, true}, {"sc", I64, true}}},
       {"ScanChar", I64, FF_RET1, {}},
       {"ScanKey", Bool, FF_RET1,
@@ -782,6 +861,10 @@ static bool CmpFillHash(CHashTable *table)
       {"CH_SHIFT_ESC", "0x1C"},
       {"WIF_SELF_MS_L", "0x0008"},
       {"WIF_SELF_MS_R", "0x0020"},
+      {"WIF_FOCUS_TASK_MS_L_D", "0x100000"},
+      {"WIF_FOCUS_TASK_MS_R_D", "0x400000"},
+      {"SCF_MS_L_DOWN", "(1<<16)"},
+      {"SCF_MS_R_DOWN", "(1<<17)"},
       {"WIG_USER_TASK_DFT", "0x1000"},
       {"SCF_E0_PREFIX", "(1<<7)"},
       {"SCF_KEY_UP", "(1<<8)"},
@@ -842,7 +925,7 @@ static bool CmpFillHash(CHashTable *table)
     HashAdd(&entry->sym.hash,table);
   }
   return CmpRuntimeData(table) && CmpTaskData(table) && CmpKbdData(table) &&
-         CmpRuntimeHeaders(table);
+         CmpMouseData(table) && CmpRuntimeHeaders(table);
 }
 
 CHashTable *CmpAsmHashNew()

@@ -53,13 +53,35 @@ extern "C" uint64_t TaskValidateCpp(CTask *task);
 extern "C" uint64_t SuspendCpp(CTask *task, uint8_t state);
 extern "C" CJob *TaskMsgCpp(CTask *srv, CTask *master, int64_t code,
                            int64_t arg1, int64_t arg2, int64_t flags);
-extern "C" void KbdService();
+extern "C" void KbdMsService();
 void KbdPoll();
 bool KbdInit();
+bool KbdCmdSend(uint16_t port, uint8_t value);
+bool KbdCmdRead(uint8_t &value, bool auxiliary = false);
+void Ps2PktRead();
+void MsHardStageByte(uint8_t raw_byte);
+bool MsHardDrvrInstall();
+void MsInit();
+void MsHardHndlr();
+void WinMsUpdate();
+int64_t WinQueIPMsgs(bool que);
+extern "C" void GridInitCpp();
+extern "C" void MsSetCpp(int64_t x, int64_t y, int64_t z, int64_t l, int64_t r);
+void MsUpdate(int64_t x, int64_t y, int64_t z, bool l, bool r);
+extern "C" uint64_t tSCpp();
+extern "C" uint64_t F64FromI64(int64_t value);
+extern "C" int64_t F64ToI64(uint64_t value, uint16_t rounding);
+extern "C" uint64_t F64MulBits(uint64_t a, uint64_t b);
+extern "C" uint64_t F64DivBits(uint64_t a, uint64_t b);
+extern "C" uint64_t F64AddBits(uint64_t a, uint64_t b);
+extern "C" uint64_t F64SqrtBits(uint64_t value);
 void IntEntrySet(unsigned irq, void (*handler)(), uint16_t type = 0xE,
                  uint16_t dpl = 0);
 uint64_t GetTSC();
 extern CKbdStateGlbls kbd;
+extern CMsHardStateGlbls ms_hard, ms_hard_last;
+extern CMsStateGlbls ms, ms_last, old_ms;
+extern CGridGlbls ms_grid;
 extern "C" void PutKeyCpp(int64_t ch, int64_t sc);
 void JobCtrlInit(CJobCtrl *ctrl);
 void JobQueDel(CJob *head);
@@ -104,6 +126,30 @@ extern "C" uint64_t IsDbgModeCpp();
 void VGAFlush();
 extern "C" void PutS(const char *text);
 void PutTaskS(CTask &task, const char *text);
+
+template <typename T> inline int64_t FifoCnt(const CFifo<T> &f)
+{
+  return (f.in_ptr - f.out_ptr) & f.mask;
+}
+
+template <typename T> inline bool FifoIns(CFifo<T> &f, T value)
+{
+  auto next = (f.in_ptr + 1) & f.mask;
+  if (next == f.out_ptr)
+    return false;
+  f.buf[f.in_ptr] = value;
+  f.in_ptr = next;
+  return true;
+}
+
+template <typename T> inline bool FifoRem(CFifo<T> &f, T &value)
+{
+  if (f.in_ptr == f.out_ptr)
+    return false;
+  value = f.buf[f.out_ptr];
+  f.out_ptr = (f.out_ptr + 1) & f.mask;
+  return true;
+}
 
 template <typename T> void QueInit(T *&next, T *&last)
 {

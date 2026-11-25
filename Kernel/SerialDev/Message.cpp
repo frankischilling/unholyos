@@ -37,7 +37,7 @@ extern "C" int64_t ScanMsgCpp(int64_t *arg1, int64_t *arg2, uint64_t mask,
 {
   if (!task)
     task = CurrentTask();
-  KbdService();
+  KbdMsService();
   auto old_flags = GetRFlags();
   while (TaskValidateCpp(task)) {
     auto *head = reinterpret_cast<CJob *>(&task->srv_ctrl.next_waiting);
@@ -142,7 +142,7 @@ extern "C" int64_t GetKeyCpp(int64_t *scan_code, uint8_t echo, uint8_t raw_curso
     } else {
       auto flags = GetRFlags();
       asm volatile("cli" : : : "memory");
-      KbdService();
+      KbdMsService();
       if (head->next == head)
         __atomic_fetch_or(&task->task_flags, TASKF_AWAITING_MSG, __ATOMIC_RELAXED);
       _YIELD();
