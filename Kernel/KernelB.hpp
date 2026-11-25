@@ -190,13 +190,18 @@ bool RedSeaFileRead(const CDrv &dv, const CRedSeaDirEntry &entry, uint64_t pos,
 bool RedSeaFileLookup(const CDrv &dv, const char *path, bool alternate,
                       bool scan_parents, CRedSeaDirEntry &entry,
                       size_t &prefix);
+bool RedSeaDirClus(const CDrv &dv, const char *path, size_t count,
+                   uint64_t &dir);
 bool RedSeaIsDir(const CDrv &dv, const char *path);
+uint64_t RedSeaAllocClus(const CDrv &dv, uint64_t blocks);
 CDrv *PathDrive(const CTask &task, char letter);
 uint64_t RedSeaFileWrite(CDrv &dv, const char *path, const uint8_t *data,
                          size_t size, uint64_t date, uint16_t attr);
 char *FileNameAbs(const char *name, const CTask &task, uint64_t flags = 0);
 extern "C" char *ExtDftCpp(const char *name, const char *ext);
+const char *FileExtDot(const char *name);
 bool IsDotExt(const char *name, char ext);
+int64_t DirEntryCompareName(const CRedSeaDirEntry &a, const CRedSeaDirEntry &b);
 char *ToggleZorNotZ(const char *name, CHeapCtrl *hc);
 void ResidentDriveClear(char letter);
 uint8_t *FileRead(const CDrv &dv, const char *path, size_t &size,

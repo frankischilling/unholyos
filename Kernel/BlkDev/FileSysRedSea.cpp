@@ -162,7 +162,7 @@ static void RedSeaMark(const CDrv &dv, uint64_t cluster, uint64_t blocks,
   }
 }
 
-static uint64_t RedSeaAllocClus(const CDrv &dv, uint64_t blocks)
+uint64_t RedSeaAllocClus(const CDrv &dv, uint64_t blocks)
 {
   uint64_t end = dv.drv_offset + dv.size;
   uint64_t best = INVALID_CLUS, best_size = UINT64_MAX;

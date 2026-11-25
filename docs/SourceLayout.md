@@ -18,7 +18,7 @@ Preserve the spelling and case of the reference directories and basenames. Use `
 | `Compiler/*.HC` | Corresponding `.cpp` files under `Compiler/` | HolyC scanning, parsing, code generation, and execution as implemented |
 | `Adam/DolDoc/*.HC` | Corresponding `.cpp` files under `Adam/DolDoc/` | Native document records and operations as implemented |
 | `Adam/Opt/Boot/BootDVD.HC` | `Adam/Opt/Boot/BootDVD.asm` | DVD boot loader |
-| `Adam/Opt/Boot/DskISORedSea.HC` | `Adam/Opt/Boot/DskISORedSea.cpp` | RedSea ISO construction on the host |
+| `Adam/Opt/Boot/DskISORedSea.HC` | `Adam/Opt/Boot/DskISORedSea.cpp`, `DskISORedSea.asm` | RedSea ISO construction and the guest's stage-one image |
 
 Use `Kernel`, including its capital K, in the filesystem, include paths, and build definitions. An existing Windows checkout can retain an older lowercase directory name even when Git tracks the correct case. Check actual directory names when preparing a Linux build.
 
@@ -34,7 +34,7 @@ The reference uses two-space blocks, opening function and class braces on the ne
 
 ## ISO records
 
-The ISO writer maps to `Adam/Opt/Boot/DskISORedSea.HC`. Its reference symbols include `FillU16Palindrome`, `FillU32Palindrome`, `CElTorito`, `RedSeaISO9660Stage1`, and `RedSeaISO9660`; the shared descriptor records come from `Kernel/KernelA.HH`. Preserve those record layouts and helper responsibilities in the host implementation.
+The ISO writer maps to `Adam/Opt/Boot/DskISORedSea.HC`. Its reference symbols include `FillU16Palindrome`, `FillU32Palindrome`, `CElTorito`, `RedSeaISO9660Stage1`, and `RedSeaISO9660`; the shared descriptor records come from `Kernel/KernelA.HH`. The host tool in `Linux/MakeISO.cpp` and the guest use the same descriptor and loader patch functions.
 
 The `PRS1B_CLASS` case in `Compiler/PrsVar.HC` assigns consecutive member offsets without inserting alignment padding. As a result, `CISODirEntry` occupies 34 bytes and `CISOPriDesc` occupies 2,044 bytes. Its `root_dir_record` starts at byte 152, `publisher_id` at byte 314, and `file_structure_version` at byte 877. C++ representations need packed fields and assertions for these sizes and offsets.
 
@@ -44,6 +44,12 @@ The `PRS1B_CLASS` case in `Compiler/PrsVar.HC` assigns consecutive member offset
 
 `Kernel/KMain.cpp` contains guest verification routines for boot records, file access, compiler behavior, and runtime modules. The reference `Kernel/KMain.HC` concentrates on initialization and startup. Those probes remain a structural difference and should move into a separate verification component as the runtime startup path develops.
 
-The ISO writer is a C++ host implementation of the boot-media subset. It packages the kernel and selected fixture files. The reference's full tree-copying workflow, including `CopyTree`, remains pending.
+The guest's `RedSeaISO` follows the sizing and directory-copy steps from
+`Adam/Opt/Boot/DskISORedSea.HC` and `Adam/ABlkDev/ADskA.HC`. The current
+`CopyTree2` works on the ISO's private RedSea RAM volume. The reference
+uses `BDT_ISO_FILE_WRITE` and the general `CopyTree` path. UnholyOS
+reserves a spare DVD sector when a stage-two file is supplied because the
+shifted read can extend beyond that file's last RedSea block. The loader
+is the NASM `BootDVD.BIN` embedded by `DskISORedSea.asm`.
 
 The native compiler, runtime, desktop, and device subsystems remain incomplete. Source correspondence is a review aid. [Boot.md](Boot.md) records the implemented scope and runtime comparisons; new changes need their own validation before those claims expand.

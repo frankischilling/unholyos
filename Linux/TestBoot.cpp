@@ -8,6 +8,7 @@
 #include <csignal>
 #include <fcntl.h>
 #include <iostream>
+#include <map>
 #include <poll.h>
 #include <regex>
 #include <sstream>
@@ -76,7 +77,8 @@ static CBootMedia VerifyMedia(const fs::path &iso, const fs::path &kernel_path)
   uint16_t sum = 0;
   for (size_t i = 0; i < 32; i += 2)
     sum += ReadLE(disc, catalog + i, 2);
-  Check(!sum && ReadLE(disc, catalog + 30, 2) == 0xAA55,
+  Check(!sum && HasBytes(disc, catalog + 4, "TempleOS\0"sv) &&
+            ReadLE(disc, catalog + 30, 2) == 0xAA55,
         "Invalid El Torito catalog checksum");
   Check(ReadLE(disc, catalog + 32, 8) == 0x0004000000000088 &&
             ReadLE(disc, catalog + 40, 4) == 21,
@@ -142,10 +144,10 @@ static CBootMedia VerifyMedia(const fs::path &iso, const fs::path &kernel_path)
   off += loader + marker.size();
   uint64_t lba = ReadLE(disc, off, 4), sectors = ReadLE(disc, off + 4, 2),
            shift = ReadLE(disc, off + 6, 2);
-  Check(lba == start / 4 && shift == start % 4 && shift &&
-            sectors == CeilDiv(size, dvd) + 1 &&
+  Check(lba == start / 4 && shift == start % 4 &&
+            sectors == CeilDiv(size, dvd) + (shift != 0) &&
             lba + sectors <= disc.size() / dvd,
-        "Invalid shifted DVD extent");
+        "Invalid DVD extent");
   uint64_t hash = 14695981039346656037ULL;
   for (uint8_t byte : kernel)
     hash = (hash ^ byte) * 1099511628211ULL;
@@ -929,6 +931,160 @@ static void VerifyVGA(const fs::path &path)
         "The VGA screenshot is blank or incomplete");
 }
 
+static fs::path CaptureGuestISO(CMonitor &vm, const fs::path &dir,
+                                 const std::string &output, const char *name)
+{
+  auto prefix = std::string("UnholyOS: guest ISO /") + name + ", address ";
+  size_t address = output.find(prefix);
+  Check(address != std::string::npos, "Guest ISO file was not created");
+  address += prefix.size();
+  size_t size_pos = output.find(", size ", address);
+  Check(size_pos != std::string::npos, "Missing guest ISO extent");
+  auto addr = std::stoull(output.substr(address, size_pos - address), nullptr, 16);
+  auto size = std::stoull(output.substr(size_pos + 7), nullptr, 16);
+  auto image = dir / name;
+  vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+             std::to_string(addr) + R"(,"size":)" + std::to_string(size) +
+             R"(,"filename":")" + image.string() + R"("}})");
+  Check(fs::file_size(image) == size, "QEMU saved an incomplete ISO");
+  return image;
+}
+
+static std::string_view RedSeaName(const Bytes &image, size_t entry)
+{
+  const char *name = reinterpret_cast<const char *>(image.data() + entry + 2);
+  auto *end = std::find(name, name + 38, '\0');
+  Check(end != name + 38, "RedSea filename is unterminated");
+  return {name, static_cast<size_t>(end - name)};
+}
+
+static size_t RedSeaDirectory(const Bytes &image, uint64_t cluster)
+{
+  Check(cluster < image.size() / 512, "RedSea directory starts outside the image");
+  size_t pos = cluster * 512;
+  size_t bytes = ReadLE(image, pos + 48, 8);
+  Check(bytes >= 512 && bytes % 512 == 0 && bytes <= image.size() - pos,
+        "RedSea directory extends outside the image");
+  return pos + bytes;
+}
+
+static void VerifyCopiedTree(const Bytes &source, uint64_t src_root,
+                             const Bytes &copy, uint64_t dst_root)
+{
+  auto src_end = RedSeaDirectory(source, src_root);
+  auto dst_end = RedSeaDirectory(copy, dst_root);
+  std::map<std::string_view, size_t> entries;
+  for (size_t src = src_root * 512 + 128; src < src_end; src += 64) {
+    auto name = RedSeaName(source, src);
+    if (name.empty())
+      break;
+    Check(entries.emplace(name, src).second, "Source ISO has duplicate names");
+  }
+  for (size_t dst = dst_root * 512 + 128; dst < dst_end; dst += 64) {
+    auto name = RedSeaName(copy, dst);
+    if (name.empty())
+      break;
+    auto entry = entries.find(name);
+    Check(entry != entries.end(), "Guest ISO added a directory entry");
+    size_t src = entry->second;
+    entries.erase(entry);
+    auto attr = ReadLE(source, src, 2);
+    Check(attr == ReadLE(copy, dst, 2), "Guest ISO changed file attributes");
+    auto from = ReadLE(source, src + 40, 8), to = ReadLE(copy, dst + 40, 8);
+    if (attr & 0x10) {
+      VerifyCopiedTree(source, from, copy, to);
+    } else {
+      Check(ReadLE(source, src + 56, 8) == ReadLE(copy, dst + 56, 8),
+            "Guest ISO changed file date");
+      auto size = ReadLE(source, src + 48, 8);
+      Check(size == ReadLE(copy, dst + 48, 8), "Guest ISO changed file size");
+      if (size) {
+        Check(from < source.size() / 512 && to < copy.size() / 512 &&
+                  size <= source.size() - from * 512 && size <= copy.size() - to * 512,
+              "Guest ISO file extends outside the image");
+        Check(std::equal(source.begin() + from * 512,
+                         source.begin() + from * 512 + size,
+                         copy.begin() + to * 512),
+              "Guest ISO changed file contents");
+      }
+    }
+  }
+  Check(entries.empty(), "Guest ISO lost directory entries");
+}
+
+static void VerifyGuestDataISO(const fs::path &path)
+{
+  Bytes data = FileRead(path);
+  constexpr size_t dvd = 2048, redsea = 22 * dvd;
+  Check(data.size() > redsea && data.size() % dvd == 0 &&
+            HasBytes(data, 16 * dvd + 314, "TempleOS RedSea") &&
+            ReadLE(data, 16 * dvd + 80, 4) == data.size() / dvd &&
+            std::all_of(data.begin() + 21 * dvd, data.begin() + redsea,
+                        [](auto byte) { return byte == 0; }),
+        "Invalid guest-built data ISO descriptors or boot sector");
+  auto root = ReadLE(data, redsea + 24, 8);
+  RedSeaDirectory(data, root);
+  auto nested = root * 512 + 128;
+  Check(RedSeaName(data, nested) == "Units" &&
+            RedSeaName(data, nested + 64).empty(),
+        "Guest data ISO did not use the selected subtree");
+  auto child = ReadLE(data, nested + 40, 8);
+  auto end = RedSeaDirectory(data, child);
+  std::string previous;
+  size_t files = 0;
+  for (size_t entry = child * 512 + 128;
+       entry < end && !RedSeaName(data, entry).empty(); entry += 64) {
+    auto name = RedSeaName(data, entry);
+    Check(previous < name, "Guest ISO did not sort the source subtree");
+    previous = name;
+    auto size = ReadLE(data, entry + 48, 8);
+    auto block = ReadLE(data, entry + 40, 8);
+    Check(block < data.size() / 512 && size <= data.size() - block * 512,
+          "Guest data ISO file extends outside the image");
+    if (name == "Source.HC") {
+      Check(size == 619 && data[block * 512] == 0x96,
+            "Guest data ISO did not preserve the replaced file");
+      for (size_t i = 1; i < size; i++)
+        Check(data[block * 512 + i] == static_cast<uint8_t>((i * 43) ^ 0xAC),
+              "Guest data ISO changed the source file bytes");
+    } else {
+      Check(name.size() == 8 && name.starts_with("Item") &&
+                name.substr(5) == ".HC" && name[4] >= 'A' && name[4] <= 'J' &&
+                size == 1 && data[block * 512] == name[4] - 'A' + 2,
+            "Guest data ISO lost a nested directory entry");
+    }
+    files++;
+  }
+  Check(files == 11, "Guest data ISO has the wrong file count");
+}
+
+static void VerifyGuestISO(const char *qemu, CMonitor &vm,
+                           const fs::path &dir, const fs::path &source,
+                           const fs::path &kernel, const char *memory,
+                           const std::string &output)
+{
+  CheckProgramOutput(output, "/RedSeaISOProbe.HC", "ISO probe 1 1 0 0 0\n", '1');
+  auto image = CaptureGuestISO(vm, dir, output, "GuestBuild.ISO.C");
+  auto media = VerifyMedia(image, kernel);
+  auto original = VerifyMedia(source, kernel);
+  VerifyCopiedTree(FileRead(source), original.root, FileRead(image), media.root);
+  VerifyGuestDataISO(CaptureGuestISO(vm, dir, output, "GuestData.ISO.C"));
+  if (std::string_view(memory) == "512") {
+    auto reboot = dir / "reboot";
+    fs::create_directory(reboot);
+    fs::path serial = reboot / "serial.log";
+    CMonitor rebuilt(qemu, image, reboot, "pc", memory, false);
+    rebuilt.Connect();
+    auto boot = rebuilt.Boot(serial);
+    auto registers = StopAtIdle(rebuilt);
+    VerifyHandoff(boot, media, registers);
+    VerifyBootDrive(rebuilt, boot, media, true, false);
+    rebuilt.Command(R"({"execute":"quit"})");
+    fs::copy_file(image, source.parent_path() / "unholyos-guest-built.iso",
+                  fs::copy_options::overwrite_existing);
+  }
+}
+
 static void TestBoot(const char *qemu, const fs::path &iso,
                      const fs::path &kernel, const char *machine,
                      const char *memory, uint32_t host_bridge,
@@ -1074,6 +1230,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                     std::string::npos &&
                 output.find("RAW-LOCATION.HC,0027\n") != std::string::npos,
             "The native HolyC compiler runtime probe did not pass all checks");
+      VerifyGuestISO(qemu, vm, dir, iso, kernel, memory, output);
       if (std::string_view(memory) == "4608") {
         std::smatch address;
         Check(std::regex_search(output, address,
@@ -1093,7 +1250,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
            "tables, interrupt gates, PIT, PCI, and the boot DVD.\n"
         << (startup
                 ? "Verified StartOS.HC expansion, native HolyC compilation, "
-                  "TOSB execution, and runtime calls.\n"
+                  "TOSB execution, runtime calls, and guest-built ISO contents.\n"
                 : "Verified Adam startup, allocator pools, and device "
                   "memory.\n");
   } catch (...) {

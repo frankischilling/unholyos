@@ -181,7 +181,7 @@ char *FileNameAbs(const char *name, const CTask &task, uint64_t flags)
   return res;
 }
 
-static const char *FileExtDot(const char *name)
+const char *FileExtDot(const char *name)
 {
   for (; *name; name++)
     if (*name == '.' && name[1] != '/' && name[1] != '.')

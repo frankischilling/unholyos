@@ -13,7 +13,7 @@ CXXFLAGS := -std=c++20 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie \
 
 ASM_SRC := Kernel/KStart16.asm Kernel/KStart32.asm Kernel/KStart64.asm Kernel/KUtils.asm \
 	Kernel/KMathA.asm Kernel/KInts.asm Kernel/KExcept.asm Kernel/Sched.asm Kernel/PCIBIOS.asm \
-	Kernel/Mem/PageTables.asm Kernel/SerialDev/SerialBoot.asm
+	Kernel/Mem/PageTables.asm Kernel/SerialDev/SerialBoot.asm Adam/Opt/Boot/DskISORedSea.asm
 CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp Kernel/KDbg.cpp Kernel/MultiProc.cpp Kernel/Display.cpp Kernel/SerialDev/Serial.cpp \
 	Kernel/KTask.cpp Kernel/KHashA.cpp Kernel/KHashB.cpp Kernel/KLoad.cpp Kernel/KMathB.cpp Kernel/StrA.cpp \
 	Kernel/KDataTypes.cpp Kernel/KDate.cpp Kernel/KExcept.cpp Kernel/QSort.cpp \
@@ -27,7 +27,8 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Compiler/CMain.cpp Compiler/CMisc.cpp Compiler/Lex.cpp Compiler/LexLib.cpp Compiler/AsmInit.cpp Compiler/PrsLib.cpp \
 	Compiler/PrsExp.cpp Compiler/PrsStmt.cpp Compiler/PrsVar.cpp Compiler/OptLib.cpp Compiler/BackC.cpp \
 	Adam/DolDoc/DocNew.cpp Adam/DolDoc/DocRecalc.cpp \
-	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp
+	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp \
+	Adam/Opt/Boot/DskISORedSea.cpp
 ASM_OBJ := $(ASM_SRC:%.asm=$(BUILD)/%.asm.o)
 CXX_OBJ := $(CXX_SRC:%.cpp=$(BUILD)/%.o)
 KERNEL := $(BUILD)/0000Boot/0000Kernel.BIN.C
@@ -53,6 +54,7 @@ DOC_SOURCE_PROBES := $(addprefix Linux/Fixtures/,TextDemo.HC SpritePlot.HC)
 PRINT_SOURCE_PROBES := $(addprefix Linux/Fixtures/,Print.HC PrintSourceProbe.HC)
 STREAM_PROBES := $(addprefix Linux/Fixtures/,StreamProbe.HC StreamNested.HC)
 MEMORY_PROBES := $(addprefix Linux/Fixtures/,MemoryProbe.HC SubIntAccess.HC AggregateProbe.HC CompoundProbe.HC)
+ISO_PROBE := Linux/Fixtures/RedSeaISOProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 
 .PHONY: all run test
@@ -62,9 +64,12 @@ $(LOADER): Adam/Opt/Boot/BootDVD.asm Kernel/KernelA.inc
 	mkdir -p $(@D)
 	$(NASM) -f bin -o $@ $<
 
+$(BUILD)/Adam/Opt/Boot/DskISORedSea.asm.o: NASMFLAGS += -D'BDVD_FILE="$(LOADER)"'
+$(BUILD)/Adam/Opt/Boot/DskISORedSea.asm.o: $(LOADER)
+
 $(ASM_OBJ): $(BUILD)/%.asm.o: %.asm Kernel/KernelA.inc
 	mkdir -p $(@D)
-	$(NASM) -f elf64 -o $@ $<
+	$(NASM) $(NASMFLAGS) -f elf64 -o $@ $<
 
 $(CXX_OBJ): $(BUILD)/%.o: %.cpp
 	mkdir -p $(@D)
@@ -77,9 +82,10 @@ $(KERNEL): $(BUILD)/Kernel/Kernel.elf
 	mkdir -p $(@D)
 	$(OBJCOPY) -O binary $< $@
 
-$(ISO_TOOL): Adam/Opt/Boot/DskISORedSea.cpp Linux/BootMedia.hpp Kernel/KernelA.hpp
+$(ISO_TOOL): Linux/MakeISO.cpp Adam/Opt/Boot/DskISORedSea.cpp \
+	Adam/Opt/Boot/DskISORedSea.hpp Linux/BootMedia.hpp Kernel/KernelA.hpp
 	mkdir -p $(@D)
-	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
 
 $(BOOT_TEST): Linux/TestBoot.cpp Linux/BootMedia.hpp
 	mkdir -p $(@D)
@@ -97,8 +103,11 @@ TEST_MODULES := $(MODULE_PROBE) $(MODULE_CALLER) $(RUNTIME_PROBE) $(FILE_READ_PR
 	$(FILE_WRITE_PROBE) $(EXCEPT_PROBE) $(FORMAT_PROBE) $(HASH_CALLER) $(HASH_PROBE) \
 	$(DOC_PROBE) $(COMPILER_RUNTIME_PROBE)
 
-$(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(TEST_MODULES) $(LEX_PROBES) $(DOC_SOURCE_PROBES) $(PRINT_SOURCE_PROBES) $(STREAM_PROBES) $(MEMORY_PROBES)
-	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(STARTUP_FIXTURE) $(addprefix --file ,$(TEST_MODULES) $(LEX_PROBES) $(DOC_SOURCE_PROBES) $(PRINT_SOURCE_PROBES) $(STREAM_PROBES) $(MEMORY_PROBES))
+STARTUP_FILES := $(TEST_MODULES) $(LEX_PROBES) $(DOC_SOURCE_PROBES) \
+	$(PRINT_SOURCE_PROBES) $(STREAM_PROBES) $(ISO_PROBE) $(MEMORY_PROBES)
+
+$(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(STARTUP_FILES)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(STARTUP_FIXTURE) $(addprefix --file ,$(STARTUP_FILES))
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
