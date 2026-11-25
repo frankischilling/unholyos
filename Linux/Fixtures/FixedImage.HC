@@ -1,0 +1,9 @@
+asm {
+  ORG FIXED_IMAGE_ORG
+_FIXED_IMAGE::
+  JMP _FIXED_BODY
+_FIXED_PTR::
+  DU64 _FIXED_BODY;
+_FIXED_BODY::
+  BINFILE "B:/FixedPayload";
+}

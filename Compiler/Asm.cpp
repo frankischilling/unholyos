@@ -4,6 +4,8 @@
 #include <new>
 
 extern "C" void SysSymImportsResolveCpp(const char *name, int64_t flags);
+extern "C" void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
+                            const uintptr_t *frame);
 
 static bool Same(const char *a, const char *b)
 {
@@ -154,12 +156,14 @@ public:
 
   bool Emit(uint8_t *image, size_t offset)
   {
-    if (!size)
-      return true;
-    auto *dest = image + offset;
+    auto base = aot ? 0 : reinterpret_cast<uintptr_t>(image);
+    return !size || EmitAt(image + offset, base);
+  }
+
+  bool EmitAt(uint8_t *dest, uintptr_t base)
+  {
     if (dest != buf)
       MemCpy(dest, buf, size);
-    auto base = aot ? 0 : reinterpret_cast<uintptr_t>(image);
     for (auto *fix = fixups; fix; fix = fix->next)
       if (!AsmResolve(*fix, dest, base))
         return false;
@@ -197,6 +201,15 @@ public:
       return Emit(buf, 0) &&
              (!size || AOTStore(*aot, nullptr, nullptr, buf, size)) &&
              Publish(nullptr);
+    if (org != INVALID_PTR) {
+      auto *image = reinterpret_cast<uint8_t *>(org);
+      if (size) {
+        if (size > UINTPTR_MAX - org || !EmitAt(buf, org))
+          return false;
+        MemCpy(image, buf, size);
+      }
+      return Publish(image);
+    }
     auto *image = size ? MAlloc(size, CurrentTask()->code_heap) : buf;
     if ((size && !image) || !Emit(image, 0) || !Publish(image)) {
       if (size)
@@ -582,6 +595,29 @@ private:
     return !failed && Eat(';');
   }
 
+  bool PrsBinFile()
+  {
+    if (cc.token != TK_STR)
+      return false;
+    auto *path = ExtDftCpp(cc.cur_str, "BIN");
+    if (!path)
+      return false;
+    size_t count = 0;
+    auto *data = FileReadCpp(path, &count, nullptr);
+    if (!data) {
+      const uint64_t name = reinterpret_cast<uintptr_t>(path);
+      PrintErrCpp("File not found: \"%s\".\n", 1, &name, nullptr);
+    }
+    Free(path);
+    if (count > INT32_MAX - origin - size)
+      failed = true;
+    if (data)
+      for (size_t i = 0; i < count && !failed; i++)
+        Byte(data[i]);
+    Free(data);
+    return !failed && Eat(TK_STR) && Eat(';');
+  }
+
   static bool I8(uint64_t n)
   {
     return int64_t(n) >= -128 && int64_t(n) <= 127;
@@ -831,8 +867,19 @@ private:
       mode = 16U << (id - AKW_USE16);
       return true;
     }
+    if (id == AKW_ORG) {
+      auto &address = aot ? aot->org : org;
+      CAsmNum n;
+      if (coc || origin || size || address != INVALID_PTR || !Expression(n) ||
+          !Constant(n))
+        return false;
+      address = n.addend;
+      return true;
+    }
+    if (id == AKW_BINFILE)
+      return PrsBinFile();
     if (id == AKW_ALIGN) {
-      CAsmNum align,fill;
+      CAsmNum align, fill;
       if (!Expression(align) || !Constant(align) || !align.addend ||
           (align.addend & (align.addend - 1)) ||
           align.addend > (aot ? 1UL << 20 : 8) ||
@@ -935,6 +982,7 @@ private:
   CHeapCtrl *hc;
   CAsm *root;
   size_t origin;
+  uint64_t org = INVALID_PTR;
   uint8_t *buf = nullptr;
   size_t capacity = 0, size = 0;
   unsigned mode = 64, scope = 1;

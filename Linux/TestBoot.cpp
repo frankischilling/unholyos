@@ -1341,6 +1341,20 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          '1');
       CheckProgramOutput(output, "/OpcodeProbe.BIN.Z",
                          "opcode table 42 2 2 42\n", '1');
+      CheckProgramOutput(output, "/FixedAsm.HC", "fixed jit 1 42\n", '1');
+      CheckProgramOutput(output, "/FixedImage.BIN", "fixed load 42\n", '1');
+      Check(output.find("UnholyOS: invalid ORG left the destination intact") !=
+                std::string::npos,
+            "Invalid ORG modified its destination or published a symbol");
+      Check(output.find(
+                "UnholyOS: BINFILE checked missing file and terminator") !=
+                std::string::npos,
+            "BINFILE missing-file or terminator behavior changed");
+      Check(
+          output.find(
+              "UnholyOS: rejected malformed fixed image before copying") !=
+              std::string::npos,
+          "Invalid fixed image modified its destination or published a symbol");
       Check(output.find("switch build 0\n") != std::string::npos &&
                 output.find("UnholyOS: switch rejected duplicate case") !=
                     std::string::npos,
@@ -1356,7 +1370,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       if (std::string_view(memory) == "512")
         for (auto *name :
              {"AsmProbe.BIN.Z", "DivByHand.BIN.Z", "InlineAsmProbe.BIN.Z",
-              "GotoProbe.BIN.Z", "SwitchProbe.BIN.Z", "OpcodeProbe.BIN.Z"})
+              "GotoProbe.BIN.Z", "SwitchProbe.BIN.Z", "OpcodeProbe.BIN.Z",
+              "FixedImage.BIN"})
           fs::copy_file(CaptureGuestFile(vm, dir, output, name),
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);

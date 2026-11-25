@@ -201,6 +201,7 @@ enum : uint8_t
   ARGT_STI,
   OCF_ALIAS = 1,
   AKW_ALIGN = 64,
+  AKW_ORG,
   AKW_I8 = 67,
   AKW_I16,
   AKW_I32,
@@ -218,6 +219,7 @@ enum : uint8_t
   AKW_USE32,
   AKW_USE64,
   AKW_IMPORT,
+  AKW_BINFILE = 88,
 };
 
 inline const CInst *AsmInstEntries(const CHashOpcode &op)
@@ -432,6 +434,7 @@ struct CAOT
   CAOTImportExport *first_ie = nullptr, *last_ie = nullptr;
   size_t size = 0, warning_cnt = 0;
   uint8_t max_align_bits = 3;
+  uint64_t org = INVALID_PTR;
 };
 
 bool MapFileWrite(const CHashTable &table, const char *name, uint8_t drv_let);

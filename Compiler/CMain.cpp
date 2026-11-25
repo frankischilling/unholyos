@@ -174,7 +174,7 @@ static CBinFile *AOTBinMake(const CAOT &aot)
       CAlloc(size, CurrentTask()->data_heap));
   if (!bfh)
     return nullptr;
-  *bfh = {0x1EEB, aot.max_align_bits, 0, BIN_SIGNATURE_VAL, INVALID_PTR,
+  *bfh = {0x1EEB, aot.max_align_bits, 0, BIN_SIGNATURE_VAL, aot.org,
           patch_offset, size};
 
   auto *base = reinterpret_cast<uint8_t *>(bfh + 1);
