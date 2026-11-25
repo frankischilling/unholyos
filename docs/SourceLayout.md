@@ -92,6 +92,18 @@ from `Kernel/KernelA.HH`. Its typed `cnts` symbol aliases the
 kernel storage defined in `Kernel/KGlbls.cpp` and uses the export
 from `Kernel/KLoad.cpp` when linked in a TOSB module.
 
+## HolyC switch statements
+
+`PrsSwitch` in `Compiler/PrsStmt.cpp` follows `PrsSwitch` in
+`Compiler/PrsStmt.HC` for case ranges, implicit case values, and
+`start`/`end` groups. Each group has its own `break` target. Dispatch
+and fallthrough share the group entry code through `IC_SUB_CALL`.
+
+`Compiler/BackC.cpp` emits the jump table and the bounds check for
+`switch ()`, following `ICSwitch` in `Compiler/BackC.HC`. The current
+back end stores fixed 32-bit relative offsets. TempleOS also selects
+smaller entries when the destinations fit.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains guest verification routines for boot records, file access, compiler behavior, and runtime modules. The reference `Kernel/KMain.HC` concentrates on initialization and startup. Those probes remain a structural difference and should move into a separate verification component as the runtime startup path develops.

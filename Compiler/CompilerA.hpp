@@ -244,11 +244,16 @@ enum CICode : uint8_t
   IC_ADD_EQU,
   IC_SUB_EQU,
   IC_JMP = 0x51,
+  IC_SUB_CALL,
+  IC_SWITCH,
+  IC_NOBOUND_SWITCH,
+  IC_RET = 0x5B,
   IC_CALL = 0x5C,
   IC_ASM = 0x61,
   IC_PUSH = 0x62,
   IC_BR_ZERO = 0x85,
   IC_BR_NOT_ZERO,
+  IC_SUB_ENTRY = 0xF0,
 };
 
 constexpr bool ICIsComparison(CICode code)
@@ -283,6 +288,12 @@ struct CCodeLabel
   char *name;
   uint32_t ic;
   bool defined;
+};
+
+struct CSwitchTable
+{
+  int64_t lo;
+  uint32_t range, dft;
 };
 
 struct CCodeCtrl

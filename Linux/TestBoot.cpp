@@ -1334,11 +1334,22 @@ static void TestBoot(const char *qemu, const fs::path &iso,
           "Compiler accepted an invalid goto label");
       CheckProgramOutput(output, "/GotoProbe.HC", "goto 42 5\n", '1');
       CheckProgramOutput(output, "/GotoProbe.BIN.Z", "goto 42 5\n", '1');
+      Check(output.find("switch build 0\n") != std::string::npos &&
+                output.find("UnholyOS: switch rejected duplicate case") !=
+                    std::string::npos,
+            "Guest switch build or duplicate case check failed");
+      CheckProgramOutput(output, "/NullCase.HC",
+                         "Zero\nOne\nTwo\nThree\nTen\nEleven\n", '1');
+      CheckProgramOutput(output, "/SubSwitch.HC",
+                         "Zero [One] Two [Three] Four [Five] \n", '1');
+      for (const char *name : {"/SwitchProbe.HC", "/SwitchProbe.BIN.Z"})
+        CheckProgramOutput(output, name, "switch 12 2 -1 99 17 34\n", '1');
       CheckProgramOutput(output, "/DivByHand.BIN.Z", "123456/10=12345\n", '1');
       CheckProgramOutput(output, "/AsmProbe.BIN.Z", "asm import\nasm result 42\n", '1');
       if (std::string_view(memory) == "512")
-        for (auto *name : {"AsmProbe.BIN.Z", "DivByHand.BIN.Z",
-                           "InlineAsmProbe.BIN.Z", "GotoProbe.BIN.Z"})
+        for (auto *name :
+             {"AsmProbe.BIN.Z", "DivByHand.BIN.Z", "InlineAsmProbe.BIN.Z",
+              "GotoProbe.BIN.Z", "SwitchProbe.BIN.Z"})
           fs::copy_file(CaptureGuestFile(vm, dir, output, name),
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);

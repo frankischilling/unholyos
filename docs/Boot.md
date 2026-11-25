@@ -230,6 +230,21 @@ labels prevent publication of the function.
 
 Full opcode, operand, and directive coverage is pending.
 
+## HolyC switch statements
+
+The startup suite runs Terry A. Davis's original `Demo/NullCase.HC` and
+`Demo/SubSwitch.HC` from byte-for-byte copies. They exercise implicit
+case values and the shared code before and after a `start`/`end`
+group. Their output matches pinned TempleOS in QEMU 9.2.0 with PC,
+`qemu64`, and 512 MiB.
+
+`SwitchProbe.HC` checks forward and reversed case ranges, fallthrough,
+default dispatch, and two levels of `start`/`end` inside an unchecked
+`switch []`. The suite expects `switch 12 2 -1 99 17 34` from the
+source and the guest-built `SwitchProbe.BIN.Z`. Pinned TempleOS
+produced the same line from the source and the UnholyOS-built module.
+The suite rejects overlapping cases and saves the module under `BUILD`.
+
 ## RedSea descriptor verification
 
 The source layout and coding rules are recorded in [SourceLayout.md](SourceLayout.md).

@@ -856,6 +856,30 @@ static void BootAsmReport(const CDrv &dvd, CTask &task)
   SerialPutS("UnholyOS: asm opcode modes and alignment matched\r\n");
 }
 
+static void BootSwitchReport(const CDrv &dvd, CTask &task)
+{
+  auto *ram = MountedDrive('B');
+  if (!ram || !BootFileProgramReport(dvd, "/SwitchBuild.HC").okay)
+    return;
+  BootFileProgramReport(dvd, "/NullCase.HC");
+  BootFileProgramReport(dvd, "/SubSwitch.HC");
+  BootFileProgramReport(dvd, "/SwitchProbe.HC");
+  auto dup = ExePutS(
+      "U0 DuplicateCase() { switch(2) { case 1...3: break; case 2: break; } }",
+      nullptr, 0);
+  if (!dup.okay && !HashFind("DuplicateCase", task.hash_table, HTT_FUN))
+    SerialPutS("UnholyOS: switch rejected duplicate case\r\n");
+
+  constexpr const char *path = "/SwitchProbe.BIN.Z";
+  SerialPutS("UnholyOS: executing /SwitchProbe.BIN.Z\r\n");
+  auto *module = Load(*ram, path, task, LDF_JUST_LOAD);
+  if (!module || !LoadPass2(*module))
+    return;
+  SerialPutS(
+      "UnholyOS: finished /SwitchProbe.BIN.Z, checks 0x0000000000000001\r\n");
+  BootGuestFileReport(*ram, path);
+}
+
 static void BootModuleReport(const CDrv &dv, CTask &task)
 {
   auto *caller = Load(dv, "/LoadCaller.BIN", task, LDF_JUST_LOAD);
@@ -1041,6 +1065,7 @@ extern "C" void KMainCpp()
     BootCmpReport(*adam_task->cur_dv, *adam_task);
     BootImportReport(*adam_task->cur_dv, *adam_task);
     BootAsmReport(*adam_task->cur_dv, *adam_task);
+    BootSwitchReport(*adam_task->cur_dv, *adam_task);
     BootISOReport(*adam_task->cur_dv);
   } else {
     SerialPutS("UnholyOS: Could not mount the boot DVD\r\n");
