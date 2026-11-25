@@ -174,7 +174,22 @@ to run. The reference can keep retrying that entry. The port also reads
 the keyboard description flag before releasing the message allocation.
 
 Cross-core dispatch through `JobQue`, the popup and terminal wrappers,
-and hardware keyboard and mouse delivery are pending.
+and PS/2 mouse delivery are pending.
+
+## PS/2 keyboard
+
+`Kernel/SerialDev/Keyboard.cpp` follows `Kernel/SerialDev/Keyboard.HC`
+for controller setup, the translated scan tables, and the
+`KbdPktRead`, `KbdHndlr`, and `KbdMsgsQue` stages. `IRQKbd` in
+`Kernel/KInts.asm` acknowledges IRQ1 and buffers bytes. Queue delivery
+runs from the scheduler and message scanner until the window manager
+takes over. The keyboard FIFOs use static storage during bootstrap.
+
+`Kernel/SerialDev/Message.cpp` carries the reference `ScanChar`,
+`ScanKey`, `GetKey`, and `GetChar` paths. Echo and the raw cursor use
+the current text output in `Kernel/KeyDev.cpp`. The PS/2 auxiliary port
+stays disabled until the mouse driver is present. Key name formatting
+and the system hotkey callbacks are pending.
 
 ## PC speaker
 

@@ -135,7 +135,7 @@ struct CPCIDev
   uint8_t *vendor_str, *dev_id_str;
 };
 
-constexpr unsigned I_DIV_ZERO = 0, I_NMI = 2, I_TIMER = 0x20;
+constexpr unsigned I_DIV_ZERO = 0, I_NMI = 2, I_TIMER = 0x20, I_KBD = 0x21;
 constexpr unsigned I_MP_CRASH = 0x30, I_WAKE = 0x31, I_DBG = 0x32;
 
 constexpr unsigned JIFFY_FREQ = 1000;
@@ -963,7 +963,43 @@ enum : int64_t
   MSG_MS_L_UP, MSG_MS_L_D_DOWN, MSG_MS_L_D_UP, MSG_MS_R_DOWN, MSG_MS_R_UP,
   MSG_MS_R_D_DOWN, MSG_MS_R_D_UP,
 };
-constexpr uint64_t SCF_KEY_DESC = 1ULL << 31;
+constexpr uint16_t KBD_PORT = 0x60, KBD_CTRL = 0x64;
+constexpr char CH_CURSOR = 0x05;
+constexpr uint8_t CH_BACKSPACE = 0x08, CH_ESC = 0x1B, CH_SHIFT_ESC = 0x1C,
+                  CH_SHIFT_SPACE = 0x1F;
+constexpr uint32_t SCF_E0_PREFIX = 1 << 7, SCF_KEY_UP = 1 << 8,
+                   SCF_SHIFT = 1 << 9, SCF_CTRL = 1 << 10, SCF_ALT = 1 << 11,
+                   SCF_CAPS = 1 << 12, SCF_NUM = 1 << 13, SCF_SCROLL = 1 << 14,
+                   SCF_NEW_KEY = 1 << 15, SCF_DELETE = 1 << 18, SCF_INS = 1 << 19,
+                   SCF_KEY_DESC = 1U << 31;
+constexpr uint8_t SC_ENTER = 0x1C, SC_SHIFT = 0x2A, SC_CTRL = 0x1D,
+                  SC_ALT = 0x38, SC_CAPS = 0x3A, SC_NUM = 0x45,
+                  SC_SCROLL = 0x46, SC_INS = 0x52, SC_DELETE = 0x53;
+
+template <typename T> struct CFifo
+{
+  T *buf;
+  int64_t mask, in_ptr, out_ptr;
+};
+
+using CFifoU8 = CFifo<uint8_t>;
+using CFifoI64 = CFifo<int64_t>;
+
+struct [[gnu::packed]] CKbdStateGlbls
+{
+  int64_t scan_code, last_down_scan_code, cnt, timestamp, new_key_timestamp;
+  CFifoU8 *fifo, *fifo2;
+  CFifoI64 *scan_code_fifo;
+  uint32_t down_bitmap[8], down_bitmap2[8];
+  bool rst, irqs_working;
+};
+
+static_assert(sizeof(CFifoU8) == 32 && sizeof(CFifoI64) == 32 &&
+              offsetof(CFifoU8, in_ptr) == 16);
+static_assert(sizeof(CKbdStateGlbls) == 130 &&
+              offsetof(CKbdStateGlbls, fifo) == 40 &&
+              offsetof(CKbdStateGlbls, down_bitmap) == 64 &&
+              offsetof(CKbdStateGlbls, irqs_working) == 129);
 constexpr uint32_t WIF_SELF_FOCUS = 1, WIF_SELF_KEY_DESC = 1 << 12;
 
 static_assert(sizeof(CJob) == 0x70 && offsetof(CJob, aux1) == 0x48 &&

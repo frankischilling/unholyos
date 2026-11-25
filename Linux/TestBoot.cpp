@@ -221,19 +221,26 @@ public:
     Command(R"({"execute":"qmp_capabilities"})");
   }
 
-  std::string Boot(const fs::path &serial)
+  std::string WaitSerial(const fs::path &serial, std::string_view marker)
   {
     while (Clock::now() < deadline) {
       std::string output = ReadText(serial);
-      if (output.find(BOOT_MARKER) != std::string::npos)
+      if (output.find(marker) != std::string::npos)
         return output;
+      if (output.find(BOOT_MARKER) != std::string::npos)
+        throw std::runtime_error("Guest finished before " + std::string(marker));
       if (waitpid(pid, nullptr, WNOHANG) == pid) {
         pid = -1;
         throw std::runtime_error("QEMU stopped before kernel entry");
       }
       std::this_thread::sleep_for(50ms);
     }
-    throw std::runtime_error("Kernel entry timed out");
+    throw std::runtime_error("Timed out waiting for " + std::string(marker));
+  }
+
+  std::string Boot(const fs::path &serial)
+  {
+    return WaitSerial(serial, BOOT_MARKER);
   }
 
   std::string Hmp(const std::string &command)
@@ -535,9 +542,9 @@ static void VerifyInterrupts(CMonitor &vm, const std::string &output,
     }
   }
 
-  uint64_t stubs = targets[1] - 7, fallback = targets[0x21];
-  const std::array<uint64_t, 6> handlers{fallback,      targets[0],
-                                         targets[2],    targets[0x20],
+  uint64_t stubs = targets[1] - 7, fallback = targets[0x22];
+  const std::array<uint64_t, 7> handlers{fallback, targets[0], targets[2],
+                                         targets[0x20], targets[0x21],
                                          targets[0x30], targets[0x31]};
   auto distinct = handlers;
   std::sort(distinct.begin(), distinct.end());
@@ -547,7 +554,7 @@ static void VerifyInterrupts(CMonitor &vm, const std::string &output,
     bool uses_stub =
         (vector > 0 && vector < 0x20 && vector != 2) || vector == 0x32;
     bool dedicated = vector == 0 || vector == 2 || vector == 0x20 ||
-                     vector == 0x30 || vector == 0x31;
+                     vector == 0x21 || vector == 0x30 || vector == 0x31;
     if (uses_stub)
       Check(targets[vector] == stubs + vector * 7, "Incorrect fault gate");
     else if (!dedicated)
@@ -567,7 +574,7 @@ static void VerifyInterrupts(CMonitor &vm, const std::string &output,
 
   auto pic = vm.Hmp("info pic");
   Check(std::regex_search(
-            pic, std::regex(R"(pic0: [^\\]*imr=fa [^\\]*irq_base=20)")) &&
+            pic, std::regex(R"(pic0: [^\\]*imr=f8 [^\\]*irq_base=20)")) &&
             std::regex_search(
                 pic, std::regex(R"(pic1: [^\\]*imr=ff [^\\]*irq_base=28)")),
         "PIC vector offsets or masks differ from boot configuration");
@@ -1103,6 +1110,29 @@ static void VerifyGuestDataISO(const fs::path &path)
   Check(files == 11, "Guest data ISO has the wrong file count");
 }
 
+static void DriveKeyboard(CMonitor &vm, const fs::path &serial)
+{
+  auto key = [&](const char *name) {
+    Check(vm.Hmp(std::string("sendkey ") + name + " 60").find(
+              R"("return": "")") != std::string::npos,
+          "QEMU rejected a keyboard event");
+    std::this_thread::sleep_for(120ms);
+  };
+
+  vm.WaitSerial(serial, "kbd wait key\n");
+  StopAtIdle(vm);
+  Check(ReadPhysical<1>(vm, 0x100318)[0] & 0x200,
+        "GetKey did not block Adam on its message queue");
+  vm.Command(R"({"execute":"cont"})");
+  key("up");
+  vm.WaitSerial(serial, "kbd wait char\n");
+  key("shift-a");
+  vm.WaitSerial(serial, "<ESC> to Exit\n");
+  for (const char *name : {"b", "shift-c", "right",
+                           "caps_lock", "d", "caps_lock", "d", "esc"})
+    key(name);
+}
+
 static void VerifyGuestISO(const char *qemu, CMonitor &vm,
                            const fs::path &dir, const fs::path &source,
                            const fs::path &kernel, const char *memory,
@@ -1120,6 +1150,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     fs::path serial = reboot / "serial.log";
     CMonitor rebuilt(qemu, image, reboot, "pc", memory, false);
     rebuilt.Connect();
+    DriveKeyboard(rebuilt, serial);
     auto boot = rebuilt.Boot(serial);
     auto registers = StopAtIdle(rebuilt);
     VerifyHandoff(boot, media, registers);
@@ -1143,6 +1174,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
   try {
     CMonitor vm(qemu, iso, dir, machine, memory, secondary_slave);
     vm.Connect();
+    if (startup)
+      DriveKeyboard(vm, serial);
     std::string output = vm.Boot(serial);
     std::string registers = StopAtIdle(vm);
     uint64_t heap = VerifyHandoff(output, media, registers);
@@ -1154,7 +1187,42 @@ static void TestBoot(const char *qemu, const fs::path &iso,
     VerifyClock(vm, output, host_bridge, hpet_enabled);
     VerifyBootDrive(vm, output, media, host_bridge == 0x12378086,
                     secondary_slave);
+
     if (startup) {
+      CheckProgramOutput(output, "/KeyboardProbe.HC",
+                         "kbd map 21E 41E 33 0 130\n"
+                         "kbd empty 0\n"
+                         "kbd wait key\n"
+                         "kbd key 0 000000C800000048\n"
+                         "kbd wait char\n"
+                         "kbd char 65 0000021E0000021E\n"
+                         "kbd irq 1\n", '1');
+      constexpr std::string_view msg_loop =
+          "CMD:02 ARG1:00000062 ARG2:0000003000000030\n"
+          "CMD:03 ARG1:00000062 ARG2:0000013000000130\n"
+          "CMD:02 ARG1:00000000 ARG2:0000022A0000022A\n"
+          "CMD:02 ARG1:00000043 ARG2:0000022E0000022E\n"
+          "CMD:03 ARG1:00000043 ARG2:0000032E0000032E\n"
+          "CMD:03 ARG1:00000000 ARG2:0000012A0000012A\n"
+          "CMD:02 ARG1:00000000 ARG2:000000CD0000004D\n"
+          "CMD:03 ARG1:00000000 ARG2:000001CD0000014D\n"
+          "CMD:02 ARG1:00000000 ARG2:0000003A0000003A\n"
+          "CMD:03 ARG1:00000000 ARG2:0000113A0000113A\n"
+          "CMD:03 ARG1:00000000 ARG2:0000117A0000117A\n"
+          "CMD:03 ARG1:00000000 ARG2:0000117A0000117A\n"
+          "CMD:02 ARG1:00000044 ARG2:0000102000001020\n"
+          "CMD:03 ARG1:00000044 ARG2:0000112000001120\n"
+          "CMD:02 ARG1:00000000 ARG2:0000103A0000103A\n"
+          "CMD:03 ARG1:00000000 ARG2:0000013A0000013A\n"
+          "CMD:03 ARG1:00000000 ARG2:0000017A0000017A\n"
+          "CMD:03 ARG1:00000000 ARG2:0000017A0000017A\n"
+          "CMD:02 ARG1:00000064 ARG2:0000002000000020\n"
+          "CMD:03 ARG1:00000064 ARG2:0000012000000120\n"
+          "CMD:02 ARG1:0000001B ARG2:0000000100000001\n";
+      Check(output.find(msg_loop) != std::string::npos &&
+                output.find("UnholyOS: finished /MsgLoop.HC, checks "
+                            "0x0000000000000001") != std::string::npos,
+            "The original message loop did not match TempleOS");
       Check(output.find("StartOS.HC size 0x0000000000000486, hash "
                         "0x68b531597d446b26") != std::string::npos,
             "The guest did not expand StartOS.HC.Z to the expected source");

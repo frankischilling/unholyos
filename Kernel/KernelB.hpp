@@ -51,6 +51,16 @@ inline void SetRFlags(uint64_t flags)
 extern "C" void _YIELD();
 extern "C" uint64_t TaskValidateCpp(CTask *task);
 extern "C" uint64_t SuspendCpp(CTask *task, uint8_t state);
+extern "C" CJob *TaskMsgCpp(CTask *srv, CTask *master, int64_t code,
+                           int64_t arg1, int64_t arg2, int64_t flags);
+extern "C" void KbdService();
+void KbdPoll();
+bool KbdInit();
+void IntEntrySet(unsigned irq, void (*handler)(), uint16_t type = 0xE,
+                 uint16_t dpl = 0);
+uint64_t GetTSC();
+extern CKbdStateGlbls kbd;
+extern "C" void PutKeyCpp(int64_t ch, int64_t sc);
 void JobCtrlInit(CJobCtrl *ctrl);
 void JobQueDel(CJob *head);
 extern "C" void JobDelCpp(CJob *job);
@@ -90,6 +100,7 @@ int64_t YearStartDate(int64_t year);
 extern "C" uint64_t Pow10I64Cpp(int64_t exponent);
 extern "C" uint64_t IsRawCpp();
 extern "C" uint64_t DbgModeCpp(uint8_t enabled);
+extern "C" uint64_t IsDbgModeCpp();
 void VGAFlush();
 extern "C" void PutS(const char *text);
 void PutTaskS(CTask &task, const char *text);

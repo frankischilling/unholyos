@@ -37,6 +37,7 @@ extern "C" int64_t ScanMsgCpp(int64_t *arg1, int64_t *arg2, uint64_t mask,
 {
   if (!task)
     task = CurrentTask();
+  KbdService();
   auto old_flags = GetRFlags();
   while (TaskValidateCpp(task)) {
     auto *head = reinterpret_cast<CJob *>(&task->srv_ctrl.next_waiting);
@@ -95,4 +96,76 @@ extern "C" int64_t GetMsgCpp(int64_t *arg1, int64_t *arg2, uint64_t mask,
   }
   __atomic_fetch_and(&task->task_flags, ~TASKF_IDLE, __ATOMIC_RELAXED);
   return code;
+}
+
+extern "C" int64_t ScanCharCpp()
+{
+  int64_t down, up;
+  if (!ScanMsgCpp(&down, nullptr, 1 << MSG_KEY_DOWN, nullptr) || !down)
+    return 0;
+  do
+    GetMsgCpp(&up, nullptr, 1 << MSG_KEY_UP, nullptr);
+  while (!up);
+  return down;
+}
+
+extern "C" uint64_t ScanKeyCpp(int64_t *ch, int64_t *scan_code, uint8_t echo)
+{
+  int64_t c, sc;
+  bool found = ScanMsgCpp(&c, &sc, 1 << MSG_KEY_DOWN, nullptr);
+  if (ch)
+    *ch = c;
+  if (scan_code)
+    *scan_code = sc;
+  if (found && echo)
+    PutKeyCpp(c, sc);
+  return found;
+}
+
+extern "C" int64_t GetKeyCpp(int64_t *scan_code, uint8_t echo, uint8_t raw_cursor)
+{
+  auto *task = CurrentTask();
+  auto *head = reinterpret_cast<CJob *>(&task->srv_ctrl.next_waiting);
+  int64_t ch, sc;
+  bool cursor_on = false;
+  while (!ScanKeyCpp(&ch, &sc, false)) {
+    if (raw_cursor && IsRawCpp() && cnts.time_stamp_freq) {
+      bool cursor = (GetTSC() * 5 / uint64_t(cnts.time_stamp_freq)) & 1;
+      if (cursor != cursor_on) {
+        PutKeyCpp(cursor ? CH_CURSOR : CH_BACKSPACE, 0);
+        cursor_on = cursor;
+      }
+    }
+    __atomic_fetch_or(&task->task_flags, TASKF_IDLE, __ATOMIC_RELAXED);
+    if (IsDbgModeCpp()) {
+      KbdPoll();
+    } else {
+      auto flags = GetRFlags();
+      asm volatile("cli" : : : "memory");
+      KbdService();
+      if (head->next == head)
+        __atomic_fetch_or(&task->task_flags, TASKF_AWAITING_MSG, __ATOMIC_RELAXED);
+      _YIELD();
+      SetRFlags(flags);
+    }
+    __atomic_fetch_and(&task->task_flags, ~TASKF_IDLE, __ATOMIC_RELAXED);
+  }
+  if (cursor_on)
+    PutKeyCpp(CH_BACKSPACE, 0);
+  if (echo)
+    PutKeyCpp(ch, sc);
+  if (scan_code)
+    *scan_code = sc;
+  return ch;
+}
+
+extern "C" int64_t GetCharCpp(int64_t *scan_code, uint8_t echo, uint8_t raw_cursor)
+{
+  int64_t ch;
+  do
+    ch = GetKeyCpp(scan_code, false, raw_cursor);
+  while (!ch);
+  if (echo)
+    PutKeyCpp(ch, 0);
+  return ch;
 }

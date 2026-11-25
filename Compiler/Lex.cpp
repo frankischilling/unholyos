@@ -6,7 +6,6 @@ extern "C" void PrintWarnCpp(const char *fmt, int64_t argc,
                              const uint64_t *argv);
 
 constexpr size_t STR_LEN = 144;
-constexpr uint8_t CH_SHIFT_SPACE = 0x1F;
 constexpr int64_t LEX_RESCAN = -2;
 constexpr uint64_t OUT_MEM = 0x6D654D74754FULL; // OutMem
 static const char lex_zeros[] = "";

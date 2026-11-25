@@ -56,7 +56,7 @@ The source reference is [TempleOS at c26482bb6ad3f80106d28504ec5db3c6a360732c](h
 - `Kernel/KStart16.HC`, `Kernel/KStart32.HC`, and `Kernel/KStart64.HC` describe the real-mode firmware calls, the change to flat 32-bit segments, and the change to 64-bit mode.
 - `SYS_FIND_PCIBIOS_SERVICE_DIR` and `SYS_FIND_PCI_SERVICES` in `Kernel/PCIBIOS.HC` validate the BIOS32 directory checksum and resolve the PCI service before paging. Both guests found the same SeaBIOS entries. `FarCall32` switches to protected mode for a PCI read and restores long mode, Adam's stack, FS, and GS before returning.
 - `Kernel/Mem/PageTables.HC` sets up 2 MiB identity mappings in ascending PML2, PML3, and PML4 order and reserves another 4 GiB of address space for device aliases.
-- `SysGlblsInit` in `Kernel/KMain.HC` reads the cache-line width, sets Adam as the focus task, initializes the macro and PCI queues, and allocates the bit tables, extension slots, and decimal powers. The x87 sequence in `Kernel/KMathA.HC` produces the same 618 binary64 slots in QEMU, including the unused zero slot. Keyboard, disk cache, screen capture, and debugger state still need their boot initialization.
+- `SysGlblsInit` in `Kernel/KMain.HC` reads the cache-line width, sets Adam as the focus task, initializes the macro and PCI queues, and allocates the bit tables, extension slots, and decimal powers. The x87 sequence in `Kernel/KMathA.HC` produces the same 618 binary64 slots in QEMU, including the unused zero slot. Disk cache, screen capture, and debugger state still need their boot initialization.
 - `Mem32DevInit` in `Kernel/Mem/MemPhysical.HC` starts with the device window at 0xE0000000 and inserts firmware ranges contained in a free span. It returns rejected descriptors and empty tails through `Free`. The boot allocator uses the reference's debug-off heap headers and separate caches for small allocations and page blocks.
 - `UncachedAliasAlloc` in `Kernel/Mem/MemPhysical.HC` remaps the reserved top 4 GiB onto the lowest 4 GiB of physical memory with the same uncached page flags. The boot display uses the alias for VGA memory, following `SysGrInit` in `Kernel/KMain.HC`.
 - `SYS_INIT_16MEG_SYS_CODE_BP` in `Kernel/Mem/PageTables.HC` records the E801 RAM above the page tables as the first free code block. The block pool uses 512-byte allocation units.
@@ -353,7 +353,23 @@ Pinned TempleOS and UnholyOS printed the same three result lines from
 the same source and from the UnholyOS-built module under QEMU 9.2.0 with
 the PC machine, `qemu64`, and 512 MiB.
 
-Cross-core dispatch and hardware input remain pending.
+Cross-core dispatch and PS/2 mouse input remain pending.
+
+## PS/2 keyboard
+
+`make -j4 test BUILD=build/keyboard` boots
+`build/keyboard/unholyos-startup-test.iso` and sends keys through the
+QEMU monitor. `KeyboardProbe.HC` checks the conversion tables, an empty
+scan, and IRQ1 waking Adam while `GetKey` waits. It checks an extended
+cursor key and a shifted character.
+
+The suite runs a byte-for-byte copy of Terry A. Davis's
+`Demo/MsgLoop.HC` with the DolDoc lexer enabled. Pinned TempleOS and
+UnholyOS produced the same tested message records for normal, shifted,
+extended, and Caps Lock keys. The trace includes the two LED command
+acknowledgements that TempleOS reports as key-up records after a lock
+change. Both guests used QEMU 9.2.0 with the PC machine, `qemu64`,
+and 512 MiB. UnholyOS sends text output to serial during the boot probe.
 
 ## PC speaker and recorded sound events
 

@@ -28,6 +28,8 @@ GLOBAL TaskMsgHC,JobResScanHC,JobResGetHC,TaskWaitHC
 GLOBAL PostMsgHC,PostMsgWaitHC,MsgHC,JobsHndlrHC
 GLOBAL SrvTaskContHC,ScanMsgHC,FlushMsgsHC,GetMsgHC
 GLOBAL InputFilterTaskHC
+GLOBAL Char2ScanCodeHC,ScanCode2CharHC,KbdTypeMaticHC,PutKeyHC
+GLOBAL ScanCharHC,ScanKeyHC,GetKeyHC,GetCharHC
 EXTERN CPUStructInitCpp,TaskInitCpp
 EXTERN SpawnCpp,TaskValidateCpp,SuspendCpp,IsSuspendedCpp,TaskQueInsCpp,TaskQueRemCpp
 EXTERN SingleUserCpp,IsSingleUserCpp
@@ -36,6 +38,8 @@ EXTERN TaskMsgCpp,JobResScanCpp,JobResGetCpp,TaskWaitCpp
 EXTERN PostMsgCpp,PostMsgWaitCpp,MsgCpp,JobsHndlrCpp
 EXTERN SrvTaskContCpp,ScanMsgCpp,FlushMsgsCpp,GetMsgCpp
 EXTERN InputFilterTaskCpp
+EXTERN Char2ScanCodeCpp,ScanCode2CharCpp,KbdTypeMaticCpp,PutKeyCpp
+EXTERN ScanCharCpp,ScanKeyCpp,GetKeyCpp,GetCharCpp
 EXTERN MAllocCpp,FreeCpp,MSizeCpp,MSize2Cpp,MHeapCtrlCpp,CAllocCpp,MAllocIdentCpp
 EXTERN StrNewCpp,AStrNewCpp,StrCpyCpp,StrCmpCpp,StrIMatchCpp,StrOccCpp
 EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
@@ -152,6 +156,14 @@ HOLYC_CPP ScanMsgHC,ScanMsgCpp,4
 HOLYC_CPP FlushMsgsHC,FlushMsgsCpp,1
 HOLYC_CPP GetMsgHC,GetMsgCpp,4
 HOLYC_CPP InputFilterTaskHC,InputFilterTaskCpp,0
+HOLYC_CPP Char2ScanCodeHC,Char2ScanCodeCpp,2
+HOLYC_CPP ScanCode2CharHC,ScanCode2CharCpp,1
+HOLYC_CPP KbdTypeMaticHC,KbdTypeMaticCpp,1
+HOLYC_CPP PutKeyHC,PutKeyCpp,2
+HOLYC_CPP ScanCharHC,ScanCharCpp,0
+HOLYC_CPP ScanKeyHC,ScanKeyCpp,3
+HOLYC_CPP GetKeyHC,GetKeyCpp,3
+HOLYC_CPP GetCharHC,GetCharCpp,3
 
 SpawnHC:
 	HC_FRAME_ENTER

@@ -1009,6 +1009,17 @@ static void BootJobReport(const CDrv &dvd)
     BootGuestFileReport(*ram, path);
 }
 
+static void BootKeyboardReport(const CDrv &dvd)
+{
+  auto old_debug = DbgModeCpp(false);
+  BootFileProgramReport(dvd, "/KeyboardProbe.HC");
+  auto level = SYS_RUN_LEVEL;
+  SYS_RUN_LEVEL |= RLF_DOC;
+  BootFileProgramReport(dvd, "/MsgLoop.HC");
+  SYS_RUN_LEVEL = level;
+  DbgModeCpp(old_debug);
+}
+
 static void BootSoundReport(const CDrv &dvd, CTask &task)
 {
   auto start = __atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED);
@@ -1324,6 +1335,8 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not initialize the idle task\r\n");
     return;
   }
+  if (!KbdInit())
+    SerialPutS("UnholyOS: Could not initialize the PS/2 keyboard\r\n");
   BootPutS("UnholyOS kernel entered in 64-bit mode");
 
   SerialPutS("UnholyOS: DVD LBA ");
@@ -1427,6 +1440,7 @@ extern "C" void KMainCpp()
     BootAsmListingReport(*adam_task->cur_dv, *adam_task);
     BootSchedulerReport(*adam_task->cur_dv);
     BootJobReport(*adam_task->cur_dv);
+    BootKeyboardReport(*adam_task->cur_dv);
     BootSoundReport(*adam_task->cur_dv, *adam_task);
     BootFileProgramReport(*adam_task->cur_dv, "/AsmListingScope.HC");
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);

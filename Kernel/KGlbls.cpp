@@ -5,6 +5,7 @@ CBlkDevGlbls blkdev;
 CDbgGlbls dbg;
 CSema sys_semas[SEMA_SEMAS_NUM];
 CScrnCastGlbls scrncast;
+CKbdStateGlbls kbd;
 uint8_t sys_var_init_flag, sys_var_init_val;
 CJob sys_macro_head;
 CTask *sys_macro_task;
