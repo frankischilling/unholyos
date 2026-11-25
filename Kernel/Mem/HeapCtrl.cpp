@@ -3,7 +3,7 @@
 CHeapCtrl *HeapCtrlInit(CTask *task, CBlkPool *bp)
 {
   auto *hc =
-      reinterpret_cast<CHeapCtrl *>(MAlloc(sizeof(CHeapCtrl), task->data_heap));
+      reinterpret_cast<CHeapCtrl *>(MAlloc(sizeof(CHeapCtrl), adam_task->data_heap));
   if (!hc)
     return nullptr;
 
@@ -15,4 +15,17 @@ CHeapCtrl *HeapCtrlInit(CTask *task, CBlkPool *bp)
   hc->next_um = hc->last_um = reinterpret_cast<CMemUsed *>(
       reinterpret_cast<uintptr_t>(&hc->next_um) - sizeof(void *));
   return hc;
+}
+
+void HeapCtrlDel(CHeapCtrl *hc)
+{
+  if (!hc)
+    return;
+  {
+    CMemLock lock(hc->locked_flags);
+    auto *head = reinterpret_cast<CMemBlk *>(&hc->next_mem_blk);
+    while (hc->next_mem_blk != head)
+      MemPagTaskFree(hc->next_mem_blk, hc);
+  }
+  Free(hc);
 }

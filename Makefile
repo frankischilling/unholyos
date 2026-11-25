@@ -16,7 +16,7 @@ ASM_SRC := Kernel/KStart16.asm Kernel/KStart32.asm Kernel/KStart64.asm Kernel/KU
 	Kernel/Mem/PageTables.asm Kernel/SerialDev/SerialBoot.asm Adam/Opt/Boot/DskISORedSea.asm \
 	Compiler/CExcept.asm Compiler/AsmInit.asm
 CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp Kernel/KDbg.cpp Kernel/MultiProc.cpp Kernel/Display.cpp Kernel/SerialDev/Serial.cpp \
-	Kernel/KTask.cpp Kernel/KHashA.cpp Kernel/KHashB.cpp Kernel/KLoad.cpp Kernel/KMathB.cpp Kernel/StrA.cpp \
+	Kernel/KTask.cpp Kernel/Sched.cpp Kernel/KHashA.cpp Kernel/KHashB.cpp Kernel/KLoad.cpp Kernel/KMathB.cpp Kernel/StrA.cpp \
 	Kernel/KDataTypes.cpp Kernel/KDate.cpp Kernel/KExcept.cpp Kernel/QSort.cpp \
 	Kernel/StrPrint.cpp Kernel/FunSeg.cpp Kernel/KDefine.cpp Kernel/KeyDev.cpp \
 	Kernel/EdLite.cpp Kernel/Job.cpp \
@@ -62,7 +62,7 @@ CMP_PROBES := $(addprefix Linux/Fixtures/,CmpProbeRunner.HC CmpProbe.PRJ CmpProb
 	AsmAndC3.HC InlineAsmProbe.HC GotoProbe.HC \
 	NullCase.HC SubSwitch.HC SwitchProbe.HC SwitchBuild.HC OpcodeProbe.HC \
 	FixedAsm.HC FixedImage.HC AsmBranchProbe.HC AsmBranchImport.HC BuzzFizz.HC \
-	AsmListingProbe.HC AsmListingScope.HC SoundProbe.HC SoundRecord.HC)
+	AsmListingProbe.HC AsmListingScope.HC SchedulerProbe.HC SoundProbe.HC SoundRecord.HC)
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 
 .PHONY: all run test

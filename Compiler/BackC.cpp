@@ -391,6 +391,23 @@ static void ICCompoundAssign(CCodeOut &out, CIntermediateCode node,
   }
 }
 
+static void FunAddress(CCodeOut &out, const CHashFun &fun, bool indirect)
+{
+  if (out.AOT()) {
+    if (fun.ext_lst)
+      out.RelAddress(fun.ext_lst);
+    else {
+      const auto &sym = fun.cls.sym;
+      const char *name = sym.import_name;
+      if (!name && (fun.cls.flags & FF__EXTERN))
+        name = sym.hash.str;
+      out.RelAddress(&fun, name);
+    }
+  } else
+    out.MoveRAX(indirect ? reinterpret_cast<uintptr_t>(&fun.exe_addr)
+                         : reinterpret_cast<uintptr_t>(fun.exe_addr));
+}
+
 static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
                  unsigned depth = 0, unsigned stack_slots = 0)
 {
@@ -400,6 +417,19 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     return false;
   const auto &node = code[index];
   auto op = node.code;
+  if (op == IC_FS) {
+    out.Bytes(0x64, 0x48, 0x8B, 0x04, 0x25); // MOV RAX,[FS:0]
+    out.Immediate(0, 4);
+    return true;
+  }
+  if (op == IC_ADDR) {
+    const auto &fun = *reinterpret_cast<const CHashFun *>(node.data);
+    bool indirect = !out.AOT() && (fun.cls.flags & CF_EXTERN);
+    FunAddress(out, fun, indirect);
+    if (indirect)
+      out.Load(RT_I64);
+    return true;
+  }
   if (op == IC_CALL) {
     auto *fun = reinterpret_cast<const CHashFun *>(node.data);
     uint32_t slots = node.right, arg = node.left;
@@ -416,19 +446,7 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
       arg = push.right;
     }
     bool indirect = !out.AOT() && (fun->cls.flags & CF_EXTERN);
-    if (out.AOT()) {
-      const auto &sym = fun->cls.sym;
-      const char *name = sym.import_name;
-      if (fun->ext_lst)
-        out.RelAddress(fun->ext_lst);
-      else {
-        if (!name && (fun->cls.flags & FF__EXTERN))
-          name = sym.hash.str;
-        out.RelAddress(fun, name);
-      }
-    } else
-      out.MoveRAX(indirect ? reinterpret_cast<uintptr_t>(&fun->exe_addr)
-                           : reinterpret_cast<uintptr_t>(fun->exe_addr));
+    FunAddress(out, *fun, indirect);
     out.Bytes(0xFF, indirect ? 0x10 : 0xD0); // CALL [RAX] or CALL RAX
     uint32_t drop = pad + (FunPopsArgs(*fun) ? 0 : slots);
     if (drop)

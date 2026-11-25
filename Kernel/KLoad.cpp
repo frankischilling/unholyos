@@ -53,6 +53,9 @@ void PUT_HEX_U64(), PUT_HEX_U32(), PUT_HEX_U16(), PUT_HEX_U8(), PUT_CHARS(),
 void CmpHC(), ExePutSHC(), ExeFileHC(), StreamPrintHC(), StreamExePrintHC();
 void DefineSubHC(), DefineMatchHC();
 void HashValHC(), HashDelHC(), HashTableDelHC(), HashSrcFileSetHC();
+void SpawnHC(), TaskValidateHC(), SuspendHC(), IsSuspendedHC();
+void TaskQueInsHC(), TaskQueRemHC(), SingleUserHC(), IsSingleUserHC();
+void _TASK_END_NOW();
 void _HASH_REM_DEL(), SysSymImportsResolveHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
     DocWriteHC();
@@ -548,6 +551,18 @@ bool LoadKernel(CTask &task)
       {"Busy", reinterpret_cast<uintptr_t>(BusyHC)},
       {"SleepUntil", reinterpret_cast<uintptr_t>(SleepUntilHC)},
       {"Sleep", reinterpret_cast<uintptr_t>(SleepHC)},
+      {"Yield", reinterpret_cast<uintptr_t>(_YIELD)},
+      {"_YIELD", reinterpret_cast<uintptr_t>(_YIELD)},
+      {"_TASK_END_NOW", reinterpret_cast<uintptr_t>(_TASK_END_NOW)},
+      {"Spawn", reinterpret_cast<uintptr_t>(SpawnHC)},
+      {"Exit", reinterpret_cast<uintptr_t>(Exit)},
+      {"TaskValidate", reinterpret_cast<uintptr_t>(TaskValidateHC)},
+      {"Suspend", reinterpret_cast<uintptr_t>(SuspendHC)},
+      {"IsSuspended", reinterpret_cast<uintptr_t>(IsSuspendedHC)},
+      {"TaskQueIns", reinterpret_cast<uintptr_t>(TaskQueInsHC)},
+      {"TaskQueRem", reinterpret_cast<uintptr_t>(TaskQueRemHC)},
+      {"SingleUser", reinterpret_cast<uintptr_t>(SingleUserHC)},
+      {"IsSingleUser", reinterpret_cast<uintptr_t>(IsSingleUserHC)},
       {"Ona2Freq", reinterpret_cast<uintptr_t>(Ona2FreqHC)},
       {"Freq2Ona", reinterpret_cast<uintptr_t>(Freq2OnaHC)},
       {"Snd", reinterpret_cast<uintptr_t>(SndHC)},

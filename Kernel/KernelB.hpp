@@ -29,6 +29,24 @@ inline CTask *CurrentTask()
   return task;
 }
 
+inline CCPU *CurrentCPU()
+{
+  CCPU *cpu;
+  asm volatile("movq %%gs:0,%0" : "=r"(cpu));
+  return cpu;
+}
+
+extern "C" void _YIELD();
+extern "C" uint64_t SingleUserCpp(uint8_t val);
+extern "C" [[noreturn]] void Exit();
+extern "C" void TaskQueInsCpp(CTask *task, CTask *pred);
+extern "C" void TaskQueRemCpp(CTask *task);
+void TaskQueInsChild(CTask *task);
+extern "C" CTask *SpawnCpp(uintptr_t fp_start_addr, uint8_t *data,
+                          const char *task_name, int64_t target_cpu,
+                          CTask *parent, int64_t stk_size, uint64_t flags);
+bool Core0TaskInit();
+
 uint8_t *Caller(const uintptr_t *frame, int64_t depth, const CTask &task);
 extern "C" [[noreturn]] void RaiseHolyC(uint64_t tag);
 [[noreturn]] void RethrowHolyC();
@@ -118,6 +136,7 @@ uint8_t *MAllocAligned(size_t size, size_t alignment, CHeapCtrl *hc,
 uint64_t BIOSTotalMem();
 bool BlkPoolsInit(CTask *task);
 CHeapCtrl *HeapCtrlInit(CTask *task, CBlkPool *bp);
+void HeapCtrlDel(CHeapCtrl *hc);
 
 uint64_t *MemPageTable(uintptr_t addr);
 void UncachedAliasAlloc();

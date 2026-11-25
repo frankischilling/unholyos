@@ -137,6 +137,27 @@ and fallthrough share the group entry code through `IC_SUB_CALL`.
 back end stores fixed 32-bit relative offsets. TempleOS also selects
 smaller entries when the destinations fit.
 
+## Cooperative task scheduling
+
+`Kernel/Sched.asm` follows `_YIELD` and `RESTORE_SETH_TASK_IF_READY` in
+`Kernel/Sched.HC`. `Kernel/Sched.cpp` maintains the runnable and child
+queues. `IRQ_TIMER` in `Kernel/KInts.asm` rechecks the queue when a tick
+interrupts the idle task. An interrupt on a running task restores that
+same task.
+
+`Spawn` and the task exit path in `Kernel/KTask.cpp` follow
+`Kernel/KTask.HC`. A new task starts with its HolyC data argument above
+its return address to `Exit`. `HeapCtrlDel` in `Kernel/Mem/HeapCtrl.cpp`
+returns the task's pages after the dying queue delay. The bootstrap
+scheduler checks that queue from `Yield`. TempleOS uses the window
+manager on Core 0 and the Seth loop on other cores for this check.
+
+`Compiler/PrsExp.cpp` and `Compiler/BackC.cpp` emit an inline FS read for
+`Fs` and relocate a function address taken with `&`. The bootstrap
+headers expose the task fields used by the scheduler. Full function
+pointer declarations and the rest of the HolyC `CTask` members remain
+pending.
+
 ## PC speaker
 
 `Kernel/KMisc.cpp` follows `Kernel/KMisc.HC` for note conversion, PIT
@@ -147,9 +168,8 @@ and `CScrnCastGlbls` records in `Kernel/KernelA.hpp` follow
 `Kernel/KernelA.HH`. `Kernel/KUtils.asm` adapts the exported HolyC
 stack calls to the C++ ABI.
 
-`SleepUntilCpp` waits for timer interrupts on the current task.
-TempleOS marks the task idle and yields to the scheduler. The
-desktop playback in `Adam/ASnd.HC`, the AU writer in
+`SleepUntilCpp` sets the idle bit and wake jiffy before yielding to the
+scheduler. The desktop playback in `Adam/ASnd.HC`, the AU writer in
 `Adam/Snd/SndFile.HC`, and video capture remain pending.
 
 ## Remaining structural work

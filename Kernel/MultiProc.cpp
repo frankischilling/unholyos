@@ -1,4 +1,4 @@
-#include "KernelA.hpp"
+#include "KernelB.hpp"
 
 extern "C" CCPU *CPUStructInitCpp(int64_t num, CCPU *cpu, CTask *seth_task)
 {
@@ -11,4 +11,15 @@ extern "C" CCPU *CPUStructInitCpp(int64_t num, CCPU *cpu, CTask *seth_task)
       reinterpret_cast<CTaskDying *>(&cpu->next_dying);
   cpu->seth_task = seth_task;
   return cpu;
+}
+
+bool Core0TaskInit()
+{
+  auto *cpu = CurrentCPU();
+  cpu->idle_task = SpawnCpp(0, nullptr, "Idle Task", -1, adam_task, 0, 0);
+  if (!cpu->idle_task)
+    return false;
+  cpu->idle_task->task_flags |= TASKF_IDLE;
+  adam_task->gs = cpu;
+  return true;
 }

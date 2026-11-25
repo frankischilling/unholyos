@@ -52,7 +52,19 @@
 %define CTask_DATA_HEAP		0x28
 %define CTask_RSP		0x128
 
+%define CTask_WAKE_JIFFY		0x10
 %define CTask_FLAGS		0x18
+%define CTask_NEXT_TASK		0x80
+%define CTask_STK		0x310
+%define CTaskStk_SIZE		8
+%define CTaskStk_BASE		24
+%define TASKf_KILL_TASK		1
+%define TASKf_SUSPENDED		2
+%define TASKf_IDLE		3
+%define TASKf_AWAITING_MSG	9
+%define SEMA_DBG_MODE		4
+%define SEMA_SINGLE_USER	10
+%define DFT_CACHE_LINE_WIDTH	128
 %define CTask_RIP		0x118
 %define CTask_RFLAGS		0x120
 %define CTask_RSI		0x130
@@ -84,4 +96,6 @@
 %define CCPU_FLAGS		0x10
 %define CCPU_IDLE_PT_HITS	0x20
 %define CCPU_TOTAL_JIFFIES	0x30
+%define CCPU_SETH_TASK		0x38
+%define CCPU_IDLE_TASK		0x40
 %define CCPU_SWAP_CNT		0x50

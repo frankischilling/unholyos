@@ -321,6 +321,22 @@ source and the guest-built `SwitchProbe.BIN.Z`. Pinned TempleOS
 produced the same line from the source and the UnholyOS-built module.
 The suite rejects overlapping cases and saves the module under `BUILD`.
 
+## Cooperative task scheduling
+
+`make -j4 test BUILD=build/scheduler` builds
+`build/scheduler/unholyos-startup-test.iso` and runs
+`SchedulerProbe.HC` from source and as a guest-built `.BIN.Z` module.
+The probe checks the child task pointer, suspended tasks, single-user
+mode, stack arguments, PIT wakeups, and x87 state across a switch.
+It checks termination by return and by `Exit`. The suite also checks
+that the dying queue drains and accounts for the idle task's pages in
+the code and data pools.
+
+The scheduler runs on Core 0. `Sleep` and `SleepUntil` yield there, and
+the timer wakes the idle task when the runnable queue has no ready work.
+The cross-core job queue, window focus and keyboard controls, and the
+remaining task end callbacks are pending.
+
 ## PC speaker and recorded sound events
 
 `make -j4 test BUILD=build/pc-speaker` builds

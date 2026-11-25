@@ -965,6 +965,32 @@ static void BootAsmBranchReport(const CDrv &dvd, CTask &task)
   }
 }
 
+static void BootSchedulerReport(const CDrv &dvd)
+{
+  constexpr char source[] = "/SchedulerProbe.HC";
+  constexpr char path[] = "/SchedulerProbe.BIN.Z";
+  if (!BootFileProgramReport(dvd, source).okay)
+    return;
+  auto *ram = MountedDrive('B');
+  if (!ram || !ExePutS(
+      "Cmp(\"::/SchedulerProbe.HC\",,\"B:/SchedulerProbe.BIN.Z\");", nullptr, 0).okay)
+    return;
+  SerialPutS("UnholyOS: executing /SchedulerProbe.BIN.Z\r\n");
+  bool okay = Load(*ram, path, *adam_task) != nullptr;
+  SerialPutS("UnholyOS: finished /SchedulerProbe.BIN.Z, checks ");
+  SerialPutHex(okay);
+  SerialPutS("\r\n");
+  if (!okay)
+    return;
+  SleepCpp(2 * DYING_JIFFIES + 10);
+  _YIELD();
+  auto *cpu = CurrentCPU();
+  if (cpu->next_dying == reinterpret_cast<CTaskDying *>(&cpu->next_dying) &&
+      adam_task->next_task == adam_task && adam_task->last_task == adam_task)
+    SerialPutS("UnholyOS: dead tasks reaped\r\n");
+  BootGuestFileReport(*ram, path);
+}
+
 static void BootSoundReport(const CDrv &dvd, CTask &task)
 {
   auto start = __atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED);
@@ -1276,6 +1302,10 @@ extern "C" void KMainCpp()
     return;
   }
   adam_task->cur_dv = BlkDevsInitAll();
+  if (!Core0TaskInit()) {
+    SerialPutS("UnholyOS: Could not initialize the idle task\r\n");
+    return;
+  }
   BootPutS("UnholyOS kernel entered in 64-bit mode");
 
   SerialPutS("UnholyOS: DVD LBA ");
@@ -1377,6 +1407,7 @@ extern "C" void KMainCpp()
     BootAsmReport(*adam_task->cur_dv, *adam_task);
     BootAsmBranchReport(*adam_task->cur_dv, *adam_task);
     BootAsmListingReport(*adam_task->cur_dv, *adam_task);
+    BootSchedulerReport(*adam_task->cur_dv);
     BootSoundReport(*adam_task->cur_dv, *adam_task);
     BootFileProgramReport(*adam_task->cur_dv, "/AsmListingScope.HC");
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);

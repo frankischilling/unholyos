@@ -21,7 +21,11 @@ GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC
 GLOBAL RawHC,DbgModeHC,IsDbgModeHC,PutFileLinkHC,PutSrcLinkHC,FixSetHC,AdamErrHC
 GLOBAL tSHC,BusyHC,SleepUntilHC,SleepHC,Ona2FreqHC,Freq2OnaHC,SndHC
 GLOBAL ScrnCastHC,SndRstHC,BeepHC,MuteHC,IsMuteHC
+GLOBAL SpawnHC,TaskValidateHC,SuspendHC,IsSuspendedHC,TaskQueInsHC,TaskQueRemHC
+GLOBAL SingleUserHC,IsSingleUserHC
 EXTERN CPUStructInitCpp,TaskInitCpp
+EXTERN SpawnCpp,TaskValidateCpp,SuspendCpp,IsSuspendedCpp,TaskQueInsCpp,TaskQueRemCpp
+EXTERN SingleUserCpp,IsSingleUserCpp
 EXTERN MAllocCpp,FreeCpp,MSizeCpp,MSize2Cpp,MHeapCtrlCpp,CAllocCpp,MAllocIdentCpp
 EXTERN StrNewCpp,AStrNewCpp,StrCpyCpp,StrCmpCpp,StrIMatchCpp,StrOccCpp
 EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
@@ -111,6 +115,34 @@ BITS 64
 
 HOLYC_CPP CPUStructInit,CPUStructInitCpp,3
 HOLYC_CPP TaskInit,TaskInitCpp,2
+HOLYC_CPP TaskValidateHC,TaskValidateCpp,1
+HOLYC_CPP SuspendHC,SuspendCpp,2
+HOLYC_CPP IsSuspendedHC,IsSuspendedCpp,1
+HOLYC_CPP TaskQueInsHC,TaskQueInsCpp,2
+HOLYC_CPP TaskQueRemHC,TaskQueRemCpp,1
+HOLYC_CPP SingleUserHC,SingleUserCpp,1
+HOLYC_CPP IsSingleUserHC,IsSingleUserCpp,0
+
+SpawnHC:
+	HC_FRAME_ENTER
+	MOV	RDI,[RBP+16]
+	MOV	RSI,[RBP+24]
+	MOV	RDX,[RBP+32]
+	MOV	RCX,[RBP+40]
+	MOV	R8,[RBP+48]
+	MOV	R9,[RBP+56]
+	AND	RSP,-16
+	SUB	RSP,16
+	MOV	RAX,[RBP+64]
+	MOV	[RSP],RAX
+	CALL	SpawnCpp
+	LEA	RSP,[RBP-32]
+	POP	R11
+	POP	R10
+	POP	RDI
+	POP	RSI
+	POP	RBP
+	RET	56
 HOLYC_CPP _MALLOC,MAllocCpp,2
 HOLYC_CPP _FREE,FreeCpp,1
 HOLYC_CPP _MSIZE,MSizeCpp,1
