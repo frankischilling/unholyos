@@ -352,6 +352,89 @@ static_assert(sizeof(CBGR48) == 8 && offsetof(CBGR48, b) == 0 &&
               offsetof(CBGR48, g) == 2 && offsetof(CBGR48, r) == 4 &&
               offsetof(CBGR48, pad) == 6);
 
+constexpr uint8_t TRANSPARENT = 0xFF, COLOR_MONO = 0xFF;
+constexpr uint32_t ROPF_HALF_RANGE_COLOR = 0x1000, ROPF_TWO_SIDED = 0x2000,
+                   ROPF_DITHER = 0x40000000,
+                   ROPF_PROBABILITY_DITHER = 0x80000000;
+
+struct CColorROPU16
+{
+  uint8_t color, rop;
+};
+
+struct CColorROPU32
+{
+  CColorROPU16 c0, c1;
+};
+
+struct CD3I32
+{
+  int32_t x, y, z;
+};
+
+constexpr int64_t GR_WIDTH = 640, GR_HEIGHT = 480;
+constexpr int64_t GR_SCALE = int64_t{1} << 32;
+enum : uint32_t
+{
+  DCF_COMPRESSED = 1,
+  DCF_PALETTE = 2,
+  DCF_NO_TRANSPARENTS = 4,
+  DCF_TRANSFORMATION = 0x100,
+  DCF_SYMMETRY = 0x200,
+  DCF_JUST_MIRROR = 0x400,
+  DCF_LOCATE_NEAREST = 0x800,
+  DCF_DONT_DRAW = 0x1000,
+  DCF_ALIAS = 0x2000,
+  DCF_SCRN_BITMAP = 0x4000,
+  DCF_FILL_NOT_COLOR = 0x8000,
+  DCF_RECORD_EXTENTS = 0x10000,
+  DCF_ON_TOP = 0x20000,
+  DCSF_COMPRESSED = 1,
+  DCSF_PALETTE_GET = 2,
+  DCS_SIGNATURE_VAL = 0x53437644, // 'DvCS'
+};
+
+struct CGrSym
+{
+  int32_t sx, sy, sz, pad;
+  int64_t snx, sny, snz;
+};
+
+struct CDC
+{
+  uint64_t cdt;
+  int32_t x0, y0, width, width_internal, height, flags;
+  CBGR48 palette[COLORS_NUM];
+  CColorROPU32 color, bkcolor, color2;
+  CD3I32 ls;
+  uint64_t dither_probability_u16;
+  CDC *brush;
+  int64_t *r, r_norm;
+  int32_t x, y, z, thick;
+  // These callbacks use the HolyC stack convention.
+  void (*transform)(CDC *dc, int64_t *x, int64_t *y, int64_t *z);
+  void (*lighting)(CDC *dc, CD3I32 *p1, CD3I32 *p2, CD3I32 *p3, uint32_t color);
+  CGrSym sym;
+  int32_t cur_x, cur_y, cur_z, pad;
+  int64_t collision_cnt, nearest_dist, min_x, max_x, min_y, max_y;
+  uint32_t dc_signature, signature_pad;
+  CTask *mem_task, *win_task;
+  CDC *alias;
+  uint8_t *body;
+  int32_t *depth_buf;
+  int64_t db_z;
+};
+
+static_assert(sizeof(CColorROPU16) == 2 && sizeof(CColorROPU32) == 4 &&
+              sizeof(CD3I32) == 12 && sizeof(CGrSym) == 40);
+static_assert(sizeof(CDC) == 408 && offsetof(CDC, flags) == 28 &&
+              offsetof(CDC, palette) == 32 && offsetof(CDC, color) == 160 &&
+              offsetof(CDC, ls) == 172 && offsetof(CDC, r) == 200 &&
+              offsetof(CDC, transform) == 232 && offsetof(CDC, sym) == 248 &&
+              offsetof(CDC, dc_signature) == 352 &&
+              offsetof(CDC, mem_task) == 360 && offsetof(CDC, body) == 384 &&
+              offsetof(CDC, depth_buf) == 392 && offsetof(CDC, db_z) == 400);
+
 enum : uint16_t
 {
   VGAP_ATTR_INDEX = 0x03C0,

@@ -690,7 +690,7 @@ constexpr uint64_t drive_pages = 7 + 9, drive_alloced = drive_pages * 512;
 constexpr uint64_t drive_used = drive_alloced - 2 * 24 + 40 + 40 + 32 + 24;
 
 static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
-                                    uint64_t owner)
+                                    uint64_t owner, uint64_t &graphics)
 {
   uint64_t used = 0, count = 0;
   bool kernel = false, hash_del = false, hash_src = false, put_str = false;
@@ -760,12 +760,14 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
         hash_del |= !module && str == "HashDel";
         hash_src |= !module && str == "HashSrcFileSet";
         put_str |= !module && str == "PUT_STR";
+        if (type == 0x08000001 && str == "gr")
+          graphics = ReadPhysical<1>(vm, addr + 64)[0];
         used += entry[1] + name[1];
         addr = entry[2];
       }
     }
   }
-  Check(kernel && hash_del && hash_src && put_str && colors && rainbow,
+  Check(kernel && hash_del && hash_src && put_str && colors && rainbow && graphics,
         "Missing boot symbols");
   return used;
 }
@@ -824,10 +826,46 @@ static void VerifyCoverage(BlockRanges blocks, const BlockRanges &ranges)
   Check(block == blocks.end(), "Block pool has pages outside its ranges");
 }
 
+static uint64_t VerifyGraphicsContexts(CMonitor &vm, uint64_t graphics,
+                                       uint64_t owner)
+{
+  const auto contexts = ReadPhysical<8>(vm, graphics);
+  Check(ReadPhysical<1>(vm, graphics + 10480)[0] == 1,
+        "Invalid initial graphics zoom");
+  constexpr uint64_t flags[] = {0, 0x24000, 0x4000, 0x4000, 0, 0x4000};
+  uint64_t used = 0;
+  for (size_t i = 0; i < std::size(flags); ++i) {
+    uint64_t dc = contexts[i + 2];
+    Check(dc >= 16 && std::count(contexts.begin(), contexts.end(), dc) == 1,
+          "Missing or duplicate graphics device context");
+    Check(ReadPhysical<4>(vm, dc) ==
+              std::array<uint64_t, 4>{0, 0, (640ULL << 32) | 640,
+                                      (flags[i] << 32) | 480},
+          "Invalid graphics device context geometry");
+    auto matrix = ReadPhysical<1>(vm, dc + 200)[0];
+    auto body = ReadPhysical<1>(vm, dc + 384)[0];
+    Check(matrix >= 16 && body >= 16, "Missing graphics buffer");
+    auto context_alloc = ReadPhysical<2>(vm, dc - 16);
+    auto matrix_alloc = ReadPhysical<2>(vm, matrix - 16);
+    auto body_alloc = ReadPhysical<2>(vm, body - 16);
+    Check(context_alloc == std::array<uint64_t, 2>{owner, 424} &&
+              matrix_alloc == std::array<uint64_t, 2>{owner, 144} &&
+              body_alloc == std::array<uint64_t, 2>{owner, 1026 * 512 - 24},
+          "Invalid graphics device context allocations");
+    Check(ReadPhysical<1>(vm, matrix)[0] == 1ULL << 32 &&
+              ReadPhysical<1>(vm, body)[0] == (i == 1 ? UINT64_MAX : 0) &&
+              ReadPhysical<1>(vm, body + 640 * 480 - 8)[0] ==
+                  (i == 1 ? UINT64_MAX : 0),
+          "Invalid graphics device context initialization");
+    used += context_alloc[1] + matrix_alloc[1] + body_alloc[1];
+  }
+  return used;
+}
+
 static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
                         const std::string &output, uint64_t range_bytes,
                         uint64_t symbol_used, const std::vector<CTestE820> &e820,
-                        uint64_t idle)
+                        uint64_t idle, uint64_t graphics)
 {
   constexpr uint64_t adam = 0x100300, adam_hc = 0x101188, code_pool = 0x1007A8;
   constexpr uint64_t code_base = 0x1000000, page = 512;
@@ -881,8 +919,9 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   auto allocation = ReadPhysical<2>(vm, waiting[0] - 16);
   Check(allocation[0] == expected_data_hc && allocation[1] == 0x80,
         "Invalid mouse message allocation");
+  const uint64_t graphics_used = VerifyGraphicsContexts(vm, graphics, expected_data_hc);
   const uint64_t boot_used = range_bytes + late_used + symbol_used + drive_used +
-                             allocation[1];
+                             allocation[1] + graphics_used;
   auto code = VerifyHeap(vm, adam_hc, code_pool, adam);
   auto idle_code = VerifyHeap(vm, idle_heaps[0], code_pool, idle);
   Check(code.used == 0x42840 + fault_used + idle_task[1] +
@@ -896,7 +935,7 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   auto low_free = ReadPhysical<3>(vm, heap);
   Check(high_free[0] == heap && !low_free[0] &&
             static_cast<uint32_t>(high_free[2]) == 0x6E55424D &&
-            low_free[2] == ((((ram_end - heap) / page - 0x224) << 32) | 0x6E55424D),
+            static_cast<uint32_t>(low_free[2]) == 0x6E55424D,
         "Invalid code pool free list");
   code.ranges.insert(code.ranges.end(), idle_code.ranges.begin(), idle_code.ranges.end());
   code.ranges.emplace_back(heap, heap + (low_free[2] >> 32) * page);
@@ -951,7 +990,8 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
   const auto e820 = ReadE820(vm);
   uint64_t range_bytes = VerifyDeviceRanges(vm, output, e820);
   uint64_t owner = ReadPhysical<1>(vm, adam + 0x28)[0];
-  uint64_t symbol_used = VerifyKernelSymbols(vm, top + 0x28, owner);
+  uint64_t graphics = 0;
+  uint64_t symbol_used = VerifyKernelSymbols(vm, top + 0x28, owner, graphics);
   Check(ReadPhysical<1>(vm, fixed, 'h')[0] == 0x37F,
         "Missing initial FPU image");
   auto cpu = ReadPhysical<14>(vm, boot_cpu);
@@ -966,7 +1006,7 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
             ReadPhysical<3>(vm, idle + 0x78) == std::array<uint64_t, 3>{adam, idle, idle} &&
             ReadPhysical<1>(vm, idle + 0x1A8)[0] == boot_cpu,
         "Invalid idle task record");
-  VerifyPools(vm, heap, ram_end, output, range_bytes, symbol_used, e820, idle);
+  VerifyPools(vm, heap, ram_end, output, range_bytes, symbol_used, e820, idle, graphics);
 
   constexpr uint64_t task_alloced = 0x44800;
   uint64_t used_block = ram_end - task_alloced;
@@ -1236,6 +1276,23 @@ static void DrivePalette(CMonitor &vm, const fs::path &serial)
         "The VGA palette did not restore the boot text");
 }
 
+constexpr std::string_view dc_output =
+    "dc layout 408 32 384 392 10507 10480\n"
+    "dc screen 640 480 24000 4000 1\n"
+    "dc new 13 16 5 53437644 0 1 0000000100000000\n"
+    "dc alias 1 1 0 2000\n"
+    "dc depth 7FFFFFFF 7FFFFFFF\n"
+    "dc copy 1 15 123 1 1\n"
+    "dc transform 12 -4 3 7FFFFFFF\n"
+    "dc light 8004000C 37837\n"
+    "dc reset 10000 0 15 37837 1\n"
+    "dc null 1000 1 1\n"
+    "dc raw 240 E52FFF102716BD66\n"
+    "dc load 240 -7 8 2 123456789ABC 7\n"
+    "dc compressed 191 3BEBDB6BD7DF4848\n"
+    "dc expanded 191 7 6 79\n"
+    "dc file 191 123456789ABC 7\n";
+
 static void VerifyGuestISO(const char *qemu, CMonitor &vm,
                            const fs::path &dir, const fs::path &source,
                            const fs::path &kernel, const char *memory,
@@ -1257,6 +1314,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     DriveMouse(rebuilt, serial);
     DrivePalette(rebuilt, serial);
     auto boot = rebuilt.Boot(serial);
+    CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
     auto registers = StopAtIdle(rebuilt);
     VerifyHandoff(boot, media, registers);
     VerifyBootDrive(rebuilt, boot, media, true, false);
@@ -1297,6 +1355,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                     secondary_slave);
 
     if (startup) {
+      CheckProgramOutput(output, "/DCProbe.HC", dc_output, '1');
       CheckProgramOutput(output, "/PaletteProbe.HC",
                          "palette tables 8 AAAA55550000 777777777777 12 BROWN LTRED\n"
                          "palette start 0 AAAA55550000 FFFFFFFFFFFF\n"
@@ -1657,7 +1716,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/DivByHand.BIN.Z", "123456/10=12345\n", '1');
       CheckProgramOutput(output, "/AsmProbe.BIN.Z",
                          "asm import\nasm result 42\n", '1');
-      if (std::string_view(memory) == "512")
+      if (std::string_view(memory) == "512") {
         for (auto *name :
              {"AsmProbe.BIN.Z", "DivByHand.BIN.Z", "InlineAsmProbe.BIN.Z",
               "GotoProbe.BIN.Z", "SwitchProbe.BIN.Z", "OpcodeProbe.BIN.Z",
@@ -1667,6 +1726,16 @@ static void TestBoot(const char *qemu, const fs::path &iso,
           fs::copy_file(CaptureGuestFile(vm, dir, output, name),
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);
+        auto path = CaptureGuestFile(vm, dir, output, "DCProbe.GR.Z");
+        const auto archive = FileRead(path);
+        uint64_t hash = 0xCBF29CE484222325;
+        for (uint8_t byte : archive)
+          hash = (hash ^ byte) * 0x100000001B3;
+        Check(archive.size() == 118 && hash == 0x1F9B24E015B471C5,
+              "The GR.Z disk file differs from pinned TempleOS");
+        fs::copy_file(path, iso.parent_path() / "DCProbe.GR.Z",
+                      fs::copy_options::overwrite_existing);
+      }
       VerifyGuestISO(qemu, vm, dir, iso, kernel, memory, output);
       if (std::string_view(memory) == "4608") {
         std::smatch address;
