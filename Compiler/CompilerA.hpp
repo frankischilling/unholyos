@@ -127,6 +127,7 @@ void LexSourceDel(CCmpCtrl &cc);
 bool LexAttachDoc(CCmpCtrl &cc, CDoc &doc, CLexFile *root = nullptr,
                   CDocEntryBase *entry = nullptr, uint32_t col = 0);
 int64_t LexGetChar(CCmpCtrl &cc);
+const char *LexPutLine(const CLexFile &file, const char *start);
 int64_t LexRaw(CCmpCtrl &cc);
 int64_t Lex(CCmpCtrl &cc);
 char *LexExtStr(CCmpCtrl &cc, size_t &size);
@@ -219,7 +220,9 @@ enum : uint8_t
   AKW_USE32,
   AKW_USE64,
   AKW_IMPORT,
-  AKW_BINFILE = 88,
+  AKW_LIST,
+  AKW_NOLIST,
+  AKW_BINFILE,
 };
 
 inline const CInst *AsmInstEntries(const CHashOpcode &op)
@@ -435,8 +438,20 @@ struct CAOT
   size_t size = 0, warning_cnt = 0;
   uint8_t max_align_bits = 3;
   uint64_t org = INVALID_PTR;
+  unsigned lst_col = 0;
 };
 
+struct CAsmListing
+{
+  const CLexFile *lst_last_lfn = nullptr;
+  const void *lst_last_source = nullptr;
+  size_t lst_last_line = SIZE_MAX, lst_last_rip = 0;
+  unsigned lst_col = 0;
+  bool lst = false;
+};
+
+void AsmLineLst(CCmpCtrl &cc, CAsmListing &listing, size_t rip);
+void AsmListCode(CAsmListing &listing, uint64_t value, unsigned width);
 bool MapFileWrite(const CHashTable &table, const char *name, uint8_t drv_let);
 bool AOTStore(CAOT &aot, const void *symbol, const char *name,
               const uint8_t *body, size_t size, bool main = false);
