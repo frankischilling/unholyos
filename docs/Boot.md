@@ -189,6 +189,15 @@ image-base fixups, and checks that an unresolved local label leaves
 no exported symbol. The test saves `DivByHand.BIN.Z` and
 `AsmProbe.BIN.Z` under `BUILD`.
 
+```sh
+make -j4 test BUILD=build/gcc
+qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom build/gcc/unholyos-startup-test.iso -display none -serial file:build/gcc/windows-pc512.log -monitor none -no-reboot -no-shutdown
+```
+
+The Windows QEMU run reached the kernel entry line after the startup
+tests. The TempleOS comparison used the pinned `TOS_Distro.ISO` with
+the same machine, CPU, RAM, and DVD boot settings.
+
 Assembly inside HolyC functions, full opcode and operand coverage,
 and the remaining directives are pending.
 

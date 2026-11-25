@@ -5,9 +5,9 @@ EXTERN PutHexHC,PutCharsHC,PutSHC
 
 %macro PUSH_C_REGS 0
 	PUSH	RAX
-	PUSH	RBX
 	PUSH	RCX
 	PUSH	RDX
+	PUSH	RBX
 	PUSH	R8
 	PUSH	R9
 %endmacro
@@ -15,9 +15,9 @@ EXTERN PutHexHC,PutCharsHC,PutSHC
 %macro POP_C_REGS 0
 	POP	R9
 	POP	R8
+	POP	RBX
 	POP	RDX
 	POP	RCX
-	POP	RBX
 	POP	RAX
 %endmacro
 
