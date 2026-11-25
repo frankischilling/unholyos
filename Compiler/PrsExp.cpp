@@ -493,7 +493,8 @@ private:
         return NO_IC;
       Lex(cc);
       auto address = fixed
-                         ? Int(reinterpret_cast<uintptr_t>(member->static_data))
+                         ? Add({reinterpret_cast<uintptr_t>(member->static_data), NO_IC,
+                                NO_IC, IC_DATA_ADDR, RT_I64, false, false, true})
                          : Add({static_cast<uint64_t>(member->offset), NO_IC,
                                 NO_IC, IC_RBP, RT_I64, false, false, true});
       return coc.LValue(address, *member->member_class, member->dim.next);
@@ -516,7 +517,9 @@ private:
             var->data_addr) {
           auto data = reinterpret_cast<uintptr_t>(var->data_addr);
           Lex(cc);
-          return coc.LValue(Int(data), *cls, var->dim.next);
+          auto address = Add({data, NO_IC, NO_IC, IC_DATA_ADDR, RT_I64,
+                              false, false, true});
+          return coc.LValue(address, *cls, var->dim.next);
         }
       }
     }
@@ -615,12 +618,16 @@ uint32_t PrsPrint(CCmpCtrl &cc, CCodeCtrl &coc)
 }
 
 static uint8_t *LexExpressionBin(CCmpCtrl &cc, CRawType &type, bool convert,
-                                 bool statement = false, bool strings = false)
+                                 bool statement = false, bool strings = false,
+                                 CAOT *aot = nullptr, size_t *size = nullptr)
 {
   CCodeCtrl coc;
   CPrsStk ps(cc, coc, nullptr, statement || strings);
   auto root = ps.Parse();
   if (root == NO_IC || coc.code[root].type == RT_AGGREGATE)
+    return nullptr;
+  if ((cc.flags & CCF_AOT_COMPILE) && !aot &&
+      (coc.code[root].runtime || coc.has_misc_data))
     return nullptr;
   if (!convert) {
     type = coc.code[root].type;
@@ -629,7 +636,7 @@ static uint8_t *LexExpressionBin(CCmpCtrl &cc, CRawType &type, bool convert,
                       (coc.code[root].code == IC_CALL && type == RT_U64)))
       type = RT_I64;
   }
-  auto *machine = COCCompile(coc, root, type);
+  auto *machine = COCCompile(coc, root, type, nullptr, aot, size);
   if (machine && coc.has_misc_data)
     cc.flags |= CCF_HAS_MISC_DATA;
   return machine;
@@ -640,9 +647,10 @@ uint8_t *LexExpression2Bin(CCmpCtrl &cc, CRawType &type)
   return LexExpressionBin(cc, type, false);
 }
 
-uint8_t *LexStatementExpression2Bin(CCmpCtrl &cc, CRawType &type)
+uint8_t *LexStatementExpression2Bin(CCmpCtrl &cc, CRawType &type,
+                                    CAOT *aot, size_t *size)
 {
-  return LexExpressionBin(cc, type, false, true);
+  return LexExpressionBin(cc, type, false, true, false, aot, size);
 }
 
 uint8_t *LexTypedExpression2Bin(CCmpCtrl &cc, CRawType type, bool strings)

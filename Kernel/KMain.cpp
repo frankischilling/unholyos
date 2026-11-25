@@ -573,7 +573,7 @@ static void BootISOReport(const CDrv &dv)
     size_t prefix;
     if (!RedSeaFileLookup(*ram, path, false, false, entry, prefix))
       return;
-    SerialPutS("UnholyOS: guest ISO ");
+    SerialPutS("UnholyOS: guest file ");
     SerialPutS(path);
     SerialPutS(", address ");
     SerialPutHex(reinterpret_cast<uintptr_t>(ram->bd->RAM_dsk) +
@@ -728,6 +728,40 @@ static void BootProbeReport(const CDrv &dv, CTask &task, const char *path,
   SerialPutS(label);
   SerialPutHex(result);
   SerialPutS("\r\n");
+}
+
+static void BootCmpReport(const CDrv &dvd, CTask &task)
+{
+  auto *ram = MountedDrive('B');
+  if (!ram || !BootFileProgramReport(dvd, "/CmpProbeRunner.HC").okay)
+    return;
+  auto *file = HashFind("CmpProbeResult", task.hash_table, HTG_TYPE_MASK);
+  auto *rejected = HashFind("CmpStaleExport", task.hash_table, HTG_TYPE_MASK);
+  SerialPutS(file || rejected ? "UnholyOS: early AOT symbols\r\n"
+                             : "UnholyOS: AOT symbols isolated\r\n");
+  size_t size;
+  auto *map = FileRead(*ram, "/CmpOutput.MAP.Z", size, task.data_heap);
+  if (map) {
+    SerialPutS("UnholyOS: AOT source map\r\n");
+    SerialPutS(reinterpret_cast<const char *>(map));
+    Free(map);
+  }
+  BootProbeReport(*ram, task, "/CmpOutput.BIN.Z", "CmpProbeResult",
+                  "UnholyOS: AOT result ");
+  SerialPutS("UnholyOS: executing /CmpPrint.BIN.Z\r\n");
+  auto *print = Load(*ram, "/CmpPrint.BIN.Z", task, LDF_JUST_LOAD);
+  if (print && LoadPass2(*print))
+    SerialPutS("UnholyOS: finished /CmpPrint.BIN.Z, checks 0x0000000000000001\r\n");
+  CRedSeaDirEntry entry;
+  size_t prefix;
+  if (RedSeaFileLookup(*ram, "/CmpOutput.BIN.Z", false, false, entry, prefix)) {
+    SerialPutS("UnholyOS: guest file /CmpOutput.BIN.Z, address ");
+    SerialPutHex(reinterpret_cast<uintptr_t>(ram->bd->RAM_dsk) +
+                 entry.clus * BLK_SIZE);
+    SerialPutS(", size ");
+    SerialPutHex(entry.size);
+    SerialPutS("\r\n");
+  }
 }
 
 static void BootModuleReport(const CDrv &dv, CTask &task)
@@ -912,6 +946,7 @@ extern "C" void KMainCpp()
                     "UnholyOS: compiler runtime probe ");
     BootProbeReport(*adam_task->cur_dv, *adam_task, "/FileWriteProbe.BIN",
                     "FileWriteProbeResult", "UnholyOS: write probe ");
+    BootCmpReport(*adam_task->cur_dv, *adam_task);
     BootISOReport(*adam_task->cur_dv);
   } else {
     SerialPutS("UnholyOS: Could not mount the boot DVD\r\n");

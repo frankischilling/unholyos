@@ -14,3 +14,7 @@ Linux/Fixtures/MemoryProbe.HC text eol=lf
 Linux/Fixtures/SubIntAccess.HC text eol=lf
 Linux/Fixtures/AggregateProbe.HC text eol=lf
 Linux/Fixtures/CompoundProbe.HC text eol=lf
+Linux/Fixtures/CmpProbeRunner.HC text eol=lf
+Linux/Fixtures/CmpProbe.PRJ text eol=lf
+Linux/Fixtures/CmpProbe.HH text eol=lf
+Linux/Fixtures/CmpInvalid.HC text eol=lf

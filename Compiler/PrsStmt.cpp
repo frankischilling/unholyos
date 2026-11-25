@@ -384,7 +384,7 @@ private:
 };
 
 static bool PrsFun(CCmpCtrl &cc, CHashClass &type, char *name,
-                   uint32_t visibility, uint16_t flags)
+                   uint32_t visibility, uint16_t flags, CAOT *aot)
 {
   auto *heap = CurrentTask()->data_heap;
   auto *fun = reinterpret_cast<CHashFun *>(CAlloc(sizeof(CHashFun), heap));
@@ -412,8 +412,9 @@ static bool PrsFun(CCmpCtrl &cc, CHashClass &type, char *name,
   CCodeCtrl coc;
   CPrsStmt ps(cc, coc);
   uint8_t *machine = nullptr;
+  size_t size;
   if (ps.Body())
-    machine = COCCompile(coc, NO_IC, ClassRawType(type), fun);
+    machine = COCCompile(coc, NO_IC, ClassRawType(type), fun, aot, &size);
   cc.htc.local_var_lst = old_local;
   cc.htc.fun = old_fun;
   if (!machine) {
@@ -427,13 +428,24 @@ static bool PrsFun(CCmpCtrl &cc, CHashClass &type, char *name,
   }
   fun->exe_addr = machine;
   fun->cls.flags &= ~CF_EXTERN;
-  CurrentTask()->last_fun = fun;
+  if (aot) {
+    if (!AOTStore(*aot, fun, visibility & HTF_PUBLIC ? name : nullptr,
+                  machine, size))
+      return false;
+    for (auto *member = fun->cls.member_lst_and_root; member;
+         member = member->next)
+      if ((member->flags & MLF_STATIC) &&
+          !AOTStore(*aot, member->static_data, nullptr, member->static_data,
+                    member->size))
+        return false;
+  } else
+    CurrentTask()->last_fun = fun;
   Lex(cc);
   return true;
 }
 
 static bool PrsGlobal(CCmpCtrl &cc, CHashClass &type, char *name,
-                      uint32_t visibility)
+                      uint32_t visibility, CAOT *aot)
 {
   auto *heap = CurrentTask()->data_heap;
   auto *var =
@@ -457,7 +469,9 @@ static bool PrsGlobal(CCmpCtrl &cc, CHashClass &type, char *name,
   var->size = type.size * var->dim.total_cnt;
   HashSrcFileSetCpp(&cc, &var->sym, 0);
   HashAdd(&var->sym.hash, cc.htc.glbl_hash_table);
-  return true;
+  return !aot || AOTStore(*aot, var->data_addr,
+                          visibility & HTF_PUBLIC ? name : nullptr,
+                          var->data_addr, var->size);
 }
 
 bool PrsStreamBlk(CCmpCtrl &cc)
@@ -494,6 +508,8 @@ bool PrsStreamBlk(CCmpCtrl &cc)
 
 bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
 {
+  auto *aot = cc.flags & CCF_AOT_COMPILE ? cc.aot : nullptr;
+  size_t size;
   cc.flags &= ~CCF_HAS_MISC_DATA;
   machine = nullptr;
   if (cc.token == ';') {
@@ -540,12 +556,12 @@ bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
       cc.cur_str = nullptr;
       Lex(cc);
       if (first && cc.token == '(')
-        return PrsFun(cc, *cls, name, visibility, flags);
+        return PrsFun(cc, *cls, name, visibility, flags, aot);
       if (flags || cc.token == '(') {
         Free(name);
         return false;
       }
-      if (!PrsGlobal(cc, *cls, name, visibility))
+      if (!PrsGlobal(cc, *cls, name, visibility, aot))
         return false;
       if (cc.token == ';') {
         Lex(cc);
@@ -564,17 +580,24 @@ bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
     if (!ps.Statement(0, NO_IC))
       return false;
     type = RT_I64;
-    machine = COCCompile(coc, NO_IC, type);
+    machine = COCCompile(coc, NO_IC, type, nullptr, aot, &size);
     if (machine && coc.has_misc_data)
       cc.flags |= CCF_HAS_MISC_DATA;
-    return machine != nullptr;
+    if (!machine)
+      return false;
+  } else {
+    machine = LexStatementExpression2Bin(cc, type, aot, &size);
+    if (!machine || cc.token != ';') {
+      Free(machine);
+      machine = nullptr;
+      return false;
+    }
+    Lex(cc);
   }
-  machine = LexStatementExpression2Bin(cc, type);
-  if (!machine || cc.token != ';') {
-    Free(machine);
-    machine = nullptr;
-    return false;
-  }
-  Lex(cc);
-  return true;
+  if (!aot)
+    return true;
+  bool okay = AOTStore(*aot, nullptr, nullptr, machine, size, true);
+  Free(machine);
+  machine = nullptr;
+  return okay;
 }

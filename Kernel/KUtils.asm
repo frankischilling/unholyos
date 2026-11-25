@@ -33,7 +33,8 @@ EXTERN FileWriteCpp,BlkDevNextFreeSlotCpp,BlkDevAddCpp,Let2DrvCpp,BlkReadCpp,Blk
 EXTERN RedSeaISOCpp
 EXTERN SysUntryCpp,PutExceptCpp
 EXTERN StrPrintJoin,CatPrintCpp,MStrPrintCpp,PrintCpp,PrintErrCpp,PrintWarnCpp
-EXTERN ExePutSCpp,ExeFileCpp,StreamPrintCpp,StreamExePrintCpp
+GLOBAL CmpHC
+EXTERN CmpCpp,ExePutSCpp,ExeFileCpp,StreamPrintCpp,StreamExePrintCpp
 EXTERN PutCharsCpp,PutS,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineMatchCpp
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp
@@ -169,6 +170,7 @@ HOLYC_PRINT PrintWarnHC,PrintWarnCpp,1,1
 HOLYC_CPP PutCharsHC,PutCharsCpp,1
 HOLYC_CPP PutSHC,PutS,1
 HOLYC_CPP ExePutSHC,ExePutSCpp,4
+HOLYC_CPP CmpHC,CmpCpp,4
 HOLYC_CPP ExeFileHC,ExeFileCpp,2
 HOLYC_PRINT StreamPrintHC,StreamPrintCpp,1,1
 HOLYC_PRINT StreamExePrintHC,StreamExePrintCpp,1,1

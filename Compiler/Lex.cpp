@@ -1088,6 +1088,8 @@ int64_t Lex(CCmpCtrl &cc)
       if (!LexExpression(cc, condition))
         return cc.token = TK_ERROR;
       if (!condition) {
+        if (cc.aot)
+          cc.aot->warning_cnt++;
         const auto *file = cc.lex_include_stk;
         uint64_t args[]{reinterpret_cast<uintptr_t>(file->full_name),
                         static_cast<uint64_t>(file->line_num)};
