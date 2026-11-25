@@ -25,5 +25,7 @@ Linux/Fixtures/ImportExtern.HC text eol=lf
 Linux/Fixtures/ImportLate.HC text eol=lf
 Linux/Fixtures/DivByHand.HC -text whitespace=cr-at-eol
 Linux/Fixtures/AsmHelloWorld.HC -text whitespace=cr-at-eol
+Linux/Fixtures/MulByHand.HC -text whitespace=cr-at-eol,-blank-at-eof
+Linux/Fixtures/PutDec.HC -text whitespace=cr-at-eol
 Linux/Fixtures/AsmBuild.HC text eol=lf
 Linux/Fixtures/AsmProbe.HC text eol=lf
