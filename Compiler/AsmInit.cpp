@@ -256,7 +256,7 @@ static CHashClass *FindType(const char *name, CHashTable *table)
 }
 
 static bool CmpKernelGlobal(CHashTable *table, const char *name, CHashClass *cls,
-                            void *addr)
+                            void *addr, size_t count = 0)
 {
   auto *heap = CurrentTask()->data_heap;
   auto *var =
@@ -273,7 +273,19 @@ static bool CmpKernelGlobal(CHashTable *table, const char *name, CHashClass *cls
   var->size = cls->size;
   var->flags = GVF_IMPORT | GVF_ALIAS;
   var->var_class = cls;
-  var->dim.cnt = var->dim.total_cnt = 1;
+  var->dim.cnt = 1;
+  var->dim.total_cnt = count ? count : 1;
+  if (count) {
+    auto *axis = reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim),heap));
+    if (!axis) {
+      HashDel(&var->sym.hash);
+      return false;
+    }
+    axis->cnt = count;
+    axis->total_cnt = 1;
+    var->dim.next = axis;
+    var->size = cls->size * count;
+  }
   var->data_addr = reinterpret_cast<uint8_t *>(addr);
   HashAdd(&var->sym.hash, table);
   return true;
@@ -544,6 +556,39 @@ static bool CmpMouseData(CHashTable *table)
          CmpKernelGlobal(table, "ms_grid", grid, &ms_grid);
 }
 
+static bool CmpPaletteData(CHashTable *table)
+{
+  auto *cls = CmpKernelClass(table, "CBGR48", sizeof(CBGR48));
+  if (!cls)
+    return false;
+  cls->fwd_class = FindType("I64i", table);
+  auto *heap = CurrentTask()->data_heap;
+  auto *u16 = FindType("U16", table);
+  constexpr struct
+  {
+    const char *name;
+    size_t offset;
+  } members[]{
+      {"b", offsetof(CBGR48, b)},
+      {"g", offsetof(CBGR48, g)},
+      {"r", offsetof(CBGR48, r)},
+      {"pad", offsetof(CBGR48, pad)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    if (!name || !MemberAdd(*cls, name, *u16, member.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return CmpKernelGlobal(table, "gr_palette_std", cls, gr_palette_std,
+                         COLORS_NUM) &&
+         CmpKernelGlobal(table, "gr_palette_gray", cls, gr_palette_gray,
+                         COLORS_NUM) &&
+         CmpKernelGlobal(table, "gr_rainbow_10", FindType("U8", table),
+                         gr_rainbow_10, 10);
+}
+
 static bool CmpRuntimeHeaders(CHashTable *table)
 {
   enum : uint8_t
@@ -558,7 +603,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     U8Ptr,
     TaskPtr,
     JobPtr,
-    I64Ptr
+    I64Ptr,
+    BGR48,
+    BGR48Ptr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -566,6 +613,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("U8", table),     FindType("F64", table),    FindType("Bool", table),
       FindType("U8", table) + 1, FindType("CTask", table) + 1,
       FindType("CJob", table) + 1, FindType("I64", table) + 1,
+      FindType("CBGR48", table), FindType("CBGR48", table) + 1,
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -618,6 +666,11 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"x", I64, true, INT64_MAX}, {"y", I64, true, INT64_MAX},
         {"z", I64, true, INT64_MAX}, {"l", I64, true, INT64_MAX},
         {"r", I64, true, INT64_MAX}}},
+      {"GrPaletteColorSet", U0, FF_RET1, {{"color_num", I64}, {"bgr48", BGR48}}},
+      {"GrPaletteColorGet", BGR48, FF_RET1, {{"color_num", I64}}},
+      {"GrPaletteGet", U0, FF_RET1, {{"bgr48", BGR48Ptr}}},
+      {"GrPaletteSet", U0, FF_RET1, {{"bgr48", BGR48Ptr}}},
+      {"PaletteSetStd", U0, FF_RET1, {}},
       {"PutKey", U0, FF_RET1, {{"ch", I64, true}, {"sc", I64, true}}},
       {"ScanChar", I64, FF_RET1, {}},
       {"ScanKey", Bool, FF_RET1,
@@ -857,6 +910,11 @@ static bool CmpFillHash(CHashTable *table)
     const char *name, *data;
   } defines[]{
       {"NULL", "0"}, {"TRUE", "1"}, {"FALSE", "0"}, {"ON", "1"}, {"OFF", "0"},
+      {"BLACK","0"}, {"BLUE","1"}, {"GREEN","2"}, {"CYAN","3"},
+      {"RED","4"}, {"PURPLE","5"}, {"BROWN","6"}, {"LTGRAY","7"},
+      {"DKGRAY","8"}, {"LTBLUE","9"}, {"LTGREEN","10"}, {"LTCYAN","11"},
+      {"LTRED","12"}, {"LTPURPLE","13"}, {"YELLOW","14"}, {"WHITE","15"},
+      {"COLORS_NUM","16"},
       {"CH_ESC", "0x1B"},
       {"CH_SHIFT_ESC", "0x1C"},
       {"WIF_SELF_MS_L", "0x0008"},
@@ -925,7 +983,7 @@ static bool CmpFillHash(CHashTable *table)
     HashAdd(&entry->sym.hash,table);
   }
   return CmpRuntimeData(table) && CmpTaskData(table) && CmpKbdData(table) &&
-         CmpMouseData(table) && CmpRuntimeHeaders(table);
+         CmpMouseData(table) && CmpPaletteData(table) && CmpRuntimeHeaders(table);
 }
 
 CHashTable *CmpAsmHashNew()

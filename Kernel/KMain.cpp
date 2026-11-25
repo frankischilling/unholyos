@@ -1342,6 +1342,11 @@ extern "C" void KMainCpp()
     KbdMsService();
   else
     SerialPutS("UnholyOS: Could not initialize the PS/2 mouse\r\n");
+  if (!DefineInitColors() || !GrPaletteInit()) {
+    SerialPutS("UnholyOS: Could not register color names\r\n");
+    return;
+  }
+  GrInit2();
   BootPutS("UnholyOS kernel entered in 64-bit mode");
 
   SerialPutS("UnholyOS: DVD LBA ");
@@ -1447,6 +1452,7 @@ extern "C" void KMainCpp()
     BootJobReport(*adam_task->cur_dv);
     BootKeyboardReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/MouseProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/PaletteProbe.HC");
     BootSoundReport(*adam_task->cur_dv, *adam_task);
     BootFileProgramReport(*adam_task->cur_dv, "/AsmListingScope.HC");
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);

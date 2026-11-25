@@ -387,6 +387,17 @@ The bootstrap input service drains the shared controller queues.
 The graphics desktop, pointer rendering, and window controls remain
 pending.
 
+## VGA palette
+
+`make -j4 test BUILD=build/palette` runs `PaletteProbe.HC` in QEMU.
+The same probe produced matching traces on pinned TempleOS and
+UnholyOS under QEMU 9.2.0 with the PC machine, `qemu64`, and 512 MiB.
+It checks palette tables, color names, packed color arguments, VGA DAC
+rounding, and restoring a palette read from the device. The boot test
+captures the displayed pixels while white is remapped to yellow and
+again after the original palette is restored. It repeats the input
+and display checks after rebooting the guest-built ISO.
+
 ## PC speaker and recorded sound events
 
 `make -j4 test BUILD=build/pc-speaker` builds

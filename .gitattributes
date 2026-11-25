@@ -44,6 +44,7 @@ Linux/Fixtures/SchedulerProbe.HC text eol=lf
 Linux/Fixtures/JobProbe.HC text eol=lf
 Linux/Fixtures/KeyboardProbe.HC text eol=lf
 Linux/Fixtures/MouseProbe.HC text eol=lf
+Linux/Fixtures/PaletteProbe.HC text eol=lf
 Linux/Fixtures/MsgLoop.HC -text whitespace=cr-at-eol
 Linux/Fixtures/SoundProbe.HC text eol=lf
 Linux/Fixtures/SoundRecord.HC text eol=lf

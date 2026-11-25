@@ -319,6 +319,7 @@ enum : size_t
   SEMA_SND = 5,
   SEMA_FLUSH_VGA_IMAGE = 9,
   SEMA_SINGLE_USER = 10,
+  SEMA_VGA = 14,
   SEMA_MUTE = 17,
   SEMA_FIX = 20,
   SEMA_SEMAS_NUM = 21,
@@ -331,6 +332,36 @@ struct CSema
 };
 
 static_assert(sizeof(CSema) == 128 && SEMA_SINGLE_USER == 10);
+
+enum : uint8_t
+{
+  BLACK,BLUE,GREEN,CYAN,RED,PURPLE,BROWN,LTGRAY,
+  DKGRAY,LTBLUE,LTGREEN,LTCYAN,LTRED,LTPURPLE,YELLOW,WHITE,
+  COLORS_NUM,
+};
+
+struct CBGR48
+{
+  uint16_t b,g,r,pad;
+
+  constexpr CBGR48(uint64_t value = 0)
+    : b(value), g(value>>16), r(value>>32), pad(value>>48) {}
+};
+
+static_assert(sizeof(CBGR48) == 8 && offsetof(CBGR48, b) == 0 &&
+              offsetof(CBGR48, g) == 2 && offsetof(CBGR48, r) == 4 &&
+              offsetof(CBGR48, pad) == 6);
+
+enum : uint16_t
+{
+  VGAP_ATTR_INDEX = 0x03C0,
+  VGAP_ATTR_DATA_WRITE = 0x03C0,
+  VGAP_PALETTE_MASK = 0x03C6,
+  VGAP_REG_READ = 0x03C7,
+  VGAP_REG_WRITE = 0x03C8,
+  VGAP_PALETTE_DATA = 0x03C9,
+  VGAP_INPUT_STAT = 0x03DA,
+};
 
 struct [[gnu::packed]] CAUData
 {

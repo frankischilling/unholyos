@@ -124,6 +124,15 @@ extern "C" uint64_t IsRawCpp();
 extern "C" uint64_t DbgModeCpp(uint8_t enabled);
 extern "C" uint64_t IsDbgModeCpp();
 void VGAFlush();
+extern CBGR48 gr_palette_std[COLORS_NUM], gr_palette_gray[COLORS_NUM];
+extern uint8_t gr_rainbow_10[10];
+bool GrPaletteInit();
+void GrPaletteIndicesSet();
+void GrInit2();
+extern "C" void PaletteSetStdCpp();
+extern "C" CHashDefineStr *DefineLstLoadCpp(const char *name, const char *list,
+                                            const uintptr_t *frame);
+bool DefineInitColors();
 extern "C" void PutS(const char *text);
 void PutTaskS(CTask &task, const char *text);
 

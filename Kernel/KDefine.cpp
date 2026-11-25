@@ -11,6 +11,16 @@ static const CHashDefineStr *DefineFind(const char *name, bool &defined)
   return reinterpret_cast<const CHashDefineStr *>(entry);
 }
 
+bool DefineInitColors()
+{
+  return DefineLstLoadCpp(
+      "ST_COLORS",
+      "BLACK\0BLUE\0GREEN\0CYAN\0"
+      "RED\0PURPLE\0BROWN\0LTGRAY\0DKGRAY\0LTBLUE\0LTGREEN\0"
+      "LTCYAN\0LTRED\0LTPURPLE\0YELLOW\0WHITE\0",
+      nullptr);
+}
+
 const char *DefineText(const char *name, bool &defined)
 {
   auto *entry = DefineFind(name, defined);

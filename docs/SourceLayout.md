@@ -221,6 +221,20 @@ stack calls to the C++ ABI.
 scheduler. The desktop playback in `Adam/ASnd.HC`, the AU writer in
 `Adam/Snd/SndFile.HC`, and video capture remain pending.
 
+## VGA palette
+
+`Adam/Gr/GrPalette.cpp` follows `GrPalette.HC` for attribute-controller
+identity mapping and the 16-color standard and grayscale palettes.
+Color writes use the upper six bits of each component. Reads expand those
+bits back to the reference 16-bit range. `CBGR48` preserves the blue,
+green, red, and padding words and crosses the HolyC call boundary in one
+64-bit argument slot or return register.
+
+`GrInit2` runs the palette setup during the bootstrap. The reference
+calls it when loading the Adam graphics stack. The graphics device
+contexts, desktop compositor, and task palette reset callback are
+pending.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains guest verification routines for boot records, file access, compiler behavior, and runtime modules. The reference `Kernel/KMain.HC` concentrates on initialization and startup. Those probes remain a structural difference and should move into a separate verification component as the runtime startup path develops.
