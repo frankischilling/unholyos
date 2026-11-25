@@ -290,7 +290,21 @@ make -j4 test BUILD=build/asm-branches
 qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom build/asm-branches/unholyos-startup-test.iso -display none -serial file:build/asm-branches/windows-pc512.log -monitor none -no-reboot -no-shutdown
 ```
 
-Full opcode, operand, and directive coverage is pending.
+`AsmListingProbe.HC` checks `LIST` and `NOLIST` with tabs, blank
+lines, comments, wrapped byte rows, and a forward branch before its
+displacement is fixed up. The raw JIT listing and the DolDoc listing
+during `Cmp` match the pinned guest's 798 bytes. Both guests load the
+UnholyOS-built module and get 42 from its exported entry. `AsmListingScope.HC` checks byte formatting at a 64 KiB
+boundary, the end of an assembly block, and a listing inside a HolyC
+function. Its 308 output bytes also match the pinned guest.
+
+```sh
+make -j4 test BUILD=build/asm-listings
+qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom build/asm-listings/unholyos-startup-test.iso -display none -serial file:build/asm-listings/windows-pc512.log -monitor none -no-reboot -no-shutdown
+```
+
+The TempleOS comparison uses QEMU 9.2.0 with PC, `qemu64`, and
+512 MiB. Full opcode, operand, and directive coverage is pending.
 
 ## HolyC switch statements
 

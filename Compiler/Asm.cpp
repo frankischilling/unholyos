@@ -95,6 +95,8 @@ public:
         root(coc && coc->asm_first ? coc->asm_first : this),
         origin(aot && !coc ? aot->size : 0)
   {
+    if (aot && !coc)
+      listing.lst_col = aot->lst_col;
   }
 
   ~CAsm()
@@ -120,24 +122,30 @@ public:
     if (!bare)
       Lex(cc); // Skip '{'.
     while (!failed && cc.token > TK_EOF && cc.token != '}') {
-      if (cc.token == '\n' || (!bare && cc.token == ';')) {
+      if (cc.token == '\n') {
         Lex(cc);
         continue;
       }
       if (bare && !IsAsmStatement(cc))
         break;
+      AsmLineLst(cc, listing, origin + size);
+      if (cc.token == ';') {
+        Lex(cc);
+        continue;
+      }
       if (cc.token != TK_IDENT)
         return false;
       auto *name = const_cast<char *>(cc.cur_str);
       cc.cur_str = nullptr;
       Lex(cc);
-      bool okay = cc.token == ':' || cc.token == TK_DBL_COLON
-                      ? Label(name)
-                      : Statement(name);
+      bool okay = cc.token == ':' || cc.token == TK_DBL_COLON ? Label(name)
+                                                              : Statement(name);
       Free(name);
       if (!okay)
         return false;
     }
+    if (aot && !coc)
+      aot->lst_col = listing.lst_col;
     return !failed && (bare ? cc.token != TK_ERROR : cc.token == '}');
   }
 
@@ -522,7 +530,7 @@ private:
     return cc.token == '[' ? PrsAsmAddress(arg) : arg.seg < 0;
   }
 
-  void Byte(uint8_t byte)
+  void Byte(uint8_t byte, bool list = true)
   {
     if (failed)
       return;
@@ -544,17 +552,45 @@ private:
       capacity = next;
     }
     buf[size++] = byte;
+    if (list && listing.lst)
+      AsmListCode(listing, byte, 1);
   }
 
   void Scalar(uint64_t value, unsigned width)
   {
-    for (unsigned i = 0; i < width; ++i) {
-      Byte(value);
-      value >>= 8;
-    }
+    constexpr unsigned AOT_BIN_BLK_BITS = 16;
+    size_t rip = origin + size;
+    bool scalar =
+        listing.lst && (width == 4 || width == 8) &&
+        (rip >> AOT_BIN_BLK_BITS) == ((rip + width) >> AOT_BIN_BLK_BITS);
+    for (unsigned i = 0; i < width; ++i)
+      Byte(value >> (i * 8), !scalar);
+    if (scalar && !failed)
+      AsmListCode(listing, value, width);
   }
 
-  void AsmStoreNum(const CAsmNum &n, unsigned width, bool relative = false)
+  uint64_t AsmListNum(const CAsmNum &n) const
+  {
+    uint64_t value = n.addend;
+    auto add = [&](const CAsmSymbol *symbol, int sign) {
+      if (!symbol)
+        return true;
+      if (symbol->block) {
+        value += sign * (symbol->block->origin + symbol->offset);
+        return true;
+      }
+      auto *external =
+          symbol->scope || symbol->imported ? nullptr : External(symbol->name);
+      if (!external)
+        return false;
+      value += sign * external->val;
+      return true;
+    };
+    return add(n.plus, 1) && add(n.minus, -1) ? value : 0;
+  }
+
+  void AsmStoreNum(const CAsmNum &n, unsigned width, bool relative = false,
+                   unsigned tail = 0)
   {
     if (!relative && Constant(n)) {
       Scalar(n.addend, width);
@@ -568,8 +604,15 @@ private:
     }
     *fix = {fixups, n,       size, size_t(cc.lex_include_stk->line_num),
             width,  relative};
+    fix->num.addend -= tail;
     fixups = fix;
-    Scalar(0, width);
+    uint64_t initial = 0;
+    if (listing.lst) {
+      initial = AsmListNum(n);
+      if (relative)
+        initial -= origin + size + width + tail;
+    }
+    Scalar(initial, width);
   }
 
   bool PrsAsmDefine(unsigned width)
@@ -643,9 +686,7 @@ private:
         AsmStoreNum(disp, 4);
       } else if (mode == 64 && disp.plus && !disp.minus) {
         Byte(reg | 5);
-        auto relative = disp;
-        relative.addend -= tail;
-        AsmStoreNum(relative, 4, true);
+        AsmStoreNum(disp, 4, true, tail);
       } else {
         Byte(reg | (mode == 64 ? 4 : 5));
         if (mode == 64)
@@ -875,6 +916,10 @@ private:
       address = n.addend;
       return true;
     }
+    if (id == AKW_LIST || id == AKW_NOLIST) {
+      listing.lst = id == AKW_LIST;
+      return true;
+    }
     if (id == AKW_BINFILE)
       return PrsBinFile();
     if (id == AKW_ALIGN) {
@@ -991,6 +1036,7 @@ private:
   CHeapCtrl *hc;
   CAsm *root;
   size_t origin;
+  CAsmListing listing;
   uint64_t org = INVALID_PTR;
   uint8_t *buf = nullptr;
   size_t capacity = 0, size = 0;

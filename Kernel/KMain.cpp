@@ -964,6 +964,47 @@ static void BootAsmBranchReport(const CDrv &dvd, CTask &task)
   }
 }
 
+static void BootAsmListingReport(const CDrv &dvd, CTask &task)
+{
+  auto *ram = MountedDrive('B');
+  if (!ram)
+    return;
+  constexpr const char *path = "/AsmListingProbe.HC";
+  size_t size;
+  auto *src = FileRead(dvd, path, size, task.data_heap);
+  if (!src)
+    return;
+  SerialPutS("UnholyOS: executing /AsmListingProbe.HC\r\n");
+  auto raw = ExePutS(reinterpret_cast<const char *>(src), path, 0);
+  Free(src);
+  if (!raw.okay)
+    return;
+  SerialPutS(
+      "UnholyOS: finished /AsmListingProbe.HC, checks 0x0000000000000001\r\n");
+  auto called = ExePutS("Call(_ASM_LIST_VALUES);", nullptr, 0);
+  if (!called.okay || called.value != 42)
+    return;
+
+  SerialPutS("UnholyOS: executing listing Cmp\r\n");
+  auto run_level = SYS_RUN_LEVEL;
+  SYS_RUN_LEVEL |= RLF_DOC;
+  auto built =
+      ExePutS("Cmp(\"::/AsmListingProbe.HC\",,\"B:/AsmListingProbe.BIN.Z\");",
+              nullptr, 0);
+  SYS_RUN_LEVEL = run_level;
+  if (!built.okay || built.value)
+    return;
+  SerialPutS("UnholyOS: finished listing Cmp\r\n");
+  auto *module = Load(*ram, "/AsmListingProbe.BIN.Z", task, LDF_JUST_LOAD);
+  if (!module || !LoadPass2(*module))
+    return;
+  called = ExePutS("Call(_ASM_LIST_VALUES);", nullptr, 0);
+  if (called.okay && called.value == 42) {
+    SerialPutS("UnholyOS: listed module returned 42\r\n");
+    BootGuestFileReport(*ram, "/AsmListingProbe.BIN.Z");
+  }
+}
+
 static void BootFixedAsmReport(const CDrv &dvd, CTask &task)
 {
   auto *ram = MountedDrive('B');
@@ -1268,6 +1309,8 @@ extern "C" void KMainCpp()
     BootImportReport(*adam_task->cur_dv, *adam_task);
     BootAsmReport(*adam_task->cur_dv, *adam_task);
     BootAsmBranchReport(*adam_task->cur_dv, *adam_task);
+    BootAsmListingReport(*adam_task->cur_dv, *adam_task);
+    BootFileProgramReport(*adam_task->cur_dv, "/AsmListingScope.HC");
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);
     BootSwitchReport(*adam_task->cur_dv, *adam_task);
     BootISOReport(*adam_task->cur_dv);

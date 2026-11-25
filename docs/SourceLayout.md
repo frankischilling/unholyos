@@ -95,7 +95,7 @@ while the compiler directory is absent from the guest boot media.
 `Compiler/Asm.cpp` uses its opcode, alias, and register records for
 instruction selection and emission. The current encoder covers integer,
 segment, and x87 forms used by the tests. Far and `MOFFS` operand forms
-and the `LIST` and `NOLIST` directives remain pending. [Pinned opcode dictionary](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Compiler/OpCodes.DD)
+remain pending. [Pinned opcode dictionary](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Compiler/OpCodes.DD)
 
 `ORG` and `PrsBinFile` in `Compiler/Asm.cpp` follow `Compiler/Asm.HC`.
 `BINFILE` uses `ExtDft` and `FileRead` with the native `.BIN` default.
@@ -112,6 +112,13 @@ Literal targets and local labels use offsets in the assembled image.
 Named imports keep the chosen width in their TOSB relocation records.
 The remaining assembler diagnostics include the reference's
 suggestion to use an I8 displacement when a wider branch would fit.
+
+`Compiler/AsmLib.cpp` implements `AsmLineLst` from
+`Compiler/AsmLib.HC`. It keeps offsets into the active source so a
+popped include cannot leave a stale line pointer. `LexPutLine` in
+`Compiler/CExcept.cpp` handles plain source and calls `DocPutLine`
+for DolDoc. Listing output uses provisional instruction bytes from
+`AsmStoreNum` before symbols are fixed up.
 
 The compiler also registers the 65-byte `CCntsGlbls` guest class
 from `Kernel/KernelA.HH`. Its typed `cnts` symbol aliases the

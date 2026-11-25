@@ -1361,6 +1361,43 @@ static void TestBoot(const char *qemu, const fs::path &iso,
             "Branch out of range at line:"})
         Check(output.find(msg) != std::string::npos,
               "Assembly branch values, bytes, or range checks differed");
+      constexpr std::string_view listing =
+          "                        00000000 _ASM_LIST_VALUES::\n"
+          "B8 0000002A             00000000 \tMOV RAX,42\n"
+          "                        00000000   RET\n"
+          "C3                      00000005 \n"
+          "                        00000005   // Values use both byte and "
+          "scalar columns.\n"
+          "AB 00                   00000006   DU8 0xAB,0;\n"
+          "34 12                   00000008   DU16 0x1234;\n"
+          "11223344                0000000A   DU32 0x11223344;\n"
+          "1122334455667788        0000000E   DU64 0x1122334455667788;\n"
+          "                        0000000E   NOLIST\n"
+          "                        00000017 _ASM_LIST_TAIL::\n"
+          "90 90 90 90 90 90 90 90 \n"
+          "90 90                   00000017   DU8 10 DUP (0x90);\n"
+          "EB DD                   00000021   JMP @@done\n"
+          "00                      00000023   DU8 0;\n"
+          "                        00000024 @@done:\n"
+          "                        00000024   RET\n"
+          "C3 ";
+      CheckProgramOutput(output, "/AsmListingProbe.HC", listing, '1');
+      auto cmp_listing = "UnholyOS: executing listing Cmp\r\n" +
+                         std::string(listing) + "Errs:0 Warns:0 ";
+      Check(output.find(cmp_listing) != std::string::npos &&
+                output.find("UnholyOS: listed module returned 42") !=
+                    std::string::npos,
+            "DolDoc assembly listing or the loaded code differed");
+      CheckProgramOutput(
+          output, "/AsmListingScope.HC",
+          "44 33 22 11             0000FFFC   DU32 0x11223344;\n"
+          "1122334455667788        00010000   DU64 0x1122334455667788;\n"
+          "                        00010000   NOLIST\n"
+          "90 B8 0000002F             00000000     MOV RAX,47\n"
+          "                        00000000     NOP\n"
+          "90                      00000005     NOLIST\n"
+          "inline listing 47\n",
+          '1');
       CheckProgramOutput(output, "/FixedAsm.HC", "fixed jit 1 42\n", '1');
       CheckProgramOutput(output, "/FixedImage.BIN", "fixed load 42\n", '1');
       Check(output.find("UnholyOS: invalid ORG left the destination intact") !=
@@ -1393,7 +1430,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
              {"AsmProbe.BIN.Z", "DivByHand.BIN.Z", "InlineAsmProbe.BIN.Z",
               "GotoProbe.BIN.Z", "SwitchProbe.BIN.Z", "OpcodeProbe.BIN.Z",
               "FixedImage.BIN", "AsmBranchProbe.BIN.Z",
-              "AsmBranchImport.BIN.Z"})
+              "AsmBranchImport.BIN.Z", "AsmListingProbe.BIN.Z"})
           fs::copy_file(CaptureGuestFile(vm, dir, output, name),
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);
