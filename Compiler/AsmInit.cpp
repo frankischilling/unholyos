@@ -315,54 +315,82 @@ static bool CmpRuntimeData(CHashTable *table)
 
 static bool CmpRuntimeHeaders(CHashTable *table)
 {
-  auto *void_type = FindType("U0", table);
-  auto *u64_type = FindType("U64", table);
-  auto *i64_type = FindType("I64", table);
-  auto *string_type = FindType("U8", table) + 1;
+  enum : uint8_t
+  {
+    U0,
+    U64,
+    I64,
+    I8,
+    F64,
+    Bool,
+    U8Ptr
+  };
+  CHashClass *types[]{
+      FindType("U0", table),     FindType("U64", table),
+      FindType("I64", table),    FindType("I8", table),
+      FindType("F64", table),    FindType("Bool", table),
+      FindType("U8", table) + 1,
+  };
   auto *task = CurrentTask();
-  struct
+  static constexpr struct
   {
     const char *name;
-    CHashClass *result;
+    uint8_t result;
     uint16_t flags;
     struct
     {
       const char *name;
-      CHashClass *type;
-      bool default_zero = false;
+      uint8_t type;
+      bool has_default = false;
+      uint64_t dft_val = 0;
+      const char *dft_str = nullptr;
     } args[4];
   } headers[]{
-      {"Print", void_type, FF_DOT_DOT_DOT, {{"fmt", string_type}}},
-      {"PutHex", void_type, FF_RET1, {{"num", u64_type}, {"width", i64_type}}},
-      {"PutChars", void_type, FF_RET1, {{"ch", u64_type}}},
-      {"PutS", void_type, FF_RET1, {{"st", string_type}}},
-      {"Call", i64_type, FF_RET1, {{"addr", u64_type}}},
-      {"StreamPrint", void_type, FF_DOT_DOT_DOT, {{"fmt", string_type}}},
-      {"StreamExePrint", i64_type, FF_DOT_DOT_DOT, {{"fmt", string_type}}},
+      {"Print", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
+      {"PutHex", U0, FF_RET1, {{"num", U64}, {"width", I64}}},
+      {"PutChars", U0, FF_RET1, {{"ch", U64}}},
+      {"PutS", U0, FF_RET1, {{"st", U8Ptr}}},
+      {"tS", F64, FF_RET1, {}},
+      {"Busy", U0, FF_RET1, {{"microseconds", I64}}},
+      {"SleepUntil", U0, FF_RET1, {{"wake_jiffy", I64}}},
+      {"Sleep", U0, FF_RET1, {{"mS", I64}}},
+      {"Ona2Freq", F64, FF_RET1, {{"ona", I64}}},
+      {"Freq2Ona", I8, FF_RET1, {{"freq", F64}}},
+      {"Snd", U0, FF_RET1, {{"ona", I8, true}}},
+      {"ScrnCast",
+       Bool,
+       FF_RET1,
+       {{"val", Bool, true, 1},
+        {"just_audio", Bool, true},
+        {"print_fmt", U8Ptr, true, 0, "B:/Tmp/%X.GR"}}},
+      {"SndRst", U0, FF_RET1, {}},
+      {"Beep", U0, FF_RET1, {{"ona", I8, true, 62}, {"busy", Bool, true}}},
+      {"Mute", Bool, FF_RET1, {{"val", Bool}}},
+      {"IsMute", Bool, FF_RET1, {}},
+      {"Call", I64, FF_RET1, {{"addr", U64}}},
+      {"StreamPrint", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
+      {"StreamExePrint", I64, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
       {"RedSeaISO",
-       i64_type,
+       I64,
        FF_RET1,
-       {{"iso_filename", string_type, true},
-        {"src_dir", string_type},
-        {"stage2_filename", string_type, true}}},
+       {{"iso_filename", U8Ptr, true},
+        {"src_dir", U8Ptr},
+        {"stage2_filename", U8Ptr, true}}},
       {"Cmp",
-       i64_type,
+       I64,
        FF_RET1,
-       {{"filename", string_type},
-        {"map_name", string_type, true},
-        {"out_name", string_type, true},
-        {"mapfile_drv_let", u64_type, true}}},
-      {"ExeFile",
-       i64_type,
-       FF_RET1,
-       {{"name", string_type}, {"ccf_flags", i64_type, true}}},
+       {{"filename", U8Ptr},
+        {"map_name", U8Ptr, true},
+        {"out_name", U8Ptr, true},
+        {"mapfile_drv_let", U64, true}}},
+      {"ExeFile", I64, FF_RET1, {{"name", U8Ptr}, {"ccf_flags", I64, true}}},
       {"ExePutS",
-       i64_type,
+       I64,
        FF_RET1,
-       {{"buf", string_type},
-        {"filename", string_type, true},
-        {"ccf_flags", i64_type, true},
-        {"htc", string_type, true}}},
+       {{"buf", U8Ptr},
+        {"filename", U8Ptr, true},
+        {"ccf_flags", I64, true},
+        {"htc", U8Ptr, true}}},
   };
   for (const auto &header : headers) {
     auto *symbol = reinterpret_cast<CHashExport *>(
@@ -383,20 +411,31 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       if (!arg.name)
         break;
       auto *name = StrNew(arg.name, task->data_heap);
-      auto *member =
-          name ? MemberAdd(fun->cls, name, *arg.type, 16 + 8 * fun->arg_cnt)
-               : nullptr;
+      auto *member = name ? MemberAdd(fun->cls, name, *types[arg.type],
+                                      16 + 8 * fun->arg_cnt)
+                          : nullptr;
       if (!member) {
         Free(name);
         HashDel(&fun->cls.sym.hash);
         return false;
       }
-      if (arg.default_zero)
+      if (arg.has_default) {
         member->flags |= MLF_DFT_AVAILABLE;
+        member->dft_val = arg.dft_val;
+      }
+      if (arg.dft_str) {
+        auto *str = StrNew(arg.dft_str, task->data_heap);
+        if (!str) {
+          HashDel(&fun->cls.sym.hash);
+          return false;
+        }
+        member->dft_val = reinterpret_cast<uintptr_t>(str);
+        member->flags |= MLF_STR_DFT_AVAILABLE;
+      }
       ++fun->arg_cnt;
     }
     fun->cls.flags = FF__EXTERN | header.flags;
-    fun->return_class = header.result;
+    fun->return_class = types[header.result];
     fun->exe_addr = reinterpret_cast<uint8_t *>(symbol->val);
     HashAdd(&fun->cls.sym.hash, table);
   }

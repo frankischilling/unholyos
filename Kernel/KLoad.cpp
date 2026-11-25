@@ -59,6 +59,8 @@ void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
 void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
 void RawHC(), DbgModeHC(), IsDbgModeHC();
+void tSHC(), BusyHC(), SleepUntilHC(), SleepHC(), Ona2FreqHC(), Freq2OnaHC();
+void SndHC(), ScrnCastHC(), SndRstHC(), BeepHC(), MuteHC(), IsMuteHC();
 }
 
 static bool IsImport(uint8_t type)
@@ -452,6 +454,7 @@ bool LoadKernel(CTask &task)
   static const CKernelExport exports[]{
       {"SYS_COMPILE_TIME", reinterpret_cast<uintptr_t>(SYS_COMPILE_TIME)},
       {"cnts", reinterpret_cast<uintptr_t>(&cnts)},
+      {"scrncast", reinterpret_cast<uintptr_t>(&scrncast)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
       {"SYS_RUN_LEVEL", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
       {"SYS_VAR_INIT_FLAG", reinterpret_cast<uintptr_t>(&sys_var_init_flag)},
@@ -541,6 +544,18 @@ bool LoadKernel(CTask &task)
       {"PutHex", reinterpret_cast<uintptr_t>(PutHexHC)},
       {"PutChars", reinterpret_cast<uintptr_t>(PutCharsHC)},
       {"PutS", reinterpret_cast<uintptr_t>(PutSHC)},
+      {"tS", reinterpret_cast<uintptr_t>(tSHC)},
+      {"Busy", reinterpret_cast<uintptr_t>(BusyHC)},
+      {"SleepUntil", reinterpret_cast<uintptr_t>(SleepUntilHC)},
+      {"Sleep", reinterpret_cast<uintptr_t>(SleepHC)},
+      {"Ona2Freq", reinterpret_cast<uintptr_t>(Ona2FreqHC)},
+      {"Freq2Ona", reinterpret_cast<uintptr_t>(Freq2OnaHC)},
+      {"Snd", reinterpret_cast<uintptr_t>(SndHC)},
+      {"ScrnCast", reinterpret_cast<uintptr_t>(ScrnCastHC)},
+      {"SndRst", reinterpret_cast<uintptr_t>(SndRstHC)},
+      {"Beep", reinterpret_cast<uintptr_t>(BeepHC)},
+      {"Mute", reinterpret_cast<uintptr_t>(MuteHC)},
+      {"IsMute", reinterpret_cast<uintptr_t>(IsMuteHC)},
       {"ExePutS", reinterpret_cast<uintptr_t>(ExePutSHC)},
       {"Cmp", reinterpret_cast<uintptr_t>(CmpHC)},
       {"ExeFile", reinterpret_cast<uintptr_t>(ExeFileHC)},
