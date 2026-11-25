@@ -207,6 +207,10 @@ static void BootDirectiveReport(const CDrv &dv)
   auto *src = FileRead(dv, "/LexDirectives.HC", size, heap);
   if (!src)
     return;
+  if (!AsmHashLoad()) {
+    Free(src);
+    return;
+  }
   auto *name = FileNameAbs("/LexDirectives.HC", *adam_task);
   auto *nested = FileNameAbs("/LexNested.HH", *adam_task);
   auto *guide = FileNameAbs("LexGuide.DD.Z", *adam_task);
@@ -805,6 +809,7 @@ static void BootAsmReport(const CDrv &dvd, CTask &task)
   BootFileProgramReport(dvd, "/AsmAndC3.HC");
   BootFileProgramReport(dvd, "/InlineAsmProbe.HC");
   BootFileProgramReport(dvd, "/GotoProbe.HC");
+  BootFileProgramReport(dvd, "/OpcodeProbe.HC");
   auto goto_missing = ExePutS("U0 GotoMissing() { goto missing; }", nullptr, 0);
   auto goto_duplicate = ExePutS(
       "U0 GotoDuplicate() { duplicate: asm { duplicate: NOP } }", nullptr, 0);
@@ -822,7 +827,8 @@ static void BootAsmReport(const CDrv &dvd, CTask &task)
       !HashFind("InlineAsmRejected", task.hash_table, HTT_FUN))
     SerialPutS("UnholyOS: asm rejected unresolved local\r\n");
   const char *paths[]{"/AsmProbe.BIN.Z", "/DivByHand.BIN.Z",
-                      "/InlineAsmProbe.BIN.Z", "/GotoProbe.BIN.Z"};
+                      "/InlineAsmProbe.BIN.Z", "/GotoProbe.BIN.Z",
+                      "/OpcodeProbe.BIN.Z"};
   for (const char *path : paths) {
     SerialPutS("UnholyOS: executing ");
     SerialPutS(path);
@@ -845,15 +851,33 @@ static void BootAsmReport(const CDrv &dvd, CTask &task)
       HashFind("_ASM_MODE32", task.hash_table, HTT_EXPORT_SYS_SYM));
   auto *c = reinterpret_cast<const CHashExport *>(
       HashFind("_ASM_WORK", task.hash_table, HTT_EXPORT_SYS_SYM));
-  if (!a || !b || !c || (c->val & 15))
-    return;
-  for (size_t i = 0; i < sizeof(mode16); ++i)
-    if (reinterpret_cast<const uint8_t *>(a->val)[i] != mode16[i])
-      return;
-  for (size_t i = 0; i < sizeof(mode32); ++i)
-    if (reinterpret_cast<const uint8_t *>(b->val)[i] != mode32[i])
-      return;
-  SerialPutS("UnholyOS: asm opcode modes and alignment matched\r\n");
+  auto matches = [](const CHashExport *s, const uint8_t *bytes, size_t count) {
+    if (!s)
+      return false;
+    auto *code = reinterpret_cast<const uint8_t *>(s->val);
+    for (size_t i = 0; i < count; i++)
+      if (code[i] != bytes[i])
+        return false;
+    return true;
+  };
+  if (c && !(c->val & 15) && matches(a, mode16, sizeof(mode16)) &&
+      matches(b, mode32, sizeof(mode32)))
+    SerialPutS("UnholyOS: asm opcode modes and alignment matched\r\n");
+  constexpr uint8_t table16[]{0x66, 0x90, 0x9C, 0x99, 0x67, 0x8B, 0x03, 0xC3};
+  constexpr uint8_t table32[]{0x66, 0x90, 0x66, 0x9C, 0x66,
+                              0x99, 0x66, 0x8B, 0x03, 0xC3};
+  auto *r16 = reinterpret_cast<const CHashExport *>(
+      HashFind("_OPCODE_16", task.hash_table, HTT_EXPORT_SYS_SYM));
+  auto *r32 = reinterpret_cast<const CHashExport *>(
+      HashFind("_OPCODE_32", task.hash_table, HTT_EXPORT_SYS_SYM));
+  constexpr uint8_t table_seg[]{0x65, 0x4A, 0x8B, 0x04, 0xC2,
+                                0x64, 0x8B, 0x04, 0x8A, 0xC3};
+  auto *seg = reinterpret_cast<const CHashExport *>(
+      HashFind("_OPCODE_SEG", task.hash_table, HTT_EXPORT_SYS_SYM));
+  if (matches(r16, table16, sizeof(table16)) &&
+      matches(r32, table32, sizeof(table32)) &&
+      matches(seg, table_seg, sizeof(table_seg)))
+    SerialPutS("UnholyOS: opcode table mode bytes matched\r\n");
 }
 
 static void BootSwitchReport(const CDrv &dvd, CTask &task)

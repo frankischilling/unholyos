@@ -131,6 +131,103 @@ int64_t LexRaw(CCmpCtrl &cc);
 int64_t Lex(CCmpCtrl &cc);
 char *LexExtStr(CCmpCtrl &cc, size_t &size);
 bool LexIncludeStr(CCmpCtrl &cc, char *name, char *src, int64_t flags);
+enum : uint16_t
+{
+  IEF_OP_SIZE16 = 0x001,
+  IEF_OP_SIZE32 = 0x002,
+  IEF_PLUS_OPCODE = 0x004,
+  IEF_DONT_SWITCH_MODES = 0x008,
+  IEF_DFT = 0x010,
+  IEF_NOT_IN_64_BIT = 0x020,
+  IEF_48_REX = 0x040,
+  IEF_REX_ONLY_R8_R15 = 0x080,
+  IEF_REX_XOR_LIKE = 0x100,
+  IEF_STI_LIKE = 0x200,
+  IEF_ENDING_ZERO = 0x400,
+};
+
+enum : uint8_t
+{
+  SV_R_REG = 8,
+  SV_I_REG,
+  SV_STI_LIKE,
+  SV_NONE,
+  OM_NO = 0,
+  OM_CB,
+  OM_CW,
+  OM_CD,
+  OM_CP,
+  OM_IB,
+  OM_IW,
+  OM_ID,
+  ARGT_NONE = 0,
+  ARGT_REL8,
+  ARGT_REL16,
+  ARGT_REL32,
+  ARGT_IMM8,
+  ARGT_IMM16,
+  ARGT_IMM32,
+  ARGT_IMM64,
+  ARGT_UIMM8,
+  ARGT_UIMM16,
+  ARGT_UIMM32,
+  ARGT_UIMM64,
+  ARGT_R8,
+  ARGT_R16,
+  ARGT_R32,
+  ARGT_R64,
+  ARGT_RM8,
+  ARGT_RM16,
+  ARGT_RM32,
+  ARGT_RM64,
+  ARGT_M8,
+  ARGT_M16,
+  ARGT_M32,
+  ARGT_M64,
+  ARGT_AL = 32,
+  ARGT_AX,
+  ARGT_EAX,
+  ARGT_RAX,
+  ARGT_CL,
+  ARGT_DX,
+  ARGT_SREG = 39,
+  ARGT_SS,
+  ARGT_DS,
+  ARGT_ES,
+  ARGT_FS,
+  ARGT_GS,
+  ARGT_CS,
+  ARGT_ST0,
+  ARGT_STI,
+  OCF_ALIAS = 1,
+  AKW_ALIGN = 64,
+  AKW_I8 = 67,
+  AKW_I16,
+  AKW_I32,
+  AKW_I64,
+  AKW_U8 = 72,
+  AKW_U16,
+  AKW_U32,
+  AKW_U64,
+  AKW_DU8 = 77,
+  AKW_DU16,
+  AKW_DU32,
+  AKW_DU64,
+  AKW_DUP,
+  AKW_USE16,
+  AKW_USE32,
+  AKW_USE64,
+  AKW_IMPORT,
+};
+
+inline const CInst *AsmInstEntries(const CHashOpcode &op)
+{
+  return reinterpret_cast<const CInst *>(
+      reinterpret_cast<const uint8_t *>(&op) + offsetof(CHashOpcode, ins));
+}
+
+bool AsmHashLoad();
+const CHash *AsmHashFind(const char *name, uint32_t mask);
 bool CmpAsmHashLoad(CHashTable *table);
 CHashTable *CmpAsmHashNew();
 CMemberLst *MemberFind(const char *name, CHashClass *cls);

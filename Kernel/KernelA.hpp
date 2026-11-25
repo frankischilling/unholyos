@@ -498,11 +498,44 @@ struct CHashGeneric
   uint64_t user_data0, user_data1, user_data2;
 };
 
+enum : uint8_t
+{
+  REGT_R8 = 1,
+  REGT_R16,
+  REGT_R32,
+  REGT_R64,
+  REGT_SEG,
+  REGT_FSTK,
+  REGT_MM,
+  REGT_XMM,
+};
+
+#pragma pack(push, 1)
 struct CHashReg
 {
   CHash hash;
   uint8_t reg_num, reg_type;
 };
+#pragma pack(pop)
+
+struct CInst
+{
+  uint8_t ins_entry_num, opcode_cnt, opcode[4];
+  uint16_t flags;
+  uint8_t slash_val, uasm_slash_val, opcode_modifier, arg1, arg2, size1, size2,
+      pad;
+};
+
+struct CHashOpcode
+{
+  CHash hash;
+  uint16_t inst_entry_cnt, oc_flags, pad[2];
+  CInst ins[1];
+};
+
+static_assert(sizeof(CHashReg) == 26 && offsetof(CHashReg, reg_num) == 24);
+static_assert(sizeof(CInst) == 16 && offsetof(CInst, flags) == 6 &&
+              sizeof(CHashOpcode) == 48 && offsetof(CHashOpcode, ins) == 32);
 
 struct CHashClass;
 

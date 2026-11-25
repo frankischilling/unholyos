@@ -1,6 +1,253 @@
 #include "../Kernel/KernelB.hpp"
 #include "CompilerA.hpp"
 
+extern "C" const char CompilerOpCodes[];
+extern "C" int64_t LstMatchCpp(const uint8_t *needle, const uint8_t *list,
+                               uint64_t flags);
+static CHashTable *asm_hash;
+static uint64_t asm_hash_lock;
+
+static int64_t AsmLstMatch(const char *name, const char *lst)
+{
+  constexpr uint64_t LMF_EXACT = 2;
+  return LstMatchCpp(reinterpret_cast<const uint8_t *>(name),
+                     reinterpret_cast<const uint8_t *>(lst), LMF_EXACT);
+}
+
+static bool AsmPrsInsFlags(CCmpCtrl &cc, CInst &ins)
+{
+  static constexpr char modifiers[] = "NO\0CB\0CW\0CD\0CP\0IB\0IW\0ID\0";
+  for (;;) {
+    switch (cc.token) {
+    case TK_IDENT: {
+      auto modifier = AsmLstMatch(cc.cur_str, modifiers);
+      if (modifier < 0)
+        return true;
+      ins.opcode_modifier = modifier;
+      break;
+    }
+    case TK_I64:
+      if (cc.cur_i64 == 16)
+        ins.flags |= IEF_OP_SIZE16;
+      else if (cc.cur_i64 == 32)
+        ins.flags |= IEF_OP_SIZE32;
+      else
+        return true;
+      break;
+    case '+':
+      ins.flags |= IEF_PLUS_OPCODE;
+      [[fallthrough]];
+    case '/':
+      if (LexRaw(cc) == TK_I64 && uint64_t(cc.cur_i64) < 8)
+        ins.slash_val = cc.cur_i64;
+      else if (cc.token == TK_IDENT && cc.cur_str[1] == 0 &&
+               (cc.cur_str[0] == 'I' || cc.cur_str[0] == 'R'))
+        ins.slash_val = cc.cur_str[0] == 'R' ? SV_R_REG : SV_I_REG;
+      else
+        return false;
+      break;
+    case '!':
+      ins.flags |= IEF_DONT_SWITCH_MODES;
+      break;
+    case '&':
+      ins.flags |= IEF_DFT;
+      break;
+    case '%':
+      ins.flags |= IEF_NOT_IN_64_BIT;
+      break;
+    case '=':
+      ins.flags |= IEF_48_REX;
+      break;
+    case '`':
+      ins.flags |= IEF_REX_ONLY_R8_R15;
+      break;
+    case '^':
+      ins.flags |= IEF_REX_XOR_LIKE;
+      break;
+    case '*':
+      ins.flags |= IEF_STI_LIKE;
+      break;
+    case '$':
+      ins.flags |= IEF_ENDING_ZERO;
+      break;
+    default:
+      return cc.token > TK_EOF;
+    }
+    LexRaw(cc);
+  }
+}
+
+static bool AsmPrsArgType(CCmpCtrl &cc, uint8_t &arg, uint8_t &size)
+{
+  if (cc.token != TK_IDENT)
+    return true;
+  static constexpr char types[] =
+      "NONE\0REL8\0REL16\0REL32\0IMM8\0IMM16\0IMM32\0IMM64\0"
+      "UIMM8\0UIMM16\0UIMM32\0UIMM64\0R8\0R16\0R32\0R64\0"
+      "RM8\0RM16\0RM32\0RM64\0M8\0M16\0M32\0M64\0"
+      "M1632\0M16N32\0M16N16\0M32N32\0MOFFS8\0MOFFS16\0MOFFS32\0MOFFS64\0"
+      "AL\0AX\0EAX\0RAX\0CL\0DX\0 \0SREG\0SS\0DS\0ES\0FS\0GS\0CS\0"
+      "ST0\0STI\0MM\0MM32\0MM64\0XMM\0XMM32\0XMM64\0XMM128\0XMM0\0";
+  auto type = AsmLstMatch(cc.cur_str, types);
+  if (type < 0)
+    return false;
+  arg = type;
+  constexpr uint64_t masks[]{0x1110111112, 0x2220222224, 0x0440444448,
+                             0x0880888880};
+  for (unsigned i = 0; i < 4; i++)
+    if (masks[i] & (uint64_t{1} << type))
+      size = 8U << i;
+  return LexRaw(cc) > TK_EOF;
+}
+
+static bool AsmOpcodeAdd(CHashTable *table, CHeapCtrl *heap, const char *name,
+                         const CInst *ins, unsigned count, unsigned flags)
+{
+  if (HashFind(name, table, HTT_OPCODE))
+    return false;
+  const size_t head = offsetof(CHashOpcode, ins);
+  auto *op = reinterpret_cast<CHashOpcode *>(
+      CAlloc(head + count * sizeof(*ins), heap));
+  if (!op)
+    return false;
+  op->hash.str = StrNew(name, heap);
+  if (!op->hash.str) {
+    Free(op);
+    return false;
+  }
+  op->hash.type = HTT_OPCODE;
+  op->inst_entry_cnt = count;
+  op->oc_flags = flags;
+  MemCpy(reinterpret_cast<uint8_t *>(op) + head, ins, count * sizeof(*ins));
+  HashAdd(&op->hash, table);
+  return true;
+}
+
+static bool AsmPrsOpcode(CCmpCtrl &cc, CHashTable *table, CHeapCtrl *heap,
+                         const char *name)
+{
+  CInst entries[32];
+  MemSet(entries, 0, sizeof(entries));
+  unsigned count = 0;
+  if (LexRaw(cc) == ',')
+    LexRaw(cc); // OpCodes.DD puts a comma after REP_OUTSB.
+  while (cc.token == TK_I64) {
+    if (count == sizeof(entries) / sizeof(*entries))
+      return false;
+    auto &ins = entries[count];
+    ins.ins_entry_num = count++;
+    ins.slash_val = SV_NONE;
+    do {
+      if (ins.opcode_cnt == sizeof(ins.opcode) || uint64_t(cc.cur_i64) > 0xFF)
+        return false;
+      ins.opcode[ins.opcode_cnt++] = cc.cur_i64;
+    } while (LexRaw(cc) == TK_I64);
+    if (cc.token == ',') {
+      LexRaw(cc);
+      if (!AsmPrsInsFlags(cc, ins) || !AsmPrsArgType(cc, ins.arg1, ins.size1) ||
+          !AsmPrsArgType(cc, ins.arg2, ins.size2))
+        return false;
+    } else if (cc.token != ';')
+      return false;
+    ins.uasm_slash_val = (ins.flags & IEF_STI_LIKE) && ins.slash_val != SV_I_REG
+                             ? uint8_t{SV_STI_LIKE}
+                             : ins.slash_val;
+  }
+  if (!count || !AsmOpcodeAdd(table, heap, name, entries, count, 0))
+    return false;
+  if (cc.token == ':')
+    while (LexRaw(cc) == TK_IDENT)
+      if (!AsmOpcodeAdd(table, heap, cc.cur_str, entries, count, OCF_ALIAS))
+        return false;
+  return cc.token == ';';
+}
+
+static bool AsmPrsHashEntry(CCmpCtrl &cc, CHashTable *table, CHeapCtrl *heap)
+{
+  static constexpr char kinds[] = "NONE\0R8\0R16\0R32\0R64\0SEG\0FSTK\0MM\0XMM\0OPCODE"
+                           "\0KEYWORD\0ASM_KEYWORD\0";
+  constexpr int opcode = REGT_XMM + 1, keyword = opcode + 1;
+  if (cc.token != TK_IDENT)
+    return false;
+  auto kind = AsmLstMatch(cc.cur_str, kinds);
+  if (kind < REGT_R8 || LexRaw(cc) != TK_IDENT)
+    return false;
+  auto *name = const_cast<char *>(cc.cur_str);
+  cc.cur_str = nullptr;
+  if (kind == opcode) {
+    bool okay = AsmPrsOpcode(cc, table, heap, name);
+    Free(name);
+    return okay;
+  }
+  if (LexRaw(cc) != TK_I64 || cc.cur_i64 < 0 ||
+      (kind <= REGT_XMM && cc.cur_i64 > 255)) {
+    Free(name);
+    return false;
+  }
+  auto val = cc.cur_i64;
+  uint32_t type = kind <= REGT_XMM  ? HTT_REG
+                  : kind == keyword ? HTT_KEYWORD
+                                    : HTT_ASM_KEYWORD;
+  if (HashFind(name, table, type) || LexRaw(cc) != ';') {
+    Free(name);
+    return false;
+  }
+  auto *entry = reinterpret_cast<CHash *>(
+      CAlloc(type == HTT_REG ? sizeof(CHashReg) : sizeof(CHashGeneric), heap));
+  if (entry) {
+    entry->str = StrNew(name, heap);
+    if (!entry->str) {
+      Free(entry);
+      entry = nullptr;
+    }
+  }
+  Free(name);
+  if (!entry)
+    return false;
+  entry->type = type;
+  if (type == HTT_REG) {
+    auto *reg = reinterpret_cast<CHashReg *>(entry);
+    reg->reg_num = val;
+    reg->reg_type = kind;
+  } else
+    reinterpret_cast<CHashGeneric *>(entry)->user_data0 = val;
+  HashAdd(entry, table);
+  return true;
+}
+
+bool AsmHashLoad()
+{
+  CMemLock lock(asm_hash_lock);
+  if (asm_hash)
+    return true;
+  auto *heap = adam_task->data_heap;
+  auto *table = HashTableNew(1024, heap);
+  if (!table)
+    return false;
+  CCmpCtrl cc;
+  CLexFile file;
+  LexSourceInit(cc, file, CompilerOpCodes, 0, "::/Compiler/OpCodes.DD");
+  bool okay = true;
+  while (LexRaw(cc) > TK_EOF)
+    if (!AsmPrsHashEntry(cc, table, heap)) {
+      okay = false;
+      break;
+    }
+  okay = okay && cc.token == TK_EOF;
+  LexSourceDel(cc);
+  if (okay)
+    asm_hash = table;
+  else
+    HashTableDelCpp(table);
+  return okay;
+}
+
+const CHash *AsmHashFind(const char *name, uint32_t mask)
+{
+  CMemLock lock(asm_hash_lock);
+  return HashFind(name, asm_hash, mask);
+}
+
 static constexpr auto type_mask = HTT_INTERNAL_TYPE | HTT_CLASS;
 
 static CHashClass *FindType(const char *name, CHashTable *table)
@@ -189,33 +436,33 @@ static bool CmpIntMembers(CHashTable *table, CHashClass &cls)
 
 static bool CmpFillHash(CHashTable *table)
 {
-  static constexpr const char *keywords[]{
-      "include",    "define",  "union",     "catch",   "class",
-      "try",        "if",      "else",      "for",     "while",
-      "extern",     "_extern", "return",    "sizeof",  "_intern",
-      "do",         "asm",     "goto",      "exe",     "break",
-      "switch",     "start",   "end",       "case",    "default",
-      "public",     "offset",  "import",    "_import", "ifdef",
-      "ifndef",     "ifaot",   "ifjit",     "endif",   "assert",
-      "reg",        "noreg",   "lastclass", "no_warn", "help_index",
-      "help_file",  "static",  "lock",      "defined", "interrupt",
-      "haserrcode", "argpop",  "noargpop",
-  };
-  static_assert(sizeof(keywords) / sizeof(*keywords) == KW_NOARGPOP + 1);
+  if (!AsmHashLoad())
+    return false;
   auto *heap = CurrentTask()->data_heap;
-  for (uint64_t i = 0; i < sizeof(keywords) / sizeof(*keywords); ++i) {
-    auto *entry =
-        reinterpret_cast<CHashGeneric *>(CAlloc(sizeof(CHashGeneric), heap));
-    auto *name = entry ? StrNew(keywords[i], heap) : nullptr;
-    if (!name) {
-      Free(entry);
-      return false;
+  bool seen[KW_NOARGPOP + 1]{};
+  for (int64_t bucket = 0; bucket <= asm_hash->mask; bucket++)
+    for (auto *hash = asm_hash->body[bucket]; hash; hash = hash->next) {
+      if (hash->type != HTT_KEYWORD)
+        continue;
+      auto value = reinterpret_cast<const CHashGeneric *>(hash)->user_data0;
+      if (value > KW_NOARGPOP || seen[value])
+        return false;
+      auto *entry =
+          reinterpret_cast<CHashGeneric *>(CAlloc(sizeof(CHashGeneric), heap));
+      auto *name = entry ? StrNew(hash->str, heap) : nullptr;
+      if (!name) {
+        Free(entry);
+        return false;
+      }
+      entry->hash.str = name;
+      entry->hash.type = HTT_KEYWORD;
+      entry->user_data0 = value;
+      HashAdd(&entry->hash, table);
+      seen[value] = true;
     }
-    entry->hash.str = name;
-    entry->hash.type = HTT_KEYWORD;
-    entry->user_data0 = i;
-    HashAdd(&entry->hash, table);
-  }
+  for (bool defined : seen)
+    if (!defined)
+      return false;
   static constexpr struct
   {
     const char *name;

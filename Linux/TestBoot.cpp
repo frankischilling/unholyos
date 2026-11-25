@@ -1303,7 +1303,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);
       Check(
-          output.find("asm build 0 0 0 0\n") != std::string::npos &&
+          output.find("asm build 0 0 0 0 0\n") != std::string::npos &&
               output.find("UnholyOS: asm rejected unresolved local") !=
                   std::string::npos &&
               output.find("UnholyOS: asm opcode modes and alignment matched") !=
@@ -1334,6 +1334,13 @@ static void TestBoot(const char *qemu, const fs::path &iso,
           "Compiler accepted an invalid goto label");
       CheckProgramOutput(output, "/GotoProbe.HC", "goto 42 5\n", '1');
       CheckProgramOutput(output, "/GotoProbe.BIN.Z", "goto 42 5\n", '1');
+      Check(output.find("UnholyOS: opcode table mode bytes matched") !=
+                std::string::npos,
+            "Opcode table emitted unexpected mode prefixes");
+      CheckProgramOutput(output, "/OpcodeProbe.HC", "opcode table 42 2 2 42\n",
+                         '1');
+      CheckProgramOutput(output, "/OpcodeProbe.BIN.Z",
+                         "opcode table 42 2 2 42\n", '1');
       Check(output.find("switch build 0\n") != std::string::npos &&
                 output.find("UnholyOS: switch rejected duplicate case") !=
                     std::string::npos,
@@ -1349,7 +1356,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       if (std::string_view(memory) == "512")
         for (auto *name :
              {"AsmProbe.BIN.Z", "DivByHand.BIN.Z", "InlineAsmProbe.BIN.Z",
-              "GotoProbe.BIN.Z", "SwitchProbe.BIN.Z"})
+              "GotoProbe.BIN.Z", "SwitchProbe.BIN.Z", "OpcodeProbe.BIN.Z"})
           fs::copy_file(CaptureGuestFile(vm, dir, output, name),
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);

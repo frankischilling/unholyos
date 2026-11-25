@@ -14,7 +14,7 @@ CXXFLAGS := -std=c++20 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie \
 ASM_SRC := Kernel/KStart16.asm Kernel/KStart32.asm Kernel/KStart64.asm Kernel/KUtils.asm \
 	Kernel/KMathA.asm Kernel/StrA.asm Kernel/KInts.asm Kernel/KExcept.asm Kernel/Sched.asm Kernel/PCIBIOS.asm \
 	Kernel/Mem/PageTables.asm Kernel/SerialDev/SerialBoot.asm Adam/Opt/Boot/DskISORedSea.asm \
-	Compiler/CExcept.asm
+	Compiler/CExcept.asm Compiler/AsmInit.asm
 CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp Kernel/KDbg.cpp Kernel/MultiProc.cpp Kernel/Display.cpp Kernel/SerialDev/Serial.cpp \
 	Kernel/KTask.cpp Kernel/KHashA.cpp Kernel/KHashB.cpp Kernel/KLoad.cpp Kernel/KMathB.cpp Kernel/StrA.cpp \
 	Kernel/KDataTypes.cpp Kernel/KDate.cpp Kernel/KExcept.cpp Kernel/QSort.cpp \
@@ -60,7 +60,7 @@ CMP_PROBES := $(addprefix Linux/Fixtures/,CmpProbeRunner.HC CmpProbe.PRJ CmpProb
 	ImportCaller.HC ImportProvider.HC ImportBuild.HC ImportExtern.HC ImportLate.HC \
 	AsmBuild.HC AsmProbe.HC DivByHand.HC AsmHelloWorld.HC MulByHand.HC PutDec.HC \
 	AsmAndC3.HC InlineAsmProbe.HC GotoProbe.HC \
-	NullCase.HC SubSwitch.HC SwitchProbe.HC SwitchBuild.HC)
+	NullCase.HC SubSwitch.HC SwitchProbe.HC SwitchBuild.HC OpcodeProbe.HC)
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 
 .PHONY: all run test
@@ -72,6 +72,7 @@ $(LOADER): Adam/Opt/Boot/BootDVD.asm Kernel/KernelA.inc
 
 $(BUILD)/Adam/Opt/Boot/DskISORedSea.asm.o: NASMFLAGS += -D'BDVD_FILE="$(LOADER)"'
 $(BUILD)/Adam/Opt/Boot/DskISORedSea.asm.o: $(LOADER)
+$(BUILD)/Compiler/AsmInit.asm.o: Compiler/OpCodes.DD
 
 $(ASM_OBJ): $(BUILD)/%.asm.o: %.asm Kernel/KernelA.inc
 	mkdir -p $(@D)
