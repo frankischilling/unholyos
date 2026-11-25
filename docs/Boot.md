@@ -155,10 +155,20 @@ executed the `CmpProbe` module produced by UnholyOS and printed the same
 `cmp module 32 ready` line. The GCC boot suite saves that module as
 `CmpOutput.BIN.Z` under `BUILD`.
 
-The current AOT path covers the implemented HolyC statements and calls
-used in these tests. General source import declarations, inline assembly,
-relocatable initializers, debug line tables, and recompiling the kernel
-are pending.
+The linker test builds `ImportCaller.HC` and `ImportProvider.HC` inside
+the guest. It loads the caller first and holds its entry points until
+the provider exports its function and data. The caller also imports
+`_MEMCPY` and `SYS_COMPILE_TIME` under local names and checks the copied
+timestamp. Both guests printed `native link 34` from the same two
+guest-built modules in QEMU 9.2.0 with PC, `qemu64`, and 512 MiB.
+
+The boot suite also resolves imports against later JIT definitions,
+checks JIT calls through forward declarations, and binds typed `extern`
+and `_extern` declarations to loaded symbols. The suite checks that an
+unresolved function raises `UndefExt` and that JIT `import` is rejected.
+
+Inline assembly, AOT `_extern` labels, relocatable initializers, debug
+line tables, and recompiling the kernel remain pending.
 
 ## RedSea descriptor verification
 

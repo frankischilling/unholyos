@@ -63,6 +63,13 @@ bool AOTRelAdd(CAOT &aot, size_t rip, const void *symbol, const char *name)
   return true;
 }
 
+void AOTRelResolve(CAOT &aot, const void *before, const void *after)
+{
+  for (auto *ie = aot.first_ie; ie; ie = ie->next)
+    if (!ie->name && ie->symbol == before)
+      ie->symbol = after;
+}
+
 static bool CmpJoin(CCmpCtrl &cc, CAOT &aot)
 {
   auto &task = *CurrentTask();

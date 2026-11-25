@@ -1248,6 +1248,30 @@ static void TestBoot(const char *qemu, const fs::path &iso,
         fs::copy_file(CaptureGuestFile(vm, dir, output, "CmpOutput.BIN.Z"),
                       iso.parent_path() / "CmpOutput.BIN.Z",
                       fs::copy_options::overwrite_existing);
+      Check(output.find("native link build 0 0\n") != std::string::npos &&
+                output.find("Unresolved Reference:NativeLinkAdd") !=
+                    std::string::npos &&
+                output.find("Unresolved Reference:NativeLinkBias") !=
+                    std::string::npos &&
+                output.find("native link 34\n") != std::string::npos &&
+                output.find("native late build 0\n") != std::string::npos &&
+                output.find("Unresolved Reference:NativeLateFn") !=
+                    std::string::npos &&
+                output.find("Unresolved Reference:NativeLateData") !=
+                    std::string::npos &&
+                output.find("native late 34\n") != std::string::npos &&
+                output.find("UnholyOS: AOT system alias matched") !=
+                    std::string::npos &&
+                output.find("UnholyOS: extern and import rejection matched") !=
+                    std::string::npos,
+            "Guest-built imports or extern declarations failed to link");
+      CheckProgramOutput(output, "/ImportExtern.HC",
+                         "native extern 15 34 49\nnative extern date 1\n", '1');
+      if (std::string_view(memory) == "512")
+        for (auto *name : {"ImportCaller.BIN.Z", "ImportProvider.BIN.Z"})
+          fs::copy_file(CaptureGuestFile(vm, dir, output, name),
+                        iso.parent_path() / name,
+                        fs::copy_options::overwrite_existing);
       VerifyGuestISO(qemu, vm, dir, iso, kernel, memory, output);
       if (std::string_view(memory) == "4608") {
         std::smatch address;

@@ -383,11 +383,13 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
       arg = push.right;
     }
     bool indirect = !out.AOT() && (fun->cls.flags & CF_EXTERN);
-    if (out.AOT())
-      out.RelAddress(fun, fun->cls.flags & FF__EXTERN
-                              ? fun->cls.sym.hash.str
-                              : nullptr);
-    else
+    if (out.AOT()) {
+      const auto &sym = fun->cls.sym;
+      const char *name = sym.import_name;
+      if (!name && (fun->cls.flags & FF__EXTERN))
+        name = sym.hash.str;
+      out.RelAddress(fun, name);
+    } else
       out.MoveRAX(indirect ? reinterpret_cast<uintptr_t>(&fun->exe_addr)
                            : reinterpret_cast<uintptr_t>(fun->exe_addr));
     out.Bytes(0xFF, indirect ? 0x10 : 0xD0); // CALL [RAX] or CALL RAX
@@ -416,7 +418,7 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
       auto address = code[target.left].code;
       ICCompoundAssign(out, node, code[node.right], target.type,
                        address == IC_IMM_I64 || address == IC_DATA_ADDR ||
-                           address == IC_RBP,
+                           address == IC_GLBL_ADDR || address == IC_RBP,
                        stack_slots + 1);
     }
     out.Bytes(0x5A); // POP RDX
@@ -425,6 +427,17 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
   }
   if (op == IC_STR_CONST) {
     out.StringAddress(node.right);
+    return true;
+  }
+  if (op == IC_GLBL_ADDR) {
+    auto *var = reinterpret_cast<const CHashGlblVar *>(node.data);
+    if (out.AOT())
+      out.RelAddress(var, var->sym.import_name);
+    else if (var->flags & GVF_EXTERN) {
+      out.MoveRAX(reinterpret_cast<uintptr_t>(&var->data_addr));
+      out.Load(RT_I64);
+    } else
+      out.MoveRAX(reinterpret_cast<uintptr_t>(var->data_addr));
     return true;
   }
   if (op == IC_DATA_ADDR) {

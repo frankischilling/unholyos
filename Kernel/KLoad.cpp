@@ -242,7 +242,12 @@ static void LoadOneImport(const CLoadImport &import, uint64_t address)
 
 static CHash *FindLinkSymbol(const char *name, CHashTable *table)
 {
-  return HashFind(name, table, HTT_EXPORT_SYS_SYM | HTT_FUN | HTT_GLBL_VAR);
+  constexpr auto mask = HTT_EXPORT_SYS_SYM | HTT_FUN | HTT_GLBL_VAR;
+  for (uint64_t instance = 1;; ++instance) {
+    auto *entry = HashFind(name, table, mask, instance);
+    if (!entry || !(entry->type & (HTF_IMPORT | HTF_UNRESOLVED)))
+      return entry;
+  }
 }
 
 static uint64_t LinkAddress(const CHash &symbol)

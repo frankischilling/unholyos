@@ -200,6 +200,7 @@ enum CICode : uint8_t
   IC_STR_CONST,
   IC_RBP = 0x13,
   IC_DATA_ADDR = 0x14,
+  IC_GLBL_ADDR = 0x15,
   IC_TO_I64 = 0x1B,
   IC_HOLYC_TYPECAST = 0x1F,
   IC_DEREF = 0x24,
@@ -312,6 +313,7 @@ bool MapFileWrite(const CHashTable &table, const char *name, uint8_t drv_let);
 bool AOTStore(CAOT &aot, const void *symbol, const char *name,
               const uint8_t *body, size_t size, bool main = false);
 bool AOTRelAdd(CAOT &aot, size_t rip, const void *symbol, const char *name);
+void AOTRelResolve(CAOT &aot, const void *before, const void *after);
 
 // The returned code belongs to the current task's executable heap.
 // Parsing starts at cc.token and leaves the first token after the expression.

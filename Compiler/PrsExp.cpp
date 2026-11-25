@@ -166,7 +166,10 @@ private:
   {
     bool variadic = callee.cls.flags & FF_DOT_DOT_DOT;
     if ((callee.cls.flags & FF_INTERNAL) || (variadic && FunPopsArgs(callee)) ||
-        (!callee.exe_addr && &callee != fun) || !callee.return_class ||
+        (!callee.exe_addr && &callee != fun &&
+         !(cc.aot && (cc.flags & CCF_AOT_COMPILE) &&
+           (callee.cls.flags & CF_EXTERN))) ||
+        !callee.return_class ||
         ClassRawType(*callee.return_class) == RT_AGGREGATE ||
         callee.arg_cnt > UINT16_MAX / 8)
       return NO_IC;
@@ -513,12 +516,13 @@ private:
       if (hash->type & HTT_GLBL_VAR) {
         auto *var = reinterpret_cast<CHashGlblVar *>(hash);
         auto *cls = var->var_class;
+        bool aot = cc.aot && (cc.flags & CCF_AOT_COMPILE);
         if (cls && TypeSize(static_cast<CRawType>(cls->raw_type)) &&
-            var->data_addr) {
-          auto data = reinterpret_cast<uintptr_t>(var->data_addr);
+            (var->data_addr ||
+             (aot ? var->flags & GVF_IMPORT : var->flags & GVF_EXTERN))) {
           Lex(cc);
-          auto address = Add({data, NO_IC, NO_IC, IC_DATA_ADDR, RT_I64,
-                              false, false, true});
+          auto address = Add({reinterpret_cast<uintptr_t>(var), NO_IC, NO_IC,
+                              IC_GLBL_ADDR, RT_I64, false, false, true});
           return coc.LValue(address, *cls, var->dim.next);
         }
       }

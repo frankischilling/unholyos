@@ -561,26 +561,28 @@ static CExeResult BootFileProgramReport(const CDrv &dv, const char *path)
   return run;
 }
 
+static void BootGuestFileReport(const CDrv &ram, const char *path)
+{
+  CRedSeaDirEntry entry;
+  size_t prefix;
+  if (!RedSeaFileLookup(ram, path, false, false, entry, prefix))
+    return;
+  SerialPutS("UnholyOS: guest file ");
+  SerialPutS(path);
+  SerialPutS(", address ");
+  SerialPutHex(reinterpret_cast<uintptr_t>(ram.bd->RAM_dsk) +
+               entry.clus * BLK_SIZE);
+  SerialPutS(", size ");
+  SerialPutHex(entry.size);
+  SerialPutS("\r\n");
+}
+
 static void BootISOReport(const CDrv &dv)
 {
   auto run = BootFileProgramReport(dv, "/RedSeaISOProbe.HC");
-  auto *ram = MountedDrive('B');
-  if (!run.okay || !ram)
-    return;
-  const char *paths[]{"/GuestBuild.ISO.C", "/GuestData.ISO.C"};
-  for (const char *path : paths) {
-    CRedSeaDirEntry entry;
-    size_t prefix;
-    if (!RedSeaFileLookup(*ram, path, false, false, entry, prefix))
-      return;
-    SerialPutS("UnholyOS: guest file ");
-    SerialPutS(path);
-    SerialPutS(", address ");
-    SerialPutHex(reinterpret_cast<uintptr_t>(ram->bd->RAM_dsk) +
-                 entry.clus * BLK_SIZE);
-    SerialPutS(", size ");
-    SerialPutHex(entry.size);
-    SerialPutS("\r\n");
+  if (auto *ram = MountedDrive('B'); ram && run.okay) {
+    BootGuestFileReport(*ram, "/GuestBuild.ISO.C");
+    BootGuestFileReport(*ram, "/GuestData.ISO.C");
   }
 }
 
@@ -752,16 +754,43 @@ static void BootCmpReport(const CDrv &dvd, CTask &task)
   auto *print = Load(*ram, "/CmpPrint.BIN.Z", task, LDF_JUST_LOAD);
   if (print && LoadPass2(*print))
     SerialPutS("UnholyOS: finished /CmpPrint.BIN.Z, checks 0x0000000000000001\r\n");
-  CRedSeaDirEntry entry;
-  size_t prefix;
-  if (RedSeaFileLookup(*ram, "/CmpOutput.BIN.Z", false, false, entry, prefix)) {
-    SerialPutS("UnholyOS: guest file /CmpOutput.BIN.Z, address ");
-    SerialPutHex(reinterpret_cast<uintptr_t>(ram->bd->RAM_dsk) +
-                 entry.clus * BLK_SIZE);
-    SerialPutS(", size ");
-    SerialPutHex(entry.size);
-    SerialPutS("\r\n");
-  }
+  BootGuestFileReport(*ram, "/CmpOutput.BIN.Z");
+}
+
+static void BootImportReport(const CDrv &dvd, CTask &task)
+{
+  auto *ram = MountedDrive('B');
+  if (!ram || !BootFileProgramReport(dvd, "/ImportBuild.HC").okay)
+    return;
+  auto *caller = Load(*ram, "/ImportCaller.BIN.Z", task, LDF_JUST_LOAD);
+  if (!caller || LoadPass2(*caller))
+    return;
+  if (!Load(*ram, "/ImportProvider.BIN.Z", task) || !LoadPass2(*caller))
+    return;
+  auto *entry = HashFind("NativeLinkDateResult", task.hash_table,
+                          HTT_EXPORT_SYS_SYM);
+  uint64_t date;
+  MemCpy(&date, SYS_COMPILE_TIME, sizeof(date));
+  if (entry && date == *reinterpret_cast<const uint64_t *>(
+                           reinterpret_cast<const CHashExport *>(entry)->val))
+    SerialPutS("UnholyOS: AOT system alias matched\r\n");
+  auto declarations = ExePutS("extern I64 NativeLateFn(I64 value);"
+                              "extern I64 NativeLateData;", nullptr, 0);
+  if (!declarations.okay)
+    return;
+  auto *late = Load(*ram, "/ImportLate.BIN.Z", task, LDF_JUST_LOAD);
+  if (!late || LoadPass2(*late) ||
+      !BootFileProgramReport(dvd, "/ImportExtern.HC").okay ||
+      !LoadPass2(*late))
+    return;
+  auto missing = ExePutS("extern I64 MissingNativeExtern(I64 n);"
+                         "MissingNativeExtern(1);", nullptr, 0);
+  auto illegal = ExePutS("import I64 BadNativeImport;", nullptr, 0);
+  if (!missing.okay && missing.exception == 0x7478456665646E55 &&
+      !illegal.okay && !HashFind("BadNativeImport", task.hash_table, HTG_TYPE_MASK))
+    SerialPutS("UnholyOS: extern and import rejection matched\r\n");
+  BootGuestFileReport(*ram, "/ImportCaller.BIN.Z");
+  BootGuestFileReport(*ram, "/ImportProvider.BIN.Z");
 }
 
 static void BootModuleReport(const CDrv &dv, CTask &task)
@@ -947,6 +976,7 @@ extern "C" void KMainCpp()
     BootProbeReport(*adam_task->cur_dv, *adam_task, "/FileWriteProbe.BIN",
                     "FileWriteProbeResult", "UnholyOS: write probe ");
     BootCmpReport(*adam_task->cur_dv, *adam_task);
+    BootImportReport(*adam_task->cur_dv, *adam_task);
     BootISOReport(*adam_task->cur_dv);
   } else {
     SerialPutS("UnholyOS: Could not mount the boot DVD\r\n");

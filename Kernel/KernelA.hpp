@@ -448,7 +448,8 @@ constexpr uint32_t HTG_TYPE_MASK = 0x1FFFF, HTG_FLAGS_MASK = 0xFF000000;
 constexpr uint32_t HTG_SRC_SYM = HTT_DEFINE_STR | HTT_GLBL_VAR | HTT_FUN |
                                  HTT_CLASS | HTT_EXPORT_SYS_SYM | HTT_HELP_FILE;
 constexpr uint32_t HTF_PRIVATE = 0x00800000, HTF_PUBLIC = 0x01000000,
-                   HTF_IMM = 0x08000000;
+                   HTF_IMPORT = 0x04000000, HTF_IMM = 0x08000000,
+                   HTF_UNRESOLVED = 0x40000000;
 
 struct CHash
 {
@@ -584,7 +585,7 @@ inline bool FunPopsArgs(const CHashFun &fun)
   auto flags = fun.cls.flags;
   return (flags & (FF_RET1 | FF_ARGPOP)) && !(flags & FF_NOARGPOP);
 }
-constexpr uint64_t MLMF_IS_STR = 1, GVF_EXTERN = 4, GVF_ALIAS = 16,
+constexpr uint64_t MLMF_IS_STR = 1, GVF_IMPORT = 2, GVF_EXTERN = 4, GVF_ALIAS = 16,
                    GVF_ARRAY = 32;
 
 static_assert(sizeof(CMemberLst) == 144 && offsetof(CMemberLst, dim) == 96 &&
