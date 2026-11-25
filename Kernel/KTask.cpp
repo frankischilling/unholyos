@@ -44,6 +44,23 @@ bool ExeCmdLine(CCmpCtrl &cc, uint64_t &result)
   return !cc.jit_exception;
 }
 
+extern "C" [[noreturn]] void SrvTaskContCpp()
+{
+  auto *task = CurrentTask();
+  auto flags = GetRFlags();
+  FlushMsgsCpp(task);
+  for (;;) {
+    asm volatile("cli" : : : "memory");
+    if (JobsHndlrCpp(flags, task) && task->title_src == TTS_TASK_NAME)
+      MemCpy(task->task_title, task->task_name, sizeof(task->task_name));
+    FlushMsgsCpp(task);
+    __atomic_fetch_or(&task->task_flags, TASKF_IDLE | TASKF_AWAITING_MSG,
+                      __ATOMIC_RELAXED);
+    _YIELD();
+    SetRFlags(flags);
+  }
+}
+
 static int64_t sys_num_spawned_tasks;
 
 static CFPU *TaskFPUInit(CHeapCtrl *hc, const CFPU *initial)
@@ -89,10 +106,7 @@ extern "C" CTask *TaskInitCpp(CTask *task, size_t stk_size)
       reinterpret_cast<uintptr_t>(&task->next_child_task) -
       offsetof(CTask, next_sibling_task));
 
-  auto &srv = task->srv_ctrl;
-  QueInit(srv.next_waiting, srv.last_waiting);
-  QueInit(srv.next_done, srv.last_done);
-  srv.flags = 0;
+  JobCtrlInit(&task->srv_ctrl);
   QueInit(task->next_cc, task->last_cc);
   QueInit(task->next_except, task->last_except);
   QueInit(task->next_ctrl, task->last_ctrl);
@@ -234,6 +248,8 @@ extern "C" CTask *TaskEnd()
     SingleUserCpp(false);
     sys_focus_task = nullptr;
   }
+  JobQueDel(reinterpret_cast<CJob *>(&task->srv_ctrl.next_waiting));
+  JobQueDel(reinterpret_cast<CJob *>(&task->srv_ctrl.next_done));
   task->task_signature = 0;
   task->last_input_filter_task->next_input_filter_task = task->next_input_filter_task;
   task->next_input_filter_task->last_input_filter_task = task->last_input_filter_task;

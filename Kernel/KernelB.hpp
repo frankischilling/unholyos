@@ -36,7 +36,29 @@ inline CCPU *CurrentCPU()
   return cpu;
 }
 
+inline uint64_t GetRFlags()
+{
+  uint64_t flags;
+  asm volatile("pushfq; popq %0" : "=r"(flags) : : "memory");
+  return flags;
+}
+
+inline void SetRFlags(uint64_t flags)
+{
+  asm volatile("pushq %0; popfq" : : "r"(flags) : "cc", "memory");
+}
+
 extern "C" void _YIELD();
+extern "C" uint64_t TaskValidateCpp(CTask *task);
+extern "C" uint64_t SuspendCpp(CTask *task, uint8_t state);
+void JobCtrlInit(CJobCtrl *ctrl);
+void JobQueDel(CJob *head);
+extern "C" void JobDelCpp(CJob *job);
+extern "C" void TaskRstAwaitingMsgCpp(CTask *task);
+extern "C" void TaskWaitCpp(CTask *task, uint8_t cmd_line_pmt);
+extern "C" int64_t JobsHndlrCpp(uint64_t run_flags, CTask *task);
+extern "C" int64_t FlushMsgsCpp(CTask *task);
+extern "C" void InputFilterTaskHC();
 extern "C" uint64_t SingleUserCpp(uint8_t val);
 extern "C" [[noreturn]] void Exit();
 extern "C" void TaskQueInsCpp(CTask *task, CTask *pred);
@@ -156,6 +178,7 @@ extern CSema sys_semas[SEMA_SEMAS_NUM];
 extern CScrnCastGlbls scrncast;
 extern uint8_t sys_var_init_flag, sys_var_init_val;
 extern CJob sys_macro_head;
+extern CTask *sys_macro_task;
 extern CDevGlbls dev;
 extern uint64_t sys_cache_line_width;
 extern uint8_t *rev_bits_table, *set_bits_table;

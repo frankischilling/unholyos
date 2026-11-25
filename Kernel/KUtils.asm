@@ -23,9 +23,19 @@ GLOBAL tSHC,BusyHC,SleepUntilHC,SleepHC,Ona2FreqHC,Freq2OnaHC,SndHC
 GLOBAL ScrnCastHC,SndRstHC,BeepHC,MuteHC,IsMuteHC
 GLOBAL SpawnHC,TaskValidateHC,SuspendHC,IsSuspendedHC,TaskQueInsHC,TaskQueRemHC
 GLOBAL SingleUserHC,IsSingleUserHC
+GLOBAL JobDelHC,TaskRstAwaitingMsgHC,TaskExeHC,TaskTextHC
+GLOBAL TaskMsgHC,JobResScanHC,JobResGetHC,TaskWaitHC
+GLOBAL PostMsgHC,PostMsgWaitHC,MsgHC,JobsHndlrHC
+GLOBAL SrvTaskContHC,ScanMsgHC,FlushMsgsHC,GetMsgHC
+GLOBAL InputFilterTaskHC
 EXTERN CPUStructInitCpp,TaskInitCpp
 EXTERN SpawnCpp,TaskValidateCpp,SuspendCpp,IsSuspendedCpp,TaskQueInsCpp,TaskQueRemCpp
 EXTERN SingleUserCpp,IsSingleUserCpp
+EXTERN JobDelCpp,TaskRstAwaitingMsgCpp,TaskExeCpp,TaskTextCpp
+EXTERN TaskMsgCpp,JobResScanCpp,JobResGetCpp,TaskWaitCpp
+EXTERN PostMsgCpp,PostMsgWaitCpp,MsgCpp,JobsHndlrCpp
+EXTERN SrvTaskContCpp,ScanMsgCpp,FlushMsgsCpp,GetMsgCpp
+EXTERN InputFilterTaskCpp
 EXTERN MAllocCpp,FreeCpp,MSizeCpp,MSize2Cpp,MHeapCtrlCpp,CAllocCpp,MAllocIdentCpp
 EXTERN StrNewCpp,AStrNewCpp,StrCpyCpp,StrCmpCpp,StrIMatchCpp,StrOccCpp
 EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
@@ -90,6 +100,9 @@ BITS 64
 %if %3>=5
 	MOV	R8,[RBP+48]
 %endif
+%if %3>=6
+	MOV	R9,[RBP+56]
+%endif
 	HC_FRAME_CALL %2
 	RET	%3*8
 %endmacro
@@ -122,6 +135,23 @@ HOLYC_CPP TaskQueInsHC,TaskQueInsCpp,2
 HOLYC_CPP TaskQueRemHC,TaskQueRemCpp,1
 HOLYC_CPP SingleUserHC,SingleUserCpp,1
 HOLYC_CPP IsSingleUserHC,IsSingleUserCpp,0
+HOLYC_CPP JobDelHC,JobDelCpp,1
+HOLYC_CPP TaskRstAwaitingMsgHC,TaskRstAwaitingMsgCpp,1
+HOLYC_CPP TaskExeHC,TaskExeCpp,4
+HOLYC_CPP TaskTextHC,TaskTextCpp,4
+HOLYC_CPP TaskMsgHC,TaskMsgCpp,6
+HOLYC_CPP JobResScanHC,JobResScanCpp,2
+HOLYC_CPP JobResGetHC,JobResGetCpp,1
+HOLYC_CPP TaskWaitHC,TaskWaitCpp,2
+HOLYC_CPP PostMsgHC,PostMsgCpp,5
+HOLYC_CPP PostMsgWaitHC,PostMsgWaitCpp,5
+HOLYC_CPP MsgHC,MsgCpp,4
+HOLYC_CPP JobsHndlrHC,JobsHndlrCpp,2
+HOLYC_CPP SrvTaskContHC,SrvTaskContCpp,0
+HOLYC_CPP ScanMsgHC,ScanMsgCpp,4
+HOLYC_CPP FlushMsgsHC,FlushMsgsCpp,1
+HOLYC_CPP GetMsgHC,GetMsgCpp,4
+HOLYC_CPP InputFilterTaskHC,InputFilterTaskCpp,0
 
 SpawnHC:
 	HC_FRAME_ENTER

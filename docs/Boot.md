@@ -83,7 +83,7 @@ The source reference is [TempleOS at c26482bb6ad3f80106d28504ec5db3c6a360732c](h
 - The pinned compiler built `FormatProbe.BIN` from `FormatProbe.HC`. Both guests reported `0x1ff` with QEMU PC, `qemu64`, and 512 MiB. `PrsExp.HC` supplies the caller-cleaned stack layout for variadic arguments. `StrPrintJoin` in `Kernel/StrPrint.HC`, the math routines in `Kernel/KMathA.HC`, and `DefineLstLoad` in `Kernel/KDefine.HC` supply the formatting and list behavior. The probe checks all four string entry points, buffer growth, integer and floating-point conversions, quoting, define lists, date and time, raw and linked pointers, file text, and exceptions. Boot tests also check ordinary output, diagnostics, and silent mode on serial. A link-only load of the pinned `Compiler.BIN.Z` at this stage left 26 unresolved import groups, down from 38.
 - The pinned compiler also built `HashCaller.BIN` and `HashProbe.BIN`. Both guests reported `0x3f` with QEMU PC, `qemu64`, and 512 MiB. `HashSrcFileSet` and `HashDel` in `Kernel/KHashB.HC` and `ClassMemberLstDel` in `Compiler/LexLib.HC` supply source links and ownership rules for compiler records. The probe checks help indexes, private flags, child tables, members, function pointer records, and owned and borrowed data. `SysSymImportsResolve` in `Kernel/KLoad.HC` patches the caller's function and global imports when the corresponding typed entries appear. The probe checks function names and offsets from `Kernel/FunSeg.HC` and confirms that the relocated call still works after the exports are removed from the table. The boot tests verify that kernel exports and their names belong to Adam's heap. A link-only load of the pinned compiler now leaves 22 unresolved import groups. The compiler initializers and debugger-backed symbol lookup remain pending.
 - The pinned compiler built `DocProbe.BIN`. Both guests reported `0x7f` with QEMU PC, `qemu64`, and 512 MiB. `DocNew.HC`, `DocPutS.HC`, `DocPlain.HC`, `DocRecalc.HC`, `DocBin.HC`, and `DocFile.HC` under `Adam/DolDoc` define the document records and storage rules. The probe checks the native ABI, allocation and deletion, text and cursor records, literal markup formatting, binary attachment renumbering, and a write to a RedSea RAM drive. It also reads the unmodified `StartOS.HC` into 86 document entries and saves the original 1,158 bytes unchanged. `%$F` now uses the document serializer. Rendering, editor input, prompt dialogs, external binary links, and HolyC expressions in markup need further work. A link-only load of the pinned compiler now leaves 13 unresolved import groups. The compiler initializers remain pending.
-- The pinned compiler built `CompilerRuntimeProbe.BIN`. Both guests reported `0x3f` with QEMU PC, `qemu64`, and 512 MiB. `Kernel/BlkDev/DskAddDev.HC` and `DskDrv.HC` define the shared device and drive tables, including the boot and home aliases. The probe changes the home path and scratch document name and checks that path lookup and `DocNew` read both values. It also checks the boot DVD read counter, previous-state returns from `Raw` and `DbgMode` in `Kernel/KMisc.HC`, file and address links from `Kernel/BlkDev/DskDirA.HC`, sparse source maps from `Kernel/FunSeg.HC`, the fix link from `Kernel/EdLite.HC`, and the error message written to Adam's document by `AdamErr` from `Kernel/Job.HC`. Drive registry persistence, the debugger display, and scheduled jobs remain pending.
+- The pinned compiler built `CompilerRuntimeProbe.BIN`. Both guests reported `0x3f` with QEMU PC, `qemu64`, and 512 MiB. `Kernel/BlkDev/DskAddDev.HC` and `DskDrv.HC` define the shared device and drive tables, including the boot and home aliases. The probe changes the home path and scratch document name and checks that path lookup and `DocNew` read both values. It also checks the boot DVD read counter, previous-state returns from `Raw` and `DbgMode` in `Kernel/KMisc.HC`, file and address links from `Kernel/BlkDev/DskDirA.HC`, sparse source maps from `Kernel/FunSeg.HC`, the fix link from `Kernel/EdLite.HC`, and the error message written to Adam's document by `AdamErr` from `Kernel/Job.HC`. Drive registry persistence, the debugger display, and cross-core jobs remain pending.
 
 In a separate QEMU run, GDB loaded the pinned `Compiler.BIN.Z` and called its `CmpCtrlNew` and `CmpCtrlDel` routines. The first call set up the supplied lexer buffer at line 1 and selected `~/Tmp.DD.Z` as the default file. The second restored heap usage, and both restored the caller's stack. Six import groups remained unresolved. Initialization of the pinned compiler module remained pending in that run.
 
@@ -338,8 +338,22 @@ QEMU 9.2.0 with the PC machine, `qemu64`, and 512 MiB.
 
 The scheduler runs on Core 0. `Sleep` and `SleepUntil` yield there, and
 the timer wakes the idle task when the runnable queue has no ready work.
-The cross-core job queue, window focus and keyboard controls, and the
-remaining task end callbacks are pending.
+The cross-core job queue, window focus and keyboard controls, and task
+end callbacks are pending.
+
+## Task jobs and messages
+
+`make -j4 test BUILD=build/jobs` runs `JobProbe.HC` from
+`build/jobs/unholyos-startup-test.iso` and builds and runs
+`JobProbe.BIN.Z` in the guest. The probe checks message masks, paired
+key-down and key-up events, and zeroed output arguments on an empty
+scan. It checks source evaluation in another task, completion results,
+an input-filter task, and a servant exiting after completing a job.
+Pinned TempleOS and UnholyOS printed the same three result lines from
+the same source and from the UnholyOS-built module under QEMU 9.2.0 with
+the PC machine, `qemu64`, and 512 MiB.
+
+Cross-core dispatch and hardware input remain pending.
 
 ## PC speaker and recorded sound events
 

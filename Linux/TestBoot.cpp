@@ -1449,6 +1449,11 @@ static void TestBoot(const char *qemu, const fs::path &iso,
         CheckProgramOutput(output, name, "switch 12 2 -1 99 17 34\n", '1');
       for (const char *name : {"/SchedulerProbe.HC", "/SchedulerProbe.BIN.Z"})
         CheckProgramOutput(output, name, "sched 1234 1 1 1 1\n", '1');
+      for (const char *name : {"/JobProbe.HC", "/JobProbe.BIN.Z"})
+        CheckProgramOutput(output, name,
+                           "jobs masks 2 65 3 30 0 0 0\n"
+                           "jobs result 42 47 1 77 22\n"
+                           "jobs servant 93 0\n", '1');
       Check(output.find("UnholyOS: dead tasks reaped") != std::string::npos,
             "Terminated tasks remain in the scheduler queues");
       CheckProgramOutput(output, "/DivByHand.BIN.Z", "123456/10=12345\n", '1');
@@ -1460,7 +1465,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
               "GotoProbe.BIN.Z", "SwitchProbe.BIN.Z", "OpcodeProbe.BIN.Z",
               "FixedImage.BIN", "AsmBranchProbe.BIN.Z",
               "AsmBranchImport.BIN.Z", "AsmListingProbe.BIN.Z",
-              "SchedulerProbe.BIN.Z", "SoundRecord.BIN.Z"})
+              "SchedulerProbe.BIN.Z", "JobProbe.BIN.Z", "SoundRecord.BIN.Z"})
           fs::copy_file(CaptureGuestFile(vm, dir, output, name),
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);
