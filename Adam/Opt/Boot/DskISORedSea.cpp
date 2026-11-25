@@ -1,25 +1,17 @@
-#include "../../../Linux/BootMedia.hpp"
-#include "../../../Kernel/KernelA.hpp"
+#include "DskISORedSea.hpp"
 
-#include <algorithm>
-#include <bit>
-#include <cerrno>
+#if __STDC_HOSTED__
 #include <cstring>
-#include <iostream>
-#include <system_error>
-#include <unistd.h>
+static constexpr auto MemCpy=std::memcpy;
+static constexpr auto MemSet=std::memset;
+#else
+#include "../../../Kernel/KernelB.hpp"
+#endif
 
-namespace fs = std::filesystem;
+static_assert(__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__);
 
-constexpr size_t DRV_OFFSET = 22 * 4, LOADER_LBA = 21, CATALOG_LBA = 20;
-constexpr size_t BOOT_RAM_LIMIT = 0x96600 - 0x7C00;
-
-// Kernel/KDate.HC YearStartDate for 2025-01-01 00:00:00.
-constexpr uint64_t DATE = (2025ULL * 365 + 2024 / 4 - 2024 / 100 + 2024 / 400)
-                          << 32;
-constexpr std::string_view LOADER_MARKER = "UNHOLYOS-CD-LBA!";
-
-static_assert(std::endian::native==std::endian::little);
+static constexpr size_t BOOT_RAM_LIMIT=0x96600-0x7C00;
+static constexpr char loader_marker[]="UNHOLYOS-CD-LBA!";
 
 static void FillU16Palindrome(CPalindromeU16 *dst,uint16_t w)
 {
@@ -36,13 +28,11 @@ static void FillU32Palindrome(CPalindromeU32 *dst,int64_t d)
 struct CElTorito
 {
   uint16_t w[16];
-  uint8_t bootable; //88=bootable 00=not bootable
-  uint8_t media_type; //0=no emulation 4=hard disk
-  uint16_t load_seg; //0000->07C0
-  uint8_t sys_type;
-  uint8_t zero;
+  uint8_t bootable,media_type;
+  uint16_t load_seg;
+  uint8_t sys_type,zero;
   uint16_t sect_cnt;
-  uint32_t load_rba; //start addr of virtual disk
+  uint32_t load_rba;
   uint8_t zero2[20];
 };
 
@@ -50,161 +40,80 @@ static_assert(sizeof(CElTorito)==64 && offsetof(CElTorito,bootable)==32 &&
               offsetof(CElTorito,sect_cnt)==38 &&
               offsetof(CElTorito,load_rba)==40);
 
-class CDvdExtent
+CDvdExtent DvdExtent(size_t clus,size_t size)
 {
-public:
-  size_t lba, sectors, shift;
-};
-
-static CDvdExtent DvdExtent(size_t clus, size_t size)
-{
-  size_t shift = clus % 4;
-  return {clus / 4, CeilDiv(size, DVD_BLK_SIZE) + (shift != 0), shift};
+  size_t shift=clus%4;
+  return {clus/4,size/DVD_BLK_SIZE+(size%DVD_BLK_SIZE!=0)+(shift!=0),shift};
 }
 
-static void WriteLE(Bytes &disc, size_t offset, uint64_t val, size_t width)
+CDvdExtentResult RedSeaISO9660Stage1(uint8_t *loader,const CDvdExtent &extent)
 {
-  for (size_t i = 0; i < width; i++) {
-    disc.at(offset + i) = static_cast<uint8_t>(val);
-    val >>= 8;
-  }
-}
-
-static void WriteString(Bytes &disc, size_t offset, std::string_view text)
-{
-  std::copy(text.begin(), text.end(), disc.begin() + offset);
-}
-
-static void RedSeaDirEntry(Bytes &disc, size_t offset, std::string_view name,
-                           size_t clus, size_t size, uint16_t attr = 0)
-{
-  WriteLE(disc, offset, attr | RS_ATTR_CONTIGUOUS, 2);
-  WriteString(disc, offset + 2, name);
-  WriteLE(disc, offset + 40, clus, 8);
-  WriteLE(disc, offset + 48, size, 8);
-  WriteLE(disc, offset + 56, DATE, 8);
-}
-
-struct CRootFile
-{
-  std::string name;
-  Bytes data;
-  uint16_t attr;
-  size_t clus;
-};
-
-static Bytes RedSeaISO(const Bytes &kernel, std::vector<CRootFile> &files,
-                       size_t &root, CDvdExtent &extent)
-{
-  // One reserved data block comes before the root directory.
-  size_t root_blocks =
-      std::max<size_t>(2, CeilDiv((4 + files.size()) * 64, BLK_SIZE));
-  size_t bitmap_blocks = 1, data_area, boot, kernel_clus, total_blocks;
-  for (;;) {
-    data_area = DRV_OFFSET + bitmap_blocks;
-    root = data_area + 1;
-    boot = root + root_blocks;
-    kernel_clus = boot + 1;
-    extent = DvdExtent(kernel_clus, kernel.size());
-    total_blocks = 4 * (extent.lba + extent.sectors);
-    for (auto &file : files) {
-      file.clus = total_blocks;
-      total_blocks += CeilDiv(file.data.size(), BLK_SIZE);
-    }
-    total_blocks = 4 * CeilDiv(total_blocks, 4);
-    size_t needed = CeilDiv(total_blocks - DRV_OFFSET, BLK_SIZE * 8);
-    if (needed == bitmap_blocks)
+  constexpr size_t marker_size=sizeof(loader_marker)-1, patch_size=8;
+  size_t i=0,j=0;
+  for (;i+marker_size+patch_size<=DVD_BLK_SIZE;i++) {
+    for (j=0;j<marker_size && loader[i+j]==loader_marker[j];j++)
+      ;
+    if (j==marker_size)
       break;
-    bitmap_blocks = needed;
   }
+  if (j!=marker_size)
+    return DVD_EXTENT_MARKER;
+  if (extent.lba>UINT32_MAX || !extent.sectors || extent.shift>3 ||
+      extent.sectors>(BOOT_RAM_LIMIT-extent.shift*BLK_SIZE)/DVD_BLK_SIZE)
+    return DVD_EXTENT_RANGE;
 
-  Bytes disc(total_blocks * BLK_SIZE);
-  size_t base = DRV_OFFSET * BLK_SIZE;
-  disc[base + 3] = 0x88;
-  WriteLE(disc, base + 8, DRV_OFFSET, 8);
-  WriteLE(disc, base + 16, total_blocks - DRV_OFFSET, 8);
-  WriteLE(disc, base + 24, root, 8);
-  WriteLE(disc, base + 32, bitmap_blocks, 8);
-  WriteLE(disc, base + 40, DATE, 8);
-  WriteLE(disc, base + 510, 0xAA55, 2);
-
-  size_t bitmap = base + BLK_SIZE;
-  size_t used =
-      (files.empty()
-           ? kernel_clus + CeilDiv(kernel.size(), BLK_SIZE)
-           : files.back().clus + CeilDiv(files.back().data.size(), BLK_SIZE)) -
-      data_area;
-  for (size_t bit = 0; bit < used; bit++)
-    disc[bitmap + bit / 8] |= 1 << (bit % 8);
-
-  size_t root_size = root_blocks * BLK_SIZE;
-  base = root * BLK_SIZE;
-  RedSeaDirEntry(disc, base, ".", root, root_size, RS_ATTR_DIR);
-  RedSeaDirEntry(disc, base + 64, "..", root, 0, RS_ATTR_DIR);
-  RedSeaDirEntry(disc, base + 128, "0000Boot", boot, BLK_SIZE, RS_ATTR_DIR);
-  size_t entry = base + 192;
-  for (const auto &file : files) {
-    RedSeaDirEntry(disc, entry, file.name, file.clus, file.data.size(),
-                   file.attr);
-    std::copy(file.data.begin(), file.data.end(),
-              disc.begin() + file.clus * BLK_SIZE);
-    entry += 64;
-  }
-  base = boot * BLK_SIZE;
-  RedSeaDirEntry(disc, base, "0000Boot", boot, BLK_SIZE, RS_ATTR_DIR);
-  RedSeaDirEntry(disc, base + 64, "..", root, 0, RS_ATTR_DIR);
-  RedSeaDirEntry(disc, base + 128, "0000Kernel.BIN.C", kernel_clus,
-                 kernel.size());
-
-  std::copy(kernel.begin(), kernel.end(),
-            disc.begin() + kernel_clus * BLK_SIZE);
-  return disc;
+  uint32_t lba=extent.lba;
+  uint16_t sectors=extent.sectors,shift=extent.shift;
+  auto *patch=loader+i+marker_size;
+  MemCpy(patch,&lba,sizeof(lba));
+  MemCpy(patch+4,&sectors,sizeof(sectors));
+  MemCpy(patch+6,&shift,sizeof(shift));
+  return DVD_EXTENT_OK;
 }
 
-static void RedSeaISO9660(Bytes &disc, size_t root)
+void RedSeaISO9660(uint8_t *disc,uint32_t iso_size,uint32_t root_clus)
 {
-  CISOPriDesc iso_pri{},iso_boot{},iso_sup{},iso_term{};
-  CElTorito et{};
-  CPalindromeU32 root_clus{};
-  size_t iso_size=disc.size()/DVD_BLK_SIZE;
-  uint32_t catalog=CATALOG_LBA;
+  CISOPriDesc iso_pri;
+  CPalindromeU32 root;
+  CElTorito et;
+  uint32_t catalog=ISO_CATALOG_LBA;
   uint16_t j=0;
 
+  // The destination includes the zeroed system area and full DVD sectors.
+  MemSet(disc,0,(ISO_LOADER_LBA+1)*DVD_BLK_SIZE);
+  MemSet(&iso_pri,0,sizeof(iso_pri));
+  MemSet(&et,0,sizeof(et));
   iso_pri.type=ISOT_PRI_VOL_DESC;
-  std::memcpy(iso_pri.id,"CD001",sizeof(iso_pri.id));
+  MemCpy(iso_pri.id,"CD001",sizeof(iso_pri.id));
   iso_pri.version=1;
   FillU16Palindrome(&iso_pri.vol_set_size,1);
   FillU16Palindrome(&iso_pri.vol_seq_num,1);
   FillU16Palindrome(&iso_pri.log_block_size,DVD_BLK_SIZE);
   FillU32Palindrome(&iso_pri.vol_space_size,iso_size);
-  // The reference writes at the record start, before CISODirEntry::loc.
-  FillU32Palindrome(&root_clus,root);
-  std::memcpy(&iso_pri.root_dir_record,&root_clus,sizeof(root_clus));
+  // TempleOS writes the cluster at the start of the root record.
+  FillU32Palindrome(&root,root_clus);
+  MemCpy(&iso_pri.root_dir_record,&root,sizeof(root));
   iso_pri.file_structure_version=1;
-  std::memcpy(iso_pri.publisher_id,"TempleOS RedSea",sizeof("TempleOS RedSea"));
+  MemCpy(iso_pri.publisher_id,"TempleOS RedSea",
+                   sizeof("TempleOS RedSea"));
 
-  iso_sup=iso_pri;
-  iso_sup.type=ISOT_SUPPLEMENTARY_DESC;
+  MemCpy(disc+16*DVD_BLK_SIZE,&iso_pri,sizeof(iso_pri));
+  MemCpy(disc+18*DVD_BLK_SIZE,&iso_pri,sizeof(iso_pri));
+  disc[18*DVD_BLK_SIZE]=ISOT_SUPPLEMENTARY_DESC;
 
-  iso_boot.type=ISOT_BOOT_RECORD;
-  std::memcpy(iso_boot.id,"CD001",sizeof(iso_boot.id));
-  iso_boot.version=1;
-  std::memcpy(reinterpret_cast<uint8_t *>(&iso_boot)+7,
-              "EL TORITO SPECIFICATION",sizeof("EL TORITO SPECIFICATION"));
-  std::memcpy(reinterpret_cast<uint8_t *>(&iso_boot)+0x47,&catalog,
-              sizeof(catalog));
+  auto *iso_boot=disc+17*DVD_BLK_SIZE;
+  iso_boot[0]=ISOT_BOOT_RECORD;
+  MemCpy(iso_boot+1,"CD001\x01",6);
+  MemCpy(iso_boot+7,"EL TORITO SPECIFICATION",
+                   sizeof("EL TORITO SPECIFICATION"));
+  MemCpy(iso_boot+0x47,&catalog,sizeof(catalog));
 
-  iso_term.type=ISOT_TERMINATOR;
-  std::memcpy(iso_term.id,"CD001",sizeof(iso_term.id));
-  iso_term.version=1;
-
-  std::memcpy(disc.data()+16*DVD_BLK_SIZE,&iso_pri,sizeof(iso_pri));
-  std::memcpy(disc.data()+17*DVD_BLK_SIZE,&iso_boot,sizeof(iso_boot));
-  std::memcpy(disc.data()+18*DVD_BLK_SIZE,&iso_sup,sizeof(iso_sup));
-  std::memcpy(disc.data()+19*DVD_BLK_SIZE,&iso_term,sizeof(iso_term));
+  auto *iso_term=disc+19*DVD_BLK_SIZE;
+  iso_term[0]=ISOT_TERMINATOR;
+  MemCpy(iso_term+1,"CD001\x01",6);
 
   et.w[0]=1;
-  std::memcpy(&et.w[2],"UnholyOS",sizeof("UnholyOS"));
+  MemCpy(&et.w[2],"TempleOS",sizeof("TempleOS"));
   et.w[15]=0xAA55;
   for (size_t i=0;i<16;i++)
     j+=et.w[i];
@@ -212,118 +121,268 @@ static void RedSeaISO9660(Bytes &disc, size_t root)
   et.bootable=0x88;
   et.media_type=0;
   et.sect_cnt=4;
-  et.load_rba=LOADER_LBA;
-  std::memcpy(disc.data()+CATALOG_LBA*DVD_BLK_SIZE,&et,sizeof(et));
+  et.load_rba=ISO_LOADER_LBA;
+  MemCpy(disc+ISO_CATALOG_LBA*DVD_BLK_SIZE,&et,sizeof(et));
 }
 
-static void RedSeaISO9660Stage1(Bytes &disc, const Bytes &loader,
-                                const CDvdExtent &extent)
+#if !__STDC_HOSTED__
+
+extern "C" const uint8_t BDVD_START[];
+extern "C" char *DirNameAbsCpp(const char *name);
+extern "C" char *ExtChgCpp(const char *name,const char *ext);
+extern "C" uint64_t FileWriteCpp(const char *name,const uint8_t *data,
+                                 uint64_t count,uint64_t date,uint64_t attr);
+
+constexpr size_t ISO_DRV_OFFSET=(ISO_LOADER_LBA+1)*DVD_BLK_SIZE/BLK_SIZE;
+
+struct CISOEntry
 {
-  size_t base = LOADER_LBA * DVD_BLK_SIZE;
-  std::copy(loader.begin(), loader.end(), disc.begin() + base);
-  size_t off = std::string_view(reinterpret_cast<const char *>(loader.data()),
-                                loader.size())
-                   .find(LOADER_MARKER);
-  if (off == std::string_view::npos ||
-      off + LOADER_MARKER.size() + 8 > loader.size())
-    throw std::runtime_error("Missing DVD loader extent");
+  CISOEntry *next,*sub;
+  CRedSeaDirEntry de;
+  size_t dir_blocks;
+};
 
-  if (extent.sectors * DVD_BLK_SIZE + extent.shift * BLK_SIZE > BOOT_RAM_LIMIT)
-    throw std::runtime_error("Kernel would overwrite the relocated DVD loader");
-
-  off += base + LOADER_MARKER.size();
-  WriteLE(disc, off, extent.lba, 4);
-  WriteLE(disc, off + 4, extent.sectors, 2);
-  WriteLE(disc, off + 6, extent.shift, 2);
+static void DirTreeDel(CISOEntry *node)
+{
+  while (node) {
+    auto *next=node->next;
+    DirTreeDel(node->sub);
+    Free(node);
+    node=next;
+  }
 }
 
-static void WriteImage(const fs::path &output, const Bytes &disc)
+static CISOEntry *DirFilesSort(CISOEntry *first,size_t count)
 {
-  std::string name = output.string() + ".XXXXXX";
-  int fd = mkstemp(name.data());
-  if (fd < 0)
-    throw std::system_error(errno, std::generic_category(), name);
-  try {
-    size_t written = 0;
-    while (written < disc.size()) {
-      ssize_t count = write(fd, disc.data() + written, disc.size() - written);
-      if (count < 0 && errno == EINTR)
+  if (count<2)
+    return first;
+  auto *middle=first;
+  for (size_t i=1;i<count/2;i++)
+    middle=middle->next;
+  auto *right=middle->next;
+  middle->next=nullptr;
+  auto *left=DirFilesSort(first,count/2);
+  right=DirFilesSort(right,count-count/2);
+  CISOEntry *res=nullptr,**tail=&res;
+  while (left && right) {
+    auto **entry=DirEntryCompareName(left->de,right->de)<=0?&left:&right;
+    *tail=*entry;
+    *entry=(*entry)->next;
+    tail=&(*tail)->next;
+  }
+  *tail=left?left:right;
+  return res;
+}
+
+static size_t RedSeaBlocks(uint64_t bytes)
+{
+  return bytes/BLK_SIZE+(bytes%BLK_SIZE!=0);
+}
+
+static bool RedSeaISOPass1(const CDrv &dv,CISOEntry &dir,size_t &blocks,
+                           unsigned depth)
+{
+  // Bound recursion when a malformed directory links back to an ancestor.
+  CRedSeaDirEntry head;
+  if (depth==64 || !RedSeaFileFind(dv,dir.de.clus,".",true,head))
+    return false;
+
+  CHeapCtrl *hc=CurrentTask()->data_heap;
+  auto *block=reinterpret_cast<CRedSeaDirEntry *>(MAlloc(BLK_SIZE,hc));
+  if (!block)
+    return false;
+  size_t count=0;
+  bool okay=true,end=false;
+  auto **tail=&dir.sub;
+  for (uint64_t pos=0;okay && !end && pos<head.size;pos+=BLK_SIZE) {
+    if (!BlkDevReadBytes(*dv.bd,reinterpret_cast<uint8_t *>(block),
+                         dir.de.clus*BLK_SIZE+pos,BLK_SIZE)) {
+      okay=false;
+      break;
+    }
+    for (size_t i=pos?0:2;i<BLK_SIZE/sizeof(*block);i++) {
+      const auto &de=block[i];
+      if (!de.name[0]) {
+        end=true;
+        break;
+      }
+      if ((de.attr & RS_ATTR_DELETED) ||
+          ((de.attr & RS_ATTR_DIR) && de.name[0]=='.'))
         continue;
-      if (count <= 0)
-        throw std::system_error(errno, std::generic_category(), name);
-      written += static_cast<size_t>(count);
+      if (de.name[sizeof(de.name)-1]) {
+        okay=false;
+        break;
+      }
+      auto *entry=reinterpret_cast<CISOEntry *>(CAlloc(sizeof(CISOEntry),hc));
+      if (!entry) {
+        okay=false;
+        break;
+      }
+      entry->de=de;
+      *tail=entry;
+      tail=&entry->next;
+      count++;
     }
-    int rc = close(fd);
-    fd = -1;
-    if (rc < 0)
-      throw std::system_error(errno, std::generic_category(), name);
-    fs::rename(name, output);
-  } catch (...) {
-    if (fd >= 0)
-      close(fd);
-    unlink(name.c_str());
-    throw;
   }
-}
+  Free(block);
+  if (!okay)
+    return false;
 
-static void AddRootFile(std::vector<CRootFile> &files, std::string name,
-                        const fs::path &path)
-{
-  if (name.empty() || name.size() >= 38 || name == "." || name == ".." ||
-      name == "0000Boot" || name.find_first_of("/\\:") != std::string::npos ||
-      std::any_of(files.begin(), files.end(),
-                  [&name](const auto &file) { return file.name == name; }))
-    throw std::runtime_error("Invalid or duplicate RedSea filename " + name);
-  auto bytes = FileRead(path);
-  uint16_t attr = 0;
-  if (name.ends_with(".Z")) {
-    if (bytes.size() < 17 || ReadLE(bytes, 0, 8) != bytes.size() ||
-        bytes[16] < 1 || bytes[16] > 3)
-      throw std::runtime_error("Invalid archive header in " + path.string());
-    attr = RS_ATTR_COMPRESSED;
-  }
-  files.push_back({std::move(name), std::move(bytes), attr, 0});
-}
-
-int main(int argc, char **argv)
-{
-  if (argc < 4) {
-    std::cerr << "Usage: " << argv[0]
-              << " loader kernel output.iso [StartOS.HC.Z] [--file path]...\n";
-    return 2;
-  }
-  try {
-    const fs::path loader_path = argv[1], kernel_path = argv[2];
-    Bytes loader = FileRead(loader_path), kernel = FileRead(kernel_path);
-    if (loader.size() != DVD_BLK_SIZE)
-      throw std::runtime_error("The DVD loader must occupy 2048 bytes");
-    if (kernel.size() < 32 || !HasBytes(kernel, 0, "\xEB\x1E") ||
-        !HasBytes(kernel, 4, "TOSB"))
-      throw std::runtime_error("Invalid CBinFile header");
-
-    uint64_t patch_table = ReadLE(kernel, 16, 8);
-    if (ReadLE(kernel, 24, 8) != kernel.size() || patch_table <= 32 ||
-        patch_table >= kernel.size() || kernel.size() % 16)
-      throw std::runtime_error("Invalid CBinFile extent");
-
-    std::vector<CRootFile> files;
-    int arg = 4;
-    if (arg < argc && std::string_view(argv[arg]) != "--file")
-      AddRootFile(files, "StartOS.HC.Z", argv[arg++]);
-    while (arg < argc) {
-      if (std::string_view(argv[arg++]) != "--file" || arg == argc)
-        throw std::runtime_error("Expected --file followed by a path");
-      fs::path path = argv[arg++];
-      AddRootFile(files, path.filename().string(), path);
+  dir.sub=DirFilesSort(dir.sub,count);
+  dir.dir_blocks=RedSeaBlocks((count+3)*sizeof(CRedSeaDirEntry));
+  blocks+=dir.dir_blocks;
+  for (auto *entry=dir.sub;entry;entry=entry->next) {
+    if (entry->de.attr & RS_ATTR_DIR) {
+      if (!RedSeaISOPass1(dv,*entry,blocks,depth+1))
+        return false;
+    } else {
+      if (entry->de.size>uint64_t(dv.size)*BLK_SIZE)
+        return false;
+      blocks+=RedSeaBlocks(entry->de.size);
     }
-    size_t root;
-    CDvdExtent extent;
-    Bytes disc = RedSeaISO(kernel, files, root, extent);
-    RedSeaISO9660(disc, root);
-    RedSeaISO9660Stage1(disc, loader, extent);
-    WriteImage(argv[3], disc);
-  } catch (const std::exception &error) {
-    std::cerr << error.what() << '\n';
-    return 1;
+    if (blocks>UINT32_MAX)
+      return false;
   }
+  return true;
 }
+
+static bool CopyTree2(const CDrv &src,CDrv &dst,const CISOEntry &dir,
+                      uint64_t clus,uint64_t stage2_src,uint64_t &stage2_dst)
+{
+  auto *out=reinterpret_cast<CRedSeaDirEntry *>(dst.bd->RAM_dsk+clus*BLK_SIZE);
+  size_t index=2;
+  for (auto *entry=dir.sub;entry;entry=entry->next) {
+    auto de=entry->de;
+    de.attr|=RS_ATTR_CONTIGUOUS;
+    if (de.attr & RS_ATTR_DIR) {
+      de.attr=RS_ATTR_DIR|RS_ATTR_CONTIGUOUS;
+      de.size=entry->dir_blocks*BLK_SIZE;
+      de.datetime=Now();
+    } else if (IsDotExt(de.name,'Z')) {
+      de.attr|=RS_ATTR_COMPRESSED;
+    } else {
+      de.attr&=~RS_ATTR_COMPRESSED;
+    }
+    size_t blocks=RedSeaBlocks(de.size);
+    de.clus=blocks?RedSeaAllocClus(dst,blocks):INVALID_CLUS;
+    if (blocks && de.clus==INVALID_CLUS)
+      return false;
+    out[index++]=de;
+
+    if (de.attr & RS_ATTR_DIR) {
+      auto *child=reinterpret_cast<CRedSeaDirEntry *>(
+          dst.bd->RAM_dsk+de.clus*BLK_SIZE);
+      child[0]=de;
+      child[1]={de.attr,"..",clus,0,de.datetime};
+      if (!CopyTree2(src,dst,*entry,de.clus,stage2_src,stage2_dst))
+        return false;
+    } else {
+      if (blocks && !RedSeaFileRead(src,entry->de,0,
+                                    dst.bd->RAM_dsk+de.clus*BLK_SIZE,de.size))
+        return false;
+      if (stage2_src!=INVALID_CLUS && stage2_src==entry->de.clus)
+        stage2_dst=de.clus;
+    }
+  }
+  return true;
+}
+
+static bool RedSeaISOContains(const char *path,const char *dir)
+{
+  while (*dir && *path==*dir) {
+    path++;
+    dir++;
+  }
+  return !*dir && (!*path || *path=='/' || path[-1]=='/');
+}
+
+static size_t RedSeaISO(const CDrv &src,const char *out_name,uint64_t root_clus,
+                        const CRedSeaDirEntry *stage2)
+{
+  CISOEntry root{};
+  root.de.clus=root_clus;
+  size_t content=0;
+  if (!RedSeaISOPass1(src,root,content,0)) {
+    DirTreeDel(root.sub);
+    return 0;
+  }
+
+  // Reserve cluster zero of the data area, and room for the shifted stage-two
+  // read if its final DVD sector would otherwise extend past the volume.
+  size_t bitmap=1;
+  size_t total;
+  for (;;) {
+    total=(ISO_DRV_OFFSET+1+bitmap+content+3)&~size_t{3};
+    if (stage2)
+      total+=4;
+    size_t needed=(total-ISO_DRV_OFFSET+8*BLK_SIZE-1)/(8*BLK_SIZE);
+    if (needed==bitmap)
+      break;
+    bitmap=needed;
+  }
+  auto *iso=CAlloc(total*BLK_SIZE,CurrentTask()->data_heap);
+  CBlkDev bd;
+  CDrv dst;
+  MemSet(&bd,0,sizeof(bd));
+  MemSet(&dst,0,sizeof(dst));
+  bd.type=BDT_RAM;
+  bd.RAM_dsk=iso;
+  bd.max_blk=total-1;
+  dst.bd=&bd;
+  dst.drv_offset=ISO_DRV_OFFSET;
+  dst.size=total-ISO_DRV_OFFSET;
+  uint64_t stage2_clus=INVALID_CLUS;
+  bool okay=iso && RedSeaFormatRAM(dst,root.dir_blocks) &&
+            CopyTree2(src,dst,root,dst.root_clus,
+                      stage2?stage2->clus:INVALID_CLUS,stage2_clus);
+  if (okay) {
+    RedSeaISO9660(iso,total/4,dst.root_clus);
+    if (stage2) {
+      auto *loader=iso+ISO_LOADER_LBA*DVD_BLK_SIZE;
+      MemCpy(loader,BDVD_START,DVD_BLK_SIZE);
+      auto extent=DvdExtent(stage2_clus,stage2->size);
+      okay=stage2_clus!=INVALID_CLUS && extent.lba+extent.sectors<=total/4 &&
+           RedSeaISO9660Stage1(loader,extent)==DVD_EXTENT_OK;
+    }
+  }
+  if (okay)
+    okay=FileWriteCpp(out_name,iso,total*BLK_SIZE,0,0)!=0;
+  Free(iso);
+  DirTreeDel(root.sub);
+  return okay?content:0;
+}
+
+extern "C" int64_t RedSeaISOCpp(const char *iso_filename,const char *src_dir,
+                                const char *stage2_filename)
+{
+  if (!src_dir)
+    return 0;
+  auto &task=*CurrentTask();
+  auto *src=DirNameAbsCpp(src_dir);
+  auto *out=ExtChgCpp(iso_filename?iso_filename:blkdev.dft_iso_c_filename,
+                      "ISO.C");
+  auto *out_path=out?FileNameAbs(out,task):nullptr;
+  auto *stage2=stage2_filename?FileNameAbs(stage2_filename,task):nullptr;
+  size_t res=0,prefix;
+  uint64_t root;
+  CRedSeaDirEntry kernel;
+  auto *dv=src && *src && src[1]==':'?PathDrive(task,src[0]):nullptr;
+  auto *target=out_path && *out_path && out_path[1]==':'?PathDrive(task,out_path[0]):nullptr;
+  if (dv && target && target->bd->type==BDT_RAM &&
+      !(target->bd->flags & BDF_READ_ONLY) &&
+      (target!=dv || !RedSeaISOContains(out_path+2,src+2)) &&
+      RedSeaDirClus(*dv,src+2,StrLen(src+2),root) &&
+      (!stage2_filename ||
+       (stage2 && *stage2 && stage2[1]==':' && PathDrive(task,stage2[0])==dv &&
+        RedSeaISOContains(stage2+2,src+2) &&
+        RedSeaFileLookup(*dv,stage2+2,false,false,kernel,prefix) &&
+        kernel.size && kernel.clus!=INVALID_CLUS)))
+    res=RedSeaISO(*dv,out_path,root,stage2_filename?&kernel:nullptr);
+  Free(stage2);
+  Free(out_path);
+  Free(out);
+  Free(src);
+  return res;
+}
+
+#endif

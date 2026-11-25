@@ -10,6 +10,7 @@ GLOBAL QueVectU8NewHC,QueVectU8PutHC,QueVectU8GetHC,QueVectU8DelHC
 GLOBAL QSortHC,QSortI64HC,LstMatchHC
 GLOBAL FileReadHC,FileNameAbsHC,DirNameAbsHC,DirCurHC,DirFileHC,ExtChgHC,ExtDftHC
 GLOBAL FileWriteHC,BlkDevNextFreeSlotHC,BlkDevAddHC,Let2DrvHC,BlkReadHC,BlkWriteHC
+GLOBAL RedSeaISOHC
 GLOBAL SysUntryHC,PutExceptHC
 GLOBAL StrPrintJoinHC,StrPrintHC,CatPrintHC,MStrPrintHC,PrintHC,PrintErrHC,PrintWarnHC
 GLOBAL PutSHC
@@ -29,6 +30,7 @@ EXTERN QueVectU8NewCpp,QueVectU8PutCpp,QueVectU8GetCpp,QueVectU8DelCpp
 EXTERN QSortCpp,QSortI64Cpp,LstMatchCpp
 EXTERN FileReadCpp,FileNameAbsCpp,DirNameAbsCpp,DirCurCpp,DirFileCpp,ExtChgCpp,ExtDftCpp
 EXTERN FileWriteCpp,BlkDevNextFreeSlotCpp,BlkDevAddCpp,Let2DrvCpp,BlkReadCpp,BlkWriteCpp
+EXTERN RedSeaISOCpp
 EXTERN SysUntryCpp,PutExceptCpp
 EXTERN StrPrintJoin,CatPrintCpp,MStrPrintCpp,PrintCpp,PrintErrCpp,PrintWarnCpp
 EXTERN ExePutSCpp,ExeFileCpp,StreamPrintCpp,StreamExePrintCpp
@@ -149,6 +151,7 @@ HOLYC_CPP DirFileHC,DirFileCpp,3
 HOLYC_CPP ExtChgHC,ExtChgCpp,2
 HOLYC_CPP ExtDftHC,ExtDftCpp,2
 HOLYC_CPP FileWriteHC,FileWriteCpp,5
+HOLYC_CPP RedSeaISOHC,RedSeaISOCpp,3
 HOLYC_CPP BlkDevNextFreeSlotHC,BlkDevNextFreeSlotCpp,2
 HOLYC_CPP BlkDevAddHC,BlkDevAddCpp,4
 HOLYC_CPP Let2DrvHC,Let2DrvCpp,2

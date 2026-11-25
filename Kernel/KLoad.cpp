@@ -58,6 +58,7 @@ void QueVectU8NewHC(), QueVectU8PutHC(), QueVectU8GetHC(), QueVectU8DelHC();
 void QSortHC(), QSortI64HC(), LstMatchHC();
 void FileReadHC(), FileNameAbsHC(), DirNameAbsHC(), DirCurHC(), DirFileHC();
 void ExtChgHC(), ExtDftHC();
+void RedSeaISOHC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
 void BlkReadHC(), BlkWriteHC();
 void SysTryHC(), SysUntryHC(), ThrowHC(), CallerHC(), PutExceptHC();
@@ -504,6 +505,7 @@ bool LoadKernel(CTask &task)
       {"ExtChg", reinterpret_cast<uintptr_t>(ExtChgHC)},
       {"ExtDft", reinterpret_cast<uintptr_t>(ExtDftHC)},
       {"FileWrite", reinterpret_cast<uintptr_t>(FileWriteHC)},
+      {"RedSeaISO", reinterpret_cast<uintptr_t>(RedSeaISOHC)},
       {"BlkDevNextFreeSlot", reinterpret_cast<uintptr_t>(BlkDevNextFreeSlotHC)},
       {"BlkDevAdd", reinterpret_cast<uintptr_t>(BlkDevAddHC)},
       {"Let2Drv", reinterpret_cast<uintptr_t>(Let2DrvHC)},

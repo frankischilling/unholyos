@@ -1,8 +1,8 @@
 #include "../Compress.hpp"
 #include "../KernelB.hpp"
 
-static bool RedSeaDirClus(const CDrv &dv, const char *path, size_t count,
-                          uint64_t &dir)
+bool RedSeaDirClus(const CDrv &dv, const char *path, size_t count,
+                   uint64_t &dir)
 {
   if (!count || *path != '/' || dv.fs_type != FSt_REDSEA)
     return false;

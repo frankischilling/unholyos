@@ -11,11 +11,46 @@ The C++20 host tools build the RedSea image and check it against the kernel buil
 
 `make test` also builds `build/unholyos-startup-test.iso` with the original `StartOS.HC.Z`, compiler fixtures, and eleven TOSB module fixtures. The guest asks for `/StartOS.HC` through `FileRead` and reports the length and checksum of the expanded bytes. At 512 MiB, 3 GiB, and 4.5 GiB, the test scans the lexer fixtures, compiles and runs scalar HolyC expressions and functions, compiles and runs the original `Demo/Print.HC` from source, and runs the compiled modules from the RedSea DVD. `build/unholyos.iso` is the standard boot image.
 
+## Building a RedSea ISO in the guest
+
+`RedSeaISO` takes an output filename, a source directory, and an optional
+stage-two filename inside that directory. It writes an `.ISO.C` file to a
+mounted writable RedSea RAM drive. For example, once `B:` is mounted:
+
+```c
+RedSeaISO("B:/GuestBuild.ISO.C","::/","::/0000Boot/0000Kernel.BIN.C");
+```
+
+The source can be the mounted DVD or a RedSea RAM directory. The guest sizes
+the source tree, sorts each directory, copies file bytes and dates, and
+patches the included `BootDVD` loader to the copied stage-two extent. The
+host builder uses the same descriptor and loader patch code.
+
+The QEMU boot suite runs `RedSeaISOProbe.HC` through `ExeFile` at 512,
+3,072, and 4,608 MiB. It reads the two output files from guest RAM, checks
+the boot image against every source file, and checks that the data image
+contains the selected nested directory. The probe also checks that missing
+and out-of-tree stage-two files and an output path inside the source tree
+return zero. The suite cold boots the 512 MiB result and saves it as
+`build/unholyos-guest-built.iso` with the default `BUILD` setting.
+
+The local build used GCC 13.3.0, NASM 2.16.01, and QEMU 8.2.2 for
+`make -j4 test BUILD=build/gcc`. The resulting image reached
+`UnholyOS kernel entered in 64-bit mode` in a new QEMU 9.2.0 window:
+
+```sh
+qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom build/gcc/unholyos-guest-built.iso -display gtk -serial stdio
+```
+
+The guest copies files already present in the source tree. Rebuilding the
+kernel and loader from source inside the guest still requires the guest
+toolchain. The file-backed ISO device and persistent disc writes are pending.
+
 ## Reference
 
 The source reference is [TempleOS at c26482bb6ad3f80106d28504ec5db3c6a360732c](https://github.com/cia-foundation/TempleOS/tree/c26482bb6ad3f80106d28504ec5db3c6a360732c). Keep the checkout outside UnholyOS and verify the revision before comparing source. The reference ISO used for the VM comparison contained the same `0000Boot/0000Kernel.BIN.C` bytes as that checkout.
 
-- `Adam/Opt/Boot/DskISORedSea.HC` writes the descriptors, El Torito catalog, and stage-one boot image. UnholyOS creates this layout on the host and includes a RedSea root with its kernel file.
+- `Adam/Opt/Boot/DskISORedSea.HC` writes the descriptors, El Torito catalog, and stage-one boot image. The host builder and guest writer share the descriptor and loader code.
 - `Adam/Opt/Boot/BootDVD.HC` starts at `BDVD_START`, relocates to low memory above the kernel area, reads the kernel one DVD block at a time, and shifts it down to `BOOT_RAM_BASE`. The high half of EAX carries the RedSea shift and EBX carries the DVD block.
 - `Kernel/KernelA.HH` defines `CBinFile`, `CKernel`, and `CGDT`. The disk image uses their startup layout. The link fixes the kernel at the DVD address, with an empty patch table. The reference applies its relocation records during startup.
 - `Kernel/KStart16.HC`, `Kernel/KStart32.HC`, and `Kernel/KStart64.HC` describe the real-mode firmware calls, the change to flat 32-bit segments, and the change to 64-bit mode.

@@ -2,6 +2,24 @@
 
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 
+int64_t DirEntryCompareName(const CRedSeaDirEntry &a, const CRedSeaDirEntry &b)
+{
+  int da = bool(a.attr & RS_ATTR_DIR), db = bool(b.attr & RS_ATTR_DIR);
+  if (da != db)
+    return db - da;
+  const char *ext_a = FileExtDot(a.name), *ext_b = FileExtDot(b.name);
+  auto ext_cmp = StrCmpCpp(reinterpret_cast<const uint8_t *>(ext_a ? ext_a+1 : ""),
+                           reinterpret_cast<const uint8_t *>(ext_b ? ext_b+1 : ""));
+  if (ext_cmp)
+    return ext_cmp;
+  size_t len_a = ext_a ? size_t(ext_a-a.name) : StrLen(a.name);
+  size_t len_b = ext_b ? size_t(ext_b-b.name) : StrLen(b.name);
+  for (size_t i = 0; i < len_a && i < len_b; i++)
+    if (a.name[i] != b.name[i])
+      return uint8_t(a.name[i]) - uint8_t(b.name[i]);
+  return (len_a > len_b) - (len_a < len_b);
+}
+
 extern "C" void PutFileLinkCpp(const char *filename, const char *full_name,
                                int64_t line, uint8_t plain_text)
 {

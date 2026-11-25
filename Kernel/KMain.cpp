@@ -561,6 +561,29 @@ static CExeResult BootFileProgramReport(const CDrv &dv, const char *path)
   return run;
 }
 
+static void BootISOReport(const CDrv &dv)
+{
+  auto run = BootFileProgramReport(dv, "/RedSeaISOProbe.HC");
+  auto *ram = MountedDrive('B');
+  if (!run.okay || !ram)
+    return;
+  const char *paths[]{"/GuestBuild.ISO.C", "/GuestData.ISO.C"};
+  for (const char *path : paths) {
+    CRedSeaDirEntry entry;
+    size_t prefix;
+    if (!RedSeaFileLookup(*ram, path, false, false, entry, prefix))
+      return;
+    SerialPutS("UnholyOS: guest ISO ");
+    SerialPutS(path);
+    SerialPutS(", address ");
+    SerialPutHex(reinterpret_cast<uintptr_t>(ram->bd->RAM_dsk) +
+                 entry.clus * BLK_SIZE);
+    SerialPutS(", size ");
+    SerialPutHex(entry.size);
+    SerialPutS("\r\n");
+  }
+}
+
 static void BootStreamReport(const CDrv &dv)
 {
   auto run = BootFileProgramReport(dv, "/StreamProbe.HC");
@@ -870,8 +893,6 @@ extern "C" void KMainCpp()
                     "RuntimeProbeResult", "UnholyOS: runtime probe ");
     BootProbeReport(*adam_task->cur_dv, *adam_task, "/FileReadProbe.BIN",
                     "FileReadProbeResult", "UnholyOS: file probe ");
-    BootProbeReport(*adam_task->cur_dv, *adam_task, "/FileWriteProbe.BIN",
-                    "FileWriteProbeResult", "UnholyOS: write probe ");
     BootProbeReport(*adam_task->cur_dv, *adam_task, "/ExceptProbe.BIN",
                     "ExceptProbeResult", "UnholyOS: exception probe ");
     BootProbeReport(*adam_task->cur_dv, *adam_task, "/FormatProbe.BIN",
@@ -889,6 +910,9 @@ extern "C" void KMainCpp()
     BootProbeReport(*adam_task->cur_dv, *adam_task, "/CompilerRuntimeProbe.BIN",
                     "CompilerRuntimeProbeResult",
                     "UnholyOS: compiler runtime probe ");
+    BootProbeReport(*adam_task->cur_dv, *adam_task, "/FileWriteProbe.BIN",
+                    "FileWriteProbeResult", "UnholyOS: write probe ");
+    BootISOReport(*adam_task->cur_dv);
   } else {
     SerialPutS("UnholyOS: Could not mount the boot DVD\r\n");
   }
