@@ -694,6 +694,7 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
 {
   uint64_t used = 0, count = 0;
   bool kernel = false, hash_del = false, hash_src = false, put_str = false;
+  bool colors = false, rainbow = false;
   for (uint64_t i = 0; i < 1024; i += 64) {
     auto buckets = ReadPhysical<64>(vm, table_body + i * 8);
     for (size_t j = 0; j < buckets.size(); j++) {
@@ -702,8 +703,10 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
         auto entry = ReadPhysical<5>(vm, addr - 16);
         auto type = static_cast<uint32_t>(entry[4]);
         bool module = type == 0x01004000;
-        Check((module || type == 0x08000001) && entry[0] == owner &&
-                  entry[1] == (module ? 64u : 88u) && entry[3] >= 16,
+        bool define = type == 4;
+        Check((module || define || type == 0x08000001) && entry[0] == owner &&
+                  entry[1] == (module ? 64u : define ? 104u : 88u) &&
+                  entry[3] >= 16,
               "Invalid boot symbol allocation");
         auto name = ReadPhysical<2>(vm, entry[3] - 16);
         Check(name[0] == owner && name[1] >= 24 && name[1] <= 80 &&
@@ -729,6 +732,30 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           hash = std::rotl(hash, 1) + ch;
         hash += (hash >> 16) + ((hash >> 15) & 1);
         Check((hash & 1023) == i + j, "Boot symbol in the wrong bucket");
+        if (define) {
+          bool color_list = str == "ST_COLORS";
+          Check(color_list || str == "ST_RAINBOW_10", "Unexpected boot definition");
+          constexpr char color_data[] =
+              "BLACK\0BLUE\0GREEN\0CYAN\0RED\0PURPLE\0BROWN\0LTGRAY\0DKGRAY\0"
+              "LTBLUE\0LTGREEN\0LTCYAN\0LTRED\0LTPURPLE\0YELLOW\0WHITE\0";
+          constexpr char rainbow_data[] =
+              "BLACK\0BROWN\0RED\0LTRED\0YELLOW\0GREEN\0BLUE\0PURPLE\0LTGRAY\0WHITE\0";
+          auto def = ReadPhysical<11>(vm, addr);
+          uint64_t entries = color_list ? 16 : 10;
+          uint64_t data_size = color_list ? sizeof(color_data) : sizeof(rainbow_data);
+          Check(def[10] == entries && def[3] >= 16 && def[8] >= 16 &&
+                    def[9] >= 16, "Invalid boot color definition");
+          const auto link = ReadPhysical<2>(vm, def[3] - 16);
+          const auto data = ReadPhysical<2>(vm, def[8] - 16);
+          const auto index = ReadPhysical<2>(vm, def[9] - 16);
+          Check(link == std::array<uint64_t, 2>{owner, 24} &&
+                    data == std::array<uint64_t, 2>{owner, (data_size + 23) & ~7ULL} &&
+                    index == std::array<uint64_t, 2>{owner, 16 + entries * 8},
+                "Invalid boot color definition allocation");
+          used += link[1] + data[1] + index[1];
+          colors |= color_list;
+          rainbow |= !color_list;
+        }
         kernel |= module && str == "/Kernel/Kernel";
         hash_del |= !module && str == "HashDel";
         hash_src |= !module && str == "HashSrcFileSet";
@@ -738,7 +765,8 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
       }
     }
   }
-  Check(kernel && hash_del && hash_src && put_str, "Missing boot symbols");
+  Check(kernel && hash_del && hash_src && put_str && colors && rainbow,
+        "Missing boot symbols");
   return used;
 }
 
@@ -981,7 +1009,7 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
           "Invalid cached 56-byte heap slot");
 }
 
-static void VerifyVGA(const fs::path &path)
+static Bytes ReadVGA(const fs::path &path)
 {
   std::ifstream file(path, std::ios::binary);
   std::string magic;
@@ -990,10 +1018,16 @@ static void VerifyVGA(const fs::path &path)
             width == 640 && height == 480 && depth == 255 && file.get() == '\n',
         "QEMU did not enter 640x480 VGA mode");
   Bytes rgb(640 * 480 * 3);
-  Check(bool(file.read(reinterpret_cast<char *>(rgb.data()), rgb.size())) &&
-            std::any_of(rgb.begin(), rgb.end(),
-                        [](uint8_t byte) { return byte; }),
-        "The VGA screenshot is blank or incomplete");
+  Check(bool(file.read(reinterpret_cast<char *>(rgb.data()), rgb.size())),
+        "The VGA screenshot is incomplete");
+  return rgb;
+}
+
+static void VerifyVGA(const fs::path &path)
+{
+  const auto rgb = ReadVGA(path);
+  Check(std::any_of(rgb.begin(), rgb.end(), [](uint8_t byte) { return byte; }),
+        "The VGA screenshot is blank");
 }
 
 static fs::path CaptureGuestFile(CMonitor &vm, const fs::path &dir,
@@ -1180,6 +1214,28 @@ static void DriveMouse(CMonitor &vm, const fs::path &serial)
   }
 }
 
+static void DrivePalette(CMonitor &vm, const fs::path &serial)
+{
+  const auto screen = serial.parent_path() / "palette.ppm";
+  auto count_pixels = [&](uint8_t blue) {
+    vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
+               screen.string() + R"("}})");
+    const auto rgb = ReadVGA(screen);
+    unsigned pixels = 0;
+    for (size_t i = 0; i < rgb.size(); i += 3)
+      pixels += rgb[i] == 255 && rgb[i + 1] == 255 && rgb[i + 2] == blue;
+    return pixels;
+  };
+  vm.WaitSerial(serial, "palette yellow ");
+  const auto yellow = count_pixels(0);
+  Check(yellow > 50, "The VGA palette did not recolor the boot text");
+  vm.Command(
+      R"({"execute":"human-monitor-command","arguments":{"command-line":"sendkey p 65"}})");
+  vm.WaitSerial(serial, "palette restored ");
+  Check(count_pixels(255) == yellow,
+        "The VGA palette did not restore the boot text");
+}
+
 static void VerifyGuestISO(const char *qemu, CMonitor &vm,
                            const fs::path &dir, const fs::path &source,
                            const fs::path &kernel, const char *memory,
@@ -1199,6 +1255,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     rebuilt.Connect();
     DriveKeyboard(rebuilt, serial);
     DriveMouse(rebuilt, serial);
+    DrivePalette(rebuilt, serial);
     auto boot = rebuilt.Boot(serial);
     auto registers = StopAtIdle(rebuilt);
     VerifyHandoff(boot, media, registers);
@@ -1225,6 +1282,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
     if (startup) {
       DriveKeyboard(vm, serial);
       DriveMouse(vm, serial);
+      DrivePalette(vm, serial);
     }
     std::string output = vm.Boot(serial);
     std::string registers = StopAtIdle(vm);
@@ -1239,6 +1297,13 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                     secondary_slave);
 
     if (startup) {
+      CheckProgramOutput(output, "/PaletteProbe.HC",
+                         "palette tables 8 AAAA55550000 777777777777 12 BROWN LTRED\n"
+                         "palette start 0 AAAA55550000 FFFFFFFFFFFF\n"
+                         "palette gray 16 75D675D675D6\n"
+                         "palette channels CF3C 5555 1040 0\n"
+                         "palette yellow FFFFFFFF0000\n"
+                         "palette restored FFFFFFFFFFFF AAAA\n", '1');
       CheckProgramOutput(output, "/MouseProbe.HC",
                          "mouse ready 168 131 80 1 1 4\n"
                          "mouse msg 4 170 154 0 0\n"

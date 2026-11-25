@@ -63,6 +63,8 @@ void SrvTaskContHC(),ScanMsgHC(),FlushMsgsHC(),GetMsgHC();
 void InputFilterTaskHC();
 void Char2ScanCodeHC(),ScanCode2CharHC(),KbdTypeMaticHC(),PutKeyHC();
 void GridInitHC(),MsSetHC();
+void GrPaletteColorSetHC(),GrPaletteColorGetHC();
+void GrPaletteGetHC(),GrPaletteSetHC(),PaletteSetStdHC();
 void ScanCharHC(),ScanKeyHC(),GetKeyHC(),GetCharHC();
 void _HASH_REM_DEL(), SysSymImportsResolveHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
@@ -469,6 +471,9 @@ bool LoadKernel(CTask &task)
       {"ms", reinterpret_cast<uintptr_t>(&ms)},
       {"ms_hard", reinterpret_cast<uintptr_t>(&ms_hard)},
       {"ms_grid", reinterpret_cast<uintptr_t>(&ms_grid)},
+      {"gr_rainbow_10", reinterpret_cast<uintptr_t>(gr_rainbow_10)},
+      {"gr_palette_std", reinterpret_cast<uintptr_t>(gr_palette_std)},
+      {"gr_palette_gray", reinterpret_cast<uintptr_t>(gr_palette_gray)},
       {"scrncast", reinterpret_cast<uintptr_t>(&scrncast)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
       {"SYS_RUN_LEVEL", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
@@ -598,6 +603,11 @@ bool LoadKernel(CTask &task)
       {"KbdTypeMatic", reinterpret_cast<uintptr_t>(KbdTypeMaticHC)},
       {"GridInit", reinterpret_cast<uintptr_t>(GridInitHC)},
       {"MsSet", reinterpret_cast<uintptr_t>(MsSetHC)},
+      {"GrPaletteColorSet", reinterpret_cast<uintptr_t>(GrPaletteColorSetHC)},
+      {"GrPaletteColorGet", reinterpret_cast<uintptr_t>(GrPaletteColorGetHC)},
+      {"GrPaletteGet", reinterpret_cast<uintptr_t>(GrPaletteGetHC)},
+      {"GrPaletteSet", reinterpret_cast<uintptr_t>(GrPaletteSetHC)},
+      {"PaletteSetStd", reinterpret_cast<uintptr_t>(PaletteSetStdHC)},
       {"PutKey", reinterpret_cast<uintptr_t>(PutKeyHC)},
       {"ScanChar", reinterpret_cast<uintptr_t>(ScanCharHC)},
       {"ScanKey", reinterpret_cast<uintptr_t>(ScanKeyHC)},

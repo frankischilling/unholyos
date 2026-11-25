@@ -30,6 +30,8 @@ GLOBAL SrvTaskContHC,ScanMsgHC,FlushMsgsHC,GetMsgHC
 GLOBAL InputFilterTaskHC
 GLOBAL Char2ScanCodeHC,ScanCode2CharHC,KbdTypeMaticHC,PutKeyHC
 GLOBAL GridInitHC,MsSetHC
+GLOBAL GrPaletteColorSetHC,GrPaletteColorGetHC
+GLOBAL GrPaletteGetHC,GrPaletteSetHC,PaletteSetStdHC
 GLOBAL ScanCharHC,ScanKeyHC,GetKeyHC,GetCharHC
 EXTERN CPUStructInitCpp,TaskInitCpp
 EXTERN SpawnCpp,TaskValidateCpp,SuspendCpp,IsSuspendedCpp,TaskQueInsCpp,TaskQueRemCpp
@@ -41,6 +43,8 @@ EXTERN SrvTaskContCpp,ScanMsgCpp,FlushMsgsCpp,GetMsgCpp
 EXTERN InputFilterTaskCpp
 EXTERN Char2ScanCodeCpp,ScanCode2CharCpp,KbdTypeMaticCpp,PutKeyCpp
 EXTERN GridInitCpp,MsSetCpp
+EXTERN GrPaletteColorSetCpp,GrPaletteColorGetCpp
+EXTERN GrPaletteGetCpp,GrPaletteSetCpp,PaletteSetStdCpp
 EXTERN ScanCharCpp,ScanKeyCpp,GetKeyCpp,GetCharCpp
 EXTERN MAllocCpp,FreeCpp,MSizeCpp,MSize2Cpp,MHeapCtrlCpp,CAllocCpp,MAllocIdentCpp
 EXTERN StrNewCpp,AStrNewCpp,StrCpyCpp,StrCmpCpp,StrIMatchCpp,StrOccCpp
@@ -163,6 +167,11 @@ HOLYC_CPP ScanCode2CharHC,ScanCode2CharCpp,1
 HOLYC_CPP KbdTypeMaticHC,KbdTypeMaticCpp,1
 HOLYC_CPP GridInitHC,GridInitCpp,0
 HOLYC_CPP MsSetHC,MsSetCpp,5
+HOLYC_CPP GrPaletteColorSetHC,GrPaletteColorSetCpp,2
+HOLYC_CPP GrPaletteColorGetHC,GrPaletteColorGetCpp,1
+HOLYC_CPP GrPaletteGetHC,GrPaletteGetCpp,1
+HOLYC_CPP GrPaletteSetHC,GrPaletteSetCpp,1
+HOLYC_CPP PaletteSetStdHC,PaletteSetStdCpp,0
 HOLYC_CPP PutKeyHC,PutKeyCpp,2
 HOLYC_CPP ScanCharHC,ScanCharCpp,0
 HOLYC_CPP ScanKeyHC,ScanKeyCpp,3
