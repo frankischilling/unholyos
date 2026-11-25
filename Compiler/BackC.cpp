@@ -417,6 +417,10 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     return false;
   const auto &node = code[index];
   auto op = node.code;
+  if (op == IC_GET_RFLAGS) {
+    out.Bytes(0x9C, 0x58); // PUSHFQ; POP RAX
+    return true;
+  }
   if (op == IC_FS) {
     out.Bytes(0x64, 0x48, 0x8B, 0x04, 0x25); // MOV RAX,[FS:0]
     out.Immediate(0, 4);

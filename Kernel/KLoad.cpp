@@ -56,6 +56,11 @@ void HashValHC(), HashDelHC(), HashTableDelHC(), HashSrcFileSetHC();
 void SpawnHC(), TaskValidateHC(), SuspendHC(), IsSuspendedHC();
 void TaskQueInsHC(), TaskQueRemHC(), SingleUserHC(), IsSingleUserHC();
 void _TASK_END_NOW();
+void JobDelHC(),TaskRstAwaitingMsgHC(),TaskExeHC(),TaskTextHC();
+void TaskMsgHC(),JobResScanHC(),JobResGetHC(),TaskWaitHC();
+void PostMsgHC(),PostMsgWaitHC(),MsgHC(),JobsHndlrHC();
+void SrvTaskContHC(),ScanMsgHC(),FlushMsgsHC(),GetMsgHC();
+void InputFilterTaskHC();
 void _HASH_REM_DEL(), SysSymImportsResolveHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
     DocWriteHC();
@@ -475,6 +480,7 @@ bool LoadKernel(CTask &task)
       {"_MEMSET_I64", reinterpret_cast<uintptr_t>(_MEMSET_I64)},
       {"_MALLOC", reinterpret_cast<uintptr_t>(_MALLOC)},
       {"_FREE", reinterpret_cast<uintptr_t>(_FREE)},
+      {"Free", reinterpret_cast<uintptr_t>(_FREE)},
       {"_MHEAP_CTRL", reinterpret_cast<uintptr_t>(_MHEAP_CTRL)},
       {"_MSIZE", reinterpret_cast<uintptr_t>(_MSIZE)},
       {"_MSIZE2", reinterpret_cast<uintptr_t>(_MSIZE2)},
@@ -563,6 +569,23 @@ bool LoadKernel(CTask &task)
       {"TaskQueRem", reinterpret_cast<uintptr_t>(TaskQueRemHC)},
       {"SingleUser", reinterpret_cast<uintptr_t>(SingleUserHC)},
       {"IsSingleUser", reinterpret_cast<uintptr_t>(IsSingleUserHC)},
+      {"JobDel", reinterpret_cast<uintptr_t>(JobDelHC)},
+      {"TaskRstAwaitingMsg", reinterpret_cast<uintptr_t>(TaskRstAwaitingMsgHC)},
+      {"TaskExe", reinterpret_cast<uintptr_t>(TaskExeHC)},
+      {"TaskText", reinterpret_cast<uintptr_t>(TaskTextHC)},
+      {"TaskMsg", reinterpret_cast<uintptr_t>(TaskMsgHC)},
+      {"JobResScan", reinterpret_cast<uintptr_t>(JobResScanHC)},
+      {"JobResGet", reinterpret_cast<uintptr_t>(JobResGetHC)},
+      {"TaskWait", reinterpret_cast<uintptr_t>(TaskWaitHC)},
+      {"PostMsg", reinterpret_cast<uintptr_t>(PostMsgHC)},
+      {"PostMsgWait", reinterpret_cast<uintptr_t>(PostMsgWaitHC)},
+      {"Msg", reinterpret_cast<uintptr_t>(MsgHC)},
+      {"JobsHndlr", reinterpret_cast<uintptr_t>(JobsHndlrHC)},
+      {"SrvTaskCont", reinterpret_cast<uintptr_t>(SrvTaskContHC)},
+      {"ScanMsg", reinterpret_cast<uintptr_t>(ScanMsgHC)},
+      {"FlushMsgs", reinterpret_cast<uintptr_t>(FlushMsgsHC)},
+      {"GetMsg", reinterpret_cast<uintptr_t>(GetMsgHC)},
+      {"InputFilterTask", reinterpret_cast<uintptr_t>(InputFilterTaskHC)},
       {"Ona2Freq", reinterpret_cast<uintptr_t>(Ona2FreqHC)},
       {"Freq2Ona", reinterpret_cast<uintptr_t>(Freq2OnaHC)},
       {"Snd", reinterpret_cast<uintptr_t>(SndHC)},

@@ -991,6 +991,24 @@ static void BootSchedulerReport(const CDrv &dvd)
   BootGuestFileReport(*ram, path);
 }
 
+static void BootJobReport(const CDrv &dvd)
+{
+  constexpr char source[] = "/JobProbe.HC", path[] = "/JobProbe.BIN.Z";
+  if (!BootFileProgramReport(dvd, source).okay)
+    return;
+  auto *ram = MountedDrive('B');
+  if (!ram || !ExePutS("Cmp(\"::/JobProbe.HC\",,\"B:/JobProbe.BIN.Z\");",
+                       nullptr, 0).okay)
+    return;
+  SerialPutS("UnholyOS: executing /JobProbe.BIN.Z\r\n");
+  bool okay = Load(*ram, path, *adam_task) != nullptr;
+  SerialPutS("UnholyOS: finished /JobProbe.BIN.Z, checks ");
+  SerialPutHex(okay);
+  SerialPutS("\r\n");
+  if (okay)
+    BootGuestFileReport(*ram, path);
+}
+
 static void BootSoundReport(const CDrv &dvd, CTask &task)
 {
   auto start = __atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED);
@@ -1408,6 +1426,7 @@ extern "C" void KMainCpp()
     BootAsmBranchReport(*adam_task->cur_dv, *adam_task);
     BootAsmListingReport(*adam_task->cur_dv, *adam_task);
     BootSchedulerReport(*adam_task->cur_dv);
+    BootJobReport(*adam_task->cur_dv);
     BootSoundReport(*adam_task->cur_dv, *adam_task);
     BootFileProgramReport(*adam_task->cur_dv, "/AsmListingScope.HC");
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);

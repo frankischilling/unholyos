@@ -41,6 +41,7 @@ Linux/Fixtures/AsmBranchImport.HC text eol=lf
 Linux/Fixtures/AsmListingProbe.HC text eol=lf
 Linux/Fixtures/AsmListingScope.HC text eol=lf
 Linux/Fixtures/SchedulerProbe.HC text eol=lf
+Linux/Fixtures/JobProbe.HC text eol=lf
 Linux/Fixtures/SoundProbe.HC text eol=lf
 Linux/Fixtures/SoundRecord.HC text eol=lf
 Linux/Fixtures/BuzzFizz.HC -text whitespace=cr-at-eol,-blank-at-eol

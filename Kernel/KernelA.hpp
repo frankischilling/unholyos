@@ -313,6 +313,7 @@ static_assert(sizeof(CBlkDevGlbls) == 384 &&
 
 enum : size_t
 {
+  SEMA_RECORD_MACRO = 1,
   SEMA_DBG_MODE = 4,
   SEMA_SND = 5,
   SEMA_FLUSH_VGA_IMAGE = 9,
@@ -947,9 +948,33 @@ struct CWinScroll
   uint8_t color, pad[3];
 };
 
+constexpr int64_t JOBF_WAKE_MASTER = 1 << 0, JOBF_FOCUS_MASTER = 1 << 1,
+                  JOBF_EXIT_ON_COMPLETE = 1 << 2, JOBF_DONT_FILTER = 1 << 3,
+                  JOBF_HIGHEST_PRIORITY = 1 << 4, JOBF_DONE = 1 << 5,
+                  JOBF_DISPATCHED = 1 << 6, JOBF_FREE_ON_COMPLETE = 1 << 7,
+                  JOBF_ADD_TO_QUE = 1 << 8;
+enum : int64_t
+{
+  JOBT_TEXT_INPUT, JOBT_MSG, JOBT_EXE_STR, JOBT_CALL, JOBT_SPAWN_TASK,
+};
+enum : int64_t
+{
+  MSG_NULL, MSG_CMD, MSG_KEY_DOWN, MSG_KEY_UP, MSG_MS_MOVE, MSG_MS_L_DOWN,
+  MSG_MS_L_UP, MSG_MS_L_D_DOWN, MSG_MS_L_D_UP, MSG_MS_R_DOWN, MSG_MS_R_UP,
+  MSG_MS_R_D_DOWN, MSG_MS_R_D_UP,
+};
+constexpr uint64_t SCF_KEY_DESC = 1ULL << 31;
+constexpr uint32_t WIF_SELF_FOCUS = 1, WIF_SELF_KEY_DESC = 1 << 12;
+
+static_assert(sizeof(CJob) == 0x70 && offsetof(CJob, aux1) == 0x48 &&
+              offsetof(CJob, master_task) == 0x68);
+static_assert(sizeof(CJobCtrl) == 0x28 && offsetof(CJobCtrl, next_done) == 0x10 &&
+              offsetof(CJobCtrl, flags) == 0x20);
+
 constexpr uint32_t TASKF_KILL_TASK = 1 << 1, TASKF_SUSPENDED = 1 << 2,
-                   TASKF_IDLE = 1 << 3, TASKF_AWAITING_MSG = 1 << 9;
-constexpr uint64_t JOBF_ADD_TO_QUE = 1 << 8;
+                   TASKF_IDLE = 1 << 3, TASKF_CMD_LINE_PMT = 1 << 4,
+                   TASKF_INPUT_FILTER_TASK = 1 << 5, TASKF_FILTER_INPUT = 1 << 6,
+                   TASKF_AWAITING_MSG = 1 << 9;
 constexpr int64_t DYING_JIFFIES = JIFFY_FREQ / 5;
 
 struct [[gnu::may_alias]] CTaskDying

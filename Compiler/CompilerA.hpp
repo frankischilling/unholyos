@@ -355,6 +355,7 @@ enum CICode : uint8_t
   IC_CALL = 0x5C,
   IC_ASM = 0x61,
   IC_PUSH = 0x62,
+  IC_GET_RFLAGS = 0x6C,
   IC_BR_ZERO = 0x85,
   IC_BR_NOT_ZERO,
   IC_SUB_ENTRY = 0xF0,

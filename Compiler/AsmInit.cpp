@@ -313,6 +313,67 @@ static bool CmpRuntimeData(CHashTable *table)
   return true;
 }
 
+static CHashClass *CmpJobClass(CHashTable *table, const char *name, size_t size)
+{
+  auto *cls = PrsClassNew();
+  if (!cls)
+    return nullptr;
+  cls->sym.hash.type |= HTF_PUBLIC;
+  cls->sym.hash.str = StrNew(name, CurrentTask()->data_heap);
+  if (!cls->sym.hash.str) {
+    HashDel(&cls->sym.hash);
+    return nullptr;
+  }
+  cls->size = size;
+  HashAdd(&cls->sym.hash, table);
+  return cls;
+}
+
+static bool CmpJobData(CHashTable *table, CHashClass *task)
+{
+  auto *job = CmpJobClass(table, "CJob", sizeof(CJob));
+  auto *ctrl = CmpJobClass(table, "CJobCtrl", sizeof(CJobCtrl));
+  if (!job || !ctrl)
+    return false;
+  auto *heap = CurrentTask()->data_heap;
+  auto *i64 = FindType("I64", table);
+  auto *u8 = FindType("U8", table);
+  const struct
+  {
+    const char *name;
+    CHashClass *record, *type;
+    size_t offset;
+  } members[]{
+      {"next", job, job + 1, offsetof(CJob, next)},
+      {"last", job, job + 1, offsetof(CJob, last)},
+      {"ctrl", job, ctrl + 1, offsetof(CJob, ctrl)},
+      {"job_code", job, i64, offsetof(CJob, job_code)},
+      {"flags", job, i64, offsetof(CJob, flags)},
+      {"msg_code", job, i64, offsetof(CJob, msg_code)},
+      {"fun_arg", job, u8 + 1, offsetof(CJob, fun_arg)},
+      {"aux_str", job, u8 + 1, offsetof(CJob, aux_str)},
+      {"aux1", job, i64, offsetof(CJob, aux1)},
+      {"aux2", job, i64, offsetof(CJob, aux2)},
+      {"res", job, i64, offsetof(CJob, res)},
+      {"spawned_task", job, task + 1, offsetof(CJob, spawned_task)},
+      {"master_task", job, task + 1, offsetof(CJob, master_task)},
+      {"next_waiting", ctrl, job + 1, offsetof(CJobCtrl, next_waiting)},
+      {"last_waiting", ctrl, job + 1, offsetof(CJobCtrl, last_waiting)},
+      {"next_done", ctrl, job + 1, offsetof(CJobCtrl, next_done)},
+      {"last_done", ctrl, job + 1, offsetof(CJobCtrl, last_done)},
+      {"flags", ctrl, i64, offsetof(CJobCtrl, flags)},
+      {"srv_ctrl", task, ctrl, offsetof(CTask, srv_ctrl)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    if (!name || !MemberAdd(*member.record, name, *member.type, member.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool CmpTaskData(CHashTable *table)
 {
   auto *heap = CurrentTask()->data_heap;
@@ -357,7 +418,7 @@ static bool CmpTaskData(CHashTable *table)
       return false;
     }
   }
-  return true;
+  return CmpJobData(table, cls);
 }
 
 static bool CmpRuntimeHeaders(CHashTable *table)
@@ -371,13 +432,16 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     F64,
     Bool,
     U8Ptr,
-    TaskPtr
+    TaskPtr,
+    JobPtr,
+    I64Ptr
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
       FindType("I64", table),    FindType("I8", table),
       FindType("F64", table),    FindType("Bool", table),
       FindType("U8", table) + 1, FindType("CTask", table) + 1,
+      FindType("CJob", table) + 1, FindType("I64", table) + 1,
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -394,8 +458,11 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       const char *dft_str = nullptr;
     } args[7];
     const char *import_name = nullptr;
+    uint8_t internal_op = 0;
   } headers[]{
       {"Print", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
+      {"MStrPrint", U8Ptr, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
+      {"Free", U0, FF_RET1, {{"addr", U8Ptr}}, "_FREE"},
       {"PutHex", U0, FF_RET1, {{"num", U64}, {"width", I64}}},
       {"PutChars", U0, FF_RET1, {{"ch", U64}}},
       {"PutS", U0, FF_RET1, {{"st", U8Ptr}}},
@@ -403,7 +470,24 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Busy", U0, FF_RET1, {{"microseconds", I64}}},
       {"SleepUntil", U0, FF_RET1, {{"wake_jiffy", I64}}},
       {"Sleep", U0, FF_RET1, {{"mS", I64}}},
-      {"Fs", TaskPtr, FF_INTERNAL, {}},
+      {"Fs", TaskPtr, FF_INTERNAL, {}, nullptr, IC_FS},
+      {"GetRFlags", I64, FF_INTERNAL, {}, nullptr, IC_GET_RFLAGS},
+      {"JobDel", U0, FF_RET1, {{"tmpc", JobPtr}}},
+      {"TaskRstAwaitingMsg", U0, FF_RET1, {{"task", TaskPtr, true}}},
+      {"TaskExe", JobPtr, FF_RET1, {{"srv", TaskPtr}, {"master", TaskPtr}, {"data", U8Ptr}, {"flags", I64}}},
+      {"TaskText", JobPtr, FF_RET1, {{"srv", TaskPtr}, {"master", TaskPtr}, {"data", U8Ptr}, {"flags", I64}}},
+      {"TaskMsg", JobPtr, FF_RET1, {{"srv", TaskPtr}, {"master", TaskPtr}, {"msg_code", I64}, {"arg1", I64}, {"arg2", I64}, {"flags", I64}}},
+      {"JobResScan", Bool, FF_RET1, {{"rqst", JobPtr, true}, {"_res", I64Ptr, true}}},
+      {"JobResGet", I64, FF_RET1, {{"rqst", JobPtr, true}}},
+      {"TaskWait", U0, FF_RET1, {{"task", TaskPtr, true}, {"cmd_line_pmt", Bool, true}}},
+      {"PostMsg", U0, FF_RET1, {{"task", TaskPtr}, {"msg_code", I64}, {"arg1", I64}, {"arg2", I64}, {"flags", I64, true}}},
+      {"PostMsgWait", U0, FF_RET1, {{"task", TaskPtr}, {"msg_code", I64}, {"arg1", I64}, {"arg2", I64}, {"flags", I64, true}}},
+      {"Msg", U0, FF_RET1, {{"msg_code", I64}, {"arg1", I64}, {"arg2", I64}, {"flags", I64, true}}},
+      {"JobsHndlr", I64, FF_RET1, {{"run_flags", I64}, {"task", TaskPtr, true}}},
+      {"SrvTaskCont", U0, FF_RET1, {}},
+      {"FlushMsgs", I64, FF_RET1, {{"task", TaskPtr, true}}},
+      {"ScanMsg", I64, FF_RET1, {{"_arg1", I64Ptr, true}, {"_arg2", I64Ptr, true}, {"mask", I64, true, ~uint64_t{1}}, {"task", TaskPtr, true}}},
+      {"GetMsg", I64, FF_RET1, {{"_arg1", I64Ptr, true}, {"_arg2", I64Ptr, true}, {"mask", I64, true, ~uint64_t{1}}, {"task", TaskPtr, true}}},
       {"Yield", U0, FF_RET1, {}, "_YIELD"},
       {"Spawn",
        TaskPtr,
@@ -504,7 +588,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     }
     fun->cls.flags = FF__EXTERN | header.flags;
     fun->return_class = types[header.result];
-    fun->exe_addr = reinterpret_cast<uint8_t *>(symbol ? symbol->val : uintptr_t{IC_FS});
+    fun->exe_addr = reinterpret_cast<uint8_t *>(symbol ? symbol->val : uintptr_t{header.internal_op});
     HashAdd(&fun->cls.sym.hash, table);
   }
   return true;
@@ -633,6 +717,38 @@ static bool CmpFillHash(CHashTable *table)
     const char *name, *data;
   } defines[]{
       {"NULL", "0"}, {"TRUE", "1"}, {"FALSE", "0"}, {"ON", "1"}, {"OFF", "0"},
+      {"MSG_NULL", "0"},
+      {"MSG_CMD", "1"},
+      {"MSG_KEY_DOWN", "2"},
+      {"MSG_KEY_UP", "3"},
+      {"MSG_MS_MOVE", "4"},
+      {"MSG_MS_L_DOWN", "5"},
+      {"MSG_MS_L_UP", "6"},
+      {"MSG_MS_L_D_DOWN", "7"},
+      {"MSG_MS_L_D_UP", "8"},
+      {"MSG_MS_R_DOWN", "9"},
+      {"MSG_MS_R_UP", "10"},
+      {"MSG_MS_R_D_DOWN", "11"},
+      {"MSG_MS_R_D_UP", "12"},
+      {"JOBf_WAKE_MASTER", "0"},
+      {"JOBf_FOCUS_MASTER", "1"},
+      {"JOBf_EXIT_ON_COMPLETE", "2"},
+      {"JOBf_DONT_FILTER", "3"},
+      {"JOBf_HIGHEST_PRIORITY", "4"},
+      {"JOBf_DONE", "5"},
+      {"JOBf_DISPATCHED", "6"},
+      {"JOBf_FREE_ON_COMPLETE", "7"},
+      {"JOBf_ADD_TO_QUE", "8"},
+      {"JOBT_TEXT_INPUT", "0"},
+      {"JOBT_MSG", "1"},
+      {"JOBT_EXE_STR", "2"},
+      {"JOBT_CALL", "3"},
+      {"JOBT_SPAWN_TASK", "4"},
+      {"MSG_KEY_DOWN_UP", "-2"},
+      {"MSG_MS_L_DOWN_UP", "-5"},
+      {"MSG_MS_L_D_DOWN_UP", "-7"},
+      {"MSG_MS_R_DOWN_UP", "-9"},
+      {"MSG_MS_R_D_DOWN_UP", "-11"},
       {"PUSH_C_REGS","PUSH RAX PUSH RCX PUSH RDX PUSH RBX PUSH R8 PUSH R9"},
       {"POP_C_REGS","POP R9 POP R8 POP RBX POP RDX POP RCX POP RAX"},
   };

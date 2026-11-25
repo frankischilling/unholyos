@@ -158,6 +158,24 @@ headers expose the task fields used by the scheduler. Full function
 pointer declarations and the rest of the HolyC `CTask` members remain
 pending.
 
+## Task jobs and messages
+
+`Kernel/Job.cpp` follows `Kernel/Job.HC` for source execution requests,
+text input, messages, and completion queues. `SrvTaskCont` in
+`Kernel/KTask.cpp` puts a servant to sleep on an empty queue.
+`Kernel/SerialDev/Message.cpp` follows `ScanMsg`, `GetMsg`, `FlushMsgs`,
+and `InputFilterTask` in `Kernel/SerialDev/Message.HC`. The compiler
+inlines `GetRFlags` and exposes the queue fields and message constants
+used by these APIs.
+
+`ScanMsg` returns an empty result when a foreign task has an execution or
+text job at the head of its queue. It leaves that job for its owning task
+to run. The reference can keep retrying that entry. The port also reads
+the keyboard description flag before releasing the message allocation.
+
+Cross-core dispatch through `JobQue`, the popup and terminal wrappers,
+and hardware keyboard and mouse delivery are pending.
+
 ## PC speaker
 
 `Kernel/KMisc.cpp` follows `Kernel/KMisc.HC` for note conversion, PIT

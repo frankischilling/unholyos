@@ -165,16 +165,18 @@ private:
                       CCallSyntax syntax = CS_NORMAL)
   {
     if (callee.cls.flags & FF_INTERNAL) {
+      auto opcode = reinterpret_cast<uintptr_t>(callee.exe_addr);
       if (syntax != CS_NORMAL || !callee.return_class ||
-          reinterpret_cast<uintptr_t>(callee.exe_addr) != IC_FS)
+          (opcode != IC_FS && opcode != IC_GET_RFLAGS))
         return NO_IC;
       if (Lex(cc) == '(') {
         if (Lex(cc) != ')')
           return NO_IC;
         Lex(cc);
       }
-      return Add({0, NO_IC, NO_IC, IC_FS, ClassRawType(*callee.return_class),
-                  false, false, true, NO_IC, callee.return_class});
+      return Add({0, NO_IC, NO_IC, static_cast<CICode>(opcode),
+                  ClassRawType(*callee.return_class), false, false, true,
+                  NO_IC, callee.return_class});
     }
     bool variadic = callee.cls.flags & FF_DOT_DOT_DOT;
     if ((variadic && FunPopsArgs(callee)) ||
