@@ -47,7 +47,9 @@ void BlkReadHC(), BlkWriteHC();
 void SysTryHC(), SysUntryHC(), ThrowHC(), CallerHC(), PutExceptHC();
 void StrPrintJoinHC(), StrPrintHC(), CatPrintHC(), MStrPrintHC(), PrintHC();
 void PrintErrHC(), PrintWarnHC(), PutCharsHC(), IsRawHC(), DefineLstLoadHC();
-void PutSHC();
+void PutSHC(), PutHexHC();
+void PUT_HEX_U64(), PUT_HEX_U32(), PUT_HEX_U16(), PUT_HEX_U8(), PUT_CHARS(),
+    PUT_STR();
 void CmpHC(), ExePutSHC(), ExeFileHC(), StreamPrintHC(), StreamExePrintHC();
 void DefineSubHC(), DefineMatchHC();
 void HashValHC(), HashDelHC(), HashTableDelHC(), HashSrcFileSetHC();
@@ -442,6 +444,7 @@ bool LoadKernel(CTask &task)
       {"sys_semas", reinterpret_cast<uintptr_t>(sys_semas)},
       {"_BEQU", reinterpret_cast<uintptr_t>(_BEQU)},
       {"_CALL", reinterpret_cast<uintptr_t>(_CALL)},
+      {"Call", reinterpret_cast<uintptr_t>(_CALL)},
       {"_CLAMP_I64", reinterpret_cast<uintptr_t>(_CLAMP_I64)},
       {"_MEMCPY", reinterpret_cast<uintptr_t>(_MEMCPY)},
       {"_MEMSET", reinterpret_cast<uintptr_t>(_MEMSET)},
@@ -511,6 +514,13 @@ bool LoadKernel(CTask &task)
       {"Print", reinterpret_cast<uintptr_t>(PrintHC)},
       {"PrintErr", reinterpret_cast<uintptr_t>(PrintErrHC)},
       {"PrintWarn", reinterpret_cast<uintptr_t>(PrintWarnHC)},
+      {"PUT_HEX_U64", reinterpret_cast<uintptr_t>(PUT_HEX_U64)},
+      {"PUT_HEX_U32", reinterpret_cast<uintptr_t>(PUT_HEX_U32)},
+      {"PUT_HEX_U16", reinterpret_cast<uintptr_t>(PUT_HEX_U16)},
+      {"PUT_HEX_U8", reinterpret_cast<uintptr_t>(PUT_HEX_U8)},
+      {"PUT_CHARS", reinterpret_cast<uintptr_t>(PUT_CHARS)},
+      {"PUT_STR", reinterpret_cast<uintptr_t>(PUT_STR)},
+      {"PutHex", reinterpret_cast<uintptr_t>(PutHexHC)},
       {"PutChars", reinterpret_cast<uintptr_t>(PutCharsHC)},
       {"PutS", reinterpret_cast<uintptr_t>(PutSHC)},
       {"ExePutS", reinterpret_cast<uintptr_t>(ExePutSHC)},

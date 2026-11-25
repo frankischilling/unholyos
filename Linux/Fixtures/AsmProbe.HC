@@ -1,0 +1,37 @@
+asm {
+  IMPORT PutS;
+
+  USE16
+_ASM_MODE16::
+  MOV AX,0x1234
+  MOV EDX,0x89ABCDEF
+  INT 0x10
+  RET
+
+  USE32
+_ASM_MODE32::
+  MOV AX,0x5678
+  MOV EDX,0x12345678
+  RET
+
+  USE64
+  ALIGN 16,0x90
+_ASM_WORK::
+  MOV RAX,_ASM_MSG
+  PUSH RAX
+  CALL PutS
+  MOV R9,15
+  LEA RAX,27[R9]
+  MOV U64 [_ASM_ACC],40
+  ADD U64 [_ASM_ACC],2
+  CMP RAX,U64 [_ASM_ACC]
+  JNE @@01
+  RET
+@@01: XOR RAX,RAX
+  RET
+_ASM_MSG:
+  DU8 "asm import\n",0;
+_ASM_ACC:
+  DU64 0;
+}
+"asm result %d\n",Call(_ASM_WORK);

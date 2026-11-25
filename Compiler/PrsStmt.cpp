@@ -427,12 +427,22 @@ static bool PrsFunDecl(CCmpCtrl &cc, CHashFun &fun, const CPrsDecl &decl,
       return true;
     }
     const char *name = decl.alias ? decl.alias : sym.hash.str;
-    auto *external = aot ? nullptr : PrsExternSym(name, table);
+    auto *external = aot && !decl.alias ? nullptr : PrsExternSym(name, table);
     if (decl.alias && (!external || *name != '_'))
       return false;
     if (external) {
-      fun.exe_addr = reinterpret_cast<uint8_t *>(external->val);
-      fun.cls.flags = (fun.cls.flags & ~CF_EXTERN) | FF__EXTERN;
+      if (aot) {
+        if (external->sym.hash.type & HTF_IMM)
+          return false;
+        if ((sym.hash.type & HTF_PUBLIC) &&
+            !AOTLabel(*aot, nullptr, sym.hash.str, external->val))
+          return false;
+        fun.ext_lst = const_cast<CHashExport *>(external);
+        fun.cls.flags |= FF__EXTERN;
+      } else {
+        fun.exe_addr = reinterpret_cast<uint8_t *>(external->val);
+        fun.cls.flags = (fun.cls.flags & ~CF_EXTERN) | FF__EXTERN;
+      }
     } else {
       sym.hash.type |= HTF_UNRESOLVED;
       if (!aot)
@@ -551,14 +561,20 @@ static bool PrsGlobalDecl(CCmpCtrl &cc, CHashGlblVar &var, const CPrsDecl &decl,
     var.flags |= GVF_IMPORT;
   } else {
     auto *table = cc.htc.glbl_hash_table;
-    auto *external = aot ? nullptr : PrsExternSym(
+    auto *external = aot && !decl.alias ? nullptr : PrsExternSym(
         decl.alias ? decl.alias : sym.hash.str, table);
     if (decl.alias && !external)
       return false;
     auto *prior = aot ? nullptr :
         HashSingleTableFind(sym.hash.str, table, HTT_GLBL_VAR);
     if (external) {
-      var.data_addr = reinterpret_cast<uint8_t *>(external->val);
+      if (aot) {
+        if (external->sym.hash.type & HTF_IMM)
+          return false;
+        var.data_addr = reinterpret_cast<uint8_t *>(
+            const_cast<CHashExport *>(external));
+      } else
+        var.data_addr = reinterpret_cast<uint8_t *>(external->val);
       var.flags |= GVF_ALIAS;
     } else if (prior && !(prior->type & (HTF_IMPORT | HTF_UNRESOLVED))) {
       auto *old = reinterpret_cast<const CHashGlblVar *>(prior);
@@ -598,6 +614,13 @@ static bool PrsGlobal(CCmpCtrl &cc, CHashClass &type, char *name,
   var->size = type.size * var->dim.total_cnt;
   HashSrcFileSetCpp(&cc, &var->sym, 0);
   auto *table = cc.htc.glbl_hash_table;
+  if (aot && (var->flags & GVF_ALIAS) && (visibility & HTF_PUBLIC)) {
+    auto *external = reinterpret_cast<const CHashExport *>(var->data_addr);
+    if (!AOTLabel(*aot, nullptr, name, external->val)) {
+      HashDel(&var->sym.hash);
+      return false;
+    }
+  }
   HashAdd(&var->sym.hash, table);
   if (decl.mode >= 0)
     return true;
@@ -673,6 +696,8 @@ bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
   }
   CPrsDecl decl;
   auto keyword = Keyword(cc);
+  if (keyword == KW_ASM)
+    return !visibility && !flags && PrsAsmBlk(cc, aot);
   if (keyword == KW_EXTERN || keyword == KW_IMPORT || keyword == KW__IMPORT ||
       keyword == KW__EXTERN) {
     decl.mode = keyword;

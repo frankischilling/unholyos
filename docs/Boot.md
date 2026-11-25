@@ -167,8 +167,39 @@ checks JIT calls through forward declarations, and binds typed `extern`
 and `_extern` declarations to loaded symbols. The suite checks that an
 unresolved function raises `UndefExt` and that JIT `import` is rejected.
 
-Inline assembly, AOT `_extern` labels, relocatable initializers, debug
-line tables, and recompiling the kernel remain pending.
+Relocatable HolyC initializers, binary debug line tables, and native
+kernel compilation remain pending.
+
+## HolyC assembly blocks
+
+The guest now assembles top-level `asm { }` blocks during both source
+execution and `Cmp`. The assembler supports `USE16`, `USE32`, and
+`USE64`, integer operations and branches, scoped `@@` labels,
+`DU8` through `DU64`, `DUP`, `ALIGN`, and named imports. Typed
+`_extern` declarations can bind to assembly labels in AOT modules.
+
+Terry A. Davis's `Demo/Asm/DivByHand.HC` and
+`Demo/Asm/AsmHelloWorld.HC` fixtures are copied byte for byte from
+the pinned TempleOS tree. Both guests printed `123456/10=12345` and
+the ten lines from `0A Hello World` through `01 Hello World` in
+QEMU 9.2.0 with PC, `qemu64`, and 512 MiB. The boot suite also checks
+DivByHand after guest-side `Cmp` and `Load`, inspects the mixed-mode
+opcode bytes and loaded alignment, exercises relative imports and
+image-base fixups, and checks that an unresolved local label leaves
+no exported symbol. The test saves `DivByHand.BIN.Z` and
+`AsmProbe.BIN.Z` under `BUILD`.
+
+```sh
+make -j4 test BUILD=build/gcc
+qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom build/gcc/unholyos-startup-test.iso -display none -serial file:build/gcc/windows-pc512.log -monitor none -no-reboot -no-shutdown
+```
+
+The Windows QEMU run reached the kernel entry line after the startup
+tests. The TempleOS comparison used the pinned `TOS_Distro.ISO` with
+the same machine, CPU, RAM, and DVD boot settings.
+
+Assembly inside HolyC functions, full opcode and operand coverage,
+and the remaining directives are pending.
 
 ## RedSea descriptor verification
 

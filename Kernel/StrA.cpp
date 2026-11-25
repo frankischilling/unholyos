@@ -1,5 +1,22 @@
 #include "KernelB.hpp"
 
+static char *StrPrintHex(char *dst, uint64_t num, size_t width)
+{
+  char *end = dst + width;
+  for (char *p = end; p != dst; num >>= 4)
+    *--p = "0123456789ABCDEF"[num & 15];
+  return end;
+}
+
+extern "C" void PutHexCpp(uint64_t num, int64_t width)
+{
+  char buf[17];
+  if (width < 0)
+    return;
+  *StrPrintHex(buf, num, width > 16 ? 16 : width) = 0;
+  PutS(buf);
+}
+
 uint32_t char_bmp_alpha[16]{
     0,          0,          0x87FFFFFF, 0x07FFFFFE,
     0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,

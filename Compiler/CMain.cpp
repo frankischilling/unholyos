@@ -22,8 +22,9 @@ struct CAOTImportExport
 {
   CAOTImportExport *next;
   const void *symbol;
-  const char *name;
+  char *name;
   size_t rip;
+  uint8_t type;
 };
 
 bool AOTStore(CAOT &aot, const void *symbol, const char *name,
@@ -48,13 +49,34 @@ bool AOTStore(CAOT &aot, const void *symbol, const char *name,
   return true;
 }
 
-bool AOTRelAdd(CAOT &aot, size_t rip, const void *symbol, const char *name)
+bool AOTLabel(CAOT &aot, const void *symbol, const char *name, size_t rip)
+{
+  auto *block = reinterpret_cast<CAOTBinBlk *>(
+      MAlloc(sizeof(CAOTBinBlk), CurrentTask()->data_heap));
+  if (!block)
+    return false;
+  *block = {nullptr, symbol, name, rip, 0, false};
+  if (aot.last)
+    aot.last->next = block;
+  else
+    aot.first = block;
+  aot.last = block;
+  return true;
+}
+
+bool AOTRelAdd(CAOT &aot, size_t rip, const void *symbol, const char *name,
+                uint8_t type)
 {
   auto *ie = reinterpret_cast<CAOTImportExport *>(
       MAlloc(sizeof(CAOTImportExport), CurrentTask()->data_heap));
   if (!ie)
     return false;
-  *ie = {nullptr, symbol, name, rip};
+  auto *copy = name ? StrNew(name, CurrentTask()->data_heap) : nullptr;
+  if (name && !copy) {
+    Free(ie);
+    return false;
+  }
+  *ie = {nullptr, symbol, copy, rip, type};
   if (aot.last_ie)
     aot.last_ie->next = ie;
   else
@@ -96,6 +118,7 @@ static void AOTDel(CAOT &aot, CHashTable *table)
   while (aot.first_ie) {
     auto *ie = aot.first_ie;
     aot.first_ie = ie->next;
+    Free(ie->name);
     Free(ie);
   }
   if (table) {
@@ -136,9 +159,14 @@ static CBinFile *AOTBinMake(const CAOT &aot)
     if (b->main)
       patches += 6;
   }
+  uint32_t abs_count = 0;
   for (auto *ie = aot.first_ie; ie; ie = ie->next)
     if (ie->name)
       patches += 6 + StrLen(ie->name);
+    else if (ie->type == IET_ABS_ADDR)
+      abs_count++;
+  if (abs_count)
+    patches += 6 + sizeof(uint32_t) * size_t(abs_count);
 
   size_t patch_offset = sizeof(CBinFile) + aot.size;
   size_t size = (patch_offset + patches + 15) & ~size_t{15};
@@ -146,7 +174,8 @@ static CBinFile *AOTBinMake(const CAOT &aot)
       CAlloc(size, CurrentTask()->data_heap));
   if (!bfh)
     return nullptr;
-  *bfh = {0x1EEB, 3, 0, BIN_SIGNATURE_VAL, INVALID_PTR, patch_offset, size};
+  *bfh = {0x1EEB, aot.max_align_bits, 0, BIN_SIGNATURE_VAL, INVALID_PTR,
+          patch_offset, size};
 
   auto *base = reinterpret_cast<uint8_t *>(bfh + 1);
   auto *patch = base + aot.size;
@@ -157,9 +186,20 @@ static CBinFile *AOTBinMake(const CAOT &aot)
     if (b->main)
       patch = PatchRecord(patch, IET_MAIN, b->rip, nullptr);
   }
+  if (abs_count) {
+    patch = PatchRecord(patch, IET_ABS_ADDR, abs_count, nullptr);
+    for (auto *ie = aot.first_ie; ie; ie = ie->next)
+      if (ie->type == IET_ABS_ADDR) {
+        uint32_t offset = ie->rip;
+        MemCpy(patch, &offset, sizeof(offset));
+        patch += sizeof(offset);
+      }
+  }
   for (auto *ie = aot.first_ie; ie; ie = ie->next) {
     if (ie->name) {
-      patch = PatchRecord(patch, IET_IMM_I64, ie->rip, ie->name);
+      patch = PatchRecord(patch, ie->type, ie->rip, ie->name);
+    } else if (ie->type == IET_ABS_ADDR) {
+      continue;
     } else {
       auto *target = aot.first;
       while (target && target->symbol != ie->symbol)

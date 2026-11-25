@@ -59,6 +59,24 @@ reads the function address from its declaration, and the later
 definition updates that slot. `Compiler/CExcept.cpp` and its assembly
 adapter implement the reference's `UndefinedExtern` path.
 
+## HolyC assembler
+
+`Compiler/Asm.cpp` follows `PrsAsmBlk` and `PrsAsmInst` in
+`Compiler/Asm.HC`. The current implementation also resolves assembly
+references there. The pinned compiler splits that work into
+`AOTLocalsResolve` and `AOTGlblsResolve` in `Compiler/AsmResolve.HC`.
+JIT assembly publishes its labels after resolving the block.
+`Compiler/CMain.cpp` emits TOSB exports at assembly label offsets,
+`IET_REL_I32` and `IET_IMM_I64` for named imports, and
+`IET_ABS_ADDR` for image-base fixups.
+
+The raw `PUT_HEX_U64`, `PUT_HEX_U32`, `PUT_HEX_U16`,
+`PUT_HEX_U8`, `PUT_CHARS`, and `PUT_STR` entry points from
+`Kernel/StrA.HC` live in `Kernel/StrA.asm`. They retain register
+arguments and call the C++ text routines through explicit adapters.
+`StrPrintHex` and `PutHex` live in `Kernel/StrA.cpp`. `PutHex` returns
+early for a negative width to keep its 17-byte buffer in bounds.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains guest verification routines for boot records, file access, compiler behavior, and runtime modules. The reference `Kernel/KMain.HC` concentrates on initialization and startup. Those probes remain a structural difference and should move into a separate verification component as the runtime startup path develops.

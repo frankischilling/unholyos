@@ -161,6 +161,7 @@ enum : uint8_t
 {
   IET_END = 0,
   IET_REL_I0 = 2,
+  IET_REL_I32 = 8,
   IET_IMM_I64 = 11,
   IET_REL32_EXPORT = 16,
   IET_IMM32_EXPORT = 17,
