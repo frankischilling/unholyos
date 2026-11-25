@@ -1335,8 +1335,13 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not initialize the idle task\r\n");
     return;
   }
+  MsInit();
   if (!KbdInit())
     SerialPutS("UnholyOS: Could not initialize the PS/2 keyboard\r\n");
+  if (MsHardDrvrInstall())
+    KbdMsService();
+  else
+    SerialPutS("UnholyOS: Could not initialize the PS/2 mouse\r\n");
   BootPutS("UnholyOS kernel entered in 64-bit mode");
 
   SerialPutS("UnholyOS: DVD LBA ");
@@ -1441,6 +1446,7 @@ extern "C" void KMainCpp()
     BootSchedulerReport(*adam_task->cur_dv);
     BootJobReport(*adam_task->cur_dv);
     BootKeyboardReport(*adam_task->cur_dv);
+    BootFileProgramReport(*adam_task->cur_dv, "/MouseProbe.HC");
     BootSoundReport(*adam_task->cur_dv, *adam_task);
     BootFileProgramReport(*adam_task->cur_dv, "/AsmListingScope.HC");
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);

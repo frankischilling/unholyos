@@ -173,8 +173,8 @@ text job at the head of its queue. It leaves that job for its owning task
 to run. The reference can keep retrying that entry. The port also reads
 the keyboard description flag before releasing the message allocation.
 
-Cross-core dispatch through `JobQue`, the popup and terminal wrappers,
-and PS/2 mouse delivery are pending.
+Cross-core dispatch through `JobQue` and the popup and terminal
+wrappers remain pending.
 
 ## PS/2 keyboard
 
@@ -187,9 +187,25 @@ takes over. The keyboard FIFOs use static storage during bootstrap.
 
 `Kernel/SerialDev/Message.cpp` carries the reference `ScanChar`,
 `ScanKey`, `GetKey`, and `GetChar` paths. Echo and the raw cursor use
-the current text output in `Kernel/KeyDev.cpp`. The PS/2 auxiliary port
-stays disabled until the mouse driver is present. Key name formatting
-and the system hotkey callbacks are pending.
+the current text output in `Kernel/KeyDev.cpp`. Key name formatting
+and the system hotkey callbacks remain pending.
+
+## PS/2 mouse
+
+`Kernel/SerialDev/Mouse.cpp` follows `Kernel/SerialDev/Mouse.HC` for
+auxiliary port commands, packet assembly, wheel negotiation, position
+scaling, and grid snapping. The shared controller read path routes each
+byte using the auxiliary bit. `IRQMsHard` acknowledges the cascaded PIC
+interrupt and buffers bytes. A failed reset leaves IRQ12 masked.
+
+`WinMsUpdate` in `Adam/Win.cpp` transfers decoded positions to `ms`.
+`WinQueIPMsgs` in `Adam/WinMgr.cpp` delivers motion and button messages
+relative to the focused task, with the reference single- and
+double-click timing rules. Wheel changes are available through
+`ms.pos.z`. The bootstrap scheduler calls both functions as it drains
+input. The original window manager runs them on its frame loop. Cursor
+drawing, control hit-testing, mouse-speed decay, and zoom handling will
+need that loop.
 
 ## PC speaker
 

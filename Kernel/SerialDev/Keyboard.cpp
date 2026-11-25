@@ -65,31 +65,9 @@ static CFifoU8 raw_fifo{raw_buf, 0xFFF, 0, 0};
 static CFifoI64 scan_fifo{scan_buf, 0xFFF, 0, 0};
 static bool ready;
 
-template <typename T> static int64_t FifoCnt(const CFifo<T> &f)
-{
-  return (f.in_ptr - f.out_ptr) & f.mask;
-}
+static void KbdStageByte(uint8_t raw_byte);
 
-template <typename T> static bool FifoIns(CFifo<T> &f, T value)
-{
-  auto next = (f.in_ptr + 1) & f.mask;
-  if (next == f.out_ptr)
-    return false;
-  f.buf[f.in_ptr] = value;
-  f.in_ptr = next;
-  return true;
-}
-
-template <typename T> static bool FifoRem(CFifo<T> &f, T &value)
-{
-  if (f.in_ptr == f.out_ptr)
-    return false;
-  value = f.buf[f.out_ptr];
-  f.out_ptr = (f.out_ptr + 1) & f.mask;
-  return true;
-}
-
-static bool KbdCmdSend(uint16_t port, uint8_t value)
+bool KbdCmdSend(uint16_t port, uint8_t value)
 {
   auto start = GetTSC();
   auto timeout = uint64_t(cnts.time_stamp_freq) / 8;
@@ -102,7 +80,7 @@ static bool KbdCmdSend(uint16_t port, uint8_t value)
   return false;
 }
 
-static bool KbdCmdRead(uint8_t &value)
+bool KbdCmdRead(uint8_t &value, bool auxiliary)
 {
   auto start = GetTSC();
   auto timeout = uint64_t(cnts.time_stamp_freq) / 8;
@@ -110,8 +88,13 @@ static bool KbdCmdRead(uint8_t &value)
     auto status = InU8(KBD_CTRL);
     if (status & 1) {
       value = InU8(KBD_PORT);
-      if (!(status & 0x20))
+      bool is_aux = status & 0x20;
+      if (is_aux == auxiliary)
         return true;
+      if (is_aux)
+        MsHardStageByte(value);
+      else
+        KbdStageByte(value);
     }
   } while (GetTSC() - start < timeout);
   return false;
@@ -277,12 +260,14 @@ static uint64_t KbdBuildSC(uint8_t raw_byte, uint8_t &last_raw_byte,
   return uint64_t(flags | sc) | (uint64_t(flags | sc_raw) << 32);
 }
 
-static void KbdPktRead()
+void Ps2PktRead()
 {
   auto status = InU8(KBD_CTRL);
   if (status & 1) {
     auto raw_byte = InU8(KBD_PORT);
-    if (!(status & 0x20))
+    if (status & 0x20)
+      MsHardStageByte(raw_byte);
+    else
       KbdStageByte(raw_byte);
   }
 }
@@ -292,7 +277,7 @@ extern "C" void IRQKbdCpp()
 {
   OutU8(0x20, 0x20);
   kbd.irqs_working = true;
-  KbdPktRead();
+  Ps2PktRead();
 }
 
 bool KbdInit()
@@ -360,15 +345,18 @@ static void KbdMsgsQue()
   }
 }
 
-extern "C" void KbdService()
+extern "C" void KbdMsService()
 {
-  if (!ready)
+  if (!kbd.fifo2)
     return;
   auto flags = GetRFlags();
   asm volatile("cli" : : : "memory");
   while (FifoCnt(*kbd.fifo2))
     KbdHndlr();
   KbdMsgsQue();
+  MsHardHndlr();
+  WinMsUpdate();
+  WinQueIPMsgs(true);
   SetRFlags(flags);
 }
 
@@ -376,9 +364,9 @@ void KbdPoll()
 {
   auto flags = GetRFlags();
   asm volatile("cli" : : : "memory");
-  if (ready)
+  if (ready || ms_hard.installed)
     while (InU8(KBD_CTRL) & 1)
-      KbdPktRead();
-  KbdService();
+      Ps2PktRead();
+  KbdMsService();
   SetRFlags(flags);
 }

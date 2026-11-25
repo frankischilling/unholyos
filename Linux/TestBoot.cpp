@@ -543,8 +543,8 @@ static void VerifyInterrupts(CMonitor &vm, const std::string &output,
   }
 
   uint64_t stubs = targets[1] - 7, fallback = targets[0x22];
-  const std::array<uint64_t, 7> handlers{fallback, targets[0], targets[2],
-                                         targets[0x20], targets[0x21],
+  const std::array<uint64_t, 8> handlers{fallback, targets[0], targets[2],
+                                         targets[0x20], targets[0x21], targets[0x2C],
                                          targets[0x30], targets[0x31]};
   auto distinct = handlers;
   std::sort(distinct.begin(), distinct.end());
@@ -554,7 +554,7 @@ static void VerifyInterrupts(CMonitor &vm, const std::string &output,
     bool uses_stub =
         (vector > 0 && vector < 0x20 && vector != 2) || vector == 0x32;
     bool dedicated = vector == 0 || vector == 2 || vector == 0x20 ||
-                     vector == 0x21 || vector == 0x30 || vector == 0x31;
+                     vector == 0x21 || vector == 0x2C || vector == 0x30 || vector == 0x31;
     if (uses_stub)
       Check(targets[vector] == stubs + vector * 7, "Incorrect fault gate");
     else if (!dedicated)
@@ -576,7 +576,7 @@ static void VerifyInterrupts(CMonitor &vm, const std::string &output,
   Check(std::regex_search(
             pic, std::regex(R"(pic0: [^\\]*imr=f8 [^\\]*irq_base=20)")) &&
             std::regex_search(
-                pic, std::regex(R"(pic1: [^\\]*imr=ff [^\\]*irq_base=28)")),
+                pic, std::regex(R"(pic1: [^\\]*imr=ef [^\\]*irq_base=28)")),
         "PIC vector offsets or masks differ from boot configuration");
   const std::regex timer(R"(counters (0x[0-9a-f]+), timer read (0x[0-9a-f]+))");
   Check(std::regex_search(output, match, timer), "Missing PIT timer state");
@@ -841,7 +841,20 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   Check(idle_task[0] == adam_hc && idle_task[1] == 3 * page - 24 &&
             idle_code_hc[0] == expected_data_hc,
         "Idle task or heap is owned by the wrong allocator");
-  const uint64_t boot_used = range_bytes + late_used + symbol_used + drive_used;
+  const uint64_t srv = adam + 0x3D8;
+  const auto waiting = ReadPhysical<2>(vm, srv);
+  Check(waiting[0] > 16 && waiting[0] != srv && waiting[0] == waiting[1],
+        "Missing the initial mouse position message");
+  auto initial = ReadPhysical<14>(vm, waiting[0]);
+  Check(initial[0] == srv && initial[1] == srv && initial[2] == srv &&
+            initial[3] == 1 && initial[5] == 4 && initial[9] == 320 &&
+            initial[10] == 240 && !initial[13],
+        "Invalid initial mouse position message");
+  auto allocation = ReadPhysical<2>(vm, waiting[0] - 16);
+  Check(allocation[0] == expected_data_hc && allocation[1] == 0x80,
+        "Invalid mouse message allocation");
+  const uint64_t boot_used = range_bytes + late_used + symbol_used + drive_used +
+                             allocation[1];
   auto code = VerifyHeap(vm, adam_hc, code_pool, adam);
   auto idle_code = VerifyHeap(vm, idle_heaps[0], code_pool, idle);
   Check(code.used == 0x42840 + fault_used + idle_task[1] +
@@ -1133,6 +1146,40 @@ static void DriveKeyboard(CMonitor &vm, const fs::path &serial)
     key(name);
 }
 
+static void DriveMouse(CMonitor &vm, const fs::path &serial)
+{
+  auto button = [&](const char *name, bool down) {
+    vm.Command(
+        std::string(R"({"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"button":")") +
+        name + R"(","down":)" + (down ? "true" : "false") + R"(}}]}})");
+  };
+  vm.WaitSerial(serial, "mouse ready ");
+  vm.Command(R"({"execute":"input-send-event","arguments":{"events":[{"type":"rel","data":{"axis":"x","value":20}},{"type":"rel","data":{"axis":"y","value":-12}}]}})");
+  vm.WaitSerial(serial, "mouse msg 4 ");
+  button("left", true);
+  vm.WaitSerial(serial, "mouse msg 5 ");
+  button("left", false);
+  vm.WaitSerial(serial, "mouse msg 6 ");
+  button("right", true);
+  vm.WaitSerial(serial, "mouse msg 9 ");
+  button("right", false);
+
+  vm.WaitSerial(serial, "mouse wheel ready");
+  button("wheel-up", true);
+  button("wheel-up", false);
+  vm.WaitSerial(serial, "mouse wheel back");
+  button("wheel-down", true);
+  button("wheel-down", false);
+
+  vm.WaitSerial(serial, "mouse double ready");
+  for (unsigned i = 0; i < 2; ++i) {
+    button("left", true);
+    std::this_thread::sleep_for(135ms);
+    button("left", false);
+    std::this_thread::sleep_for(135ms);
+  }
+}
+
 static void VerifyGuestISO(const char *qemu, CMonitor &vm,
                            const fs::path &dir, const fs::path &source,
                            const fs::path &kernel, const char *memory,
@@ -1151,6 +1198,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CMonitor rebuilt(qemu, image, reboot, "pc", memory, false);
     rebuilt.Connect();
     DriveKeyboard(rebuilt, serial);
+    DriveMouse(rebuilt, serial);
     auto boot = rebuilt.Boot(serial);
     auto registers = StopAtIdle(rebuilt);
     VerifyHandoff(boot, media, registers);
@@ -1174,8 +1222,10 @@ static void TestBoot(const char *qemu, const fs::path &iso,
   try {
     CMonitor vm(qemu, iso, dir, machine, memory, secondary_slave);
     vm.Connect();
-    if (startup)
+    if (startup) {
       DriveKeyboard(vm, serial);
+      DriveMouse(vm, serial);
+    }
     std::string output = vm.Boot(serial);
     std::string registers = StopAtIdle(vm);
     uint64_t heap = VerifyHandoff(output, media, registers);
@@ -1189,6 +1239,21 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                     secondary_slave);
 
     if (startup) {
+      CheckProgramOutput(output, "/MouseProbe.HC",
+                         "mouse ready 168 131 80 1 1 4\n"
+                         "mouse msg 4 170 154 0 0\n"
+                         "mouse msg 5 170 154 1 0\n"
+                         "mouse msg 6 170 154 0 0\n"
+                         "mouse msg 9 170 154 0 1\n"
+                         "mouse msg 10 170 154 0 0\n"
+                         "mouse wheel ready\n"
+                         "mouse wheel -1\n"
+                         "mouse wheel back\n"
+                         "mouse irq 1\n"
+                         "mouse snap 168 152 171 157\n"
+                         "mouse double ready\n"
+                         "mouse double 7 160 160\n"
+                         "mouse double 8 160 160\n", '1');
       CheckProgramOutput(output, "/KeyboardProbe.HC",
                          "kbd map 21E 41E 33 0 130\n"
                          "kbd empty 0\n"

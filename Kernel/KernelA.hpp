@@ -135,7 +135,8 @@ struct CPCIDev
   uint8_t *vendor_str, *dev_id_str;
 };
 
-constexpr unsigned I_DIV_ZERO = 0, I_NMI = 2, I_TIMER = 0x20, I_KBD = 0x21;
+constexpr unsigned I_DIV_ZERO = 0, I_NMI = 2, I_TIMER = 0x20, I_KBD = 0x21,
+                   I_MS = 0x2C;
 constexpr unsigned I_MP_CRASH = 0x30, I_WAKE = 0x31, I_DBG = 0x32;
 
 constexpr unsigned JIFFY_FREQ = 1000;
@@ -970,7 +971,8 @@ constexpr uint8_t CH_BACKSPACE = 0x08, CH_ESC = 0x1B, CH_SHIFT_ESC = 0x1C,
 constexpr uint32_t SCF_E0_PREFIX = 1 << 7, SCF_KEY_UP = 1 << 8,
                    SCF_SHIFT = 1 << 9, SCF_CTRL = 1 << 10, SCF_ALT = 1 << 11,
                    SCF_CAPS = 1 << 12, SCF_NUM = 1 << 13, SCF_SCROLL = 1 << 14,
-                   SCF_NEW_KEY = 1 << 15, SCF_DELETE = 1 << 18, SCF_INS = 1 << 19,
+                   SCF_NEW_KEY = 1 << 15, SCF_MS_L_DOWN = 1 << 16,
+                   SCF_MS_R_DOWN = 1 << 17, SCF_DELETE = 1 << 18, SCF_INS = 1 << 19,
                    SCF_KEY_DESC = 1U << 31;
 constexpr uint8_t SC_ENTER = 0x1C, SC_SHIFT = 0x2A, SC_CTRL = 0x1D,
                   SC_ALT = 0x38, SC_CAPS = 0x3A, SC_NUM = 0x45,
@@ -1000,7 +1002,58 @@ static_assert(sizeof(CKbdStateGlbls) == 130 &&
               offsetof(CKbdStateGlbls, fifo) == 40 &&
               offsetof(CKbdStateGlbls, down_bitmap) == 64 &&
               offsetof(CKbdStateGlbls, irqs_working) == 129);
-constexpr uint32_t WIF_SELF_FOCUS = 1, WIF_SELF_KEY_DESC = 1 << 12;
+struct CD3I64
+{
+  int64_t x, y, z;
+};
+
+struct CD3
+{
+  uint64_t x, y, z;
+};
+
+struct [[gnu::packed]] CMsHardStateGlbls
+{
+  CD3I64 pos, prescale;
+  CD3 scale;
+  uint64_t speed;
+  int64_t timestamp, install_attempts, pkt_size;
+  CFifoU8 *fifo, *fifo2;
+  bool bttns[5], has_wheel, has_ext_bttns, evt, installed, install_in_progress,
+       irqs_working;
+};
+
+struct CMsStateGlbls
+{
+  CD3I64 pos, pos_text, presnap, offset;
+  CD3 scale;
+  uint64_t speed;
+  int64_t timestamp;
+  uint64_t dbl_time, left_dbl_time, right_dbl_time;
+  bool lb, rb, show, has_wheel, left_dbl, right_dbl, left_down_sent,
+       right_down_sent;
+};
+
+struct CGridGlbls
+{
+  bool snap, show, coord;
+  uint8_t pad[5];
+  uint64_t x, y, z, x_offset, y_offset, z_offset, x_speed, y_speed, z_speed;
+};
+
+static_assert(sizeof(CD3I64) == 24 && sizeof(CD3) == 24);
+static_assert(sizeof(CMsHardStateGlbls) == 131 &&
+              offsetof(CMsHardStateGlbls, pkt_size) == 96 &&
+              offsetof(CMsHardStateGlbls, bttns) == 120 &&
+              offsetof(CMsHardStateGlbls, irqs_working) == 130);
+static_assert(sizeof(CMsStateGlbls) == 168 &&
+              offsetof(CMsStateGlbls, scale) == 96 &&
+              offsetof(CMsStateGlbls, lb) == 160);
+static_assert(sizeof(CGridGlbls) == 80 && offsetof(CGridGlbls, x) == 8);
+
+constexpr uint32_t WIF_SELF_FOCUS = 1, WIF_SELF_KEY_DESC = 1 << 12,
+                   WIF_FOCUS_TASK_MS_L_D = 1 << 20,
+                   WIF_FOCUS_TASK_MS_R_D = 1 << 22;
 
 static_assert(sizeof(CJob) == 0x70 && offsetof(CJob, aux1) == 0x48 &&
               offsetof(CJob, master_task) == 0x68);

@@ -62,6 +62,7 @@ void PostMsgHC(),PostMsgWaitHC(),MsgHC(),JobsHndlrHC();
 void SrvTaskContHC(),ScanMsgHC(),FlushMsgsHC(),GetMsgHC();
 void InputFilterTaskHC();
 void Char2ScanCodeHC(),ScanCode2CharHC(),KbdTypeMaticHC(),PutKeyHC();
+void GridInitHC(),MsSetHC();
 void ScanCharHC(),ScanKeyHC(),GetKeyHC(),GetCharHC();
 void _HASH_REM_DEL(), SysSymImportsResolveHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
@@ -465,6 +466,9 @@ bool LoadKernel(CTask &task)
       {"SYS_COMPILE_TIME", reinterpret_cast<uintptr_t>(SYS_COMPILE_TIME)},
       {"cnts", reinterpret_cast<uintptr_t>(&cnts)},
       {"kbd", reinterpret_cast<uintptr_t>(&kbd)},
+      {"ms", reinterpret_cast<uintptr_t>(&ms)},
+      {"ms_hard", reinterpret_cast<uintptr_t>(&ms_hard)},
+      {"ms_grid", reinterpret_cast<uintptr_t>(&ms_grid)},
       {"scrncast", reinterpret_cast<uintptr_t>(&scrncast)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
       {"SYS_RUN_LEVEL", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
@@ -592,6 +596,8 @@ bool LoadKernel(CTask &task)
       {"Char2ScanCode", reinterpret_cast<uintptr_t>(Char2ScanCodeHC)},
       {"ScanCode2Char", reinterpret_cast<uintptr_t>(ScanCode2CharHC)},
       {"KbdTypeMatic", reinterpret_cast<uintptr_t>(KbdTypeMaticHC)},
+      {"GridInit", reinterpret_cast<uintptr_t>(GridInitHC)},
+      {"MsSet", reinterpret_cast<uintptr_t>(MsSetHC)},
       {"PutKey", reinterpret_cast<uintptr_t>(PutKeyHC)},
       {"ScanChar", reinterpret_cast<uintptr_t>(ScanCharHC)},
       {"ScanKey", reinterpret_cast<uintptr_t>(ScanKeyHC)},

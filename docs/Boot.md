@@ -353,7 +353,7 @@ Pinned TempleOS and UnholyOS printed the same three result lines from
 the same source and from the UnholyOS-built module under QEMU 9.2.0 with
 the PC machine, `qemu64`, and 512 MiB.
 
-Cross-core dispatch and PS/2 mouse input remain pending.
+Cross-core dispatch remains pending.
 
 ## PS/2 keyboard
 
@@ -370,6 +370,22 @@ extended, and Caps Lock keys. The trace includes the two LED command
 acknowledgements that TempleOS reports as key-up records after a lock
 change. Both guests used QEMU 9.2.0 with the PC machine, `qemu64`,
 and 512 MiB. UnholyOS sends text output to serial during the boot probe.
+
+## PS/2 mouse
+
+`make -j4 test BUILD=build/mouse` sends relative motion, button
+transitions, and wheel events to the PS/2 device in QEMU.
+`MouseProbe.HC` checks the negotiated packet size, IRQ12, both button
+bits in `kbd.scan_code`, and window-relative message arguments.
+It checks that `MsSet` preserves the unsnapped position alongside the
+snapped one, and that a second click in the configured time window
+produces double-click messages.
+Pinned TempleOS and UnholyOS produced the same 14-line probe trace under
+QEMU 9.2.0 with the PC machine, `qemu64`, and 512 MiB.
+
+The bootstrap input service drains the shared controller queues.
+The graphics desktop, pointer rendering, and window controls remain
+pending.
 
 ## PC speaker and recorded sound events
 
@@ -452,6 +468,6 @@ This verifies the clean boot to the current kernel; the desktop is pending.
 | Tasking and CPUs | `Kernel/KTask.HC`, `Sched.HC`, `MultiProc.HC` | Core 0 runs Adam, the idle task, and spawned tasks with cooperative switching and PIT wakeups. Starting additional CPUs remains pending. |
 | Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. Persistent writes and FAT32 are pending. |
 | Graphics | `Kernel/Display.HC`, `Adam/Gr/GrScrn.HC` | BIOS VGA mode and a kernel entry line |
-| Input and sound | `Kernel/KeyDev.HC`, `Adam/AMouse.HC`, `Adam/ASnd.HC`, `Adam/Snd` | Speaker reset at entry. Input and sound APIs are pending. |
+| Input and sound | `Kernel/SerialDev/Keyboard.HC`, `Mouse.HC`, `Message.HC`, `Kernel/KMisc.HC` | PS/2 keyboard and mouse messages, PC speaker tones, and queued sound recording. Desktop input controls and AU output remain pending. |
 | Desktop and system tools | `StartOS.HC`, `Adam/MakeAdam.HC`, `Adam/WinMgr.HC`, `Adam/DolDoc`, `Apps` | Pending |
 | HolyC | `Compiler/CMain.HC`, `Lex.HC`, `Prs*.HC`, `Back*.HC`, `Kernel/KLoad.HC` | Source execution with `ExeFile` and `ExePutS`, compile-time streams, plain and DolDoc tokenization, scalar expressions and functions, typed pointers, packed classes, unions, fixed arrays and their initializers, print calls, and TOSB module generation and loading for supported source. Full language support and native kernel compilation remain pending. |
