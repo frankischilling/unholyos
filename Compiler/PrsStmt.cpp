@@ -207,6 +207,8 @@ public:
       Lex(cc);
       coc.Append(IC_JMP, NO_IC, brk);
       return Consume(';');
+    case KW_GOTO:
+      return cc.htc.fun && PrsGoTo();
     case KW_RETURN:
       if (leave == NO_IC)
         return false;
@@ -220,8 +222,12 @@ public:
       }
       return Consume(';');
     default:
-      if (cc.htc.fun && IsAsmStatement(cc))
-        return PrsAsmBlk(cc, cc.aot, &coc, true);
+      if (cc.htc.fun && cc.token == TK_IDENT && !cc.local_var_entry) {
+        if (IsAsmStatement(cc))
+          return PrsAsmBlk(cc, cc.aot, &coc, true);
+        if (!cc.hash_entry)
+          return PrsGoToLabel();
+      }
       return ExpressionStatement(';');
     }
   }
@@ -242,6 +248,30 @@ private:
       if (!Statement(depth + 1, brk))
         return false;
     return true;
+  }
+
+  bool PrsGoTo()
+  {
+    if (Lex(cc) != TK_IDENT)
+      return false;
+    auto *label = coc.GoToLabelFind(cc.cur_str, true);
+    if (!label || Lex(cc) != ';')
+      return false;
+    coc.Append(IC_JMP, NO_IC, label->ic);
+    return Consume(';');
+  }
+
+  bool PrsGoToLabel()
+  {
+    auto *name = cc.cur_str;
+    cc.cur_str = nullptr;
+    auto *label = Lex(cc) == ':' ? coc.GoToLabelFind(name, true) : nullptr;
+    Free(const_cast<char *>(name));
+    if (!label || label->defined)
+      return false;
+    label->defined = true;
+    coc.Append(label->ic);
+    return Consume(':');
   }
 
   bool PrsLocal(CHashFun &fun, CHashClass &base, bool is_static = false)

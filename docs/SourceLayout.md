@@ -71,6 +71,9 @@ For assembly inside a function, `Compiler/PrsStmt.cpp` records
 retains the references until `Compiler/BackC.cpp` assigns code
 offsets, following the `IC_ASM` case in `Compiler/OptPass789A.HC`.
 The statement compiler and assembler share the function's frame offsets.
+Their named labels use a single function-local table, following
+`COCGoToLabelFind` in `Compiler/PrsLib.HC`. The back end assigns offsets
+to HolyC and assembly labels before patching branches in either direction.
 `Compiler/CMain.cpp` emits TOSB exports at assembly label offsets,
 `IET_REL_I32` and `IET_IMM_I64` for named imports, and
 `IET_ABS_ADDR` for image-base fixups.

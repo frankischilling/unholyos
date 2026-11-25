@@ -804,6 +804,14 @@ static void BootAsmReport(const CDrv &dvd, CTask &task)
   BootFileProgramReport(dvd, "/PutDec.HC");
   BootFileProgramReport(dvd, "/AsmAndC3.HC");
   BootFileProgramReport(dvd, "/InlineAsmProbe.HC");
+  BootFileProgramReport(dvd, "/GotoProbe.HC");
+  auto goto_missing = ExePutS("U0 GotoMissing() { goto missing; }", nullptr, 0);
+  auto goto_duplicate = ExePutS(
+      "U0 GotoDuplicate() { duplicate: asm { duplicate: NOP } }", nullptr, 0);
+  if (!goto_missing.okay && !goto_duplicate.okay &&
+      !HashFind("GotoMissing", task.hash_table, HTT_FUN) &&
+      !HashFind("GotoDuplicate", task.hash_table, HTT_FUN))
+    SerialPutS("UnholyOS: goto rejected missing and duplicate labels\r\n");
   auto rejected = ExePutS("asm { _ASM_REJECTED:: LOOP @@0 }", nullptr, 0);
   auto inline_rejected = ExePutS(
       "U0 InlineAsmRejected() { asm { _INLINE_ASM_REJECTED:: LOOP @@0 } }",
@@ -814,7 +822,7 @@ static void BootAsmReport(const CDrv &dvd, CTask &task)
       !HashFind("InlineAsmRejected", task.hash_table, HTT_FUN))
     SerialPutS("UnholyOS: asm rejected unresolved local\r\n");
   const char *paths[]{"/AsmProbe.BIN.Z", "/DivByHand.BIN.Z",
-                      "/InlineAsmProbe.BIN.Z"};
+                      "/InlineAsmProbe.BIN.Z", "/GotoProbe.BIN.Z"};
   for (const char *path : paths) {
     SerialPutS("UnholyOS: executing ");
     SerialPutS(path);
