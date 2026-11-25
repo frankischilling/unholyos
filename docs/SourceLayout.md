@@ -105,6 +105,14 @@ the following bytes as the relocation base. The loader validates the
 patch table and allocates patch records before copying to caller-owned
 storage.
 
+Relative instruction forms follow `PrsAsmInst` and `AsmStoreNum` in
+`Compiler/Asm.HC`. `AsmResolve` checks the chosen displacement width
+after labels are resolved, following `Compiler/AsmResolve.HC`.
+Literal targets and local labels use offsets in the assembled image.
+Named imports keep the chosen width in their TOSB relocation records.
+The remaining assembler diagnostics include the reference's
+suggestion to use an I8 displacement when a wider branch would fit.
+
 The compiler also registers the 65-byte `CCntsGlbls` guest class
 from `Kernel/KernelA.HH`. Its typed `cnts` symbol aliases the
 kernel storage defined in `Kernel/KGlbls.cpp` and uses the export

@@ -269,6 +269,27 @@ make -j4 test BUILD=build/fixed-image
 qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom build/fixed-image/unholyos-startup-test.iso -display none -serial file:build/fixed-image/windows-pc512.log -monitor none -no-reboot -no-shutdown
 ```
 
+`AsmBranchProbe.HC` checks literal targets, forward and backward
+short displacements at the signed limits, conditional jumps, and
+explicit `I16` and `I32` encodings. The suite checks bytes and return
+values before and after `Cmp` and `Load`. It rejects short branches
+one byte beyond either limit. `AsmBranchImport.HC` defers a target
+until after loading and verifies the byte, word, and dword patches.
+The fixed-origin test also checks the `EB 08` jump and 16-byte payload.
+Pinned TempleOS matched the sampled bytes and returned 41 through 45
+from the branch probe and the UnholyOS-built module. It also applied
+the same three patches to the UnholyOS-built import module. The
+comparison used QEMU 9.2.0 with PC, `qemu64`, and 512 MiB.
+
+The startup suite also checks all 100 lines from Terry A. Davis's
+unmodified `Demo/Asm/BuzzFizz.HC`. It uses short branches in a loop
+with calls to the kernel text routines. [Pinned BuzzFizz source](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Asm/BuzzFizz.HC)
+
+```sh
+make -j4 test BUILD=build/asm-branches
+qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom build/asm-branches/unholyos-startup-test.iso -display none -serial file:build/asm-branches/windows-pc512.log -monitor none -no-reboot -no-shutdown
+```
+
 Full opcode, operand, and directive coverage is pending.
 
 ## HolyC switch statements
