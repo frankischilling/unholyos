@@ -228,6 +228,27 @@ same source and the UnholyOS-built module in QEMU 9.2.0 with PC,
 `qemu64`, and 512 MiB. The suite also checks that missing and duplicate
 labels prevent publication of the function.
 
+The assembler reads the pinned `Compiler/OpCodes.DD` for instruction
+forms and aliases. `OpcodeProbe.HC` covers integer bit operations,
+conditional moves, x87 stack arithmetic, a local loop, and a scaled
+stack address. The startup suite expects `opcode table 42 2 2 42` from
+the source and `OpcodeProbe.BIN.Z`, which it saves under `BUILD`.
+It also compares the emitted operand-size and segment prefixes and the
+memory encoding for `MOV AX,[BX]` under `USE16` and `USE32`. In
+`USE64`, a 32-bit register spelling in the tested memory operand leaves
+the address-size prefix clear, as it does in pinned TempleOS.
+
+Pinned TempleOS printed `opcode table 42 2 2 42` from the same source
+and the UnholyOS-built module. Its source-assembled bytes matched the
+UnholyOS checks for both address modes and the FS and GS prefixes.
+The comparison used QEMU 9.2.0 with PC, `qemu64`, and 512 MiB. The
+UnholyOS startup image is built and run with the following commands.
+
+```sh
+make -j4 test BUILD=build/opcode-table
+qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom build/opcode-table/unholyos-startup-test.iso -display none -serial file:build/opcode-table/windows-pc512.log -monitor none -no-reboot -no-shutdown
+```
+
 Full opcode, operand, and directive coverage is pending.
 
 ## HolyC switch statements

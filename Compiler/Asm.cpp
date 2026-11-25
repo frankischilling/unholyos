@@ -42,60 +42,24 @@ struct CAsmArg
 {
   CAsmNum num;
   unsigned width = 0;
-  int reg = -1;
+  int reg = -1, index = -1, seg = -1;
+  unsigned addr_width = 0, scale = 0;
+  uint8_t reg_type = 0;
   bool mem = false, high = false, rex_byte = false;
 };
 
-struct CAsmOp
+static const CHashOpcode *AsmOpcodeFind(const char *name)
 {
-  const char *name;
-  uint8_t opcode, ext;
-};
+  if (Same(name, "IMUL1"))
+    name = "IMUL";
+  return reinterpret_cast<const CHashOpcode *>(AsmHashFind(name, HTT_OPCODE));
+}
 
-static constexpr CAsmOp fixed_ops[]{
-    {"NOP", 0x90, 0},          {"RET", 0xC3, 0},      {"LEAVE", 0xC9, 0},
-    {"CLD", 0xFC, 0},          {"STD", 0xFD, 0},      {"CLI", 0xFA, 0},
-    {"STI", 0xFB, 0},          {"HLT", 0xF4, 0},      {"CLC", 0xF8, 0},
-    {"STC", 0xF9, 0},          {"CMC", 0xF5, 0},      {"LODSB", 0xAC, 0},
-    {"MOVSB", 0xA4, 0},        {"STOSB", 0xAA, 0},    {"REP_MOVSB", 0xA4, 0xF3},
-    {"REP_STOSB", 0xAA, 0xF3}, {"CPUID", 0xA2, 0x0F},
-};
-
-static constexpr CAsmOp branch_ops[]{
-    {"CALL", 0xE8, 0},   {"JMP", 0xE9, 0},    {"LOOP", 0xE2, 1},
-    {"JRCXZ", 0xE3, 1},  {"JO", 0x80, 0x0F},  {"JNO", 0x81, 0x0F},
-    {"JB", 0x82, 0x0F},  {"JC", 0x82, 0x0F},  {"JAE", 0x83, 0x0F},
-    {"JNC", 0x83, 0x0F}, {"JZ", 0x84, 0x0F},  {"JE", 0x84, 0x0F},
-    {"JNZ", 0x85, 0x0F}, {"JNE", 0x85, 0x0F}, {"JBE", 0x86, 0x0F},
-    {"JA", 0x87, 0x0F},  {"JS", 0x88, 0x0F},  {"JNS", 0x89, 0x0F},
-    {"JL", 0x8C, 0x0F},  {"JGE", 0x8D, 0x0F}, {"JLE", 0x8E, 0x0F},
-    {"JG", 0x8F, 0x0F},
-};
-
-static constexpr CAsmOp unary_ops[]{
-    {"INC", 0xFE, 0},  {"DEC", 0xFE, 1},  {"NOT", 0xF6, 2},   {"NEG", 0xF6, 3},
-    {"MUL", 0xF6, 4},  {"IMUL", 0xF6, 5}, {"IMUL1", 0xF6, 5}, {"DIV", 0xF6, 6},
-    {"IDIV", 0xF6, 7}, {"ROL1", 0xD0, 0}, {"ROR1", 0xD0, 1},  {"RCL1", 0xD0, 2},
-    {"RCR1", 0xD0, 3}, {"SHL1", 0xD0, 4}, {"SHR1", 0xD0, 5},  {"SAR1", 0xD0, 7},
-};
-
-static constexpr CAsmOp shift_ops[]{
-    {"ROL", 0, 0}, {"ROR", 0, 1}, {"RCL", 0, 2}, {"RCR", 0, 3},
-    {"SHL", 0, 4}, {"SHR", 0, 5}, {"SAR", 0, 7},
-};
-
-static constexpr CAsmOp binary_ops[]{
-    {"ADD", 0, 0}, {"OR", 0, 1},  {"ADC", 0, 2}, {"SBB", 0, 3},
-    {"AND", 0, 4}, {"SUB", 0, 5}, {"XOR", 0, 6}, {"CMP", 0, 7},
-};
-
-template <size_t N>
-static const CAsmOp *AsmOpFind(const CAsmOp (&ops)[N], const char *name)
+static unsigned AsmKeyword(const char *name)
 {
-  for (const auto &op : ops)
-    if (Same(name, op.name))
-      return &op;
-  return nullptr;
+  auto *h = reinterpret_cast<const CHashGeneric *>(
+      AsmHashFind(name, HTT_ASM_KEYWORD));
+  return h ? h->user_data0 : 0;
 }
 
 bool IsAsmStatement(const CCmpCtrl &cc)
@@ -108,20 +72,17 @@ bool IsAsmStatement(const CCmpCtrl &cc)
   if (cc.hash_entry &&
       (cc.hash_entry->type & (HTT_FUN | HTT_GLBL_VAR | HTT_EXPORT_SYS_SYM)))
     return false;
-  if (AsmOpFind(fixed_ops, name) || AsmOpFind(branch_ops, name) ||
-      AsmOpFind(unary_ops, name) || AsmOpFind(shift_ops, name) ||
-      AsmOpFind(binary_ops, name))
-    return true;
-  constexpr const char *names[]{
-      "RET1",  "INT",   "PUSH",  "POP",   "LEA",   "MOV",    "MOVZX",
-      "MOVSX", "TEST",  "IMUL",  "IMUL2", "DU8",   "DU16",   "DU32",
-      "DU64",  "USE16", "USE32", "USE64", "ALIGN", "IMPORT",
-  };
-  for (const char *candidate : names)
-    if (Same(name, candidate))
-      return true;
-  return false;
+  return AsmOpcodeFind(name) || (!cc.hash_entry && AsmKeyword(name));
 }
+
+struct CAsmTableIns
+{
+  const CInst *inst = nullptr;
+  const CAsmArg *rm = nullptr, *imm = nullptr;
+  unsigned score = UINT32_MAX, imm_width = 0;
+  uint8_t last = 0, group = 0, rex = 0;
+  bool operand_prefix = false, addr_prefix = false, relative = false;
+};
 
 class CAsm
 {
@@ -255,11 +216,6 @@ private:
   bool Eat(int64_t t)
   {
     return cc.token == t && Lex(cc) != TK_ERROR;
-  }
-
-  bool Ident(const char *text) const
-  {
-    return cc.token == TK_IDENT && Same(cc.cur_str, text);
   }
 
   CAsmSymbol *Symbol(const char *name)
@@ -436,65 +392,118 @@ private:
   {
     if (cc.token != TK_IDENT)
       return false;
-    static constexpr const char *regs[4][16] = {
-      {"AL","CL","DL","BL","AH","CH","DH","BH","R8u8","R9u8","R10u8","R11u8",
-       "R12u8","R13u8","R14u8","R15u8"},
-      {"AX","CX","DX","BX","SP","BP","SI","DI","R8u16","R9u16","R10u16",
-       "R11u16","R12u16","R13u16","R14u16","R15u16"},
-      {"EAX","ECX","EDX","EBX","ESP","EBP","ESI","EDI","R8u32","R9u32",
-       "R10u32","R11u32","R12u32","R13u32","R14u32","R15u32"},
-      {"RAX","RCX","RDX","RBX","RSP","RBP","RSI","RDI","R8","R9","R10","R11",
-       "R12","R13","R14","R15"},
-    };
-    for (unsigned w = 0; w < 4; ++w)
-      for (unsigned r = 0; r < 16; ++r)
-        if (Ident(regs[w][r])) {
-          arg.reg = r;
-          arg.width = 1U << w;
-          arg.high = !w && 4 <= r && r < 8;
-          Lex(cc);
-          return true;
-        }
-    constexpr const char *low[]{"RSPu8","RBPu8","RSIu8","RDIu8"};
-    for (unsigned r = 0; r < 4; ++r)
-      if (Ident(low[r])) {
-        arg.reg = r + 4;
-        arg.width = 1;
+    auto *reg =
+        reinterpret_cast<const CHashReg *>(AsmHashFind(cc.cur_str, HTT_REG));
+    if (!reg)
+      return false;
+    arg.reg_type = reg->reg_type;
+    arg.reg = reg->reg_num;
+    if (REGT_R8 <= reg->reg_type && reg->reg_type <= REGT_R64)
+      arg.width = 1U << (reg->reg_type - REGT_R8);
+    if (arg.reg_type == REGT_R8) {
+      arg.high = 4 <= arg.reg && arg.reg < 8;
+      if (arg.reg >= 20) {
         arg.rex_byte = true;
-        Lex(cc);
-        return true;
+        arg.reg &= 7;
       }
-    return false;
+    }
+    Lex(cc);
+    return true;
+  }
+
+  unsigned AsmSize() const
+  {
+    if (cc.token != TK_IDENT)
+      return 0;
+    auto id = AsmKeyword(cc.cur_str);
+    if (AKW_I8 <= id && id <= AKW_I64)
+      return 1U << (id - AKW_I8);
+    if (AKW_U8 <= id && id <= AKW_U64)
+      return 1U << (id - AKW_U8);
+    return 0;
+  }
+
+  bool AddAddrReg(CAsmArg &arg, const CAsmArg &reg, bool scaled, unsigned scale)
+  {
+    auto width = reg.width;
+    if (width < 2 || (mode == 64 ? width == 2 : width == 8) ||
+        (arg.addr_width && arg.addr_width != width))
+      return false;
+    arg.addr_width = width;
+    if (!scaled && arg.reg < 0) {
+      arg.reg = reg.reg;
+      return true;
+    }
+    if (arg.index >= 0)
+      return false;
+    if (reg.reg == 4 && !scaled) {
+      arg.index = arg.reg;
+      arg.reg = reg.reg;
+    } else {
+      arg.index = reg.reg;
+      arg.scale = scale;
+    }
+    return true;
+  }
+
+  bool PrsAsmAddress(CAsmArg &arg)
+  {
+    arg.mem = true;
+    Lex(cc); // Skip '['.
+    if (cc.token == ']')
+      return false;
+    for (bool first = true;; first = false) {
+      bool negate = cc.token == '-';
+      if (cc.token == '+' || negate)
+        Lex(cc);
+      else if (!first)
+        return false;
+      CAsmArg reg;
+      if (ReadReg(reg)) {
+        bool scaled = cc.token == '*';
+        unsigned scale = 0;
+        if (scaled) {
+          if (Lex(cc) != TK_I64)
+            return false;
+          uint64_t value = cc.cur_i64;
+          if (value != 1 && value != 2 && value != 4 && value != 8)
+            return false;
+          scale = __builtin_ctzll(value);
+          Lex(cc);
+        }
+        if (negate || !AddAddrReg(arg, reg, scaled, scale))
+          return false;
+      } else {
+        CAsmNum disp;
+        if (!Expression(disp, 5) || !Apply(arg.num, disp, negate ? '-' : '+'))
+          return false;
+      }
+      if (cc.token == ']')
+        break;
+    }
+    return arg.index != 4 && Eat(']');
   }
 
   bool PrsAsmArg(CAsmArg &arg)
   {
-    if (ReadReg(arg))
-      return true;
-    constexpr const char *types[]{"U8","U16","U32","U64"};
-    for (unsigned w = 0; w < 4; ++w)
-      if (Ident(types[w])) {
-        arg.width = 1U << w;
-        Lex(cc);
-        break;
+    if ((arg.width = AsmSize()))
+      Lex(cc);
+    CAsmArg reg;
+    if (ReadReg(reg)) {
+      if (reg.reg_type != REGT_SEG || cc.token != ':') {
+        if (arg.width && arg.width != reg.width)
+          return false;
+        arg = reg;
+        return true;
       }
+      arg.seg = reg.reg;
+      Lex(cc);
+      if (!arg.width && (arg.width = AsmSize()))
+        Lex(cc);
+    }
     if (cc.token != '[' && !Expression(arg.num))
       return false;
-    if (cc.token != '[')
-      return !arg.width;
-    arg.mem = true;
-    Lex(cc);
-    CAsmArg base;
-    CAsmNum disp;
-    if (ReadReg(base)) {
-      if (base.width != mode / 8)
-        return false;
-      arg.reg = base.reg;
-      if (cc.token != ']' && !Expression(disp))
-        return false;
-    } else if (!Expression(disp))
-      return false;
-    return Apply(arg.num, disp, '+') && Eat(']');
+    return cc.token == '[' ? PrsAsmAddress(arg) : arg.seg < 0;
   }
 
   void Byte(uint8_t byte)
@@ -558,7 +567,7 @@ private:
         CAsmNum n;
         if (!Expression(n))
           return false;
-        if (Ident("DUP")) {
+        if (cc.token == TK_IDENT && AsmKeyword(cc.cur_str) == AKW_DUP) {
           Lex(cc);
           CAsmNum value;
           if (!Constant(n) || n.addend > (INT32_MAX - size - origin) / width ||
@@ -573,26 +582,6 @@ private:
     return !failed && Eat(';');
   }
 
-  bool Prefix(unsigned width, const CAsmArg &r, const CAsmArg &rm)
-  {
-    if (!width || width > 8 ||
-        (mode != 64 && (width == 8 || r.reg >= 8 || rm.reg >= 8 ||
-                        r.rex_byte || rm.rex_byte)))
-      return false;
-    if ((width == 2 && mode != 16) || (width == 4 && mode == 16))
-      Byte(0x66);
-    if (mode == 64) {
-      unsigned rex = (width == 8 ? 8 : 0) | (r.reg >= 8 ? 4 : 0) |
-                     (rm.reg >= 8 ? 1 : 0);
-      if (rex || r.rex_byte || rm.rex_byte) {
-        if (r.high || rm.high)
-          return false;
-        Byte(0x40 | rex);
-      }
-    }
-    return true;
-  }
-
   static bool I8(uint64_t n)
   {
     return int64_t(n) >= -128 && int64_t(n) <= 127;
@@ -605,11 +594,14 @@ private:
       Byte(0xC0 | reg | (rm.reg & 7));
       return rm.reg >= 0;
     }
+
     auto &disp = rm.num;
-    if (rm.reg < 0) {
-      if (mode == 16) {
-        Byte(reg | 6);
-        AsmStoreNum(disp, 2);
+    auto base = rm.reg, index = rm.index;
+    if (base < 0) {
+      if (index >= 0) {
+        Byte(reg | 4);
+        Byte((rm.scale << 6) | ((index & 7) << 3) | 5);
+        AsmStoreNum(disp, 4);
       } else if (mode == 64 && disp.plus && !disp.minus) {
         Byte(reg | 5);
         auto relative = disp;
@@ -623,193 +615,223 @@ private:
       }
       return true;
     }
-    int base = rm.reg & 7;
-    if (mode == 16) {
-      switch (base) {
-      case 3: base=7; break; // BX
-      case 5: base=6; break; // BP
-      case 6: base=4; break; // SI
-      case 7: base=5; break; // DI
-      default: return false;
-      }
-    }
+
+    base &= 7;
     bool known = Constant(disp);
-    unsigned special = mode == 16 ? 6 : 5;
-    unsigned mod = known && !disp.addend && unsigned(base) != special ? 0
-                   : known && I8(disp.addend) ? 1 : 2;
-    Byte((mod << 6) | reg | base);
-    if (mode != 16 && base == 4)
-      Byte(0x24);
+    unsigned mod = known && !disp.addend && base != 5 ? 0
+                   : known && I8(disp.addend)         ? 1
+                                                      : 2;
+    bool sib = base == 4 || index >= 0;
+    Byte((mod << 6) | reg | (sib ? 4 : base));
+    if (sib)
+      Byte((rm.scale << 6) | ((index >= 0 ? index & 7 : 4) << 3) | base);
     if (mod)
       AsmStoreNum(disp, mod == 1 ? 1 : mode == 16 ? 2 : 4);
     return true;
   }
 
-  bool RMInst(uint16_t opcode, unsigned width, const CAsmArg &rm, int ext,
-              const CAsmArg &reg = {}, unsigned tail = 0)
+  static bool AsmRM(unsigned type)
   {
-    if (rm.reg < 0 && !rm.mem)
-      return false;
-    if (!Prefix(width, reg, rm))
-      return false;
-    if (opcode > 0xFF)
-      Byte(opcode >> 8);
-    Byte(opcode);
-    return ModRM(ext, rm, tail);
+    return ARGT_RM8 <= type && type <= ARGT_M64;
   }
 
-  bool Binary(const char *name, const CAsmArg &a, const CAsmArg &b)
+  static unsigned AsmImmWidth(unsigned type)
   {
-    unsigned width = a.width ? a.width : b.width;
-    if (!width || (a.width && b.width && a.width != b.width) ||
-        (a.mem && b.mem))
-      return false;
-    bool wide = width != 1;
-    bool mov = Same(name, "MOV");
-    if (!b.mem && b.reg < 0) {
-      if (mov && !a.mem) {
-        if (a.reg < 0 || !Prefix(width, {}, a))
-          return false;
-        Byte((wide ? 0xB8 : 0xB0) | (a.reg & 7));
-        AsmStoreNum(b.num, width);
-        return true;
-      }
-      unsigned group = 0xFF;
-      if (auto *op = AsmOpFind(binary_ops, name))
-        group = op->ext;
-      bool test = Same(name,"TEST");
-      if (group == 0xFF && !mov && !test)
-        return false;
-      bool small = wide && !mov && !test && Constant(b.num) && I8(b.num.addend);
-      unsigned opcode = mov ? 0xC6 + wide : test ? 0xF6 + wide
-                             : small ? 0x83 : 0x80 + wide;
-      unsigned imm = small ? 1 : width > 4 ? 4 : width;
-      if (!RMInst(opcode,width,a,(mov || test) ? 0 : group,{},imm))
-        return false;
-      AsmStoreNum(b.num,imm);
-      return true;
-    }
+    if (ARGT_REL8 <= type && type <= ARGT_REL32)
+      return 1U << (type - ARGT_REL8);
+    if (ARGT_IMM8 <= type && type <= ARGT_UIMM64)
+      return 1U << ((type - ARGT_IMM8) & 3);
+    return 0;
+  }
 
-    bool test = Same(name,"TEST");
-    unsigned opcode = mov ? 0x88 : test ? 0x84 : 0xFF;
-    if (auto *op = AsmOpFind(binary_ops, name))
-      opcode = op->ext * 8;
-    if (opcode == 0xFF)
+  bool AsmMatchArg(const CAsmArg &arg, unsigned type) const
+  {
+    bool reg = arg.reg >= 0 && !arg.mem;
+    bool gpr = reg && REGT_R8 <= arg.reg_type && arg.reg_type <= REGT_R64;
+    if (ARGT_R8 <= type && type <= ARGT_R64)
+      return gpr && arg.width == (1U << (type - ARGT_R8));
+    if (AsmRM(type)) {
+      unsigned width = 1U << ((type - ARGT_RM8) & 3);
+      return (arg.mem && (!arg.width || arg.width == width)) ||
+             (type <= ARGT_RM64 && gpr && arg.width == width);
+    }
+    if (ARGT_AL <= type && type <= ARGT_RAX)
+      return gpr && !arg.reg && arg.width == (1U << (type - ARGT_AL));
+    if (type == ARGT_CL || type == ARGT_DX)
+      return gpr && arg.reg == (type == ARGT_CL ? 1 : 2) &&
+             arg.width == (type == ARGT_CL ? 1U : 2U);
+    if (ARGT_SREG <= type && type <= ARGT_CS) {
+      constexpr int segs[]{2, 3, 0, 4, 5, 1};
+      return reg && arg.reg_type == REGT_SEG &&
+             (type == ARGT_SREG || arg.reg == segs[type - ARGT_SS]);
+    }
+    if (type == ARGT_ST0 || type == ARGT_STI)
+      return reg && arg.reg_type == REGT_FSTK && (type == ARGT_STI || !arg.reg);
+    unsigned width = AsmImmWidth(type);
+    if (!width || reg || arg.mem || (arg.width && arg.width != width))
       return false;
-    if (b.mem)
-      return !test && a.reg >= 0 && RMInst(opcode+2+wide,width,b,a.reg,a);
-    return RMInst(opcode+wide,width,a,b.reg,b);
+    if (type <= ARGT_REL32)
+      return true;
+    if (!Constant(arg.num))
+      return width >= 4;
+    unsigned shift = 64 - 8 * width;
+    uint64_t value = arg.num.addend;
+    return type <= ARGT_IMM64
+               ? uint64_t(int64_t(value << shift) >> shift) == value
+               : !shift || value >> (64 - shift) == 0;
+  }
+
+  void AsmTableMatch(CAsmTableIns &best, const CInst &ins, const CAsmArg &a,
+                     const CAsmArg &b, unsigned argc) const
+  {
+    if ((!ins.arg1) != (!argc) || (!ins.arg2) != (argc < 2) ||
+        (argc && !AsmMatchArg(a, ins.arg1)) ||
+        (argc == 2 && !AsmMatchArg(b, ins.arg2)) ||
+        (mode == 64 && (ins.flags & IEF_NOT_IN_64_BIT)) ||
+        ins.opcode_modifier == OM_CP)
+      return;
+
+    CAsmTableIns form;
+    form.inst = &ins;
+    form.last = ins.opcode[ins.opcode_cnt - 1];
+    form.operand_prefix =
+        mode == 16 ? (ins.flags & IEF_OP_SIZE32) : (ins.flags & IEF_OP_SIZE16);
+    const bool rm_a = AsmRM(ins.arg1), rm_b = AsmRM(ins.arg2);
+    uint8_t rex = ins.flags & IEF_48_REX ? 8 : 0;
+    bool rex_byte = a.rex_byte || b.rex_byte;
+    if (rm_a || rm_b) {
+      if (rm_a && rm_b)
+        return;
+      form.rm = rm_a ? &a : &b;
+      auto &reg = rm_a ? b : a;
+      if (ins.slash_val < 8 || ins.slash_val == SV_NONE)
+        form.group = ins.slash_val == SV_NONE ? 0 : ins.slash_val;
+      else if (ins.slash_val == SV_R_REG && !reg.mem) {
+        auto group = reg.reg >= 0 ? reg.reg : form.rm->reg;
+        if (group < 0 || (reg.reg < 0 && form.rm->mem))
+          return;
+        form.group = group;
+        if (group >= 8)
+          rex |= 4;
+      } else
+        return;
+      if (form.rm->reg >= 8)
+        rex |= 1;
+      if (form.rm->index >= 8)
+        rex |= 2;
+      form.addr_prefix = form.rm->mem && mode == 16;
+    } else if (ins.flags & IEF_PLUS_OPCODE) {
+      if (ins.slash_val == SV_R_REG) {
+        auto &reg = ARGT_AL <= ins.arg1 && ins.arg1 <= ARGT_RAX ? b : a;
+        if (reg.reg < 0 || reg.mem)
+          return;
+        form.last |= reg.reg & 7;
+        if (reg.reg >= 8)
+          rex |= 1;
+      } else if (ins.slash_val == SV_I_REG)
+        form.last += ins.arg1 == ARGT_STI ? a.reg : b.reg;
+      else
+        return;
+    } else if (ins.slash_val != SV_NONE)
+      return;
+
+    if ((form.operand_prefix || form.addr_prefix) &&
+        (ins.flags & IEF_DONT_SWITCH_MODES))
+      return;
+    if (ins.arg1 == ARGT_R64 || ins.arg1 == ARGT_RM64 || ins.arg1 == ARGT_M64 ||
+        ins.arg2 == ARGT_R64 || ins.arg2 == ARGT_RM64 || ins.arg2 == ARGT_M64 ||
+        AsmImmWidth(ins.arg1) == 8 || AsmImmWidth(ins.arg2) == 8)
+      rex |= 8;
+    if ((ins.flags & IEF_REX_ONLY_R8_R15) &&
+        (ins.arg2 == ARGT_UIMM32 || rex == 8))
+      rex &= ~8;
+    if (rex == 8 && !rex_byte && (ins.flags & IEF_REX_XOR_LIKE) && !a.mem &&
+        !b.mem && a.reg == b.reg)
+      rex = 0;
+    if (mode != 64) {
+      if ((rex & 7) || rex_byte || a.width == 8 || b.width == 8)
+        return;
+    } else if (rex || rex_byte) {
+      if (a.high || b.high)
+        return;
+      form.rex = 0x40 | rex;
+    }
+    if ((form.imm_width = AsmImmWidth(ins.arg1))) {
+      form.imm = &a;
+      form.relative = ins.arg1 <= ARGT_REL32;
+      if (AsmImmWidth(ins.arg2))
+        return;
+    } else if ((form.imm_width = AsmImmWidth(ins.arg2))) {
+      form.imm = &b;
+      form.relative = ins.arg2 <= ARGT_REL32;
+    }
+    form.score = ins.opcode_cnt + form.imm_width + bool(form.rm) +
+                 bool(form.rex) + form.operand_prefix + form.addr_prefix +
+                 bool(ins.flags & IEF_ENDING_ZERO);
+    // A branch target can move until the block's labels and imports are fixed
+    // up.
+    if (form.relative && form.imm_width == 1 && !form.imm->width)
+      form.score += 16;
+    if (aot && form.imm && form.imm->num.plus && form.imm->num.plus->imported &&
+        form.imm_width != (form.relative ? 4U : 8U))
+      return;
+    if (form.score < best.score)
+      best = form;
+  }
+
+  bool PrsTableInst(const CHashOpcode &op)
+  {
+    auto *forms = AsmInstEntries(op);
+    unsigned argc = !!forms[0].arg1 + !!forms[0].arg2;
+    CAsmArg a, b;
+    if ((argc && !PrsAsmArg(a)) || (argc == 2 && (!Eat(',') || !PrsAsmArg(b))))
+      return false;
+    CAsmTableIns best;
+    for (unsigned i = 0; i < op.inst_entry_cnt; i++)
+      AsmTableMatch(best, forms[i], a, b, argc);
+    if (!best.inst)
+      return false;
+    const auto &ins = *best.inst;
+    auto seg = b.seg >= 0 ? b.seg : a.seg;
+    if (seg >= 0) {
+      constexpr uint8_t seg_prefixes[]{0x26, 0x2E, 0x36, 0x3E, 0x64, 0x65};
+      Byte(seg_prefixes[seg]);
+    }
+    if (best.operand_prefix)
+      Byte(0x66);
+    if (best.addr_prefix)
+      Byte(0x67);
+    if (best.rex)
+      Byte(best.rex);
+    for (unsigned i = 1; i < ins.opcode_cnt; i++)
+      Byte(ins.opcode[i - 1]);
+    Byte(best.last);
+    bool ending_zero = ins.flags & IEF_ENDING_ZERO;
+    if (best.rm && !ModRM(best.group, *best.rm, best.imm_width + ending_zero))
+      return false;
+    if (best.imm)
+      AsmStoreNum(best.imm->num, best.imm_width, best.relative, best.relative);
+    if (ending_zero)
+      Byte(0);
+    return !failed;
   }
 
   bool PrsAsmInst(const char *name)
   {
-    for (auto &op : fixed_ops)
-      if (Same(name,op.name)) {
-        if (op.ext)
-          Byte(op.ext);
-        Byte(op.opcode);
-        return true;
-      }
-    CAsmArg a,b;
-    if (!PrsAsmArg(a))
-      return false;
-    for (auto &op : branch_ops)
-      if (Same(name,op.name)) {
-        if (a.mem || a.reg >= 0) {
-          if (op.opcode != 0xE8 && op.opcode != 0xE9)
-            return false;
-          return RMInst(0xFF,a.width ? a.width : mode/8,a,
-                        op.opcode == 0xE8 ? 2 : 4);
-        }
-        if (op.ext == 0x0F)
-          Byte(op.ext);
-        Byte(op.opcode);
-        AsmStoreNum(a.num, op.ext == 1 ? 1 : mode == 16 ? 2 : 4, true, true);
-        return true;
-      }
-    if (Same(name,"RET1") || Same(name,"INT")) {
-      bool ret = Same(name,"RET1");
-      if (a.mem || a.reg >= 0 || !Constant(a.num) ||
-          a.num.addend > (ret ? 65535U : 255U))
-        return false;
-      Byte(ret ? 0xC2 : 0xCD);
-      Scalar(a.num.addend, ret ? 2 : 1);
-      return true;
-    }
-    if (Same(name,"PUSH") || Same(name,"POP")) {
-      bool pop = Same(name,"POP");
-      if (a.mem || (mode != 64 && a.reg >= 8))
-        return false;
-      if (a.reg >= 0) {
-        if (a.width != mode / 8 && a.width != 2)
-          return false;
-        if (a.width == 2 && mode != 16)
-          Byte(0x66);
-        if (a.reg >= 8)
-          Byte(0x41);
-        Byte((pop ? 0x58 : 0x50) | (a.reg & 7));
-        return true;
-      }
-      if (pop)
-        return false;
-      bool small = Constant(a.num) && I8(a.num.addend);
-      Byte(small ? 0x6A : 0x68);
-      AsmStoreNum(a.num, small ? 1 : mode == 16 ? 2 : 4);
-      return true;
-    }
-
-    for (auto &op : unary_ops)
-      if (Same(name,op.name))
-        return RMInst(op.opcode + (a.width != 1),a.width,a,op.ext);
-    if (!Eat(',') || !PrsAsmArg(b))
-      return false;
-    if (Same(name, "IMUL2")) {
-      if (a.reg < 0 || a.mem || a.width < 2)
-        return false;
-      if (b.reg >= 0 || b.mem)
-        return (!b.width || b.width == a.width) &&
-               RMInst(0x0FAF, a.width, b, a.reg, a);
-      bool small = Constant(b.num) && I8(b.num.addend);
-      if (!RMInst(small ? 0x6B : 0x69, a.width, a, a.reg, a))
-        return false;
-      AsmStoreNum(b.num, small ? 1 : a.width == 2 ? 2 : 4);
-      return true;
-    }
-    if (Same(name,"LEA"))
-      return a.reg >= 0 && !a.mem && a.width > 1 && b.mem &&
-             RMInst(0x8D,a.width,b,a.reg,a);
-    if (Same(name,"MOVZX") || Same(name,"MOVSX")) {
-      bool sign = Same(name,"MOVSX");
-      return a.reg >= 0 && !a.mem && a.width > b.width &&
-             (b.width == 1 || b.width == 2) &&
-             RMInst((sign ? 0x0FBE : 0x0FB6) + (b.width == 2),a.width,b,a.reg,a);
-    }
-    for (auto &op : shift_ops)
-      if (Same(name,op.name)) {
-        bool cl = b.reg == 1 && !b.mem && b.width == 1;
-        if ((!cl && (b.reg >= 0 || b.mem || !Constant(b.num) ||
-                     b.num.addend > 255)) ||
-            !RMInst((cl ? 0xD2 : 0xC0) + (a.width != 1),a.width,a,op.ext,
-                    {},cl ? 0 : 1))
-          return false;
-        if (!cl)
-          Byte(b.num.addend);
-        return true;
-      }
-    return Binary(name,a,b);
+    auto *op = AsmOpcodeFind(name);
+    return op && PrsTableInst(*op);
   }
 
   bool Statement(const char *name)
   {
-    constexpr const char *sizes[]{"DU8","DU16","DU32","DU64"};
-    for (unsigned i = 0; i < 4; ++i)
-      if (Same(name,sizes[i]))
-        return PrsAsmDefine(1U << i);
-    if (Same(name,"USE16") || Same(name,"USE32") || Same(name,"USE64")) {
-      mode = Same(name,"USE16") ? 16 : Same(name,"USE32") ? 32 : 64;
+    auto id = AsmKeyword(name);
+    if (AKW_DU8 <= id && id <= AKW_DU64)
+      return PrsAsmDefine(1U << (id - AKW_DU8));
+    if (AKW_USE16 <= id && id <= AKW_USE64) {
+      mode = 16U << (id - AKW_USE16);
       return true;
     }
-    if (Same(name,"ALIGN")) {
+    if (id == AKW_ALIGN) {
       CAsmNum align,fill;
       if (!Expression(align) || !Constant(align) || !align.addend ||
           (align.addend & (align.addend - 1)) ||
@@ -825,7 +847,7 @@ private:
         Byte(fill.addend);
       return !failed;
     }
-    if (Same(name,"IMPORT")) {
+    if (id == AKW_IMPORT) {
       do {
         if (cc.token != TK_IDENT)
           return false;
