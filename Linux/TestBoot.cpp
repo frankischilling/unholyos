@@ -7,6 +7,7 @@
 #include <chrono>
 #include <csignal>
 #include <fcntl.h>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <poll.h>
@@ -1303,7 +1304,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);
       Check(
-          output.find("asm build 0 0 0 0 0\n") != std::string::npos &&
+          output.find("asm build 0 0 0 0 0 0 0\n") != std::string::npos &&
               output.find("UnholyOS: asm rejected unresolved local") !=
                   std::string::npos &&
               output.find("UnholyOS: asm opcode modes and alignment matched") !=
@@ -1337,10 +1338,29 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       Check(output.find("UnholyOS: opcode table mode bytes matched") !=
                 std::string::npos,
             "Opcode table emitted unexpected mode prefixes");
+      std::ostringstream buzz_fizz;
+      buzz_fizz << std::hex << std::uppercase << std::setfill('0');
+      for (unsigned n = 1; n <= 100; n++) {
+        buzz_fizz << std::setw(16) << n << ' ';
+        if (n % 6 == 0)
+          buzz_fizz << "FIZZ ";
+        if (n % 7 == 0)
+          buzz_fizz << "BUZZ ";
+        buzz_fizz << '\n';
+      }
+      CheckProgramOutput(output, "/BuzzFizz.HC", buzz_fizz.str(), '1');
       CheckProgramOutput(output, "/OpcodeProbe.HC", "opcode table 42 2 2 42\n",
                          '1');
       CheckProgramOutput(output, "/OpcodeProbe.BIN.Z",
                          "opcode table 42 2 2 42\n", '1');
+      for (const char *msg :
+           {"UnholyOS: JIT branch values and bytes matched",
+            "UnholyOS: AOT branch values and bytes matched",
+            "UnholyOS: short and near branch imports matched",
+            "UnholyOS: short branches rejected out-of-range targets",
+            "Branch out of range at line:"})
+        Check(output.find(msg) != std::string::npos,
+              "Assembly branch values, bytes, or range checks differed");
       CheckProgramOutput(output, "/FixedAsm.HC", "fixed jit 1 42\n", '1');
       CheckProgramOutput(output, "/FixedImage.BIN", "fixed load 42\n", '1');
       Check(output.find("UnholyOS: invalid ORG left the destination intact") !=
@@ -1366,12 +1386,14 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       for (const char *name : {"/SwitchProbe.HC", "/SwitchProbe.BIN.Z"})
         CheckProgramOutput(output, name, "switch 12 2 -1 99 17 34\n", '1');
       CheckProgramOutput(output, "/DivByHand.BIN.Z", "123456/10=12345\n", '1');
-      CheckProgramOutput(output, "/AsmProbe.BIN.Z", "asm import\nasm result 42\n", '1');
+      CheckProgramOutput(output, "/AsmProbe.BIN.Z",
+                         "asm import\nasm result 42\n", '1');
       if (std::string_view(memory) == "512")
         for (auto *name :
              {"AsmProbe.BIN.Z", "DivByHand.BIN.Z", "InlineAsmProbe.BIN.Z",
               "GotoProbe.BIN.Z", "SwitchProbe.BIN.Z", "OpcodeProbe.BIN.Z",
-              "FixedImage.BIN"})
+              "FixedImage.BIN", "AsmBranchProbe.BIN.Z",
+              "AsmBranchImport.BIN.Z"})
           fs::copy_file(CaptureGuestFile(vm, dir, output, name),
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);

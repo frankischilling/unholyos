@@ -807,6 +807,7 @@ static void BootAsmReport(const CDrv &dvd, CTask &task)
   BootFileProgramReport(dvd, "/MulByHand.HC");
   BootFileProgramReport(dvd, "/PutDec.HC");
   BootFileProgramReport(dvd, "/AsmAndC3.HC");
+  BootFileProgramReport(dvd, "/BuzzFizz.HC");
   BootFileProgramReport(dvd, "/InlineAsmProbe.HC");
   BootFileProgramReport(dvd, "/GotoProbe.HC");
   BootFileProgramReport(dvd, "/OpcodeProbe.HC");
@@ -878,6 +879,89 @@ static void BootAsmReport(const CDrv &dvd, CTask &task)
       matches(r32, table32, sizeof(table32)) &&
       matches(seg, table_seg, sizeof(table_seg)))
     SerialPutS("UnholyOS: opcode table mode bytes matched\r\n");
+}
+
+static bool BootAsmBranchCheck(const CTask &task)
+{
+  constexpr struct
+  {
+    const char *name;
+    size_t offset, size;
+    uint8_t bytes[5];
+    uint64_t result;
+  } checks[]{
+      {"_BRANCH_LITERAL", 0, 4, {0xEB, 2, 0xCC, 0xCC}, 41},
+      {"_BRANCH_FORWARD", 0, 2, {0xEB, 0x7F}, 42},
+      {"_BRANCH_BACKWARD", 128, 2, {0xEB, 0x80}, 43},
+      {"_BRANCH_DWORD", 0, 5, {0xE9, 0, 1, 0, 0}, 44},
+      {"_BRANCH_COND", 2, 4, {0x74, 2, 0xCC, 0xCC}, 45},
+      {"_BRANCH_WORD", 0, 3, {0xE9, 0, 1}, 0},
+  };
+  for (const auto &check : checks) {
+    auto *symbol = reinterpret_cast<const CHashExport *>(
+        HashFind(check.name, task.hash_table, HTT_EXPORT_SYS_SYM));
+    if (!symbol)
+      return false;
+    auto *code = reinterpret_cast<const uint8_t *>(symbol->val);
+    for (size_t i = 0; i < check.size; i++)
+      if (code[check.offset + i] != check.bytes[i])
+        return false;
+    uint64_t value;
+    if (check.result &&
+        (!CallHolyC0Checked(code, &value) || value != check.result))
+      return false;
+  }
+  return true;
+}
+
+static void BootAsmBranchReport(const CDrv &dvd, CTask &task)
+{
+  auto *ram = MountedDrive('B');
+  if (!ram || !BootFileProgramReport(dvd, "/AsmBranchProbe.HC").okay ||
+      !BootAsmBranchCheck(task))
+    return;
+  SerialPutS("UnholyOS: JIT branch values and bytes matched\r\n");
+
+  auto forward = ExePutS("asm { _BRANCH_FAR_FORWARD:: JMP @@end "
+                         "DU8 128 DUP (0); @@end: RET }",
+                         nullptr, 0);
+  auto backward = ExePutS("asm { _BRANCH_FAR_BACKWARD:: @@back: "
+                          "DU8 127 DUP (0); JMP @@back }",
+                          nullptr, 0);
+  if (!forward.okay && !backward.okay &&
+      !HashFind("_BRANCH_FAR_FORWARD", task.hash_table, HTT_EXPORT_SYS_SYM) &&
+      !HashFind("_BRANCH_FAR_BACKWARD", task.hash_table, HTT_EXPORT_SYS_SYM))
+    SerialPutS("UnholyOS: short branches rejected out-of-range targets\r\n");
+
+  constexpr const char *path = "/AsmBranchProbe.BIN.Z";
+  auto *mod = Load(*ram, path, task, LDF_JUST_LOAD);
+  if (mod && LoadPass2(*mod) && BootAsmBranchCheck(task)) {
+    SerialPutS("UnholyOS: AOT branch values and bytes matched\r\n");
+    BootGuestFileReport(*ram, path);
+  }
+
+  constexpr const char *imports = "/AsmBranchImport.BIN.Z";
+  mod = Load(*ram, imports, task, LDF_JUST_LOAD | LDF_SILENT);
+  if (!mod)
+    return;
+  auto *entry = reinterpret_cast<const CHashExport *>(
+      HashFind("_BRANCH_IMPORT", task.hash_table, HTT_EXPORT_SYS_SYM));
+  if (!entry)
+    return;
+  auto target = ExePutS("asm { ORG _BRANCH_IMPORT_BODY _BR_PATCH:: "
+                        "MOV RAX,46 RET }",
+                        nullptr, 0);
+  constexpr uint8_t bytes[]{0xEB, 8, 0xE9, 5, 0, 0xE9, 0, 0, 0, 0};
+  auto *code = reinterpret_cast<const uint8_t *>(entry->val);
+  for (size_t i = 0; i < sizeof(bytes); i++)
+    if (code[i] != bytes[i])
+      return;
+  uint64_t value;
+  if (target.okay && LoadPass2(*mod) && CallHolyC0Checked(code, &value) &&
+      value == 46) {
+    SerialPutS("UnholyOS: short and near branch imports matched\r\n");
+    BootGuestFileReport(*ram, imports);
+  }
 }
 
 static void BootFixedAsmReport(const CDrv &dvd, CTask &task)
@@ -960,7 +1044,8 @@ static void BootFixedAsmReport(const CDrv &dvd, CTask &task)
            sizeof(target));
   auto &bfh = *reinterpret_cast<const CBinFile *>(dest);
   uint64_t result = 0;
-  if (mod && bfh.org == address && entry &&
+  if (mod && bfh.org == address && bfh.patch_table_offset == sizeof(bfh) + 16 &&
+      dest[sizeof(bfh)] == 0xEB && dest[sizeof(bfh) + 1] == 8 && entry &&
       entry->val == address + sizeof(bfh) && body && target == body->val &&
       LoadPass2(*mod) &&
       CallHolyC0Checked(reinterpret_cast<const uint8_t *>(entry->val),
@@ -1182,6 +1267,7 @@ extern "C" void KMainCpp()
     BootCmpReport(*adam_task->cur_dv, *adam_task);
     BootImportReport(*adam_task->cur_dv, *adam_task);
     BootAsmReport(*adam_task->cur_dv, *adam_task);
+    BootAsmBranchReport(*adam_task->cur_dv, *adam_task);
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);
     BootSwitchReport(*adam_task->cur_dv, *adam_task);
     BootISOReport(*adam_task->cur_dv);

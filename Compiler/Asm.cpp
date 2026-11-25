@@ -29,15 +29,16 @@ struct CAsmNum
 {
   uint64_t addend = 0;
   CAsmSymbol *plus = nullptr, *minus = nullptr;
+  bool c_address = false;
 };
 
 struct CAsmUnresolvedRef
 {
   CAsmUnresolvedRef *next;
   CAsmNum num;
-  size_t offset;
+  size_t offset, line_num;
   unsigned width;
-  bool relative, signed_only;
+  bool relative;
 };
 
 struct CAsmArg
@@ -319,6 +320,7 @@ private:
   static bool Apply(CAsmNum &n, const CAsmNum &rhs, int64_t op)
   {
     auto v = rhs.addend;
+    n.c_address ^= rhs.c_address;
     if (op == '+' || op == '-') {
       n.addend += op == '+' ? v : -v;
       return Add(n, rhs.plus, op == '+') && Add(n, rhs.minus, op == '-');
@@ -379,9 +381,10 @@ private:
         return LexExpression(cc, n.addend);
       if (entry && (entry->type & HTT_EXPORT_SYS_SYM) &&
           (entry->type & HTF_IMM) &&
-          !(entry->type & (HTF_IMPORT | HTF_UNRESOLVED)))
+          !(entry->type & (HTF_IMPORT | HTF_UNRESOLVED))) {
         n.addend = reinterpret_cast<const CHashExport *>(entry)->val;
-      else if (!(n.plus = Symbol(cc.cur_str)))
+        n.c_address = true;
+      } else if (!(n.plus = Symbol(cc.cur_str)))
         return false;
       Lex(cc);
     } else
@@ -551,8 +554,7 @@ private:
     }
   }
 
-  void AsmStoreNum(const CAsmNum &n, unsigned width, bool relative = false,
-                    bool signed_only = false)
+  void AsmStoreNum(const CAsmNum &n, unsigned width, bool relative = false)
   {
     if (!relative && Constant(n)) {
       Scalar(n.addend, width);
@@ -564,7 +566,8 @@ private:
       failed = true;
       return;
     }
-    *fix = {fixups, n, size, width, relative, signed_only};
+    *fix = {fixups, n,       size, size_t(cc.lex_include_stk->line_num),
+            width,  relative};
     fixups = fix;
     Scalar(0, width);
   }
@@ -804,12 +807,8 @@ private:
     form.score = ins.opcode_cnt + form.imm_width + bool(form.rm) +
                  bool(form.rex) + form.operand_prefix + form.addr_prefix +
                  bool(ins.flags & IEF_ENDING_ZERO);
-    // A branch target can move until the block's labels and imports are fixed
-    // up.
-    if (form.relative && form.imm_width == 1 && !form.imm->width)
-      form.score += 16;
-    if (aot && form.imm && form.imm->num.plus && form.imm->num.plus->imported &&
-        form.imm_width != (form.relative ? 4U : 8U))
+    if (aot && form.imm && !form.relative && form.imm->num.plus &&
+        form.imm->num.plus->imported && form.imm_width != 8)
       return;
     if (form.score < best.score)
       best = form;
@@ -846,7 +845,7 @@ private:
     if (best.rm && !ModRM(best.group, *best.rm, best.imm_width + ending_zero))
       return false;
     if (best.imm)
-      AsmStoreNum(best.imm->num, best.imm_width, best.relative, best.relative);
+      AsmStoreNum(best.imm->num, best.imm_width, best.relative);
     if (ending_zero)
       Byte(0);
     return !failed;
@@ -923,6 +922,7 @@ private:
   {
     uint64_t value = fix.num.addend;
     int bases = 0;
+    bool c_address = fix.num.c_address;
     auto add = [&](const CAsmSymbol *symbol, int sign) {
       if (!symbol)
         return true;
@@ -945,32 +945,41 @@ private:
       value += sign * external->val;
       if (aot && !(external->sym.hash.type & HTF_IMM))
         bases += sign;
+      else
+        c_address = !c_address;
       return true;
     };
     if (aot && fix.num.plus && fix.num.plus->imported) {
-      if (fix.num.minus || value ||
-          (fix.relative ? fix.width != 4 : fix.width != 8))
+      if (fix.num.minus || value || (!fix.relative && fix.width != 8))
         return false;
-      return AOTRelAdd(*aot,origin+fix.offset,nullptr,fix.num.plus->name,
-                       fix.relative ? IET_REL_I32 : IET_IMM_I64);
+      constexpr uint8_t rel_types[]{IET_REL_I8, IET_REL_I16, IET_REL_I32};
+      auto type = fix.relative ? rel_types[__builtin_ctz(fix.width)]
+                               : uint8_t{IET_IMM_I64};
+      return AOTRelAdd(*aot, origin + fix.offset, nullptr, fix.num.plus->name,
+                       type);
     }
-    if (!add(fix.num.plus,1) || !add(fix.num.minus,-1))
+    if (!add(fix.num.plus, 1) || !add(fix.num.minus, -1))
       return false;
     if (fix.relative) {
       value -= origin + fix.offset + fix.width;
-      bases--;
+      // Only an absolute target needs the image base subtracted.
+      bases = c_address ? -1 : 0;
     }
     if (!aot)
       value += bases * base;
     else if (bases) {
       if (bases != 1 || fix.relative || fix.width < 4 ||
-          !AOTRelAdd(*aot,origin+fix.offset,nullptr,nullptr,IET_ABS_ADDR))
+          !AOTRelAdd(*aot, origin + fix.offset, nullptr, nullptr, IET_ABS_ADDR))
         return false;
     }
-    if (fix.relative || fix.signed_only) {
+    if (fix.relative) {
       unsigned shift = 64 - 8 * fix.width;
-      if (uint64_t(int64_t(value << shift) >> shift) != value)
+      if (uint64_t(int64_t(value << shift) >> shift) != value) {
+        auto *label = fix.num.plus ? fix.num.plus->name : "";
+        const uint64_t args[]{fix.line_num, reinterpret_cast<uintptr_t>(label)};
+        PrintErrCpp("Branch out of range at line:%04d %s\n", 2, args, nullptr);
         return false;
+      }
     }
     MemCpy(dest + fix.offset, &value, fix.width);
     return true;
