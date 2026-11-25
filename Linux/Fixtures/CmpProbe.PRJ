@@ -1,0 +1,20 @@
+#ifaot
+#include "/CmpProbe.HH"
+#endif
+#ifjit
+JitShouldNeverCompile;
+#endif
+
+public I64 CmpProbeResult;
+public I64 CmpProbeSum(I64 n)
+{
+  static I64 calls=0;
+  calls++;
+  if (n<=0)
+    return calls;
+  return CmpProbeSum(n-1)+table[n-1];
+}
+
+CmpProbeResult=CmpProbeSum(3);
+CmpProbeResult+=CmpProbeSum(0);
+"cmp module %d %s\n",CmpProbeResult,"ready";

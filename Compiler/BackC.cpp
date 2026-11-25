@@ -6,7 +6,7 @@ extern "C" uint64_t F64PowerBits(uint64_t base, uint64_t exponent);
 class CCodeOut
 {
 public:
-  explicit CCodeOut(uint8_t *buf = nullptr) : buf(buf)
+  explicit CCodeOut(uint8_t *buf, CAOT *aot) : buf(buf), aot(aot)
   {
   }
 
@@ -21,10 +21,28 @@ public:
     Immediate(bits, 8);
   }
 
-  uintptr_t Address(size_t offset) const
+  void StringAddress(size_t offset)
   {
-    return buf ? reinterpret_cast<uintptr_t>(buf + offset) : 0;
+    if (aot) {
+      Bytes(0x48, 0x8D, 0x05); // LEA RAX,[RIP+disp32]
+      Immediate(offset - (size + 4), 4);
+    } else
+      MoveRAX(buf ? reinterpret_cast<uintptr_t>(buf + offset) : 0);
   }
+
+  void RelAddress(const void *symbol, const char *name = nullptr)
+  {
+    if (name)
+      Bytes(0x48, 0xB8); // MOV RAX,imm64
+    else
+      Bytes(0x48, 0x8D, 0x05); // LEA RAX,[RIP+disp32]
+    if (buf && !AOTRelAdd(*aot, aot->size + size, symbol, name))
+      failed = true;
+    Immediate(0, name ? 8 : 4);
+  }
+
+  bool AOT() const { return aot != nullptr; }
+  bool failed = false;
 
   void Immediate(uint64_t bits, unsigned bytes)
   {
@@ -154,6 +172,7 @@ private:
   }
 
   uint8_t *buf;
+  CAOT *aot;
 };
 
 static uint8_t CmpCondition(CICode op, bool uns)
@@ -233,6 +252,8 @@ static void FltBinary(CCodeOut &out, const CIntermediateCode &node,
     bool pad = !(stack_slots & 1);
     if (pad)
       out.Bytes(0x48, 0x83, 0xEC, 8); // SUB RSP,8
+    if (out.AOT())
+      out.failed = true;
     out.MoveRAX(reinterpret_cast<uintptr_t>(F64PowerBits));
     out.Bytes(0xFF, 0xD0); // CALL RAX
     if (pad)
@@ -361,9 +382,14 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
       out.Bytes(0x50); // PUSH RAX
       arg = push.right;
     }
-    bool indirect = fun->cls.flags & CF_EXTERN;
-    out.MoveRAX(indirect ? reinterpret_cast<uintptr_t>(&fun->exe_addr)
-                         : reinterpret_cast<uintptr_t>(fun->exe_addr));
+    bool indirect = !out.AOT() && (fun->cls.flags & CF_EXTERN);
+    if (out.AOT())
+      out.RelAddress(fun, fun->cls.flags & FF__EXTERN
+                              ? fun->cls.sym.hash.str
+                              : nullptr);
+    else
+      out.MoveRAX(indirect ? reinterpret_cast<uintptr_t>(&fun->exe_addr)
+                           : reinterpret_cast<uintptr_t>(fun->exe_addr));
     out.Bytes(0xFF, indirect ? 0x10 : 0xD0); // CALL [RAX] or CALL RAX
     uint32_t drop = pad + (FunPopsArgs(*fun) ? 0 : slots);
     if (drop)
@@ -389,7 +415,8 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     } else {
       auto address = code[target.left].code;
       ICCompoundAssign(out, node, code[node.right], target.type,
-                       address == IC_IMM_I64 || address == IC_RBP,
+                       address == IC_IMM_I64 || address == IC_DATA_ADDR ||
+                           address == IC_RBP,
                        stack_slots + 1);
     }
     out.Bytes(0x5A); // POP RDX
@@ -397,7 +424,14 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     return true;
   }
   if (op == IC_STR_CONST) {
-    out.MoveRAX(out.Address(node.right));
+    out.StringAddress(node.right);
+    return true;
+  }
+  if (op == IC_DATA_ADDR) {
+    if (out.AOT())
+      out.RelAddress(reinterpret_cast<const void *>(node.data));
+    else
+      out.MoveRAX(node.data);
     return true;
   }
   if (op == IC_IMM_I64 || op == IC_IMM_F64) {
@@ -556,11 +590,11 @@ static bool EmitFunction(CCodeOut &out, CCodeCtrl &coc, uint32_t root,
 }
 
 uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
-                    const CHashFun *fun)
+                    const CHashFun *fun, CAOT *aot, size_t *bytes)
 {
-  CCodeOut size;
+  CCodeOut size(nullptr, aot);
   if (coc.failed || !EmitFunction(size, coc, root, type, fun) ||
-      size.size > INT32_MAX)
+      size.failed || size.size > INT32_MAX)
     return nullptr;
   auto total_size = size.size;
   if (coc.has_misc_data)
@@ -576,8 +610,8 @@ uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
   auto *result = MAlloc(total_size, CurrentTask()->code_heap);
   if (!result)
     return nullptr;
-  CCodeOut out(result);
-  if (!EmitFunction(out, coc, root, type, fun)) {
+  CCodeOut out(result, aot);
+  if (!EmitFunction(out, coc, root, type, fun) || out.failed) {
     Free(result);
     return nullptr;
   }
@@ -588,5 +622,7 @@ uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
         MemCpy(result + node.right, reinterpret_cast<const void *>(node.data),
                node.left);
     }
+  if (bytes)
+    *bytes = total_size;
   return result;
 }

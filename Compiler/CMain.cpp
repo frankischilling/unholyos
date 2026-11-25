@@ -4,6 +4,204 @@
 extern "C" void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
                             const uintptr_t *frame);
 
+extern "C" char *ExtChgCpp(const char *name, const char *ext);
+extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
+extern "C" uint64_t FileWriteCpp(const char *name, const uint8_t *data,
+                                 uint64_t size, uint64_t date, uint64_t attr);
+
+struct CAOTBinBlk
+{
+  CAOTBinBlk *next;
+  const void *symbol;
+  const char *name;
+  size_t rip, size;
+  bool main;
+};
+
+struct CAOTImportExport
+{
+  CAOTImportExport *next;
+  const void *symbol;
+  const char *name;
+  size_t rip;
+};
+
+bool AOTStore(CAOT &aot, const void *symbol, const char *name,
+              const uint8_t *body, size_t size, bool main)
+{
+  // Keep even empty declarations at distinct payload addresses.
+  size_t step = ((size ? size : 1) + 7) & ~size_t{7};
+  if (size > INT32_MAX || step > INT32_MAX - aot.size)
+    return false;
+  auto *block = reinterpret_cast<CAOTBinBlk *>(
+      MAlloc(sizeof(CAOTBinBlk) + size, CurrentTask()->data_heap));
+  if (!block)
+    return false;
+  *block = {nullptr, symbol, name, aot.size, size, main};
+  MemCpy(block + 1, body, size);
+  if (aot.last)
+    aot.last->next = block;
+  else
+    aot.first = block;
+  aot.last = block;
+  aot.size += step;
+  return true;
+}
+
+bool AOTRelAdd(CAOT &aot, size_t rip, const void *symbol, const char *name)
+{
+  auto *ie = reinterpret_cast<CAOTImportExport *>(
+      MAlloc(sizeof(CAOTImportExport), CurrentTask()->data_heap));
+  if (!ie)
+    return false;
+  *ie = {nullptr, symbol, name, rip};
+  if (aot.last_ie)
+    aot.last_ie->next = ie;
+  else
+    aot.first_ie = ie;
+  aot.last_ie = ie;
+  return true;
+}
+
+static bool CmpJoin(CCmpCtrl &cc, CAOT &aot)
+{
+  auto &task = *CurrentTask();
+  cc.aot = &aot;
+  QueIns(cc, *task.last_cc);
+  Lex(cc);
+  bool okay = true;
+  while (okay && cc.token != TK_EOF) {
+    uint8_t *machine;
+    CRawType type;
+    okay = LexStmt2Bin(cc, machine, type) && !cc.jit_exception;
+  }
+  QueRem(cc);
+  return okay;
+}
+
+static void AOTDel(CAOT &aot, CHashTable *table)
+{
+  while (aot.first) {
+    auto *block = aot.first;
+    aot.first = block->next;
+    Free(block);
+  }
+  while (aot.first_ie) {
+    auto *ie = aot.first_ie;
+    aot.first_ie = ie->next;
+    Free(ie);
+  }
+  if (table) {
+    for (int64_t i = 0; i <= table->mask; i++)
+      for (auto *entry = table->body[i]; entry; entry = entry->next)
+        if (entry->type & HTT_FUN) {
+          auto &fun = *reinterpret_cast<CHashFun *>(entry);
+          if (!(fun.cls.flags & FF__EXTERN))
+            Free(fun.exe_addr);
+          for (auto *member = fun.cls.member_lst_and_root; member;
+               member = member->next)
+            if (member->flags & MLF_STATIC)
+              Free(member->static_data);
+        }
+  }
+  HashTableDelCpp(table);
+}
+
+static uint8_t *PatchRecord(uint8_t *p, uint8_t type, uint32_t rip,
+                            const char *name)
+{
+  *p++ = type;
+  MemCpy(p, &rip, sizeof(rip));
+  p += sizeof(rip);
+  if (!name)
+    name = "";
+  size_t len = StrLen(name) + 1;
+  MemCpy(p, name, len);
+  return p + len;
+}
+
+static CBinFile *AOTBinMake(const CAOT &aot)
+{
+  size_t patches = 1;
+  for (auto *b = aot.first; b; b = b->next) {
+    if (b->name)
+      patches += 6 + StrLen(b->name);
+    if (b->main)
+      patches += 6;
+  }
+  for (auto *ie = aot.first_ie; ie; ie = ie->next)
+    if (ie->name)
+      patches += 6 + StrLen(ie->name);
+
+  size_t patch_offset = sizeof(CBinFile) + aot.size;
+  size_t size = (patch_offset + patches + 15) & ~size_t{15};
+  auto *bfh = reinterpret_cast<CBinFile *>(
+      CAlloc(size, CurrentTask()->data_heap));
+  if (!bfh)
+    return nullptr;
+  *bfh = {0x1EEB, 3, 0, BIN_SIGNATURE_VAL, INVALID_PTR, patch_offset, size};
+
+  auto *base = reinterpret_cast<uint8_t *>(bfh + 1);
+  auto *patch = base + aot.size;
+  for (auto *b = aot.first; b; b = b->next) {
+    MemCpy(base + b->rip, b + 1, b->size);
+    if (b->name)
+      patch = PatchRecord(patch, IET_REL32_EXPORT, b->rip, b->name);
+    if (b->main)
+      patch = PatchRecord(patch, IET_MAIN, b->rip, nullptr);
+  }
+  for (auto *ie = aot.first_ie; ie; ie = ie->next) {
+    if (ie->name) {
+      patch = PatchRecord(patch, IET_IMM_I64, ie->rip, ie->name);
+    } else {
+      auto *target = aot.first;
+      while (target && target->symbol != ie->symbol)
+        target = target->next;
+      if (!target) {
+        Free(bfh);
+        return nullptr;
+      }
+      // A RIP-relative displacement stays valid when Load moves the image.
+      uint32_t disp = target->rip - (ie->rip + sizeof(uint32_t));
+      MemCpy(base + ie->rip, &disp, sizeof(disp));
+    }
+  }
+  *patch = IET_END;
+  return bfh;
+}
+
+extern "C" int64_t CmpCpp(const char *filename, const char *map_name,
+                          const char *out_name, uint8_t mapfile_drv_let)
+{
+  auto *path = filename ? ExtDftCpp(filename, "PRJ.Z") : nullptr;
+  auto *out = out_name ? ExtDftCpp(out_name, "BIN.Z")
+                       : path ? ExtChgCpp(path, "BIN.Z") : nullptr;
+  auto *table = path && out ? CmpAsmHashNew() : nullptr;
+  const uint64_t arg = reinterpret_cast<uintptr_t>(path);
+  auto *source = table ? MStrPrintCpp("#include \"%s\"", 1, &arg) : nullptr;
+  CAOT aot;
+  CBinFile *bfh = nullptr;
+  if (source) {
+    CCmpCtrl cc;
+    CLexFile file;
+    LexSourceInit(cc, file, source, CCF_AOT_COMPILE, path, table);
+    if (CmpJoin(cc, aot))
+      bfh = AOTBinMake(aot);
+    LexSourceDel(cc);
+  }
+  uint64_t error =
+      !bfh || (map_name && !MapFileWrite(*table, map_name, mapfile_drv_let)) ||
+      !FileWriteCpp(out, reinterpret_cast<uint8_t *>(bfh), bfh->file_size, 0, 0);
+  uint64_t report[]{error, aot.warning_cnt, aot.size, bfh ? bfh->file_size : 0};
+  PrintCpp("Errs:%d Warns:%d Code:%X Size:%X\n", 4, report);
+  Free(bfh);
+  AOTDel(aot, table);
+  Free(source);
+  Free(out);
+  Free(path);
+  return error;
+}
+
 CExeResult ExePutS(const char *src, const char *filename, int64_t flags,
                    const CLexHashTableContext *htc)
 {

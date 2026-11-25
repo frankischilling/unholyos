@@ -199,6 +199,7 @@ enum CICode : uint8_t
   IC_IMM_F64,
   IC_STR_CONST,
   IC_RBP = 0x13,
+  IC_DATA_ADDR = 0x14,
   IC_TO_I64 = 0x1B,
   IC_HOLYC_TYPECAST = 0x1F,
   IC_DEREF = 0x24,
@@ -297,10 +298,26 @@ private:
   uint32_t used = 0, capacity = 0;
 };
 
+struct CAOTBinBlk;
+struct CAOTImportExport;
+
+struct CAOT
+{
+  CAOTBinBlk *first = nullptr, *last = nullptr;
+  CAOTImportExport *first_ie = nullptr, *last_ie = nullptr;
+  size_t size = 0, warning_cnt = 0;
+};
+
+bool MapFileWrite(const CHashTable &table, const char *name, uint8_t drv_let);
+bool AOTStore(CAOT &aot, const void *symbol, const char *name,
+              const uint8_t *body, size_t size, bool main = false);
+bool AOTRelAdd(CAOT &aot, size_t rip, const void *symbol, const char *name);
+
 // The returned code belongs to the current task's executable heap.
 // Parsing starts at cc.token and leaves the first token after the expression.
 uint8_t *LexExpression2Bin(CCmpCtrl &cc, CRawType &type);
-uint8_t *LexStatementExpression2Bin(CCmpCtrl &cc, CRawType &type);
+uint8_t *LexStatementExpression2Bin(CCmpCtrl &cc, CRawType &type,
+                                    CAOT *aot = nullptr, size_t *size = nullptr);
 uint8_t *LexTypedExpression2Bin(CCmpCtrl &cc, CRawType type,
                                 bool strings = false);
 uint32_t PrsExpression(CCmpCtrl &cc, CCodeCtrl &coc);
@@ -309,7 +326,8 @@ bool OptBranch(CCodeCtrl &coc, uint32_t value, CICode branch, uint32_t target,
                unsigned depth = 0);
 bool LexExpression(CCmpCtrl &cc, uint64_t &result);
 uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
-                    const CHashFun *fun = nullptr);
+                    const CHashFun *fun = nullptr, CAOT *aot = nullptr,
+                    size_t *size = nullptr);
 bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type);
 bool PrsStreamBlk(CCmpCtrl &cc);
 bool CmpCall(CCmpCtrl &cc, const uint8_t *machine, uint64_t &result);

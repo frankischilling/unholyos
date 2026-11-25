@@ -131,6 +131,35 @@ With matching QEMU 9.2.0 PC and `qemu64` settings and 512 MiB of RAM, both guest
 
 Debugger stops in both guests matched the boot CPU fields, initial FPU control word, and free code block after `SET_GS_BASE`. At `KMain` entry, the Adam record, heap accounting, FS base, and stack pointer matched. The random seed comes from each boot's timestamp counter. After block-pool initialization, the sampled heap and pool records matched at 512 MiB, 3 GiB, and 4.5 GiB. Injected E820 records matched the reference on range splitting, overlap rejection, and empty-tail removal.
 
+## Compiling a HolyC module in the guest
+
+`Cmp` reads HolyC source or a `.PRJ` file and writes a relocatable TOSB
+module. With a writable RAM drive mounted as `B:`:
+
+```c
+Cmp("::/CmpProbe","B:/CmpOutput","B:/CmpOutput.BIN.Z",':');
+```
+
+The boot test uses the source files from the startup-test DVD. It checks
+that the compiler writes the requested DolDoc source map and leaves the
+caller's symbol table alone. An invalid source compile returns one error
+and preserves the previous output file. Loading the valid module runs
+its top-level statements and reports `cmp module 32 ready`. The module
+uses recursion, static storage, a constant array initializer, and an
+import of the guest's `Print` function.
+
+The tests also compile and load Terry A. Davis's unmodified
+`Demo/Print.HC`. Its 230 output bytes match the original guest's output.
+With QEMU 9.2.0 PC, `qemu64`, and 512 MiB, pinned TempleOS's `Load`
+executed the `CmpProbe` module produced by UnholyOS and printed the same
+`cmp module 32 ready` line. The GCC boot suite saves that module as
+`CmpOutput.BIN.Z` under `BUILD`.
+
+The current AOT path covers the implemented HolyC statements and calls
+used in these tests. General source import declarations, inline assembly,
+relocatable initializers, debug line tables, and recompiling the kernel
+are pending.
+
 ## RedSea descriptor verification
 
 The source layout and coding rules are recorded in [SourceLayout.md](SourceLayout.md).
@@ -191,4 +220,4 @@ This verifies the clean boot to the current kernel; the desktop is pending.
 | Graphics | `Kernel/Display.HC`, `Adam/Gr/GrScrn.HC` | BIOS VGA mode and a kernel entry line |
 | Input and sound | `Kernel/KeyDev.HC`, `Adam/AMouse.HC`, `Adam/ASnd.HC`, `Adam/Snd` | Speaker reset at entry. Input and sound APIs are pending. |
 | Desktop and system tools | `StartOS.HC`, `Adam/MakeAdam.HC`, `Adam/WinMgr.HC`, `Adam/DolDoc`, `Apps` | Pending |
-| HolyC | `Compiler/CMain.HC`, `Lex.HC`, `Prs*.HC`, `Back*.HC`, `Kernel/KLoad.HC` | Source execution with `ExeFile` and `ExePutS`, compile-time streams, plain and DolDoc tokenization, scalar expressions and functions, typed pointers, packed classes, unions, fixed arrays and their initializers, print calls, and relocatable TOSB loading and linking. Full language and ahead-of-time compilation remain pending. |
+| HolyC | `Compiler/CMain.HC`, `Lex.HC`, `Prs*.HC`, `Back*.HC`, `Kernel/KLoad.HC` | Source execution with `ExeFile` and `ExePutS`, compile-time streams, plain and DolDoc tokenization, scalar expressions and functions, typed pointers, packed classes, unions, fixed arrays and their initializers, print calls, and TOSB module generation and loading for supported source. Full language support and native kernel compilation remain pending. |

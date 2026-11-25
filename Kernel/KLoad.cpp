@@ -1,22 +1,5 @@
 #include "KernelB.hpp"
 
-enum : uint8_t
-{
-  IET_END = 0,
-  IET_REL_I0 = 2,
-  IET_IMM_I64 = 11,
-  IET_REL32_EXPORT = 16,
-  IET_IMM32_EXPORT = 17,
-  IET_REL64_EXPORT = 18,
-  IET_IMM64_EXPORT = 19,
-  IET_ABS_ADDR = 20,
-  IET_CODE_HEAP = 21,
-  IET_ZEROED_CODE_HEAP = 22,
-  IET_DATA_HEAP = 23,
-  IET_ZEROED_DATA_HEAP = 24,
-  IET_MAIN = 25,
-};
-
 struct CLoadImport
 {
   CHashImport entry;
@@ -65,7 +48,7 @@ void SysTryHC(), SysUntryHC(), ThrowHC(), CallerHC(), PutExceptHC();
 void StrPrintJoinHC(), StrPrintHC(), CatPrintHC(), MStrPrintHC(), PrintHC();
 void PrintErrHC(), PrintWarnHC(), PutCharsHC(), IsRawHC(), DefineLstLoadHC();
 void PutSHC();
-void ExePutSHC(), ExeFileHC(), StreamPrintHC(), StreamExePrintHC();
+void CmpHC(), ExePutSHC(), ExeFileHC(), StreamPrintHC(), StreamExePrintHC();
 void DefineSubHC(), DefineMatchHC();
 void HashValHC(), HashDelHC(), HashTableDelHC(), HashSrcFileSetHC();
 void _HASH_REM_DEL(), SysSymImportsResolveHC();
@@ -526,6 +509,7 @@ bool LoadKernel(CTask &task)
       {"PutChars", reinterpret_cast<uintptr_t>(PutCharsHC)},
       {"PutS", reinterpret_cast<uintptr_t>(PutSHC)},
       {"ExePutS", reinterpret_cast<uintptr_t>(ExePutSHC)},
+      {"Cmp", reinterpret_cast<uintptr_t>(CmpHC)},
       {"ExeFile", reinterpret_cast<uintptr_t>(ExeFileHC)},
       {"StreamPrint", reinterpret_cast<uintptr_t>(StreamPrintHC)},
       {"StreamExePrint", reinterpret_cast<uintptr_t>(StreamExePrintHC)},

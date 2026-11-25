@@ -40,6 +40,17 @@ The `PRS1B_CLASS` case in `Compiler/PrsVar.HC` assigns consecutive member offset
 
 `RedSeaISO9660` passes the address of the entire `root_dir_record` to `FillU32Palindrome`, so the root-cluster palindrome starts at byte 152. The writer and its media checks must use that location. The reference allocates and writes a full 2,048-byte sector with `CAlloc(DVD_BLK_SIZE)`, leaving four zero bytes after the descriptor. These details follow from source review; boot and compatibility evidence belongs in [Boot.md](Boot.md).
 
+## Ahead-of-time HolyC
+
+`CmpJoin` and `Cmp` in `Compiler/CMain.cpp` follow the reference's
+isolated compilation and TOSB patch-table stages. The current compiler
+uses RIP-relative references within the module. It emits
+`IET_REL32_EXPORT` for public definitions, `IET_IMM_I64` for typed
+runtime calls, and `IET_MAIN` for top-level statements. The existing
+loader consumes those records. The map writer follows
+`MapFileWrite` in `Compiler/CHash.HC` and emits DolDoc source links.
+It has no binary debug line tables yet.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains guest verification routines for boot records, file access, compiler behavior, and runtime modules. The reference `Kernel/KMain.HC` concentrates on initialization and startup. Those probes remain a structural difference and should move into a separate verification component as the runtime startup path develops.

@@ -60,6 +60,7 @@ struct CTaskSettings;
 struct CMathODE;
 struct CJob;
 struct CCmpCtrl;
+struct CAOT;
 struct CHashFun;
 struct CHeapCtrl;
 
@@ -155,6 +156,23 @@ constexpr size_t BLK_SIZE = 512, DVD_BLK_SIZE = 2048;
 constexpr size_t BIN_HEADER_SIZE = 32;
 constexpr uint32_t BIN_SIGNATURE_VAL = 0x42534F54; // TOSB
 constexpr uint64_t INVALID_PTR = INT64_MAX;
+
+enum : uint8_t
+{
+  IET_END = 0,
+  IET_REL_I0 = 2,
+  IET_IMM_I64 = 11,
+  IET_REL32_EXPORT = 16,
+  IET_IMM32_EXPORT = 17,
+  IET_REL64_EXPORT = 18,
+  IET_IMM64_EXPORT = 19,
+  IET_ABS_ADDR = 20,
+  IET_CODE_HEAP = 21,
+  IET_ZEROED_CODE_HEAP = 22,
+  IET_DATA_HEAP = 23,
+  IET_ZEROED_DATA_HEAP = 24,
+  IET_MAIN = 25,
+};
 
 struct CBinFile
 {
@@ -816,7 +834,7 @@ struct CCmpCtrl
   const char *cur_buf_ptr;
   CLexFile *lex_include_stk, *lex_prs_stk, *fun_lex_file;
   CStreamBlk *next_stream_blk, *last_stream_blk;
-  void *aot;
+  CAOT *aot;
   int64_t pass, opts;
   int64_t jit_exception;
 };

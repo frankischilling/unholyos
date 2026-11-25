@@ -931,22 +931,22 @@ static void VerifyVGA(const fs::path &path)
         "The VGA screenshot is blank or incomplete");
 }
 
-static fs::path CaptureGuestISO(CMonitor &vm, const fs::path &dir,
+static fs::path CaptureGuestFile(CMonitor &vm, const fs::path &dir,
                                  const std::string &output, const char *name)
 {
-  auto prefix = std::string("UnholyOS: guest ISO /") + name + ", address ";
+  auto prefix = std::string("UnholyOS: guest file /") + name + ", address ";
   size_t address = output.find(prefix);
-  Check(address != std::string::npos, "Guest ISO file was not created");
+  Check(address != std::string::npos, "Guest file was not created");
   address += prefix.size();
   size_t size_pos = output.find(", size ", address);
-  Check(size_pos != std::string::npos, "Missing guest ISO extent");
+  Check(size_pos != std::string::npos, "Missing guest file extent");
   auto addr = std::stoull(output.substr(address, size_pos - address), nullptr, 16);
   auto size = std::stoull(output.substr(size_pos + 7), nullptr, 16);
   auto image = dir / name;
   vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
              std::to_string(addr) + R"(,"size":)" + std::to_string(size) +
              R"(,"filename":")" + image.string() + R"("}})");
-  Check(fs::file_size(image) == size, "QEMU saved an incomplete ISO");
+  Check(fs::file_size(image) == size, "QEMU saved an incomplete guest file");
   return image;
 }
 
@@ -1064,11 +1064,11 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
                            const std::string &output)
 {
   CheckProgramOutput(output, "/RedSeaISOProbe.HC", "ISO probe 1 1 0 0 0\n", '1');
-  auto image = CaptureGuestISO(vm, dir, output, "GuestBuild.ISO.C");
+  auto image = CaptureGuestFile(vm, dir, output, "GuestBuild.ISO.C");
   auto media = VerifyMedia(image, kernel);
   auto original = VerifyMedia(source, kernel);
   VerifyCopiedTree(FileRead(source), original.root, FileRead(image), media.root);
-  VerifyGuestDataISO(CaptureGuestISO(vm, dir, output, "GuestData.ISO.C"));
+  VerifyGuestDataISO(CaptureGuestFile(vm, dir, output, "GuestData.ISO.C"));
   if (std::string_view(memory) == "512") {
     auto reboot = dir / "reboot";
     fs::create_directory(reboot);
@@ -1134,13 +1134,13 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                         "0x6ebe7d79f6232350, checks "
                         "0x000000000000000f") != std::string::npos,
             "The native HolyC function results or stack ABI differed");
-      CheckProgramOutput(
-          output, "/Print.HC",
+      constexpr std::string_view print_output =
           "123.45679M\n12.345000K\n123456.79K\n12.345000K\n\n"
           "With the ',' flag:\n123,456.8K\n 12.345,0K\n\n"
           "Floating Point:\n1.2345678900000m\n12.345000000000K\n"
           "        1234.57\xe6\n 12345000000.00\xe6\n\n"
-          "xxxxxxxxxxxxxxxxxxxxxxxxx\nyyyyyyyyyyyyyyyyyyyyyyyyy\nzzzz\n\n", '1');
+          "xxxxxxxxxxxxxxxxxxxxxxxxx\nyyyyyyyyyyyyyyyyyyyyyyyyy\nzzzz\n\n";
+      CheckProgramOutput(output, "/Print.HC", print_output, '1');
       CheckProgramOutput(output, "/PrintSourceProbe.HC",
                          "join ab 1 2  -2.50\nparen 7 kept %\nraw B\n"
                          "100% raw\norder 21\n");
@@ -1230,6 +1230,24 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                     std::string::npos &&
                 output.find("RAW-LOCATION.HC,0027\n") != std::string::npos,
             "The native HolyC compiler runtime probe did not pass all checks");
+      auto isolated = output.find("UnholyOS: AOT symbols isolated");
+      Check(output.find("cmp compile 0\n") != std::string::npos &&
+                output.find("cmp reject 1\n") != std::string::npos &&
+                output.find("cmp print 0\n") != std::string::npos &&
+                isolated != std::string::npos &&
+                output.find("UnholyOS: AOT source map") != std::string::npos &&
+                output.find("$LK,\"CmpProbeSum\",A=\"FL:::/CmpProbe.PRJ.Z,") !=
+                    std::string::npos &&
+                output.find("cmp module 32 ready\n") != std::string::npos &&
+                output.find("cmp module 32 ready\n") > isolated &&
+                output.find("UnholyOS: AOT result 0x0000000000000020") !=
+                    std::string::npos,
+            "Guest Cmp failed to build or load the HolyC module");
+      CheckProgramOutput(output, "/CmpPrint.BIN.Z", print_output, '1');
+      if (std::string_view(memory) == "512")
+        fs::copy_file(CaptureGuestFile(vm, dir, output, "CmpOutput.BIN.Z"),
+                      iso.parent_path() / "CmpOutput.BIN.Z",
+                      fs::copy_options::overwrite_existing);
       VerifyGuestISO(qemu, vm, dir, iso, kernel, memory, output);
       if (std::string_view(memory) == "4608") {
         std::smatch address;
