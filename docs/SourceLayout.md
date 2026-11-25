@@ -51,6 +51,14 @@ loader consumes those records. The map writer follows
 `MapFileWrite` in `Compiler/CHash.HC` and emits DolDoc source links.
 It has no binary debug line tables yet.
 
+`Compiler/PrsStmt.cpp` follows `PrsFunJoin` and `PrsGlblVarLst` for
+typed declarations. The expression parser and back end retain the
+declared types at call and data access sites. The AOT writer uses
+`IET_IMM_I64` for `import` and `_import` fixups. A forward JIT call
+reads the function address from its declaration, and the later
+definition updates that slot. `Compiler/CExcept.cpp` and its assembly
+adapter implement the reference's `UndefinedExtern` path.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains guest verification routines for boot records, file access, compiler behavior, and runtime modules. The reference `Kernel/KMain.HC` concentrates on initialization and startup. Those probes remain a structural difference and should move into a separate verification component as the runtime startup path develops.

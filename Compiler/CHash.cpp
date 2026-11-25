@@ -16,7 +16,7 @@ bool MapFileWrite(const CHashTable &table, const char *name, uint8_t drv_let)
   bool okay = true;
   for (int64_t i = 0; okay && i <= table.mask; ++i) {
     for (auto *entry = table.body[i]; okay && entry; entry = entry->next) {
-      if (!(entry->type & HTG_SRC_SYM) || (entry->type & HTF_PRIVATE))
+      if (!(entry->type & HTG_SRC_SYM) || (entry->type & (HTF_PRIVATE | HTF_IMPORT)))
         continue;
       const auto *sym = reinterpret_cast<const CHashSrcSym *>(entry);
       if (!sym->src_link)
