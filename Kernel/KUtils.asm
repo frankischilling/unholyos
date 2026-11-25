@@ -13,7 +13,7 @@ GLOBAL FileWriteHC,BlkDevNextFreeSlotHC,BlkDevAddHC,Let2DrvHC,BlkReadHC,BlkWrite
 GLOBAL RedSeaISOHC
 GLOBAL SysUntryHC,PutExceptHC
 GLOBAL StrPrintJoinHC,StrPrintHC,CatPrintHC,MStrPrintHC,PrintHC,PrintErrHC,PrintWarnHC
-GLOBAL PutSHC
+GLOBAL PutSHC,PutHexHC
 GLOBAL ExePutSHC,ExeFileHC,StreamPrintHC,StreamExePrintHC
 GLOBAL PutCharsHC,IsRawHC,DefineLstLoadHC,DefineSubHC,DefineMatchHC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
@@ -35,7 +35,7 @@ EXTERN SysUntryCpp,PutExceptCpp
 EXTERN StrPrintJoin,CatPrintCpp,MStrPrintCpp,PrintCpp,PrintErrCpp,PrintWarnCpp
 GLOBAL CmpHC
 EXTERN CmpCpp,ExePutSCpp,ExeFileCpp,StreamPrintCpp,StreamExePrintCpp
-EXTERN PutCharsCpp,PutS,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineMatchCpp
+EXTERN PutCharsCpp,PutS,PutHexCpp,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineMatchCpp
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp
 EXTERN RawCpp,DbgModeCpp,IsDbgModeCpp,PutFileLinkCpp,PutSrcLinkCpp,FixSetCpp,AdamErrCpp
@@ -167,6 +167,7 @@ HOLYC_PRINT MStrPrintHC,MStrPrintCpp,1
 HOLYC_PRINT PrintHC,PrintCpp,1
 HOLYC_PRINT PrintErrHC,PrintErrCpp,1,1
 HOLYC_PRINT PrintWarnHC,PrintWarnCpp,1,1
+HOLYC_CPP PutHexHC,PutHexCpp,2
 HOLYC_CPP PutCharsHC,PutCharsCpp,1
 HOLYC_CPP PutSHC,PutS,1
 HOLYC_CPP ExePutSHC,ExePutSCpp,4

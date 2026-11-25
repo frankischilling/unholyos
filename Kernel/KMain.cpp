@@ -793,6 +793,51 @@ static void BootImportReport(const CDrv &dvd, CTask &task)
   BootGuestFileReport(*ram, "/ImportProvider.BIN.Z");
 }
 
+static void BootAsmReport(const CDrv &dvd, CTask &task)
+{
+  auto *ram = MountedDrive('B');
+  if (!ram || !BootFileProgramReport(dvd, "/AsmBuild.HC").okay)
+    return;
+  BootFileProgramReport(dvd, "/DivByHand.HC");
+  BootFileProgramReport(dvd, "/AsmHelloWorld.HC");
+  auto rejected = ExePutS("asm { _ASM_REJECTED:: LOOP @@0 }", nullptr, 0);
+  if (!rejected.okay &&
+      !HashFind("_ASM_REJECTED", task.hash_table, HTT_EXPORT_SYS_SYM))
+    SerialPutS("UnholyOS: asm rejected unresolved local\r\n");
+  const char *paths[]{"/AsmProbe.BIN.Z", "/DivByHand.BIN.Z"};
+  for (const char *path : paths) {
+    SerialPutS("UnholyOS: executing ");
+    SerialPutS(path);
+    SerialPutS("\r\n");
+    auto *module = Load(*ram, path, task, LDF_JUST_LOAD);
+    if (!module || !LoadPass2(*module))
+      return;
+    SerialPutS("UnholyOS: finished ");
+    SerialPutS(path);
+    SerialPutS(", checks 0x0000000000000001\r\n");
+    BootGuestFileReport(*ram, path);
+  }
+
+  constexpr uint8_t mode16[]{0xB8,0x34,0x12,0x66,0xBA,0xEF,0xCD,0xAB,0x89,
+                            0xCD,0x10,0xC3};
+  constexpr uint8_t mode32[]{0x66,0xB8,0x78,0x56,0xBA,0x78,0x56,0x34,0x12,0xC3};
+  auto *a = reinterpret_cast<const CHashExport *>(
+      HashFind("_ASM_MODE16", task.hash_table, HTT_EXPORT_SYS_SYM));
+  auto *b = reinterpret_cast<const CHashExport *>(
+      HashFind("_ASM_MODE32", task.hash_table, HTT_EXPORT_SYS_SYM));
+  auto *c = reinterpret_cast<const CHashExport *>(
+      HashFind("_ASM_WORK", task.hash_table, HTT_EXPORT_SYS_SYM));
+  if (!a || !b || !c || (c->val & 15))
+    return;
+  for (size_t i = 0; i < sizeof(mode16); ++i)
+    if (reinterpret_cast<const uint8_t *>(a->val)[i] != mode16[i])
+      return;
+  for (size_t i = 0; i < sizeof(mode32); ++i)
+    if (reinterpret_cast<const uint8_t *>(b->val)[i] != mode32[i])
+      return;
+  SerialPutS("UnholyOS: asm opcode modes and alignment matched\r\n");
+}
+
 static void BootModuleReport(const CDrv &dv, CTask &task)
 {
   auto *caller = Load(dv, "/LoadCaller.BIN", task, LDF_JUST_LOAD);
@@ -977,6 +1022,7 @@ extern "C" void KMainCpp()
                     "FileWriteProbeResult", "UnholyOS: write probe ");
     BootCmpReport(*adam_task->cur_dv, *adam_task);
     BootImportReport(*adam_task->cur_dv, *adam_task);
+    BootAsmReport(*adam_task->cur_dv, *adam_task);
     BootISOReport(*adam_task->cur_dv);
   } else {
     SerialPutS("UnholyOS: Could not mount the boot DVD\r\n");

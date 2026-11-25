@@ -674,7 +674,7 @@ constexpr uint64_t late_pages = 19, late_alloced = late_pages * 512;
 constexpr uint64_t late_used = 0x2828;
 constexpr uint64_t fault_pages = 4, fault_alloced = fault_pages * 512;
 constexpr uint64_t fault_used = 0x7E8;
-constexpr uint64_t symbol_pages = 16, symbol_alloced = symbol_pages * 512;
+constexpr uint64_t symbol_pages = 32, symbol_alloced = symbol_pages * 512;
 constexpr uint64_t drive_pages = 7 + 9, drive_alloced = drive_pages * 512;
 constexpr uint64_t drive_used = drive_alloced - 2 * 24 + 40 + 40 + 32 + 24;
 
@@ -682,7 +682,7 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
                                     uint64_t owner)
 {
   uint64_t used = 0, count = 0;
-  bool kernel = false, hash_del = false, hash_src = false;
+  bool kernel = false, hash_del = false, hash_src = false, put_str = false;
   for (uint64_t i = 0; i < 1024; i += 64) {
     auto buckets = ReadPhysical<64>(vm, table_body + i * 8);
     for (size_t j = 0; j < buckets.size(); j++) {
@@ -721,12 +721,13 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
         kernel |= module && str == "/Kernel/Kernel";
         hash_del |= !module && str == "HashDel";
         hash_src |= !module && str == "HashSrcFileSet";
+        put_str |= !module && str == "PUT_STR";
         used += entry[1] + name[1];
         addr = entry[2];
       }
     }
   }
-  Check(kernel && hash_del && hash_src, "Missing boot symbols");
+  Check(kernel && hash_del && hash_src && put_str, "Missing boot symbols");
   return used;
 }
 
@@ -811,13 +812,14 @@ static uint64_t VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
         "Invalid code block pool");
   if (hc_block) {
     uint64_t data_hc = hc_block + 0x28;
-    uint64_t last_chunk = small_chunk - late_alloced - symbol_alloced;
+    uint64_t last_chunk = small_chunk - late_alloced - symbol_alloced -
+                          drive_alloced;
     Check(ReadPhysical<12>(vm, data_hc) ==
               std::array<uint64_t, 12>{
                   pool, 0x56536348, 0,
                   0x2000 + late_alloced + symbol_alloced + drive_alloced,
                   range_bytes + late_used + symbol_used + drive_used, adam,
-                  small_chunk, last_chunk - drive_alloced, last_chunk,
+                  small_chunk, last_chunk, last_chunk,
                   last_chunk + 0x18, data_hc + 0x48, data_hc + 0x48},
           "Invalid Adam data heap");
   }
@@ -913,7 +915,10 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
         "Invalid Adam heap state");
   uint64_t range_heap = hc_block ? hc_block + 0x28 : adam_hc;
   uint64_t cached = ReadPhysical<1>(vm, range_heap + 0x98)[0];
-  Check(!cached, "The boot symbol names did not reuse the 56-byte heap slot");
+  if (cached)
+    Check(!(cached & 7) &&
+              ReadPhysical<2>(vm, cached) == std::array<uint64_t, 2>{0, 56},
+          "Invalid cached 56-byte heap slot");
 }
 
 static void VerifyVGA(const fs::path &path)
@@ -1269,6 +1274,25 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          "native extern 15 34 49\nnative extern date 1\n", '1');
       if (std::string_view(memory) == "512")
         for (auto *name : {"ImportCaller.BIN.Z", "ImportProvider.BIN.Z"})
+          fs::copy_file(CaptureGuestFile(vm, dir, output, name),
+                        iso.parent_path() / name,
+                        fs::copy_options::overwrite_existing);
+      Check(output.find("asm build 0 0\n") != std::string::npos &&
+                output.find("UnholyOS: asm rejected unresolved local") !=
+                    std::string::npos &&
+                output.find("UnholyOS: asm opcode modes and alignment matched") !=
+                    std::string::npos,
+            "Guest assembly build, label cleanup, or opcode check failed");
+      CheckProgramOutput(output, "/DivByHand.HC", "123456/10=12345\n", '1');
+      CheckProgramOutput(output, "/AsmHelloWorld.HC",
+                         "0A Hello World\n09 Hello World\n08 Hello World\n"
+                         "07 Hello World\n06 Hello World\n05 Hello World\n"
+                         "04 Hello World\n03 Hello World\n02 Hello World\n"
+                         "01 Hello World\n", '1');
+      CheckProgramOutput(output, "/DivByHand.BIN.Z", "123456/10=12345\n", '1');
+      CheckProgramOutput(output, "/AsmProbe.BIN.Z", "asm import\nasm result 42\n", '1');
+      if (std::string_view(memory) == "512")
+        for (auto *name : {"AsmProbe.BIN.Z", "DivByHand.BIN.Z"})
           fs::copy_file(CaptureGuestFile(vm, dir, output, name),
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);

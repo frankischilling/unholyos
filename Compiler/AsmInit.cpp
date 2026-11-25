@@ -28,8 +28,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     } args[4];
   } headers[]{
       {"Print", void_type, FF_DOT_DOT_DOT, {{"fmt", string_type}}},
+      {"PutHex", void_type, FF_RET1, {{"num", u64_type}, {"width", i64_type}}},
       {"PutChars", void_type, FF_RET1, {{"ch", u64_type}}},
       {"PutS", void_type, FF_RET1, {{"st", string_type}}},
+      {"Call", i64_type, FF_RET1, {{"addr", u64_type}}},
       {"StreamPrint", void_type, FF_DOT_DOT_DOT, {{"fmt", string_type}}},
       {"StreamExePrint", i64_type, FF_DOT_DOT_DOT, {{"fmt", string_type}}},
       {"RedSeaISO",
@@ -196,6 +198,24 @@ static bool CmpFillHash(CHashTable *table)
       if (!CmpIntMembers(table, *cls))
         return false;
     }
+  }
+  constexpr struct {
+    const char *name;
+    uint64_t value;
+  } constants[]{{"SF_RBP",0},{"SF_RIP",8},{"SF_ARG1",16},{"SF_ARG2",24},
+                {"SF_ARG3",32},{"SF_ARG4",40},{"SF_ARG5",48},{"SF_ARG6",56},
+                {"SF_ARG7",64},{"SF_ARG8",72},{"CH_SPACE",' '}};
+  for (const auto &v : constants) {
+    auto *entry = reinterpret_cast<CHashExport *>(CAlloc(sizeof(CHashExport), heap));
+    auto *name = entry ? StrNew(v.name, heap) : nullptr;
+    if (!name) {
+      Free(entry);
+      return false;
+    }
+    entry->sym.hash.str = name;
+    entry->sym.hash.type = HTT_EXPORT_SYS_SYM | HTF_IMM;
+    entry->val = v.value;
+    HashAdd(&entry->sym.hash, table);
   }
   return CmpRuntimeHeaders(table);
 }

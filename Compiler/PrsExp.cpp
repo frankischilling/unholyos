@@ -511,6 +511,17 @@ private:
         if (keyword == KW_SIZEOF || keyword == KW_OFFSET)
           return SizeOf(keyword == KW_OFFSET);
       }
+      if (hash->type & HTT_EXPORT_SYS_SYM) {
+        auto *sym = reinterpret_cast<const CHashExport *>(hash);
+        if (hash->type & (HTF_IMPORT | HTF_UNRESOLVED))
+          return NO_IC;
+        bool reloc = cc.aot && (cc.flags & CCF_AOT_COMPILE) &&
+                     !(hash->type & HTF_IMM);
+        Lex(cc);
+        return Add({reloc ? reinterpret_cast<uintptr_t>(sym) : sym->val,
+                    NO_IC, NO_IC, reloc ? IC_ASM_ADDR : IC_IMM_I64,
+                    RT_I64, false, false, reloc});
+      }
       if (hash->type & HTT_FUN)
         return PrsFunCall(*reinterpret_cast<CHashFun *>(hash), depth);
       if (hash->type & HTT_GLBL_VAR) {

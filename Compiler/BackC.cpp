@@ -386,9 +386,13 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     if (out.AOT()) {
       const auto &sym = fun->cls.sym;
       const char *name = sym.import_name;
-      if (!name && (fun->cls.flags & FF__EXTERN))
-        name = sym.hash.str;
-      out.RelAddress(fun, name);
+      if (fun->ext_lst)
+        out.RelAddress(fun->ext_lst);
+      else {
+        if (!name && (fun->cls.flags & FF__EXTERN))
+          name = sym.hash.str;
+        out.RelAddress(fun, name);
+      }
     } else
       out.MoveRAX(indirect ? reinterpret_cast<uintptr_t>(&fun->exe_addr)
                            : reinterpret_cast<uintptr_t>(fun->exe_addr));
@@ -429,10 +433,19 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     out.StringAddress(node.right);
     return true;
   }
+  if (op == IC_ASM_ADDR) {
+    if (!out.AOT())
+      return false;
+    out.RelAddress(reinterpret_cast<const void *>(node.data));
+    return true;
+  }
   if (op == IC_GLBL_ADDR) {
     auto *var = reinterpret_cast<const CHashGlblVar *>(node.data);
     if (out.AOT())
-      out.RelAddress(var, var->sym.import_name);
+      out.RelAddress(var->flags & GVF_ALIAS
+                         ? static_cast<const void *>(var->data_addr)
+                         : static_cast<const void *>(var),
+                     var->sym.import_name);
     else if (var->flags & GVF_EXTERN) {
       out.MoveRAX(reinterpret_cast<uintptr_t>(&var->data_addr));
       out.Load(RT_I64);
