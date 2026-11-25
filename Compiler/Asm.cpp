@@ -1,6 +1,8 @@
 #include "../Kernel/KernelB.hpp"
 #include "CompilerA.hpp"
 
+#include <new>
+
 extern "C" void SysSymImportsResolveCpp(const char *name, int64_t flags);
 
 static bool Same(const char *a, const char *b)
@@ -12,11 +14,12 @@ static bool Same(const char *a, const char *b)
 struct CAsmSymbol
 {
   CAsmSymbol *next;
+  CAsm *block;
   char *name;
   CHashExport *entry;
   size_t offset;
   unsigned scope;
-  bool defined, exported, imported;
+  bool exported, imported;
 };
 
 struct CAsmNum
@@ -48,11 +51,86 @@ struct CAsmOp
   uint8_t opcode, ext;
 };
 
+static constexpr CAsmOp fixed_ops[]{
+    {"NOP", 0x90, 0},          {"RET", 0xC3, 0},      {"LEAVE", 0xC9, 0},
+    {"CLD", 0xFC, 0},          {"STD", 0xFD, 0},      {"CLI", 0xFA, 0},
+    {"STI", 0xFB, 0},          {"HLT", 0xF4, 0},      {"CLC", 0xF8, 0},
+    {"STC", 0xF9, 0},          {"CMC", 0xF5, 0},      {"LODSB", 0xAC, 0},
+    {"MOVSB", 0xA4, 0},        {"STOSB", 0xAA, 0},    {"REP_MOVSB", 0xA4, 0xF3},
+    {"REP_STOSB", 0xAA, 0xF3}, {"CPUID", 0xA2, 0x0F},
+};
+
+static constexpr CAsmOp branch_ops[]{
+    {"CALL", 0xE8, 0},   {"JMP", 0xE9, 0},    {"LOOP", 0xE2, 1},
+    {"JRCXZ", 0xE3, 1},  {"JO", 0x80, 0x0F},  {"JNO", 0x81, 0x0F},
+    {"JB", 0x82, 0x0F},  {"JC", 0x82, 0x0F},  {"JAE", 0x83, 0x0F},
+    {"JNC", 0x83, 0x0F}, {"JZ", 0x84, 0x0F},  {"JE", 0x84, 0x0F},
+    {"JNZ", 0x85, 0x0F}, {"JNE", 0x85, 0x0F}, {"JBE", 0x86, 0x0F},
+    {"JA", 0x87, 0x0F},  {"JS", 0x88, 0x0F},  {"JNS", 0x89, 0x0F},
+    {"JL", 0x8C, 0x0F},  {"JGE", 0x8D, 0x0F}, {"JLE", 0x8E, 0x0F},
+    {"JG", 0x8F, 0x0F},
+};
+
+static constexpr CAsmOp unary_ops[]{
+    {"INC", 0xFE, 0},  {"DEC", 0xFE, 1},  {"NOT", 0xF6, 2},   {"NEG", 0xF6, 3},
+    {"MUL", 0xF6, 4},  {"IMUL", 0xF6, 5}, {"IMUL1", 0xF6, 5}, {"DIV", 0xF6, 6},
+    {"IDIV", 0xF6, 7}, {"ROL1", 0xD0, 0}, {"ROR1", 0xD0, 1},  {"RCL1", 0xD0, 2},
+    {"RCR1", 0xD0, 3}, {"SHL1", 0xD0, 4}, {"SHR1", 0xD0, 5},  {"SAR1", 0xD0, 7},
+};
+
+static constexpr CAsmOp shift_ops[]{
+    {"ROL", 0, 0}, {"ROR", 0, 1}, {"RCL", 0, 2}, {"RCR", 0, 3},
+    {"SHL", 0, 4}, {"SHR", 0, 5}, {"SAR", 0, 7},
+};
+
+static constexpr CAsmOp binary_ops[]{
+    {"ADD", 0, 0}, {"OR", 0, 1},  {"ADC", 0, 2}, {"SBB", 0, 3},
+    {"AND", 0, 4}, {"SUB", 0, 5}, {"XOR", 0, 6}, {"CMP", 0, 7},
+};
+
+template <size_t N>
+static const CAsmOp *AsmOpFind(const CAsmOp (&ops)[N], const char *name)
+{
+  for (const auto &op : ops)
+    if (Same(name, op.name))
+      return &op;
+  return nullptr;
+}
+
+bool IsAsmStatement(const CCmpCtrl &cc)
+{
+  if (cc.token != TK_IDENT || cc.local_var_entry)
+    return false;
+  const auto *name = cc.cur_str;
+  if (name[0] == '@' && name[1] == '@')
+    return true;
+  if (cc.hash_entry &&
+      (cc.hash_entry->type & (HTT_FUN | HTT_GLBL_VAR | HTT_EXPORT_SYS_SYM)))
+    return false;
+  if (AsmOpFind(fixed_ops, name) || AsmOpFind(branch_ops, name) ||
+      AsmOpFind(unary_ops, name) || AsmOpFind(shift_ops, name) ||
+      AsmOpFind(binary_ops, name))
+    return true;
+  constexpr const char *names[]{
+      "RET1",  "INT",   "PUSH",  "POP",   "LEA",   "MOV",    "MOVZX",
+      "MOVSX", "TEST",  "IMUL",  "IMUL2", "DU8",   "DU16",   "DU32",
+      "DU64",  "USE16", "USE32", "USE64", "ALIGN", "IMPORT",
+  };
+  for (const char *candidate : names)
+    if (Same(name, candidate))
+      return true;
+  return false;
+}
+
 class CAsm
 {
 public:
-  CAsm(CCmpCtrl &cc, CAOT *aot) : cc(cc), aot(aot),
-      hc(CurrentTask()->data_heap), origin(aot ? aot->size : 0) {}
+  CAsm(CCmpCtrl &cc, CAOT *aot, bool in_fun = false, CAsm *first = nullptr)
+      : cc(cc), aot(aot), hc(CurrentTask()->data_heap),
+        root(first ? first : this), origin(aot && !in_fun ? aot->size : 0),
+        in_fun(in_fun)
+  {
+  }
 
   ~CAsm()
   {
@@ -72,14 +150,17 @@ public:
     Free(buf);
   }
 
-  bool Parse()
+  bool Parse(bool bare)
   {
-    Lex(cc); // Skip '{'.
+    if (!bare)
+      Lex(cc); // Skip '{'.
     while (!failed && cc.token > TK_EOF && cc.token != '}') {
-      if (cc.token == ';' || cc.token == '\n') {
+      if (cc.token == '\n' || (!bare && cc.token == ';')) {
         Lex(cc);
         continue;
       }
+      if (bare && !IsAsmStatement(cc))
+        break;
       if (cc.token != TK_IDENT)
         return false;
       auto *name = const_cast<char *>(cc.cur_str);
@@ -92,7 +173,73 @@ public:
       if (!okay)
         return false;
     }
-    return !failed && cc.token == '}' && Finish();
+    return !failed && (bare ? cc.token != TK_ERROR : cc.token == '}');
+  }
+
+  size_t Layout(size_t offset)
+  {
+    origin = offset + (aot ? aot->size : 0);
+    return size;
+  }
+
+  bool Emit(uint8_t *image, size_t offset)
+  {
+    if (!size)
+      return true;
+    auto *dest = image + offset;
+    if (dest != buf)
+      MemCpy(dest, buf, size);
+    auto base = aot ? 0 : reinterpret_cast<uintptr_t>(image);
+    for (auto *fix = fixups; fix; fix = fix->next)
+      if (!AsmResolve(*fix, dest, base))
+        return false;
+    return true;
+  }
+
+  bool Publish(const uint8_t *image)
+  {
+    auto base = aot ? 0 : reinterpret_cast<uintptr_t>(image);
+    if (aot)
+      for (auto *s = symbols; s; s = s->next)
+        if (s->entry &&
+            !AOTLabel(*aot, s->entry,
+                      s->exported ? s->entry->sym.hash.str : nullptr,
+                      s->block->origin + s->offset))
+          return false;
+    for (auto *s = symbols; s; s = s->next) {
+      if (!s->entry)
+        continue;
+      auto &sym = s->entry->sym;
+      s->entry->val = base + s->block->origin + s->offset;
+      if (!aot)
+        sym.hash.type |= HTF_IMM;
+      HashAdd(&sym.hash, cc.htc.glbl_hash_table);
+      if (!aot)
+        SysSymImportsResolveCpp(sym.hash.str, 0);
+      s->entry = nullptr;
+    }
+    return true;
+  }
+
+  bool Finish()
+  {
+    if (aot)
+      return Emit(buf, 0) &&
+             (!size || AOTStore(*aot, nullptr, nullptr, buf, size)) &&
+             Publish(nullptr);
+    auto *image = size ? MAlloc(size, CurrentTask()->code_heap) : buf;
+    if ((size && !image) || !Emit(image, 0) || !Publish(image)) {
+      if (size)
+        Free(image);
+      return false;
+    }
+    // The task's labels retain the assembled code.
+    bool keep = false;
+    for (auto *s = symbols; s; s = s->next)
+      keep |= s->block && !s->scope;
+    if (size && !keep)
+      Free(image);
+    return true;
   }
 
 private:
@@ -109,7 +256,7 @@ private:
   CAsmSymbol *Symbol(const char *name)
   {
     unsigned group = name[0] == '@' && name[1] == '@' ? scope : 0;
-    for (auto *s = symbols; s; s = s->next)
+    for (auto *s = root->symbols; s; s = s->next)
       if (s->scope == group && Same(s->name, name))
         return s;
     auto *s = reinterpret_cast<CAsmSymbol *>(CAlloc(sizeof(CAsmSymbol), hc));
@@ -121,8 +268,8 @@ private:
       return nullptr;
     }
     s->scope = group;
-    s->next = symbols;
-    symbols = s;
+    s->next = root->symbols;
+    root->symbols = s;
     return s;
   }
 
@@ -130,13 +277,14 @@ private:
   {
     bool exported = cc.token == TK_DBL_COLON;
     auto *s = Symbol(name);
-    if (!s || s->imported || (s->defined && s->offset != size) ||
+    if (!s || s->imported ||
+        (s->block && (s->block != this || s->offset != size)) ||
         (s->scope && exported))
       return false;
-    s->defined = true;
+    s->block = this;
     s->exported |= exported;
     s->offset = size;
-    if (!s->scope && !s->entry) {
+    if (!s->scope && !s->entry && (!in_fun || exported)) {
       if (HashSingleTableFind(name, cc.htc.glbl_hash_table, HTT_EXPORT_SYS_SYM))
         return false;
       s->entry = reinterpret_cast<CHashExport *>(
@@ -150,7 +298,7 @@ private:
       if (exported)
         HashSrcFileSetCpp(&cc, &sym, 0);
     }
-    if (exported)
+    if (exported && !in_fun)
       ++scope;
     return Eat(cc.token);
   }
@@ -221,6 +369,16 @@ private:
         n.plus = n.minus;
         n.minus = s;
       }
+    } else if (cc.token == '&') {
+      if (Lex(cc) != TK_IDENT)
+        return false;
+      if (auto *member = cc.local_var_entry) {
+        if (member->flags & MLF_STATIC)
+          return false;
+        n.addend = member->offset;
+      } else if (!(n.plus = Symbol(cc.cur_str)))
+        return false;
+      Lex(cc);
     } else if (cc.token == '(') {
       Lex(cc);
       if (!Expression(n, 1, depth + 1) || !Eat(')'))
@@ -229,7 +387,11 @@ private:
       n.addend = cc.cur_i64;
       Lex(cc);
     } else if (cc.token == TK_IDENT) {
+      if (cc.local_var_entry)
+        return false;
       auto *entry = cc.hash_entry;
+      if (entry && (entry->type & HTT_GLBL_VAR) && !aot)
+        return LexExpression(cc, n.addend);
       if (entry && (entry->type & HTT_EXPORT_SYS_SYM) &&
           (entry->type & HTF_IMM) &&
           !(entry->type & (HTF_IMPORT | HTF_UNRESOLVED)))
@@ -497,13 +659,8 @@ private:
         return true;
       }
       unsigned group = 0xFF;
-      static constexpr CAsmOp ops[]{
-        {"ADD",0,0},{"OR",0,1},{"ADC",0,2},{"SBB",0,3},{"AND",0,4},
-        {"SUB",0,5},{"XOR",0,6},{"CMP",0,7},
-      };
-      for (auto &op : ops)
-        if (Same(name, op.name))
-          group = op.ext;
+      if (auto *op = AsmOpFind(binary_ops, name))
+        group = op->ext;
       bool test = Same(name,"TEST");
       if (group == 0xFF && !mov && !test)
         return false;
@@ -519,10 +676,8 @@ private:
 
     bool test = Same(name,"TEST");
     unsigned opcode = mov ? 0x88 : test ? 0x84 : 0xFF;
-    constexpr const char *ops[]{"ADD","OR","ADC","SBB","AND","SUB","XOR","CMP"};
-    for (unsigned i = 0; i < 8; ++i)
-      if (Same(name,ops[i]))
-        opcode = i * 8;
+    if (auto *op = AsmOpFind(binary_ops, name))
+      opcode = op->ext * 8;
     if (opcode == 0xFF)
       return false;
     if (b.mem)
@@ -532,13 +687,7 @@ private:
 
   bool PrsAsmInst(const char *name)
   {
-    static constexpr CAsmOp fixed[]{
-      {"NOP",0x90,0},{"RET",0xC3,0},{"LEAVE",0xC9,0},{"CLD",0xFC,0},
-      {"STD",0xFD,0},{"CLI",0xFA,0},{"STI",0xFB,0},{"HLT",0xF4,0},
-      {"LODSB",0xAC,0},{"MOVSB",0xA4,0},{"STOSB",0xAA,0},
-      {"REP_MOVSB",0xA4,0xF3},{"REP_STOSB",0xAA,0xF3},{"CPUID",0xA2,0x0F},
-    };
-    for (auto &op : fixed)
+    for (auto &op : fixed_ops)
       if (Same(name,op.name)) {
         if (op.ext)
           Byte(op.ext);
@@ -548,15 +697,7 @@ private:
     CAsmArg a,b;
     if (!PrsAsmArg(a))
       return false;
-    static constexpr CAsmOp branch[]{
-      {"CALL",0xE8,0},{"JMP",0xE9,0},{"LOOP",0xE2,1},{"JRCXZ",0xE3,1},
-      {"JO",0x80,0x0F},{"JNO",0x81,0x0F},{"JB",0x82,0x0F},
-      {"JC",0x82,0x0F},{"JAE",0x83,0x0F},{"JNC",0x83,0x0F},
-      {"JZ",0x84,0x0F},{"JE",0x84,0x0F},{"JNZ",0x85,0x0F},{"JNE",0x85,0x0F},
-      {"JBE",0x86,0x0F},{"JA",0x87,0x0F},{"JS",0x88,0x0F},{"JNS",0x89,0x0F},
-      {"JL",0x8C,0x0F},{"JGE",0x8D,0x0F},{"JLE",0x8E,0x0F},{"JG",0x8F,0x0F},
-    };
-    for (auto &op : branch)
+    for (auto &op : branch_ops)
       if (Same(name,op.name)) {
         if (a.mem || a.reg >= 0) {
           if (op.opcode != 0xE8 && op.opcode != 0xE9)
@@ -601,17 +742,23 @@ private:
       return true;
     }
 
-    static constexpr CAsmOp unary[]{
-      {"INC",0xFE,0},{"DEC",0xFE,1},{"NOT",0xF6,2},{"NEG",0xF6,3},
-      {"MUL",0xF6,4},{"IMUL1",0xF6,5},{"DIV",0xF6,6},{"IDIV",0xF6,7},
-      {"ROL1",0xD0,0},{"ROR1",0xD0,1},{"RCL1",0xD0,2},{"RCR1",0xD0,3},
-      {"SHL1",0xD0,4},{"SHR1",0xD0,5},{"SAR1",0xD0,7},
-    };
-    for (auto &op : unary)
+    for (auto &op : unary_ops)
       if (Same(name,op.name))
         return RMInst(op.opcode + (a.width != 1),a.width,a,op.ext);
     if (!Eat(',') || !PrsAsmArg(b))
       return false;
+    if (Same(name, "IMUL2")) {
+      if (a.reg < 0 || a.mem || a.width < 2)
+        return false;
+      if (b.reg >= 0 || b.mem)
+        return (!b.width || b.width == a.width) &&
+               RMInst(0x0FAF, a.width, b, a.reg, a);
+      bool small = Constant(b.num) && I8(b.num.addend);
+      if (!RMInst(small ? 0x6B : 0x69, a.width, a, a.reg, a))
+        return false;
+      AsmStoreNum(b.num, small ? 1 : a.width == 2 ? 2 : 4);
+      return true;
+    }
     if (Same(name,"LEA"))
       return a.reg >= 0 && !a.mem && a.width > 1 && b.mem &&
              RMInst(0x8D,a.width,b,a.reg,a);
@@ -621,11 +768,7 @@ private:
              (b.width == 1 || b.width == 2) &&
              RMInst((sign ? 0x0FBE : 0x0FB6) + (b.width == 2),a.width,b,a.reg,a);
     }
-    static constexpr CAsmOp shift[]{
-      {"ROL",0,0},{"ROR",0,1},{"RCL",0,2},{"RCR",0,3},
-      {"SHL",0,4},{"SHR",0,5},{"SAR",0,7},
-    };
-    for (auto &op : shift)
+    for (auto &op : shift_ops)
       if (Same(name,op.name)) {
         bool cl = b.reg == 1 && !b.mem && b.width == 1;
         if ((!cl && (b.reg >= 0 || b.mem || !Constant(b.num) ||
@@ -671,7 +814,7 @@ private:
         if (cc.token != TK_IDENT)
           return false;
         auto *s = Symbol(cc.cur_str);
-        if (!s || s->scope || s->defined)
+        if (!s || s->scope || s->block)
           return false;
         s->imported = true;
         Lex(cc);
@@ -691,15 +834,15 @@ private:
                : nullptr;
   }
 
-  bool AsmResolve(const CAsmUnresolvedRef &fix, uintptr_t base)
+  bool AsmResolve(const CAsmUnresolvedRef &fix, uint8_t *dest, uintptr_t base)
   {
     uint64_t value = fix.num.addend;
     int bases = 0;
     auto add = [&](const CAsmSymbol *symbol, int sign) {
       if (!symbol)
         return true;
-      if (symbol->defined) {
-        value += sign * (origin + symbol->offset);
+      if (symbol->block) {
+        value += sign * (symbol->block->origin + symbol->offset);
         bases += sign;
         return true;
       }
@@ -736,56 +879,16 @@ private:
       if (uint64_t(int64_t(value << shift) >> shift) != value)
         return false;
     }
-    MemCpy(buf + fix.offset,&value,fix.width);
-    return true;
-  }
-
-  bool Finish()
-  {
-    auto *image = aot || !size ? nullptr : MAlloc(size,CurrentTask()->code_heap);
-    if (!aot && size && !image)
-      return false;
-    uintptr_t base = reinterpret_cast<uintptr_t>(image);
-    for (auto *fix = fixups; fix; fix = fix->next)
-      if (!AsmResolve(*fix,base)) {
-        Free(image);
-        return false;
-      }
-    if (aot && size && !AOTStore(*aot,nullptr,nullptr,buf,size))
-      return false;
-    if (image)
-      MemCpy(image,buf,size);
-    for (auto *s = symbols; s; s = s->next) {
-      if (!s->entry)
-        continue;
-      auto &sym = s->entry->sym;
-      s->entry->val = base + origin + s->offset;
-      if (aot) {
-        if (!AOTLabel(*aot,s->entry,s->exported ? sym.hash.str : nullptr,
-                      origin + s->offset))
-          return false;
-      } else
-        sym.hash.type |= HTF_IMM;
-      HashAdd(&sym.hash,cc.htc.glbl_hash_table);
-      if (!aot)
-        SysSymImportsResolveCpp(sym.hash.str,0);
-      s->entry = nullptr;
-    }
-    // The task's exported labels retain the assembled code.
-    if (!aot && image) {
-      bool keep = false;
-      for (auto *s = symbols; s; s = s->next)
-        keep |= s->defined && !s->scope;
-      if (!keep)
-        Free(image);
-    }
+    MemCpy(dest + fix.offset, &value, fix.width);
     return true;
   }
 
   CCmpCtrl &cc;
   CAOT *aot;
   CHeapCtrl *hc;
+  CAsm *root;
   size_t origin;
+  bool in_fun;
   uint8_t *buf = nullptr;
   size_t capacity = 0, size = 0;
   unsigned mode = 64, scope = 1;
@@ -794,17 +897,58 @@ private:
   CAsmUnresolvedRef *fixups = nullptr;
 };
 
-bool PrsAsmBlk(CCmpCtrl &cc, CAOT *aot)
+bool PrsAsmBlk(CCmpCtrl &cc, CAOT *aot, CCodeCtrl *coc, bool bare)
 {
-  if (Lex(cc) != '{' || !cc.htc.glbl_hash_table)
+  if ((!bare && Lex(cc) != '{') || !cc.htc.glbl_hash_table)
     return false;
+  CAsm standalone(cc, aot);
+  auto *as = &standalone;
+  if (coc) {
+    auto *mem = MAlloc(sizeof(CAsm), CurrentTask()->data_heap);
+    if (!mem)
+      return false;
+    as = new (mem) CAsm(cc, aot, true, coc->asm_first);
+  }
   auto old_flags = cc.flags;
   cc.flags |= CCF_ASM_EXPRESSIONS | CCF_KEEP_NEW_LINES;
-  CAsm as(cc,aot);
-  bool okay = as.Parse();
+  bool okay = as->Parse(bare);
   constexpr auto mask = CCF_ASM_EXPRESSIONS | CCF_KEEP_NEW_LINES;
   cc.flags = (cc.flags & ~mask) | (old_flags & mask);
-  if (okay)
-    Lex(cc);
-  return okay;
+  if (!coc)
+    return okay && as->Finish() && Lex(cc) != TK_ERROR;
+  if (okay && !bare)
+    okay = Lex(cc) != TK_ERROR;
+  if (okay) {
+    auto index = coc->Add({reinterpret_cast<uintptr_t>(as), NO_IC, NO_IC,
+                           IC_ASM, RT_U0, false, false, false});
+    if (index != NO_IC) {
+      if (!coc->asm_first)
+        coc->asm_first = as;
+      coc->Append(index);
+      return true;
+    }
+  }
+  AsmDel(as);
+  return false;
+}
+
+size_t AsmLayout(CAsm &as, size_t offset)
+{
+  return as.Layout(offset);
+}
+
+bool AsmEmit(CAsm &as, uint8_t *buf, size_t offset)
+{
+  return as.Emit(buf, offset);
+}
+
+bool AsmPublish(CAsm &as, const uint8_t *buf)
+{
+  return as.Publish(buf);
+}
+
+void AsmDel(CAsm *as)
+{
+  as->~CAsm();
+  Free(as);
 }

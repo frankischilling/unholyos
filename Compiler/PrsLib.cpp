@@ -70,10 +70,13 @@ CHashClass *PrsClassNew()
 // storage and use their indices even when the array grows.
 CCodeCtrl::~CCodeCtrl()
 {
-  if (has_misc_data)
-    for (uint32_t i = 0; i < used; ++i)
+  if (has_misc_data || asm_first)
+    for (uint32_t i = 0; i < used; ++i) {
       if (code[i].code == IC_STR_CONST)
         Free(reinterpret_cast<void *>(code[i].data));
+      else if (code[i].code == IC_ASM)
+        AsmDel(reinterpret_cast<CAsm *>(code[i].data));
+    }
   Free(code);
 }
 

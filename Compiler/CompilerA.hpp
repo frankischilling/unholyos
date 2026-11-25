@@ -245,6 +245,7 @@ enum CICode : uint8_t
   IC_SUB_EQU,
   IC_JMP = 0x51,
   IC_CALL = 0x5C,
+  IC_ASM = 0x61,
   IC_PUSH = 0x62,
   IC_BR_ZERO = 0x85,
   IC_BR_NOT_ZERO,
@@ -274,6 +275,8 @@ struct CIntermediateCode
   const CArrayDim *dim = nullptr;
 };
 
+class CAsm;
+
 struct CCodeCtrl
 {
   CCodeCtrl() = default;
@@ -293,6 +296,7 @@ struct CCodeCtrl
   }
 
   CIntermediateCode *code = nullptr;
+  CAsm *asm_first = nullptr;
   uint32_t first = NO_IC, last = NO_IC;
   bool failed = false, has_misc_data = false;
 
@@ -317,7 +321,13 @@ bool AOTStore(CAOT &aot, const void *symbol, const char *name,
 bool AOTLabel(CAOT &aot, const void *symbol, const char *name, size_t rip);
 bool AOTRelAdd(CAOT &aot, size_t rip, const void *symbol, const char *name,
                 uint8_t type = IET_IMM_I64);
-bool PrsAsmBlk(CCmpCtrl &cc, CAOT *aot);
+bool IsAsmStatement(const CCmpCtrl &cc);
+bool PrsAsmBlk(CCmpCtrl &cc, CAOT *aot, CCodeCtrl *coc = nullptr,
+               bool bare = false);
+size_t AsmLayout(CAsm &as, size_t offset);
+bool AsmEmit(CAsm &as, uint8_t *buf, size_t offset);
+bool AsmPublish(CAsm &as, const uint8_t *buf);
+void AsmDel(CAsm *as);
 void AOTRelResolve(CAOT &aot, const void *before, const void *after);
 
 // The returned code belongs to the current task's executable heap.

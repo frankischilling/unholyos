@@ -186,6 +186,8 @@ public:
       return cc.htc.fun && PrsLocal(*cc.htc.fun, *cls);
     auto keyword = Keyword(cc);
     switch (keyword) {
+    case KW_ASM:
+      return cc.htc.fun && PrsAsmBlk(cc, cc.aot, &coc);
     case KW_STATIC:
       Lex(cc);
       if (auto *cls = PrsClass(cc))
@@ -218,6 +220,8 @@ public:
       }
       return Consume(';');
     default:
+      if (cc.htc.fun && IsAsmStatement(cc))
+        return PrsAsmBlk(cc, cc.aot, &coc, true);
       return ExpressionStatement(';');
     }
   }
@@ -245,6 +249,8 @@ private:
     do {
       Lex(cc);
       auto *cls = PrsStars(cc, &base);
+      if (Keyword(cc) == KW_NOREG)
+        Lex(cc);
       if (!cls || !ClassComplete(*cls) || cc.token != TK_IDENT)
         return false;
       auto *member = MemberAdd(fun.cls, cc.cur_str, *cls, 0);

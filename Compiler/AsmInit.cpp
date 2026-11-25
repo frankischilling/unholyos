@@ -8,6 +8,64 @@ static CHashClass *FindType(const char *name, CHashTable *table)
   return reinterpret_cast<CHashClass *>(HashFind(name, table, type_mask));
 }
 
+static bool CmpRuntimeData(CHashTable *table)
+{
+  auto *heap = CurrentTask()->data_heap;
+  auto *cls = PrsClassNew();
+  if (!cls)
+    return false;
+  cls->sym.hash.type |= HTF_PUBLIC;
+  cls->sym.hash.str = StrNew("CCntsGlbls", heap);
+  cls->size = offsetof(CCntsGlbls, time_stamp_calibrated) + 1;
+  if (!cls->sym.hash.str) {
+    HashDel(&cls->sym.hash);
+    return false;
+  }
+  HashAdd(&cls->sym.hash, table);
+
+  auto *i64 = FindType("I64", table);
+  auto *boolean = FindType("Bool", table);
+  constexpr const char *members[]{
+      "jiffies",
+      "timer",
+      "time_stamp_freq",
+      "time_stamp_kHz_freq",
+      "time_stamp_freq_initial",
+      "HPET_freq",
+      "HPET_kHz_freq",
+      "HPET_initial",
+      "time_stamp_calibrated",
+  };
+  static_assert(offsetof(CCntsGlbls, time_stamp_freq) == 16 &&
+                offsetof(CCntsGlbls, time_stamp_calibrated) == 64);
+  for (unsigned i = 0; i < sizeof(members) / sizeof(*members); ++i) {
+    auto *name = StrNew(members[i], heap);
+    if (!name || !MemberAdd(*cls, name, *(i == 8 ? boolean : i64), 8 * i)) {
+      Free(name);
+      return false;
+    }
+  }
+
+  auto *var =
+      reinterpret_cast<CHashGlblVar *>(CAlloc(sizeof(CHashGlblVar), heap));
+  if (!var)
+    return false;
+  var->sym.hash.type = HTT_GLBL_VAR | HTF_PUBLIC;
+  var->sym.hash.str = StrNew("cnts", heap);
+  var->sym.import_name = StrNew("cnts", heap);
+  if (!var->sym.hash.str || !var->sym.import_name) {
+    HashDel(&var->sym.hash);
+    return false;
+  }
+  var->size = cls->size;
+  var->flags = GVF_IMPORT | GVF_ALIAS;
+  var->var_class = cls;
+  var->dim.cnt = var->dim.total_cnt = 1;
+  var->data_addr = reinterpret_cast<uint8_t *>(&cnts);
+  HashAdd(&var->sym.hash, table);
+  return true;
+}
+
 static bool CmpRuntimeHeaders(CHashTable *table)
 {
   auto *void_type = FindType("U0", table);
@@ -238,7 +296,7 @@ static bool CmpFillHash(CHashTable *table)
     }
     HashAdd(&entry->sym.hash,table);
   }
-  return CmpRuntimeHeaders(table);
+  return CmpRuntimeData(table) && CmpRuntimeHeaders(table);
 }
 
 CHashTable *CmpAsmHashNew()
@@ -264,7 +322,7 @@ bool CmpAsmHashLoad(CHashTable *table)
   for (int64_t i = 0; i <= asm_hash->mask; ++i) {
     auto **link = &asm_hash->body[i];
     while (auto *entry = *link) {
-      if (entry->type & HTT_FUN) {
+      if (entry->type & (HTT_FUN | HTT_GLBL_VAR)) {
         *link = entry->next;
         HashAdd(entry, table);
       } else

@@ -749,7 +749,7 @@ static uint64_t VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
                                         : total;
   uint64_t high_pages = (limit - code_base) / page;
 
-  uint64_t pool = 0, data_free = 0, data_bytes = 0, small_chunk = 0;
+  uint64_t pool = 0, data_free = 0, data_bytes = 0, data_end = 0;
   if (limit < total) {
     std::vector<std::pair<uint64_t, uint64_t>> blocks;
     for (auto entry : e820) {
@@ -773,7 +773,7 @@ static uint64_t VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
 
     Check(!blocks.empty(), "Data pool has no free blocks");
     auto [last_base, last_pages] = blocks.back();
-    small_chunk = last_base + (last_pages - 16) * page;
+    data_end = last_base + last_pages * page;
     for (auto [base, pages] : blocks) {
       auto block = ReadPhysical<3>(vm, base);
       uint64_t free_pages =
@@ -812,16 +812,41 @@ static uint64_t VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
         "Invalid code block pool");
   if (hc_block) {
     uint64_t data_hc = hc_block + 0x28;
-    uint64_t last_chunk = small_chunk - late_alloced - symbol_alloced -
-                          drive_alloced;
-    Check(ReadPhysical<12>(vm, data_hc) ==
-              std::array<uint64_t, 12>{
-                  pool, 0x56536348, 0,
-                  0x2000 + late_alloced + symbol_alloced + drive_alloced,
-                  range_bytes + late_used + symbol_used + drive_used, adam,
-                  small_chunk, last_chunk, last_chunk,
-                  last_chunk + 0x18, data_hc + 0x48, data_hc + 0x48},
+    auto hc = ReadPhysical<12>(vm, data_hc);
+    uint64_t allocated = 0x2000 + late_alloced + symbol_alloced + drive_alloced;
+    Check(hc[0] == pool && hc[1] == 0x56536348 && !hc[2] &&
+              hc[3] == allocated &&
+              hc[4] == range_bytes + late_used + symbol_used + drive_used &&
+              hc[5] == adam && hc[10] == data_hc + 0x48 && hc[11] == hc[10],
           "Invalid Adam data heap");
+
+    // Registering another symbol can change which small blocks merge.
+    uint64_t begin = data_end - allocated, head = data_hc + 0x30, prev = head;
+    std::vector<std::pair<uint64_t, uint64_t>> ranges;
+    bool mergeable = false;
+    for (uint64_t addr = hc[6]; addr != head;) {
+      Check(addr >= begin && addr < data_end && !(addr & (page - 1)) &&
+                ranges.size() < allocated / page,
+            "Adam data heap block outside allocated pages");
+      auto blk = ReadPhysical<3>(vm, addr);
+      uint64_t bytes = (blk[2] >> 32) * page;
+      Check(blk[1] == prev && static_cast<uint32_t>(blk[2]) == 0x7355424D &&
+                bytes && bytes <= data_end - addr,
+            "Invalid Adam data heap block");
+      ranges.emplace_back(addr, addr + bytes);
+      mergeable |= addr == hc[8];
+      prev = addr;
+      addr = blk[0];
+    }
+    Check(prev == hc[7] && mergeable && hc[9] >= begin + 0x18 &&
+              hc[9] <= data_end - 0x10 && !(hc[9] & 7),
+          "Invalid Adam data heap links");
+    std::sort(ranges.begin(), ranges.end());
+    for (auto [lo, hi] : ranges) {
+      Check(begin == lo, "Adam data heap blocks do not cover allocated pages");
+      begin = hi;
+    }
+    Check(begin == data_end, "Adam data heap has untracked pages");
   }
   Check(ReadPhysical<2>(vm, adam + 0x20) ==
             std::array<uint64_t, 2>{adam_hc,
@@ -1277,12 +1302,13 @@ static void TestBoot(const char *qemu, const fs::path &iso,
           fs::copy_file(CaptureGuestFile(vm, dir, output, name),
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);
-      Check(output.find("asm build 0 0\n") != std::string::npos &&
-                output.find("UnholyOS: asm rejected unresolved local") !=
-                    std::string::npos &&
-                output.find("UnholyOS: asm opcode modes and alignment matched") !=
-                    std::string::npos,
-            "Guest assembly build, label cleanup, or opcode check failed");
+      Check(
+          output.find("asm build 0 0 0\n") != std::string::npos &&
+              output.find("UnholyOS: asm rejected unresolved local") !=
+                  std::string::npos &&
+              output.find("UnholyOS: asm opcode modes and alignment matched") !=
+                  std::string::npos,
+          "Guest assembly build, label cleanup, or opcode check failed");
       CheckProgramOutput(output, "/DivByHand.HC", "123456/10=12345\n", '1');
       CheckProgramOutput(output, "/AsmHelloWorld.HC",
                          "0A Hello World\n09 Hello World\n08 Hello World\n"
@@ -1293,10 +1319,20 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          "2*7   =0xE\n100*10=0x3E8\n"
                          "0x0123466789ABCDEF*0x1000001=0x000000000001234568ACF13578ABCDEF\n", '1');
       CheckProgramOutput(output, "/PutDec.HC", "122333221\n", '1');
+      CheckProgramOutput(
+          output, "/AsmAndC3.HC",
+          "Meaning of life:42\nMeaning of life:42\nMeaning of life:42\n", '1');
+      CheckProgramOutput(output, "/InlineAsmProbe.HC",
+                         "inline import\ninline asm 42\ninline counters 1\n",
+                         '1');
+      CheckProgramOutput(output, "/InlineAsmProbe.BIN.Z",
+                         "inline import\ninline asm 42\ninline counters 1\n",
+                         '1');
       CheckProgramOutput(output, "/DivByHand.BIN.Z", "123456/10=12345\n", '1');
       CheckProgramOutput(output, "/AsmProbe.BIN.Z", "asm import\nasm result 42\n", '1');
       if (std::string_view(memory) == "512")
-        for (auto *name : {"AsmProbe.BIN.Z", "DivByHand.BIN.Z"})
+        for (auto *name :
+             {"AsmProbe.BIN.Z", "DivByHand.BIN.Z", "InlineAsmProbe.BIN.Z"})
           fs::copy_file(CaptureGuestFile(vm, dir, output, name),
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);
