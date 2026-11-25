@@ -76,6 +76,9 @@ The raw `PUT_HEX_U64`, `PUT_HEX_U32`, `PUT_HEX_U16`,
 arguments and call the C++ text routines through explicit adapters.
 `StrPrintHex` and `PutHex` live in `Kernel/StrA.cpp`. `PutHex` returns
 early for a negative width to keep its 17-byte buffer in bounds.
+`Compiler/AsmInit.cpp` installs the `PUSH_C_REGS` and `POP_C_REGS`
+definitions from `Kernel/KernelA.HH` in the compiler's bootstrap hash.
+The source lexer expands them through the same path as `#define`.
 
 ## Remaining structural work
 

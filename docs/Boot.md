@@ -198,6 +198,13 @@ The Windows QEMU run reached the kernel entry line after the startup
 tests. The TempleOS comparison used the pinned `TOS_Distro.ISO` with
 the same machine, CPU, RAM, and DVD boot settings.
 
+The boot suite also runs the original `Demo/Asm/MulByHand.HC` and
+`Demo/Asm/PutDec.HC`, both by Terry A. Davis. MulByHand exercises the
+typed assembly calls, the packed 128-bit product record, and the
+narrow register operands. PutDec prints `122333221` through the raw
+text entry point and uses the original `PUSH_C_REGS` and `POP_C_REGS`
+macro expansions.
+
 Assembly inside HolyC functions, full opcode and operand coverage,
 and the remaining directives are pending.
 

@@ -217,6 +217,27 @@ static bool CmpFillHash(CHashTable *table)
     entry->val = v.value;
     HashAdd(&entry->sym.hash, table);
   }
+  constexpr struct {
+    const char *name, *data;
+  } defines[]{
+      {"PUSH_C_REGS","PUSH RAX PUSH RCX PUSH RDX PUSH RBX PUSH R8 PUSH R9"},
+      {"POP_C_REGS","POP R9 POP R8 POP RBX POP RDX POP RCX POP RAX"},
+  };
+  for (const auto &v : defines) {
+    auto *entry = reinterpret_cast<CHashDefineStr *>(
+        CAlloc(sizeof(CHashDefineStr),heap));
+    if (!entry)
+      return false;
+    entry->sym.hash.str = StrNew(v.name,heap);
+    entry->sym.hash.type = HTT_DEFINE_STR;
+    entry->data = StrNew(v.data,heap);
+    entry->cnt = -1;
+    if (!entry->sym.hash.str || !entry->data) {
+      HashDel(&entry->sym.hash);
+      return false;
+    }
+    HashAdd(&entry->sym.hash,table);
+  }
   return CmpRuntimeHeaders(table);
 }
 

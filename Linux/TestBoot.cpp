@@ -1289,6 +1289,10 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          "07 Hello World\n06 Hello World\n05 Hello World\n"
                          "04 Hello World\n03 Hello World\n02 Hello World\n"
                          "01 Hello World\n", '1');
+      CheckProgramOutput(output, "/MulByHand.HC",
+                         "2*7   =0xE\n100*10=0x3E8\n"
+                         "0x0123466789ABCDEF*0x1000001=0x000000000001234568ACF13578ABCDEF\n", '1');
+      CheckProgramOutput(output, "/PutDec.HC", "122333221\n", '1');
       CheckProgramOutput(output, "/DivByHand.BIN.Z", "123456/10=12345\n", '1');
       CheckProgramOutput(output, "/AsmProbe.BIN.Z", "asm import\nasm result 42\n", '1');
       if (std::string_view(memory) == "512")

@@ -800,6 +800,8 @@ static void BootAsmReport(const CDrv &dvd, CTask &task)
     return;
   BootFileProgramReport(dvd, "/DivByHand.HC");
   BootFileProgramReport(dvd, "/AsmHelloWorld.HC");
+  BootFileProgramReport(dvd, "/MulByHand.HC");
+  BootFileProgramReport(dvd, "/PutDec.HC");
   auto rejected = ExePutS("asm { _ASM_REJECTED:: LOOP @@0 }", nullptr, 0);
   if (!rejected.okay &&
       !HashFind("_ASM_REJECTED", task.hash_table, HTT_EXPORT_SYS_SYM))
