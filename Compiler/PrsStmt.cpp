@@ -157,6 +157,36 @@ static bool PrsFunArgs(CCmpCtrl &cc, CHashFun &fun)
   } while (true);
 }
 
+struct CSwitchCase
+{
+  CSwitchCase *next;
+  int64_t lo, hi;
+  uint32_t label;
+};
+
+struct CSwitchParse
+{
+  ~CSwitchParse()
+  {
+    while (cases) {
+      auto *c = cases;
+      cases = c->next;
+      Free(c);
+    }
+  }
+
+  CSwitchCase *cases = nullptr;
+  int64_t lo = INT64_MAX, hi = INT64_MIN, previous = INT64_MIN;
+  uint32_t dft, brk;
+  bool has_default = false;
+};
+
+struct CSubSwitch
+{
+  const CSubSwitch *parent;
+  uint32_t start, brk;
+};
+
 class CPrsStmt
 {
 public:
@@ -176,7 +206,7 @@ public:
 
   bool Statement(unsigned depth, uint32_t brk)
   {
-    if (depth == 127 || cc.token <= TK_EOF || coc.failed)
+    if (depth >= 127 || cc.token <= TK_EOF || coc.failed)
       return false;
     if (cc.token == ';')
       return Consume(';');
@@ -201,6 +231,8 @@ public:
     case KW_DO:
       Lex(cc);
       return PrsLoop(keyword, depth);
+    case KW_SWITCH:
+      return PrsSwitch(depth);
     case KW_BREAK:
       if (brk == NO_IC)
         return false;
@@ -399,6 +431,192 @@ private:
     }
     coc.Append(done);
     return true;
+  }
+
+  bool SwitchValue(int64_t &value)
+  {
+    auto *machine = LexTypedExpression2Bin(cc, RT_I64);
+    if (!machine)
+      return false;
+    uint64_t bits;
+    bool okay = CmpCall(cc, machine, bits);
+    Free(machine);
+    if (okay)
+      value = static_cast<int64_t>(bits);
+    return okay;
+  }
+
+  void SubSwitchCalls(const CSubSwitch *sub)
+  {
+    if (!sub)
+      return;
+    SubSwitchCalls(sub->parent);
+    if (sub->start != NO_IC)
+      coc.Append(IC_SUB_CALL, NO_IC, sub->start);
+  }
+
+  bool PrsSwitchCase(CSwitchParse &sw, const CSubSwitch *sub, bool dft)
+  {
+    auto label = dft ? sw.dft : coc.LabelNew();
+    auto fallthrough = sub ? coc.LabelNew() : NO_IC;
+    if (sub)
+      coc.Append(IC_JMP, NO_IC, fallthrough);
+    coc.Append(label);
+    SubSwitchCalls(sub);
+    coc.Append(fallthrough);
+    Lex(cc);
+
+    if (dft) {
+      if (sw.has_default)
+        return false;
+      sw.has_default = true;
+      return Consume(':');
+    }
+
+    int64_t lo, hi;
+    if (cc.token == ':') {
+      if (sw.previous == INT64_MAX)
+        return false;
+      lo = sw.previous == INT64_MIN ? 0 : sw.previous + 1;
+    } else if (!SwitchValue(lo))
+      return false;
+    hi = lo;
+    if (cc.token == TK_ELLIPSIS) {
+      Lex(cc);
+      if (!SwitchValue(hi))
+        return false;
+    }
+    if (!Consume(':'))
+      return false;
+    if (lo > hi) {
+      auto t = lo;
+      lo = hi;
+      hi = t;
+    }
+    auto *entry = reinterpret_cast<CSwitchCase *>(
+        MAlloc(sizeof(CSwitchCase), CurrentTask()->data_heap));
+    if (!entry)
+      return false;
+    *entry = {sw.cases, lo, hi, label};
+    sw.cases = entry;
+    if (lo < sw.lo)
+      sw.lo = lo;
+    if (hi > sw.hi)
+      sw.hi = hi;
+    sw.previous = hi;
+    return !coc.failed;
+  }
+
+  bool PrsSubSwitch(CSwitchParse &sw, unsigned depth, const CSubSwitch *parent)
+  {
+    if (depth >= 127 || Lex(cc) != ':' || !Consume(':'))
+      return false;
+    CSubSwitch sub{parent, NO_IC, coc.LabelNew()};
+    auto keyword = Keyword(cc);
+    if (keyword != KW_CASE && keyword != KW_DFT && keyword != KW_START &&
+        keyword != KW_END) {
+      auto fallthrough = coc.LabelNew();
+      auto jump =
+          coc.Add({0, NO_IC, fallthrough, IC_JMP, RT_U0, false, false, false});
+      sub.start = coc.LabelNew();
+      auto entry =
+          coc.Add({0, NO_IC, NO_IC, IC_SUB_ENTRY, RT_U0, false, false, false});
+      coc.Append(jump);
+      coc.Append(sub.start);
+      coc.Append(entry);
+      do {
+        if (!Statement(depth + 1, NO_IC))
+          return false;
+        keyword = Keyword(cc);
+      } while (keyword != KW_CASE && keyword != KW_DFT && keyword != KW_START &&
+               keyword != KW_END);
+      if (coc.failed)
+        return false;
+      if (keyword == KW_END) {
+        coc.code[jump].code = IC_END_EXP;
+        coc.code[entry].code = IC_END_EXP;
+      } else {
+        coc.Append(IC_RET);
+        coc.Append(fallthrough);
+        coc.Append(IC_SUB_CALL, NO_IC, sub.start);
+      }
+    }
+    return PrsSwitchBody(sw, depth + 1, &sub);
+  }
+
+  bool PrsSwitchBody(CSwitchParse &sw, unsigned depth, const CSubSwitch *sub)
+  {
+    auto brk = sub ? sub->brk : sw.brk;
+    while (!coc.failed && cc.token > TK_EOF) {
+      auto keyword = Keyword(cc);
+      if (keyword == KW_END || cc.token == '}') {
+        if (keyword == KW_END) {
+          if (!sub || Lex(cc) != ':' || !Consume(':'))
+            return false;
+        } else if (sub || !Consume('}'))
+          return false;
+        coc.Append(brk);
+        return !coc.failed;
+      }
+      if (keyword == KW_START) {
+        if (!PrsSubSwitch(sw, depth, sub))
+          return false;
+      } else if (keyword == KW_CASE || keyword == KW_DFT) {
+        if (!PrsSwitchCase(sw, sub, keyword == KW_DFT))
+          return false;
+      } else if (!Statement(depth + 1, brk))
+        return false;
+    }
+    return false;
+  }
+
+  bool PrsSwitch(unsigned depth)
+  {
+    auto open = Lex(cc);
+    if (open != '(' && open != '[')
+      return false;
+    Lex(cc);
+    auto value = PrsExpression(cc, coc);
+    if (value == NO_IC || !TypeSize(coc.code[value].type) ||
+        !Consume(open == '(' ? ')' : ']') || !Consume('{'))
+      return false;
+    CSwitchParse sw;
+    sw.dft = coc.LabelNew();
+    sw.brk = coc.LabelNew();
+    auto op = open == '(' ? IC_SWITCH : IC_NOBOUND_SWITCH;
+    auto dispatch = coc.Add({0, value, NO_IC, op, RT_U0, false, false, false});
+    coc.Append(dispatch);
+    if (!PrsSwitchBody(sw, depth, nullptr) || !sw.cases)
+      return false;
+    if (!sw.has_default)
+      coc.Append(sw.dft);
+    if (0 < sw.lo && sw.lo <= 16)
+      sw.lo = 0;
+    auto delta = uint64_t(sw.hi) - uint64_t(sw.lo);
+    if (delta >= 0xFFFF)
+      return false;
+    auto range = static_cast<uint32_t>(delta + 1);
+    auto *table = reinterpret_cast<CSwitchTable *>(
+        MAlloc(sizeof(CSwitchTable) + range * sizeof(uint32_t),
+               CurrentTask()->data_heap));
+    if (!table)
+      return false;
+    *table = {sw.lo, range, sw.dft};
+    coc.code[dispatch].data = reinterpret_cast<uintptr_t>(table);
+    coc.has_misc_data = true;
+    auto *targets = reinterpret_cast<uint32_t *>(table + 1);
+    for (uint32_t i = 0; i < range; ++i)
+      targets[i] = sw.dft;
+    for (auto *c = sw.cases; c; c = c->next) {
+      auto first = uint64_t(c->lo) - uint64_t(sw.lo);
+      auto last = uint64_t(c->hi) - uint64_t(sw.lo);
+      for (auto i = first; i <= last; ++i) {
+        if (targets[i] != sw.dft)
+          return false;
+        targets[i] = c->label;
+      }
+    }
+    return !coc.failed;
   }
 
   bool ExpressionStatement(int64_t end)

@@ -76,6 +76,8 @@ CCodeCtrl::~CCodeCtrl()
         Free(reinterpret_cast<void *>(code[i].data));
       else if (code[i].code == IC_ASM)
         AsmDel(reinterpret_cast<CAsm *>(code[i].data));
+      else if (code[i].code == IC_SWITCH || code[i].code == IC_NOBOUND_SWITCH)
+        Free(reinterpret_cast<void *>(code[i].data));
     }
   while (labels) {
     auto *label = labels;

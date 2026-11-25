@@ -70,8 +70,8 @@ public:
 
   size_t Branch(CICode op)
   {
-    if (op == IC_JMP)
-      Bytes(0xE9);
+    if (op == IC_JMP || op == IC_SUB_CALL)
+      Bytes(op == IC_JMP ? 0xE9 : 0xE8);
     else
       Bytes(0x0F, op == IC_BR_ZERO ? 0x84 : 0x85);
     Immediate(0, 4);
@@ -85,6 +85,31 @@ public:
     auto disp = static_cast<uint32_t>(target - end);
     for (unsigned i = 0; i < 4; ++i)
       buf[end - 4 + i] = disp >> (8 * i);
+  }
+
+  void Switch(const CSwitchTable &sw, const CIntermediateCode *code,
+              bool nobound)
+  {
+    if (sw.lo) {
+      Bytes(0x48, 0xBA); // MOV RDX,imm64
+      Immediate(sw.lo, 8);
+      Bytes(0x48, 0x29, 0xD0); // SUB RAX,RDX
+    }
+    if (!nobound) {
+      Bytes(0x48, 0x3D); // CMP RAX,imm32
+      Immediate(sw.range, 4);
+      Bytes(0x0F, 0x83); // JAE default
+      Immediate(0, 4);
+      PatchBranch(size, code[sw.dft].data);
+    }
+    Bytes(0x48, 0x8D, 0x15); // LEA RDX,[RIP+table]
+    Immediate(9, 4);
+    Bytes(0x48, 0x63, 0x04, 0x82);       // MOVSXD RAX,DWORD [RDX+RAX*4]
+    Bytes(0x48, 0x01, 0xD0, 0xFF, 0xE0); // ADD RAX,RDX / JMP RAX
+    auto table = size;
+    const auto *targets = reinterpret_cast<const uint32_t *>(&sw + 1);
+    for (uint32_t i = 0; i < sw.range; ++i)
+      Immediate(code[targets[i]].data - table, 4);
   }
 
   void Extend(CRawType type, uint8_t modrm)
@@ -575,7 +600,23 @@ static bool EmitBody(CCodeOut &out, CCodeCtrl &coc, CRawType type,
       node.data = out.size;
       break;
     case IC_JMP:
-      out.PatchBranch(out.Branch(IC_JMP), code[node.right].data);
+    case IC_SUB_CALL:
+      out.PatchBranch(out.Branch(node.code), code[node.right].data);
+      break;
+    case IC_SUB_ENTRY:
+      ++stack_slots;
+      break;
+    case IC_RET:
+      --stack_slots;
+      out.Bytes(0xC3);
+      break;
+    case IC_SWITCH:
+    case IC_NOBOUND_SWITCH:
+      if (!Emit(out, code, node.left, 0, stack_slots))
+        return false;
+      out.Convert(code[node.left].type, RT_I64);
+      out.Switch(*reinterpret_cast<const CSwitchTable *>(node.data), code,
+                 node.code == IC_NOBOUND_SWITCH);
       break;
     case IC_BR_ZERO:
     case IC_BR_NOT_ZERO:
