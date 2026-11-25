@@ -1,0 +1,16 @@
+Linux/Fixtures/LexProbe.HC text eol=lf
+Linux/Fixtures/LexDirectives.HC text eol=lf
+Linux/Fixtures/LexInput.HC text eol=lf
+Linux/Fixtures/LexNested.HH text eol=lf
+Linux/Fixtures/TextDemo.HC text eol=lf
+Linux/Fixtures/SpritePlot.HC -text
+Linux/Fixtures/ExpressionProbe.HC text eol=lf
+Linux/Fixtures/FunctionProbe.HC text eol=lf
+Linux/Fixtures/Print.HC text eol=lf
+Linux/Fixtures/PrintSourceProbe.HC text eol=lf
+Linux/Fixtures/StreamProbe.HC text eol=lf
+Linux/Fixtures/StreamNested.HC text eol=lf
+Linux/Fixtures/MemoryProbe.HC text eol=lf
+Linux/Fixtures/SubIntAccess.HC text eol=lf
+Linux/Fixtures/AggregateProbe.HC text eol=lf
+Linux/Fixtures/CompoundProbe.HC text eol=lf

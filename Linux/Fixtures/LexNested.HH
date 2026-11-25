@@ -1,0 +1,2 @@
+#define LEX_INNER 0b11
+NESTED LEX_INNER

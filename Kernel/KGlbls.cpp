@@ -1,0 +1,18 @@
+#include "KernelB.hpp"
+
+CTask *adam_task, *sys_focus_task;
+CBlkDevGlbls blkdev;
+CDbgGlbls dbg;
+CSema sys_semas[SEMA_SEMAS_NUM];
+uint8_t sys_var_init_flag, sys_var_init_val;
+CJob sys_macro_head;
+CDevGlbls dev;
+CCntsGlbls cnts{1, 0, 2676302000, 2676302, 2676302000, 0, 0, 0, false};
+uint64_t sys_cache_line_width;
+uint8_t *rev_bits_table, *set_bits_table;
+uint64_t *pow10_I64;
+CExt *ext;
+
+extern "C" {
+uint64_t MEM_HEAP_LIMIT;
+}

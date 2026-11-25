@@ -1,0 +1,15 @@
+$WW,1$$FG,5$$TX+CX,"Booting from DVD"$$FG$
+
+UnholyOS boots from a RedSea DVD image on a PC with a BIOS. The BIOS starts the DVD boot sector in 16-bit real mode. The boot sector loads the kernel from the disc. The kernel enters 32-bit protected mode, sets up paging, and enters 64-bit mode.
+
+Build and test the disc on Linux or on Ubuntu under WSL.
+
+$FG,2$make -j2 test$FG$
+
+Boot the image in QEMU with 512 MiB of RAM.
+
+$FG,2$qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom build/unholyos.iso -serial stdio$FG$
+
+The window displays "UnholyOS kernel entered in 64-bit mode." The boot tests also check the BIOS handoff, kernel memory, interrupts, and reads from the boot disc. The test disc runs the original Demo/Print.HC and Demo/SubIntAccess.HC through ExeFile and checks HolyC class layout and initialization.
+
+The source lives in Adam/Opt/Boot and Kernel. The host guide in docs/Boot.md records the build requirements, reference paths, and subsystem status.

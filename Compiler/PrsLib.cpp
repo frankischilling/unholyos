@@ -1,0 +1,134 @@
+#include "../Kernel/KernelB.hpp"
+#include "CompilerA.hpp"
+
+CMemberLst *MemberAdd(CHashClass &owner, const char *name, CHashClass &cls,
+                      int64_t offset)
+{
+  auto **link = &owner.member_lst_and_root;
+  while (*link) {
+    auto cmp = StrCmpCpp(reinterpret_cast<const uint8_t *>((*link)->str),
+                         reinterpret_cast<const uint8_t *>(name));
+    if (!cmp)
+      return nullptr;
+    link = cmp < 0 ? &(*link)->left : &(*link)->right;
+  }
+  auto *member = reinterpret_cast<CMemberLst *>(
+      CAlloc(sizeof(CMemberLst), CurrentTask()->data_heap));
+  if (!member)
+    return nullptr;
+  member->str = name;
+  member->member_class = &cls;
+  member->member_class_base = &cls - cls.ptr_stars_cnt;
+  member->size = cls.size;
+  member->dim.cnt = member->dim.total_cnt = 1;
+  member->offset = offset;
+  ++owner.member_cnt;
+  *link = member;
+  if (owner.last_in_member_lst)
+    owner.last_in_member_lst->next = member;
+  owner.last_in_member_lst = member;
+  return member;
+}
+
+CHashClass *PrsClass(const CCmpCtrl &cc)
+{
+  if (cc.token != TK_IDENT || !cc.hash_entry ||
+      !(cc.hash_entry->type & (HTT_CLASS | HTT_INTERNAL_TYPE)))
+    return nullptr;
+  auto *cls = reinterpret_cast<CHashClass *>(cc.hash_entry);
+  auto type = static_cast<CRawType>(cls->raw_type);
+  return TypeSize(type) || type == RT_U0 ? cls : nullptr;
+}
+
+CHashClass *PrsStars(CCmpCtrl &cc, CHashClass *cls)
+{
+  for (; cc.token == '*'; Lex(cc)) {
+    if (cls->ptr_stars_cnt == PTR_STARS_NUM)
+      return nullptr;
+    ++cls;
+  }
+  return cc.token == TK_ERROR ? nullptr : cls;
+}
+
+CHashClass *PrsClassNew()
+{
+  auto *cls = reinterpret_cast<CHashClass *>(CAlloc(
+      sizeof(CHashClass) * (PTR_STARS_NUM + 1), CurrentTask()->data_heap));
+  if (!cls)
+    return nullptr;
+  for (unsigned stars = 0; stars <= PTR_STARS_NUM; ++stars) {
+    auto &type = cls[stars];
+    type.sym.hash.type = HTT_CLASS;
+    type.ptr_stars_cnt = stars;
+    type.raw_type = RT_I64;
+    type.size = stars ? sizeof(uint64_t) : 0;
+  }
+  return cls;
+}
+
+// The statement stream links only its own nodes. Operand trees share the same
+// storage and use their indices even when the array grows.
+CCodeCtrl::~CCodeCtrl()
+{
+  if (has_misc_data)
+    for (uint32_t i = 0; i < used; ++i)
+      if (code[i].code == IC_STR_CONST)
+        Free(reinterpret_cast<void *>(code[i].data));
+  Free(code);
+}
+
+uint32_t CCodeCtrl::Add(const CIntermediateCode &entry)
+{
+  if (failed)
+    return NO_IC;
+  if (used == capacity) {
+    uint32_t count = capacity ? capacity * 2 : 32;
+    auto *next = count > capacity ? MAlloc(size_t{count} * sizeof(entry),
+                                           CurrentTask()->data_heap)
+                                  : nullptr;
+    if (!next) {
+      failed = true;
+      return NO_IC;
+    }
+    if (used)
+      MemCpy(next, code, used * sizeof(entry));
+    Free(code);
+    code = reinterpret_cast<CIntermediateCode *>(next);
+    capacity = count;
+  }
+  code[used] = entry;
+  return used++;
+}
+
+void CCodeCtrl::Append(uint32_t index)
+{
+  if (index == NO_IC)
+    return;
+  if (last == NO_IC)
+    first = index;
+  else
+    code[last].next = index;
+  last = index;
+}
+
+void CCodeCtrl::Append(CICode op, uint32_t left, uint32_t right)
+{
+  Append(Add({0, left, right, op, RT_U0, false, false, false}));
+}
+
+uint32_t CCodeCtrl::LabelNew()
+{
+  return Add({0, NO_IC, NO_IC, IC_LABEL, RT_U0, false, false, false});
+}
+
+uint32_t CCodeCtrl::LValue(uint32_t address, CHashClass &cls,
+                           const CArrayDim *dim)
+{
+  if (address == NO_IC || (dim && cls.ptr_stars_cnt == PTR_STARS_NUM))
+    return NO_IC;
+  if (dim)
+    return Add({0, address, NO_IC, IC_HOLYC_TYPECAST, RT_I64, false, false,
+                true, NO_IC, &cls + 1, dim});
+  return Add({0, address, NO_IC, IC_DEREF, ClassRawType(cls), false, false,
+              true, NO_IC, &cls});
+}

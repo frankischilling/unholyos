@@ -1,0 +1,15 @@
+name: Boot
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  qemu:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: sudo apt-get update
+      - run: sudo apt-get install -y nasm qemu-system-x86
+      - run: make -j2 test
