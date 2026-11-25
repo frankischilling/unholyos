@@ -4,6 +4,7 @@ CTask *adam_task, *sys_focus_task;
 CBlkDevGlbls blkdev;
 CDbgGlbls dbg;
 CSema sys_semas[SEMA_SEMAS_NUM];
+CScrnCastGlbls scrncast;
 uint8_t sys_var_init_flag, sys_var_init_val;
 CJob sys_macro_head;
 CDevGlbls dev;

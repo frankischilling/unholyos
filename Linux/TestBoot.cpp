@@ -1398,6 +1398,17 @@ static void TestBoot(const char *qemu, const fs::path &iso,
           "90                      00000005     NOLIST\n"
           "inline listing 47\n",
           '1');
+      CheckProgramOutput(output, "/SoundProbe.HC",
+                         "sound notes 0000000000000000 407B800000000000 "
+                         "407EDE22007F791A 4029F4E00A91D08E\n"
+                         "sound keys 0 60 60 1 127\n",
+                         '1');
+      for (const char *msg :
+           {"UnholyOS: beeps completed and stopped",
+            "UnholyOS: speaker gate, mute and reset matched",
+            "UnholyOS: sound event queue and default format matched"})
+        Check(output.find(msg) != std::string::npos,
+              "The speaker, timing, or sound event recording failed");
       CheckProgramOutput(output, "/FixedAsm.HC", "fixed jit 1 42\n", '1');
       CheckProgramOutput(output, "/FixedImage.BIN", "fixed load 42\n", '1');
       Check(output.find("UnholyOS: invalid ORG left the destination intact") !=
@@ -1430,7 +1441,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
              {"AsmProbe.BIN.Z", "DivByHand.BIN.Z", "InlineAsmProbe.BIN.Z",
               "GotoProbe.BIN.Z", "SwitchProbe.BIN.Z", "OpcodeProbe.BIN.Z",
               "FixedImage.BIN", "AsmBranchProbe.BIN.Z",
-              "AsmBranchImport.BIN.Z", "AsmListingProbe.BIN.Z"})
+              "AsmBranchImport.BIN.Z", "AsmListingProbe.BIN.Z",
+              "SoundRecord.BIN.Z"})
           fs::copy_file(CaptureGuestFile(vm, dir, output, name),
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);

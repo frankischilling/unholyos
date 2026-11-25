@@ -39,6 +39,7 @@ static bool SysGlblsInit()
   sys_focus_task = adam_task;
   DbgModeCpp(true);
   QueInit(sys_macro_head.next, sys_macro_head.last);
+  scrncast.snd_head.next = scrncast.snd_head.last = &scrncast.snd_head;
 
   auto *hc = adam_task->data_heap;
   rev_bits_table = MAlloc(256, hc);
@@ -964,6 +965,72 @@ static void BootAsmBranchReport(const CDrv &dvd, CTask &task)
   }
 }
 
+static void BootSoundReport(const CDrv &dvd, CTask &task)
+{
+  auto start = __atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED);
+  auto freq = cnts.HPET_freq;
+  auto hpet_start = freq ? HPET() : 0;
+  if (!BootFileProgramReport(dvd, "/SoundProbe.HC").okay)
+    return;
+  auto elapsed = __atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED) - start;
+  bool timed = elapsed >= 700 && (!freq || HPET() - hpet_start >= freq * 13 / 10);
+  if (timed && !(InU8(0x61) & 3) && !scrncast.ona)
+    SerialPutS("UnholyOS: beeps completed and stopped\r\n");
+
+  SndCpp(60);
+  bool enabled = (InU8(0x61) & 3) == 3 && scrncast.ona == 60;
+  auto &snd_lock = sys_semas[SEMA_SND].flags;
+  __atomic_fetch_or(&snd_lock, 1, __ATOMIC_ACQUIRE);
+  SndCpp(0);
+  bool contended = (InU8(0x61) & 3) == 3 && scrncast.ona == 60;
+  SndRstCpp();
+  bool reset = !(InU8(0x61) & 3) && !scrncast.ona && !(snd_lock & 1);
+  auto initial_mute = MuteCpp(1);
+  SndCpp(60);
+  bool muted = !(InU8(0x61) & 3) && !scrncast.ona && IsMuteCpp();
+  auto restored = MuteCpp(initial_mute);
+  if (enabled && contended && reset && muted && restored &&
+      IsMuteCpp() == initial_mute)
+    SerialPutS("UnholyOS: speaker gate, mute and reset matched\r\n");
+
+  auto *ram = MountedDrive('B');
+  if (!ram)
+    return;
+  auto compiled = ExePutS(
+      "Cmp(\"::/SoundRecord.HC\",,\"B:/SoundRecord.BIN.Z\");", nullptr, 0);
+  if (!compiled.okay || compiled.value)
+    return;
+  auto *mod = Load(*ram, "/SoundRecord.BIN.Z", task, LDF_JUST_LOAD);
+  if (!mod)
+    return;
+  auto old_debug = DbgModeCpp(false);
+  bool okay = LoadPass2(*mod);
+  DbgModeCpp(old_debug);
+  auto &head = scrncast.snd_head;
+  constexpr int8_t notes[]{0, 60, 60, 0};
+  unsigned count = 0;
+  uint64_t last = head.tS;
+  while (head.next != &head) {
+    auto *entry = head.next;
+    okay = okay && count < sizeof(notes) && entry->ona == notes[count] &&
+           entry->tS >= last;
+    count++;
+    last = entry->tS;
+    QueRem(*entry);
+    Free(entry);
+  }
+  auto *fmt = scrncast.print_fmt;
+  if (okay && count == sizeof(notes) && !scrncast.record &&
+      scrncast.just_audio && fmt &&
+      !StrCmpCpp(reinterpret_cast<const uint8_t *>(fmt),
+                 reinterpret_cast<const uint8_t *>("B:/Tmp/%X.GR"))) {
+    SerialPutS("UnholyOS: sound event queue and default format matched\r\n");
+    BootGuestFileReport(*ram, "/SoundRecord.BIN.Z");
+  }
+  Free(fmt);
+  scrncast.print_fmt = nullptr;
+}
+
 static void BootAsmListingReport(const CDrv &dvd, CTask &task)
 {
   auto *ram = MountedDrive('B');
@@ -1310,6 +1377,7 @@ extern "C" void KMainCpp()
     BootAsmReport(*adam_task->cur_dv, *adam_task);
     BootAsmBranchReport(*adam_task->cur_dv, *adam_task);
     BootAsmListingReport(*adam_task->cur_dv, *adam_task);
+    BootSoundReport(*adam_task->cur_dv, *adam_task);
     BootFileProgramReport(*adam_task->cur_dv, "/AsmListingScope.HC");
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);
     BootSwitchReport(*adam_task->cur_dv, *adam_task);

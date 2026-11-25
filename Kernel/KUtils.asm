@@ -19,6 +19,8 @@ GLOBAL PutCharsHC,IsRawHC,DefineLstLoadHC,DefineSubHC,DefineMatchHC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC
 GLOBAL RawHC,DbgModeHC,IsDbgModeHC,PutFileLinkHC,PutSrcLinkHC,FixSetHC,AdamErrHC
+GLOBAL tSHC,BusyHC,SleepUntilHC,SleepHC,Ona2FreqHC,Freq2OnaHC,SndHC
+GLOBAL ScrnCastHC,SndRstHC,BeepHC,MuteHC,IsMuteHC
 EXTERN CPUStructInitCpp,TaskInitCpp
 EXTERN MAllocCpp,FreeCpp,MSizeCpp,MSize2Cpp,MHeapCtrlCpp,CAllocCpp,MAllocIdentCpp
 EXTERN StrNewCpp,AStrNewCpp,StrCpyCpp,StrCmpCpp,StrIMatchCpp,StrOccCpp
@@ -39,6 +41,8 @@ EXTERN PutCharsCpp,PutS,PutHexCpp,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineM
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp
 EXTERN RawCpp,DbgModeCpp,IsDbgModeCpp,PutFileLinkCpp,PutSrcLinkCpp,FixSetCpp,AdamErrCpp
+EXTERN tSCpp,BusyCpp,SleepUntilCpp,SleepCpp,Ona2FreqCpp,Freq2OnaCpp,SndCpp
+EXTERN ScrnCastCpp,SndRstCpp,BeepCpp,MuteCpp,IsMuteCpp
 
 SECTION .text
 BITS 64
@@ -191,6 +195,18 @@ HOLYC_PRINT DocPrintHC,DocPrintCpp,2
 HOLYC_CPP RawHC,RawCpp,1
 HOLYC_CPP DbgModeHC,DbgModeCpp,1
 HOLYC_CPP IsDbgModeHC,IsDbgModeCpp,0
+HOLYC_CPP tSHC,tSCpp,0
+HOLYC_CPP BusyHC,BusyCpp,1
+HOLYC_CPP SleepUntilHC,SleepUntilCpp,1
+HOLYC_CPP SleepHC,SleepCpp,1
+HOLYC_CPP Ona2FreqHC,Ona2FreqCpp,1
+HOLYC_CPP Freq2OnaHC,Freq2OnaCpp,1
+HOLYC_CPP SndHC,SndCpp,1
+HOLYC_CPP ScrnCastHC,ScrnCastCpp,3
+HOLYC_CPP SndRstHC,SndRstCpp,0
+HOLYC_CPP BeepHC,BeepCpp,2
+HOLYC_CPP MuteHC,MuteCpp,1
+HOLYC_CPP IsMuteHC,IsMuteCpp,0
 HOLYC_CPP PutFileLinkHC,PutFileLinkCpp,4
 HOLYC_CPP PutSrcLinkHC,PutSrcLinkCpp,3
 HOLYC_CPP FixSetHC,FixSetCpp,2

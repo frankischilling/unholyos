@@ -312,8 +312,10 @@ static_assert(sizeof(CBlkDevGlbls) == 384 &&
 enum : size_t
 {
   SEMA_DBG_MODE = 4,
+  SEMA_SND = 5,
   SEMA_FLUSH_VGA_IMAGE = 9,
   SEMA_SINGLE_USER = 10,
+  SEMA_MUTE = 17,
   SEMA_FIX = 20,
   SEMA_SEMAS_NUM = 21,
 };
@@ -323,6 +325,38 @@ struct CSema
   uint64_t flags;
   uint8_t pad[120];
 };
+
+struct [[gnu::packed]] CAUData
+{
+  uint64_t cdt;
+  int8_t ona;
+};
+
+struct [[gnu::packed]] CSndData
+{
+  CSndData *next, *last;
+  uint64_t tS;
+  int8_t ona;
+};
+
+struct [[gnu::packed]] CScrnCastGlbls
+{
+  CSndData snd_head;
+  uint64_t t0_now, t0_tS;
+  char *print_fmt;
+  CDC *dc, *dc2_alias;
+  bool record, just_audio;
+  int8_t ona;
+};
+
+static_assert(sizeof(CAUData) == 9 && offsetof(CAUData, ona) == 8);
+static_assert(sizeof(CSndData) == 25 && offsetof(CSndData, tS) == 16 &&
+              offsetof(CSndData, ona) == 24);
+static_assert(sizeof(CScrnCastGlbls) == 68 &&
+              offsetof(CScrnCastGlbls, t0_now) == 25 &&
+              offsetof(CScrnCastGlbls, print_fmt) == 41 &&
+              offsetof(CScrnCastGlbls, record) == 65 &&
+              offsetof(CScrnCastGlbls, ona) == 67);
 
 struct CDbgInfo
 {
@@ -909,6 +943,7 @@ struct CWinScroll
   uint8_t color, pad[3];
 };
 
+constexpr uint32_t TASKF_IDLE = 1 << 3;
 constexpr uint32_t DISPLAYF_NOT_RAW = 1 << 1, DISPLAYF_SILENT = 1 << 2;
 
 struct CTask

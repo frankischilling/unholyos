@@ -321,6 +321,29 @@ source and the guest-built `SwitchProbe.BIN.Z`. Pinned TempleOS
 produced the same line from the source and the UnholyOS-built module.
 The suite rejects overlapping cases and saves the module under `BUILD`.
 
+## PC speaker and recorded sound events
+
+`make -j4 test BUILD=build/pc-speaker` builds
+`build/pc-speaker/unholyos.iso` and runs the HolyC sound probes.
+`SoundProbe.HC` checks note conversion, the default `Beep` and busy
+`Beep`, speaker shutoff, mute, and reset. Pinned TempleOS printed the
+same four frequency bit patterns and five note numbers from the same
+probe.
+
+The QEMU 9.2.0 comparison used `qemu-system-x86_64 -machine
+pc,pcspk-audiodev=spk -cpu qemu64 -m 512 -boot d -cdrom <iso>
+-display none -audiodev wav,id=spk,path=<wave>`. The recordings
+showed pitches of about 490.6 Hz and 327.4 Hz in both guests.
+The captured tone durations differed. The UnholyOS test separately
+checks the combined beep wait against PIT ticks and HPET elapsed time
+when HPET is available.
+
+The suite compiles `SoundRecord.HC` in the guest and saves
+`SoundRecord.BIN.Z` under `BUILD`. Loading that module in both systems
+produced the event sequence `0, 60, 60, 0` and the default path
+`B:/Tmp/%X.GR` in audio-only mode. Video capture and writing the queued
+events to an AU file remain pending.
+
 ## RedSea descriptor verification
 
 The source layout and coding rules are recorded in [SourceLayout.md](SourceLayout.md).

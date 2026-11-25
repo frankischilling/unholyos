@@ -182,8 +182,7 @@ private:
     auto *member = callee.cls.member_lst_and_root;
     for (uint32_t i = 0; i < callee.arg_cnt; ++i) {
       if (!member || !member->member_class || member->dim.next ||
-          (member->flags &
-           (MLF_LASTCLASS | MLF_STR_DFT_AVAILABLE | MLF_FUN | MLF_DOT_DOT_DOT)))
+          (member->flags & (MLF_LASTCLASS | MLF_FUN | MLF_DOT_DOT_DOT)))
         return NO_IC;
       auto *cls = member->member_class;
       if (!TypeSize(ClassRawType(*cls)))
@@ -196,11 +195,17 @@ private:
       }
       uint32_t arg;
       if ((member->flags & MLF_DFT_AVAILABLE) &&
-          (!paren || cc.token == ',' || cc.token == ')'))
-        arg = Add({member->dft_val, NO_IC, NO_IC,
-                   type == RT_F64 ? IC_IMM_F64 : IC_IMM_I64, type, false, false,
-                   false});
-      else
+          (!paren || cc.token == ',' || cc.token == ')')) {
+        if ((member->flags & MLF_STR_DFT_AVAILABLE) &&
+            (cc.flags & CCF_AOT_COMPILE)) {
+          auto *str = reinterpret_cast<const char *>(member->dft_val);
+          arg = StringConst(StrNew(str, CurrentTask()->data_heap),
+                            StrLen(str) + 1, cls);
+        } else
+          arg = Add({member->dft_val, NO_IC, NO_IC,
+                     type == RT_F64 ? IC_IMM_F64 : IC_IMM_I64, type, false,
+                     false, false});
+      } else
         arg = Expression(PREC_ASSIGN + 1, depth + 1);
       if (arg == NO_IC || !TypeSize(coc.code[arg].type))
         return NO_IC;
@@ -256,6 +261,22 @@ private:
   uint32_t Int(uint64_t bits)
   {
     return Add({bits, NO_IC, NO_IC, IC_IMM_I64, RT_I64, false, false, false});
+  }
+
+  uint32_t StringConst(char *text, size_t size, CHashClass *cls)
+  {
+    if (!text)
+      return NO_IC;
+    auto index = size > UINT32_MAX
+                     ? NO_IC
+                     : Add({reinterpret_cast<uintptr_t>(text),
+                            static_cast<uint32_t>(size), 0, IC_STR_CONST,
+                            RT_I64, false, false, false, NO_IC, cls});
+    if (index == NO_IC)
+      Free(text);
+    else
+      coc.has_misc_data = true;
+    return index;
   }
 
   uint32_t TypeCast(uint32_t value, CHashClass &cls)
@@ -470,24 +491,13 @@ private:
       return Add({bits, NO_IC, NO_IC, IC_IMM_F64, RT_F64, false, false, false});
     }
     if (token == TK_STR && strings) {
-      size_t size;
+      size_t size = 0;
       auto *byte = reinterpret_cast<CHashClass *>(
           HashFind("U8", cc.htc.hash_table_lst, HTT_INTERNAL_TYPE));
       if (!byte)
         return NO_IC;
       auto *text = LexExtStr(cc, size);
-      if (!text)
-        return NO_IC;
-      auto index = size > UINT32_MAX
-                       ? NO_IC
-                       : Add({reinterpret_cast<uintptr_t>(text),
-                              static_cast<uint32_t>(size), 0, IC_STR_CONST,
-                              RT_I64, false, false, false, NO_IC, byte + 1});
-      if (index == NO_IC)
-        Free(text);
-      else
-        coc.has_misc_data = true;
-      return index;
+      return StringConst(text, size, byte + 1);
     }
     if (token == TK_IDENT && cc.local_var_entry) {
       const auto *member = cc.local_var_entry;

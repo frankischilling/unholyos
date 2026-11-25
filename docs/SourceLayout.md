@@ -137,6 +137,21 @@ and fallthrough share the group entry code through `IC_SUB_CALL`.
 back end stores fixed 32-bit relative offsets. TempleOS also selects
 smaller entries when the destinations fit.
 
+## PC speaker
+
+`Kernel/KMisc.cpp` follows `Kernel/KMisc.HC` for note conversion, PIT
+channel 2 programming, mute, beep, and sound event capture.
+`F64Log2Bits` in `Kernel/KMathA.asm` uses the x87 instruction sequence
+from `_LOG2` in `Kernel/KMathA.HC`. The packed `CAUData`, `CSndData`,
+and `CScrnCastGlbls` records in `Kernel/KernelA.hpp` follow
+`Kernel/KernelA.HH`. `Kernel/KUtils.asm` adapts the exported HolyC
+stack calls to the C++ ABI.
+
+`SleepUntilCpp` waits for timer interrupts on the current task.
+TempleOS marks the task idle and yields to the scheduler. The
+desktop playback in `Adam/ASnd.HC`, the AU writer in
+`Adam/Snd/SndFile.HC`, and video capture remain pending.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains guest verification routines for boot records, file access, compiler behavior, and runtime modules. The reference `Kernel/KMain.HC` concentrates on initialization and startup. Those probes remain a structural difference and should move into a separate verification component as the runtime startup path develops.
