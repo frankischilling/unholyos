@@ -231,9 +231,23 @@ green, red, and padding words and crosses the HolyC call boundary in one
 64-bit argument slot or return register.
 
 `GrInit2` runs the palette setup during the bootstrap. The reference
-calls it when loading the Adam graphics stack. The graphics device
-contexts, desktop compositor, and task palette reset callback are
-pending.
+calls it when loading the Adam graphics stack. The desktop compositor and task palette reset callback remain pending.
+
+## Graphics device contexts
+
+`Adam/Gr/GrDC.cpp` carries the reference `CDC` allocation and ownership
+rules, fixed-point transforms, depth buffers, lighting, and GR
+serialization. `GrMath.cpp` supplies the matrix copy used by `DCCopy`.
+`CDC` retains its 32-byte on-disk header and the optional palette that
+precedes the pixel body. `DCSave` and `DCLoad` use the kernel's TempleOS
+LZW codec. `GRRead` also checks that the serialized data fits in the file.
+
+`GrInit2` allocates the six screen contexts. The persistent `gr.dc`
+starts transparent with `DCF_SCRN_BITMAP | DCF_ON_TOP`. The context
+holds HolyC ABI addresses for the transform and lighting callbacks.
+HolyC can call the two functions by name. The current compiler headers
+still need typed callback member access. Brush tables, the text layer,
+raster operations, and composition remain pending.
 
 ## Remaining structural work
 

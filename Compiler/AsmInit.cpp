@@ -1,4 +1,5 @@
 #include "../Kernel/KernelB.hpp"
+#include "../Adam/Gr/GrGlbls.hpp"
 #include "CompilerA.hpp"
 
 extern "C" const char CompilerOpCodes[];
@@ -589,6 +590,127 @@ static bool CmpPaletteData(CHashTable *table)
                          gr_rainbow_10, 10);
 }
 
+static bool CmpDCData(CHashTable *table)
+{
+  auto *color16 = CmpKernelClass(table, "CColorROPU16", sizeof(CColorROPU16));
+  auto *color32 = CmpKernelClass(table, "CColorROPU32", sizeof(CColorROPU32));
+  auto *p = CmpKernelClass(table, "CD3I32", sizeof(CD3I32));
+  auto *sym = CmpKernelClass(table, "CGrSym", sizeof(CGrSym));
+  auto *dc = CmpKernelClass(table, "CDC", sizeof(CDC));
+  auto *glbl = CmpKernelClass(table, "CGrGlbls", sizeof(CGrGlbls));
+  if (!color16 || !color32 || !p || !sym || !dc || !glbl)
+    return false;
+  color16->fwd_class = FindType("U16i", table);
+  color32->fwd_class = FindType("U32i", table);
+  auto *heap = CurrentTask()->data_heap;
+  auto *u0 = FindType("U0", table);
+  auto *u8 = FindType("U8", table);
+  auto *u32 = FindType("U32", table);
+  auto *i32 = FindType("I32", table);
+  auto *u64 = FindType("U64", table);
+  auto *i64 = FindType("I64", table);
+  auto *boolean = FindType("Bool", table);
+  auto *bgr48 = FindType("CBGR48", table);
+  auto *task = FindType("CTask", table) + 1;
+  const struct
+  {
+    const char *name;
+    CHashClass *record, *type;
+    size_t offset;
+    size_t count = 0;
+  } members[]{
+      {"color", color16, u8, offsetof(CColorROPU16, color)},
+      {"rop", color16, u8, offsetof(CColorROPU16, rop)},
+      {"c0", color32, color16, offsetof(CColorROPU32, c0)},
+      {"c1", color32, color16, offsetof(CColorROPU32, c1)},
+      {"x", p, i32, offsetof(CD3I32, x)},
+      {"y", p, i32, offsetof(CD3I32, y)},
+      {"z", p, i32, offsetof(CD3I32, z)},
+      {"sx", sym, i32, offsetof(CGrSym, sx)},
+      {"sy", sym, i32, offsetof(CGrSym, sy)},
+      {"sz", sym, i32, offsetof(CGrSym, sz)},
+      {"pad", sym, i32, offsetof(CGrSym, pad)},
+      {"snx", sym, i64, offsetof(CGrSym, snx)},
+      {"sny", sym, i64, offsetof(CGrSym, sny)},
+      {"snz", sym, i64, offsetof(CGrSym, snz)},
+      {"start", dc, u0, 0},
+      {"cdt", dc, u64, offsetof(CDC, cdt)},
+      {"x0", dc, i32, offsetof(CDC, x0)},
+      {"y0", dc, i32, offsetof(CDC, y0)},
+      {"width", dc, i32, offsetof(CDC, width)},
+      {"width_internal", dc, i32, offsetof(CDC, width_internal)},
+      {"height", dc, i32, offsetof(CDC, height)},
+      {"flags", dc, i32, offsetof(CDC, flags)},
+      {"end", dc, u0, offsetof(CDC, palette)},
+      {"palette", dc, bgr48, offsetof(CDC, palette), COLORS_NUM},
+      {"color", dc, color32, offsetof(CDC, color)},
+      {"bkcolor", dc, color32, offsetof(CDC, bkcolor)},
+      {"color2", dc, color32, offsetof(CDC, color2)},
+      {"ls", dc, p, offsetof(CDC, ls)},
+      {"dither_probability_u16", dc, u64,
+       offsetof(CDC, dither_probability_u16)},
+      {"brush", dc, dc + 1, offsetof(CDC, brush)},
+      {"r", dc, i64 + 1, offsetof(CDC, r)},
+      {"r_norm", dc, i64, offsetof(CDC, r_norm)},
+      {"x", dc, i32, offsetof(CDC, x)},
+      {"y", dc, i32, offsetof(CDC, y)},
+      {"z", dc, i32, offsetof(CDC, z)},
+      {"thick", dc, i32, offsetof(CDC, thick)},
+      {"sym", dc, sym, offsetof(CDC, sym)},
+      {"cur_x", dc, i32, offsetof(CDC, cur_x)},
+      {"cur_y", dc, i32, offsetof(CDC, cur_y)},
+      {"cur_z", dc, i32, offsetof(CDC, cur_z)},
+      {"collision_cnt", dc, i64, offsetof(CDC, collision_cnt)},
+      {"nearest_dist", dc, i64, offsetof(CDC, nearest_dist)},
+      {"min_x", dc, i64, offsetof(CDC, min_x)},
+      {"max_x", dc, i64, offsetof(CDC, max_x)},
+      {"min_y", dc, i64, offsetof(CDC, min_y)},
+      {"max_y", dc, i64, offsetof(CDC, max_y)},
+      {"dc_signature", dc, u32, offsetof(CDC, dc_signature)},
+      {"mem_task", dc, task, offsetof(CDC, mem_task)},
+      {"win_task", dc, task, offsetof(CDC, win_task)},
+      {"alias", dc, dc + 1, offsetof(CDC, alias)},
+      {"body", dc, u8 + 1, offsetof(CDC, body)},
+      {"depth_buf", dc, i32 + 1, offsetof(CDC, depth_buf)},
+      {"db_z", dc, i64, offsetof(CDC, db_z)},
+      {"scrn_image", glbl, dc + 1, offsetof(CGrGlbls, scrn_image)},
+      {"dc", glbl, dc + 1, offsetof(CGrGlbls, dc)},
+      {"dc1", glbl, dc + 1, offsetof(CGrGlbls, dc1)},
+      {"dc2", glbl, dc + 1, offsetof(CGrGlbls, dc2)},
+      {"dc_cache", glbl, dc + 1, offsetof(CGrGlbls, dc_cache)},
+      {"zoomed_dc", glbl, dc + 1, offsetof(CGrGlbls, zoomed_dc)},
+      {"scrn_zoom", glbl, i64, offsetof(CGrGlbls, scrn_zoom)},
+      {"sx", glbl, i64, offsetof(CGrGlbls, sx)},
+      {"sy", glbl, i64, offsetof(CGrGlbls, sy)},
+      {"continuous_scroll", glbl, boolean,
+       offsetof(CGrGlbls, continuous_scroll)},
+      {"hide_row", glbl, boolean, offsetof(CGrGlbls, hide_row)},
+      {"hide_col", glbl, boolean, offsetof(CGrGlbls, hide_col)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    auto *entry =
+        name ? MemberAdd(*member.record, name, *member.type, member.offset)
+             : nullptr;
+    if (!entry) {
+      Free(name);
+      return false;
+    }
+    if (member.count) {
+      auto *axis =
+          reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return false;
+      axis->cnt = member.count;
+      axis->total_cnt = 1;
+      entry->dim.next = axis;
+      entry->dim.total_cnt = member.count;
+      entry->size = member.type->size * member.count;
+    }
+  }
+  return CmpKernelGlobal(table, "gr", glbl, &gr);
+}
+
 static bool CmpRuntimeHeaders(CHashTable *table)
 {
   enum : uint8_t
@@ -606,6 +728,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     I64Ptr,
     BGR48,
     BGR48Ptr,
+    DCPtr,
+    I32Ptr,
+    ColorROP,
+    D3I32Ptr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -614,6 +740,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("U8", table) + 1, FindType("CTask", table) + 1,
       FindType("CJob", table) + 1, FindType("I64", table) + 1,
       FindType("CBGR48", table), FindType("CBGR48", table) + 1,
+      FindType("CDC", table) + 1, FindType("I32", table) + 1,
+      FindType("CColorROPU32", table), FindType("CD3I32", table) + 1,
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -671,6 +799,41 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"GrPaletteGet", U0, FF_RET1, {{"bgr48", BGR48Ptr}}},
       {"GrPaletteSet", U0, FF_RET1, {{"bgr48", BGR48Ptr}}},
       {"PaletteSetStd", U0, FF_RET1, {}},
+      {"Mat4x4MulXYZ", U0, FF_RET1,
+       {{"r", I64Ptr}, {"_x", I64Ptr}, {"_y", I64Ptr}, {"_z", I64Ptr}}},
+      {"DCTransform", U0, FF_RET1,
+       {{"dc", DCPtr}, {"_x", I64Ptr}, {"_y", I64Ptr}, {"_z", I64Ptr}}},
+      {"Mat4x4IdentEqu", I64Ptr, FF_RET1, {{"r", I64Ptr}}},
+      {"Mat4x4IdentNew", I64Ptr, FF_RET1, {{"mem_task", TaskPtr, true}}},
+      {"Mat4x4NormSqr65536", I64, FF_RET1, {{"r", I64Ptr}}},
+      {"DCMat4x4Set", U0, FF_RET1, {{"dc", DCPtr, true}, {"r", I64Ptr}}},
+      {"DCLighting", U0, FF_RET1,
+       {{"dc", DCPtr}, {"p1", D3I32Ptr}, {"p2", D3I32Ptr}, {"p3", D3I32Ptr}, {"color", ColorROP}}},
+      {"DCFill", U0, FF_RET1, {{"dc", DCPtr, true}, {"val", ColorROP, true, TRANSPARENT}}},
+      {"DCClear", U0, FF_RET1, {{"dc", DCPtr, true}}},
+      {"DCRst", U0, FF_RET1, {{"dc", DCPtr}}},
+      {"DCExtentsInit", U0, FF_RET1, {{"dc", DCPtr, true}}},
+      {"DCAlias", DCPtr, FF_RET1, {{"dc", DCPtr, true}, {"task", TaskPtr, true}}},
+      {"DCNew", DCPtr, FF_RET1,
+       {{"width", I64}, {"height", I64}, {"task", TaskPtr, true}, {"null_bitmap", Bool, true}}},
+      {"DCDel", U0, FF_RET1, {{"dc", DCPtr}}},
+      {"DCSize", I64, FF_RET1, {{"dc", DCPtr}}},
+      {"DCDepthBufRst", I32Ptr, FF_RET1, {{"dc", DCPtr}}},
+      {"DCDepthBufAlloc", I32Ptr, FF_RET1, {{"dc", DCPtr}}},
+      {"DCCopy", DCPtr, FF_RET1, {{"dc", DCPtr}, {"task", TaskPtr, true}}},
+      {"DCMono", U0, FF_RET1,
+       {{"dc", DCPtr}, {"quest", I64, true, TRANSPARENT}, {"true_color", I64, true}, {"false_color", I64, true, COLOR_MONO}}},
+      {"DCColorChg", I64, FF_RET1,
+       {{"dc", DCPtr}, {"src_color", I64}, {"dst_color", I64, true, TRANSPARENT}}},
+      {"DCSave", U8Ptr, FF_RET1,
+       {{"dc", DCPtr}, {"_size", I64Ptr, true}, {"dcsf_flags", I64, true, DCSF_COMPRESSED}}},
+      {"DCLoad", DCPtr, FF_RET1,
+       {{"src", U8Ptr}, {"_size", I64Ptr, true}, {"task", TaskPtr, true}}},
+      {"GRWrite", I64, FF_RET1,
+       {{"filename", U8Ptr}, {"dc", DCPtr}, {"dcsf_flags", I64, true, DCSF_COMPRESSED}}},
+      {"GRRead", DCPtr, FF_RET1, {{"filename", U8Ptr}, {"task", TaskPtr, true}}},
+      {"Mat4x4Equ", I64Ptr, FF_RET1, {{"dst", I64Ptr}, {"src", I64Ptr}}},
+      {"Mat4x4New", I64Ptr, FF_RET1, {{"src", I64Ptr}, {"mem_task", TaskPtr, true}}},
       {"PutKey", U0, FF_RET1, {{"ch", I64, true}, {"sc", I64, true}}},
       {"ScanChar", I64, FF_RET1, {}},
       {"ScanKey", Bool, FF_RET1,
@@ -915,6 +1078,20 @@ static bool CmpFillHash(CHashTable *table)
       {"DKGRAY","8"}, {"LTBLUE","9"}, {"LTGREEN","10"}, {"LTCYAN","11"},
       {"LTRED","12"}, {"LTPURPLE","13"}, {"YELLOW","14"}, {"WHITE","15"},
       {"COLORS_NUM","16"},
+      {"TRANSPARENT","0xFF"}, {"COLOR_MONO","0xFF"},
+      {"GR_WIDTH","640"}, {"GR_HEIGHT","480"}, {"GR_SCALE","(1<<32)"},
+      {"DCF_COMPRESSED","1"}, {"DCF_PALETTE","2"}, {"DCF_NO_TRANSPARENTS","4"},
+      {"DCF_TRANSFORMATION","0x100"}, {"DCF_SYMMETRY","0x200"},
+      {"DCF_JUST_MIRROR","0x400"}, {"DCF_LOCATE_NEAREST","0x800"},
+      {"DCF_DONT_DRAW","0x1000"}, {"DCF_ALIAS","0x2000"},
+      {"DCF_SCRN_BITMAP","0x4000"}, {"DCF_FILL_NOT_COLOR","0x8000"},
+      {"DCF_RECORD_EXTENTS","0x10000"}, {"DCF_ON_TOP","0x20000"},
+      {"DCSF_COMPRESSED","1"}, {"DCSF_PALETTE_GET","2"},
+      {"DCS_SIGNATURE_VAL","0x53437644"},
+      {"ROP_EQU","0"}, {"ROP_XOR","0x100"}, {"ROP_COLLISION","0x200"},
+      {"ROP_MONO","0x300"}, {"ROPF_HALF_RANGE_COLOR","0x1000"},
+      {"ROPF_TWO_SIDED","0x2000"}, {"ROPF_DITHER","0x40000000"},
+      {"ROPF_PROBABILITY_DITHER","0x80000000"},
       {"CH_ESC", "0x1B"},
       {"CH_SHIFT_ESC", "0x1C"},
       {"WIF_SELF_MS_L", "0x0008"},
@@ -983,7 +1160,8 @@ static bool CmpFillHash(CHashTable *table)
     HashAdd(&entry->sym.hash,table);
   }
   return CmpRuntimeData(table) && CmpTaskData(table) && CmpKbdData(table) &&
-         CmpMouseData(table) && CmpPaletteData(table) && CmpRuntimeHeaders(table);
+         CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
+         CmpRuntimeHeaders(table);
 }
 
 CHashTable *CmpAsmHashNew()

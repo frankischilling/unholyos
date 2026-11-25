@@ -1346,7 +1346,10 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not register color names\r\n");
     return;
   }
-  GrInit2();
+  if (!GrInit2()) {
+    SerialPutS("UnholyOS: Could not allocate graphics device contexts\r\n");
+    return;
+  }
   BootPutS("UnholyOS kernel entered in 64-bit mode");
 
   SerialPutS("UnholyOS: DVD LBA ");
@@ -1453,6 +1456,9 @@ extern "C" void KMainCpp()
     BootKeyboardReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/MouseProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/PaletteProbe.HC");
+    if (BootFileProgramReport(*adam_task->cur_dv, "/DCProbe.HC").okay)
+      if (auto *ram = MountedDrive('B'))
+        BootGuestFileReport(*ram, "/DCProbe.GR.Z");
     BootSoundReport(*adam_task->cur_dv, *adam_task);
     BootFileProgramReport(*adam_task->cur_dv, "/AsmListingScope.HC");
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);

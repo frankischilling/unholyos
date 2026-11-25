@@ -1,4 +1,5 @@
 #include "KernelB.hpp"
+#include "../Adam/Gr/GrGlbls.hpp"
 
 struct CLoadImport
 {
@@ -65,6 +66,13 @@ void Char2ScanCodeHC(),ScanCode2CharHC(),KbdTypeMaticHC(),PutKeyHC();
 void GridInitHC(),MsSetHC();
 void GrPaletteColorSetHC(),GrPaletteColorGetHC();
 void GrPaletteGetHC(),GrPaletteSetHC(),PaletteSetStdHC();
+void Mat4x4MulXYZHC(),DCTransformHC(),Mat4x4IdentEquHC(),Mat4x4IdentNewHC();
+void Mat4x4NormSqr65536HC(),DCMat4x4SetHC(),DCLightingHC(),DCFillHC();
+void DCClearHC(),DCRstHC(),DCExtentsInitHC(),DCAliasHC();
+void DCNewHC(),DCDelHC(),DCSizeHC(),DCDepthBufRstHC();
+void DCDepthBufAllocHC(),DCCopyHC(),DCMonoHC(),DCColorChgHC();
+void DCSaveHC(),DCLoadHC(),GRWriteHC(),GRReadHC();
+void Mat4x4EquHC(),Mat4x4NewHC();
 void ScanCharHC(),ScanKeyHC(),GetKeyHC(),GetCharHC();
 void _HASH_REM_DEL(), SysSymImportsResolveHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
@@ -474,6 +482,7 @@ bool LoadKernel(CTask &task)
       {"gr_rainbow_10", reinterpret_cast<uintptr_t>(gr_rainbow_10)},
       {"gr_palette_std", reinterpret_cast<uintptr_t>(gr_palette_std)},
       {"gr_palette_gray", reinterpret_cast<uintptr_t>(gr_palette_gray)},
+      {"gr", reinterpret_cast<uintptr_t>(&gr)},
       {"scrncast", reinterpret_cast<uintptr_t>(&scrncast)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
       {"SYS_RUN_LEVEL", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
@@ -608,6 +617,32 @@ bool LoadKernel(CTask &task)
       {"GrPaletteGet", reinterpret_cast<uintptr_t>(GrPaletteGetHC)},
       {"GrPaletteSet", reinterpret_cast<uintptr_t>(GrPaletteSetHC)},
       {"PaletteSetStd", reinterpret_cast<uintptr_t>(PaletteSetStdHC)},
+      {"Mat4x4MulXYZ", reinterpret_cast<uintptr_t>(Mat4x4MulXYZHC)},
+      {"DCTransform", reinterpret_cast<uintptr_t>(DCTransformHC)},
+      {"Mat4x4IdentEqu", reinterpret_cast<uintptr_t>(Mat4x4IdentEquHC)},
+      {"Mat4x4IdentNew", reinterpret_cast<uintptr_t>(Mat4x4IdentNewHC)},
+      {"Mat4x4NormSqr65536", reinterpret_cast<uintptr_t>(Mat4x4NormSqr65536HC)},
+      {"DCMat4x4Set", reinterpret_cast<uintptr_t>(DCMat4x4SetHC)},
+      {"DCLighting", reinterpret_cast<uintptr_t>(DCLightingHC)},
+      {"DCFill", reinterpret_cast<uintptr_t>(DCFillHC)},
+      {"DCClear", reinterpret_cast<uintptr_t>(DCClearHC)},
+      {"DCRst", reinterpret_cast<uintptr_t>(DCRstHC)},
+      {"DCExtentsInit", reinterpret_cast<uintptr_t>(DCExtentsInitHC)},
+      {"DCAlias", reinterpret_cast<uintptr_t>(DCAliasHC)},
+      {"DCNew", reinterpret_cast<uintptr_t>(DCNewHC)},
+      {"DCDel", reinterpret_cast<uintptr_t>(DCDelHC)},
+      {"DCSize", reinterpret_cast<uintptr_t>(DCSizeHC)},
+      {"DCDepthBufRst", reinterpret_cast<uintptr_t>(DCDepthBufRstHC)},
+      {"DCDepthBufAlloc", reinterpret_cast<uintptr_t>(DCDepthBufAllocHC)},
+      {"DCCopy", reinterpret_cast<uintptr_t>(DCCopyHC)},
+      {"DCMono", reinterpret_cast<uintptr_t>(DCMonoHC)},
+      {"DCColorChg", reinterpret_cast<uintptr_t>(DCColorChgHC)},
+      {"DCSave", reinterpret_cast<uintptr_t>(DCSaveHC)},
+      {"DCLoad", reinterpret_cast<uintptr_t>(DCLoadHC)},
+      {"GRWrite", reinterpret_cast<uintptr_t>(GRWriteHC)},
+      {"GRRead", reinterpret_cast<uintptr_t>(GRReadHC)},
+      {"Mat4x4Equ", reinterpret_cast<uintptr_t>(Mat4x4EquHC)},
+      {"Mat4x4New", reinterpret_cast<uintptr_t>(Mat4x4NewHC)},
       {"PutKey", reinterpret_cast<uintptr_t>(PutKeyHC)},
       {"ScanChar", reinterpret_cast<uintptr_t>(ScanCharHC)},
       {"ScanKey", reinterpret_cast<uintptr_t>(ScanKeyHC)},

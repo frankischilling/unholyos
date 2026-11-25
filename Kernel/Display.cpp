@@ -1,6 +1,6 @@
 #include "KernelB.hpp"
 
-constexpr unsigned GR_WIDTH = 640, GR_HEIGHT = 480, FONT_HEIGHT = 16;
+constexpr unsigned FONT_HEIGHT = 16;
 
 void VGAFlush()
 {

@@ -128,7 +128,17 @@ extern CBGR48 gr_palette_std[COLORS_NUM], gr_palette_gray[COLORS_NUM];
 extern uint8_t gr_rainbow_10[10];
 bool GrPaletteInit();
 void GrPaletteIndicesSet();
-void GrInit2();
+bool GrInit2();
+extern "C" CDC *DCNewCpp(int64_t width, int64_t height, CTask *task,
+                         uint8_t null_bitmap);
+extern "C" void DCDelCpp(CDC *dc);
+extern "C" void DCFillCpp(CDC *dc, uint32_t val);
+extern "C" void GrPaletteGetCpp(CBGR48 *bgr48);
+extern "C" uint8_t *MAllocCpp(size_t size, void *mem_task);
+extern "C" uint8_t *CAllocCpp(size_t size, void *mem_task);
+extern "C" uint8_t *MAllocIdentCpp(const void *src, void *mem_task);
+extern "C" uint64_t FileWriteCpp(const char *filename, const uint8_t *data,
+                                 uint64_t count, uint64_t date, uint64_t attr);
 extern "C" void PaletteSetStdCpp();
 extern "C" CHashDefineStr *DefineLstLoadCpp(const char *name, const char *list,
                                             const uintptr_t *frame);

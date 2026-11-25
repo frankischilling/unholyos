@@ -2,7 +2,7 @@
 
 #include <bit>
 
-constexpr int64_t GR_WIDTH = 640, GR_HEIGHT = 480, FONT_WIDTH = 8, FONT_HEIGHT = 8;
+constexpr int64_t FONT_WIDTH = 8, FONT_HEIGHT = 8;
 
 static constexpr uint64_t F64(double value)
 {

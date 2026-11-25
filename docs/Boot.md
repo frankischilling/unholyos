@@ -398,6 +398,16 @@ captures the displayed pixels while white is remapped to yellow and
 again after the original palette is restored. It repeats the input
 and display checks after rebooting the guest-built ISO.
 
+## Graphics device contexts
+
+`make -j4 test BUILD=build/gr-dc` runs `DCProbe.HC` at startup and after
+booting from the guest-built ISO. It checks the record offsets,
+screen contexts, row padding, alias and copy behavior, depth,
+fixed-point transforms, lighting, and compressed and raw GR data.
+Pinned TempleOS and UnholyOS produced the same 15-line trace with
+QEMU 9.2.0, the PC machine, `qemu64`, and 512 MiB. The 118-byte
+`DCProbe.GR.Z` file matched byte for byte.
+
 ## PC speaker and recorded sound events
 
 `make -j4 test BUILD=build/pc-speaker` builds
