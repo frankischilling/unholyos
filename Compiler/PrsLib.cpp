@@ -77,6 +77,12 @@ CCodeCtrl::~CCodeCtrl()
       else if (code[i].code == IC_ASM)
         AsmDel(reinterpret_cast<CAsm *>(code[i].data));
     }
+  while (labels) {
+    auto *label = labels;
+    labels = label->next;
+    Free(label->name);
+    Free(label);
+  }
   Free(code);
 }
 
@@ -122,6 +128,38 @@ void CCodeCtrl::Append(CICode op, uint32_t left, uint32_t right)
 uint32_t CCodeCtrl::LabelNew()
 {
   return Add({0, NO_IC, NO_IC, IC_LABEL, RT_U0, false, false, false});
+}
+
+CCodeLabel *CCodeCtrl::GoToLabelFind(const char *name, bool create)
+{
+  for (auto *label = labels; label; label = label->next)
+    if (!StrCmpCpp(reinterpret_cast<const uint8_t *>(label->name),
+                   reinterpret_cast<const uint8_t *>(name)))
+      return label;
+  if (!create)
+    return nullptr;
+
+  auto *heap = CurrentTask()->data_heap;
+  auto *label =
+      reinterpret_cast<CCodeLabel *>(MAlloc(sizeof(CCodeLabel), heap));
+  auto *str = label ? StrNew(name, heap) : nullptr;
+  auto index = str ? LabelNew() : NO_IC;
+  if (index == NO_IC) {
+    Free(str);
+    Free(label);
+    return nullptr;
+  }
+  *label = {labels, str, index, false};
+  labels = label;
+  return label;
+}
+
+bool CCodeCtrl::GoToLabelsDefined() const
+{
+  for (auto *label = labels; label; label = label->next)
+    if (!label->defined)
+      return false;
+  return true;
 }
 
 uint32_t CCodeCtrl::LValue(uint32_t address, CHashClass &cls,

@@ -631,9 +631,12 @@ uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
                     const CHashFun *fun, CAOT *aot, size_t *bytes)
 {
   CCodeOut size(nullptr, aot);
-  if (coc.failed || !EmitFunction(size, coc, root, type, fun) ||
-      size.failed || size.size > INT32_MAX)
+  if (coc.failed || !coc.GoToLabelsDefined() ||
+      !EmitFunction(size, coc, root, type, fun) || size.failed ||
+      size.size > INT32_MAX)
     return nullptr;
+  if (coc.asm_first)
+    AsmLabelsLayout(*coc.asm_first);
   auto total_size = size.size;
   if (coc.has_misc_data)
     for (uint32_t i = 0; i < coc.Count(); ++i) {

@@ -277,6 +277,14 @@ struct CIntermediateCode
 
 class CAsm;
 
+struct CCodeLabel
+{
+  CCodeLabel *next;
+  char *name;
+  uint32_t ic;
+  bool defined;
+};
+
 struct CCodeCtrl
 {
   CCodeCtrl() = default;
@@ -288,6 +296,8 @@ struct CCodeCtrl
   void Append(uint32_t index);
   void Append(CICode op, uint32_t left = NO_IC, uint32_t right = NO_IC);
   uint32_t LabelNew();
+  CCodeLabel *GoToLabelFind(const char *name, bool create = false);
+  bool GoToLabelsDefined() const;
   uint32_t LValue(uint32_t address, CHashClass &cls,
                   const CArrayDim *dim = nullptr);
   uint32_t Count() const
@@ -301,6 +311,7 @@ struct CCodeCtrl
   bool failed = false, has_misc_data = false;
 
 private:
+  CCodeLabel *labels = nullptr;
   uint32_t used = 0, capacity = 0;
 };
 
@@ -325,6 +336,7 @@ bool IsAsmStatement(const CCmpCtrl &cc);
 bool PrsAsmBlk(CCmpCtrl &cc, CAOT *aot, CCodeCtrl *coc = nullptr,
                bool bare = false);
 size_t AsmLayout(CAsm &as, size_t offset);
+void AsmLabelsLayout(CAsm &as);
 bool AsmEmit(CAsm &as, uint8_t *buf, size_t offset);
 bool AsmPublish(CAsm &as, const uint8_t *buf);
 void AsmDel(CAsm *as);

@@ -17,6 +17,7 @@ struct CAsmSymbol
   CAsm *block;
   char *name;
   CHashExport *entry;
+  CCodeLabel *label;
   size_t offset;
   unsigned scope;
   bool exported, imported;
@@ -125,10 +126,10 @@ bool IsAsmStatement(const CCmpCtrl &cc)
 class CAsm
 {
 public:
-  CAsm(CCmpCtrl &cc, CAOT *aot, bool in_fun = false, CAsm *first = nullptr)
-      : cc(cc), aot(aot), hc(CurrentTask()->data_heap),
-        root(first ? first : this), origin(aot && !in_fun ? aot->size : 0),
-        in_fun(in_fun)
+  CAsm(CCmpCtrl &cc, CAOT *aot, CCodeCtrl *coc = nullptr)
+      : cc(cc), aot(aot), coc(coc), hc(CurrentTask()->data_heap),
+        root(coc && coc->asm_first ? coc->asm_first : this),
+        origin(aot && !coc ? aot->size : 0)
   {
   }
 
@@ -180,6 +181,14 @@ public:
   {
     origin = offset + (aot ? aot->size : 0);
     return size;
+  }
+
+  void LabelsLayout()
+  {
+    size_t base = aot ? aot->size : 0;
+    for (auto *s = symbols; s; s = s->next)
+      if (s->label)
+        coc->code[s->label->ic].data = s->block->origin - base + s->offset;
   }
 
   bool Emit(uint8_t *image, size_t offset)
@@ -284,7 +293,14 @@ private:
     s->block = this;
     s->exported |= exported;
     s->offset = size;
-    if (!s->scope && !s->entry && (!in_fun || exported)) {
+    if (coc) {
+      auto *label = coc->GoToLabelFind(name, true);
+      if (!label || label->defined)
+        return false;
+      label->defined = true;
+      s->label = label;
+    }
+    if (!s->scope && !s->entry && (!coc || exported)) {
       if (HashSingleTableFind(name, cc.htc.glbl_hash_table, HTT_EXPORT_SYS_SYM))
         return false;
       s->entry = reinterpret_cast<CHashExport *>(
@@ -298,7 +314,7 @@ private:
       if (exported)
         HashSrcFileSetCpp(&cc, &sym, 0);
     }
-    if (exported && !in_fun)
+    if (exported && !coc)
       ++scope;
     return Eat(cc.token);
   }
@@ -846,6 +862,14 @@ private:
         bases += sign;
         return true;
       }
+      if (coc && !symbol->imported) {
+        if (auto *label = coc->GoToLabelFind(symbol->name)) {
+          size_t offset = coc->code[label->ic].data;
+          value += sign * (offset + (aot ? aot->size : 0));
+          bases += sign;
+          return true;
+        }
+      }
       auto *external = symbol->scope ? nullptr : External(symbol->name);
       if (!external)
         return false;
@@ -885,10 +909,10 @@ private:
 
   CCmpCtrl &cc;
   CAOT *aot;
+  CCodeCtrl *coc;
   CHeapCtrl *hc;
   CAsm *root;
   size_t origin;
-  bool in_fun;
   uint8_t *buf = nullptr;
   size_t capacity = 0, size = 0;
   unsigned mode = 64, scope = 1;
@@ -907,7 +931,7 @@ bool PrsAsmBlk(CCmpCtrl &cc, CAOT *aot, CCodeCtrl *coc, bool bare)
     auto *mem = MAlloc(sizeof(CAsm), CurrentTask()->data_heap);
     if (!mem)
       return false;
-    as = new (mem) CAsm(cc, aot, true, coc->asm_first);
+    as = new (mem) CAsm(cc, aot, coc);
   }
   auto old_flags = cc.flags;
   cc.flags |= CCF_ASM_EXPRESSIONS | CCF_KEEP_NEW_LINES;
@@ -935,6 +959,11 @@ bool PrsAsmBlk(CCmpCtrl &cc, CAOT *aot, CCodeCtrl *coc, bool bare)
 size_t AsmLayout(CAsm &as, size_t offset)
 {
   return as.Layout(offset);
+}
+
+void AsmLabelsLayout(CAsm &as)
+{
+  as.LabelsLayout();
 }
 
 bool AsmEmit(CAsm &as, uint8_t *buf, size_t offset)

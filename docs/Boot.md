@@ -220,8 +220,15 @@ counter field read from the loaded module. The suite also checks that
 an unresolved inline label leaves no published function or assembly
 symbol. It saves `InlineAsmProbe.BIN.Z` under `BUILD`.
 
-Full opcode, operand, and directive coverage and branches between
-assembly and HolyC `goto` labels are pending.
+`GotoProbe.HC` exercises forward and backward HolyC `goto` branches and
+jumps between HolyC and assembly in both directions. The startup suite
+expects `goto 42 5` from the source and from the guest-built
+`GotoProbe.BIN.Z`. Pinned TempleOS produced the same output from the
+same source and the UnholyOS-built module in QEMU 9.2.0 with PC,
+`qemu64`, and 512 MiB. The suite also checks that missing and duplicate
+labels prevent publication of the function.
+
+Full opcode, operand, and directive coverage is pending.
 
 ## RedSea descriptor verification
 
