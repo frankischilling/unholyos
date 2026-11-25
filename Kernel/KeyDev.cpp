@@ -20,6 +20,17 @@ extern "C" void PutS(const char *text)
   PutTaskS(*CurrentTask(), text);
 }
 
+extern "C" void PutKeyCpp(int64_t ch, int64_t)
+{
+  auto &task = *CurrentTask();
+  if (!ch || (task.display_flags & DISPLAYF_SILENT))
+    return;
+  while ((kbd.scan_code & SCF_SCROLL) && sys_focus_task == &task)
+    _YIELD();
+  const char text[]{static_cast<char>(ch), 0};
+  PutTaskS(task, text);
+}
+
 extern "C" void PutCharsCpp(uint64_t chars)
 {
   char text[9];

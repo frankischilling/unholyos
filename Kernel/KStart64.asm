@@ -1,7 +1,7 @@
 %include "Kernel/KernelA.inc"
 
 GLOBAL SYS_ENTER_LONG_MODE,CORE0_64BIT_INIT,KMain
-EXTERN TaskInitFailed
+EXTERN TaskInitFailed,KbdService
 EXTERN SYS_RUN_LEVEL,MEM_PML4,KMainCpp,CPUStructInit,SET_GS_BASE,TaskInit,SET_FS_BASE
 
 SECTION .boot64 progbits alloc exec nowrite align=16
@@ -79,6 +79,7 @@ KMain:
 	CALL	KMainCpp
 .halt:
 	HLT
+	CALL	KbdService
 	JMP	.halt
 
 SECTION .note.GNU-stack noalloc noexec nowrite progbits

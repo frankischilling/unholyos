@@ -313,7 +313,7 @@ static bool CmpRuntimeData(CHashTable *table)
   return true;
 }
 
-static CHashClass *CmpJobClass(CHashTable *table, const char *name, size_t size)
+static CHashClass *CmpKernelClass(CHashTable *table, const char *name, size_t size)
 {
   auto *cls = PrsClassNew();
   if (!cls)
@@ -331,8 +331,8 @@ static CHashClass *CmpJobClass(CHashTable *table, const char *name, size_t size)
 
 static bool CmpJobData(CHashTable *table, CHashClass *task)
 {
-  auto *job = CmpJobClass(table, "CJob", sizeof(CJob));
-  auto *ctrl = CmpJobClass(table, "CJobCtrl", sizeof(CJobCtrl));
+  auto *job = CmpKernelClass(table, "CJob", sizeof(CJob));
+  auto *ctrl = CmpKernelClass(table, "CJobCtrl", sizeof(CJobCtrl));
   if (!job || !ctrl)
     return false;
   auto *heap = CurrentTask()->data_heap;
@@ -398,6 +398,7 @@ static bool CmpTaskData(CHashTable *table)
   } members[]{
       {"addr", cls + 1, offsetof(CTask, addr)},
       {"task_signature", u32, offsetof(CTask, task_signature)},
+      {"win_inhibit", u32, offsetof(CTask, win_inhibit)},
       {"wake_jiffy", i64, offsetof(CTask, wake_jiffy)},
       {"task_flags", u32, offsetof(CTask, task_flags)},
       {"display_flags", u32, offsetof(CTask, display_flags)},
@@ -421,6 +422,54 @@ static bool CmpTaskData(CHashTable *table)
   return CmpJobData(table, cls);
 }
 
+static bool CmpKbdData(CHashTable *table)
+{
+  auto *cls = CmpKernelClass(table, "CKbdStateGlbls", sizeof(CKbdStateGlbls));
+  if (!cls)
+    return false;
+  auto *heap = CurrentTask()->data_heap;
+  auto *i64 = FindType("I64", table);
+  auto *boolean = FindType("Bool", table);
+  const struct {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+  } members[]{
+      {"scan_code", i64, offsetof(CKbdStateGlbls, scan_code)},
+      {"last_down_scan_code", i64, offsetof(CKbdStateGlbls, last_down_scan_code)},
+      {"cnt", i64, offsetof(CKbdStateGlbls, cnt)},
+      {"timestamp", i64, offsetof(CKbdStateGlbls, timestamp)},
+      {"new_key_timestamp", i64, offsetof(CKbdStateGlbls, new_key_timestamp)},
+      {"rst", boolean, offsetof(CKbdStateGlbls, rst)},
+      {"irqs_working", boolean, offsetof(CKbdStateGlbls, irqs_working)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    if (!name || !MemberAdd(*cls, name, *member.type, member.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  auto *var =
+      reinterpret_cast<CHashGlblVar *>(CAlloc(sizeof(CHashGlblVar), heap));
+  if (!var)
+    return false;
+  var->sym.hash.type = HTT_GLBL_VAR | HTF_PUBLIC;
+  var->sym.hash.str = StrNew("kbd", heap);
+  var->sym.import_name = StrNew("kbd", heap);
+  if (!var->sym.hash.str || !var->sym.import_name) {
+    HashDel(&var->sym.hash);
+    return false;
+  }
+  var->size = cls->size;
+  var->flags = GVF_IMPORT | GVF_ALIAS;
+  var->var_class = cls;
+  var->dim.cnt = var->dim.total_cnt = 1;
+  var->data_addr = reinterpret_cast<uint8_t *>(&kbd);
+  HashAdd(&var->sym.hash, table);
+  return true;
+}
+
 static bool CmpRuntimeHeaders(CHashTable *table)
 {
   enum : uint8_t
@@ -429,6 +478,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     U64,
     I64,
     I8,
+    U8,
     F64,
     Bool,
     U8Ptr,
@@ -439,7 +489,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
       FindType("I64", table),    FindType("I8", table),
-      FindType("F64", table),    FindType("Bool", table),
+      FindType("U8", table),     FindType("F64", table),    FindType("Bool", table),
       FindType("U8", table) + 1, FindType("CTask", table) + 1,
       FindType("CJob", table) + 1, FindType("I64", table) + 1,
   };
@@ -486,6 +536,17 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"JobsHndlr", I64, FF_RET1, {{"run_flags", I64}, {"task", TaskPtr, true}}},
       {"SrvTaskCont", U0, FF_RET1, {}},
       {"FlushMsgs", I64, FF_RET1, {{"task", TaskPtr, true}}},
+      {"Char2ScanCode", I64, FF_RET1, {{"ch", I64}, {"sc_flags", I64, true}}},
+      {"ScanCode2Char", U8, FF_RET1, {{"sc", I64}}},
+      {"KbdTypeMatic", U0, FF_RET1, {{"delay", U8}}},
+      {"PutKey", U0, FF_RET1, {{"ch", I64, true}, {"sc", I64, true}}},
+      {"ScanChar", I64, FF_RET1, {}},
+      {"ScanKey", Bool, FF_RET1,
+       {{"_ch", I64Ptr, true}, {"_scan_code", I64Ptr, true}, {"echo", Bool, true}}},
+      {"GetKey", I64, FF_RET1,
+       {{"_scan_code", I64Ptr, true}, {"echo", Bool, true}, {"raw_cursor", Bool, true}}},
+      {"GetChar", I64, FF_RET1,
+       {{"_scan_code", I64Ptr, true}, {"echo", Bool, true, 1}, {"raw_cursor", Bool, true}}},
       {"ScanMsg", I64, FF_RET1, {{"_arg1", I64Ptr, true}, {"_arg2", I64Ptr, true}, {"mask", I64, true, ~uint64_t{1}}, {"task", TaskPtr, true}}},
       {"GetMsg", I64, FF_RET1, {{"_arg1", I64Ptr, true}, {"_arg2", I64Ptr, true}, {"mask", I64, true, ~uint64_t{1}}, {"task", TaskPtr, true}}},
       {"Yield", U0, FF_RET1, {}, "_YIELD"},
@@ -717,6 +778,19 @@ static bool CmpFillHash(CHashTable *table)
     const char *name, *data;
   } defines[]{
       {"NULL", "0"}, {"TRUE", "1"}, {"FALSE", "0"}, {"ON", "1"}, {"OFF", "0"},
+      {"CH_ESC", "0x1B"},
+      {"CH_SHIFT_ESC", "0x1C"},
+      {"WIF_SELF_MS_L", "0x0008"},
+      {"WIF_SELF_MS_R", "0x0020"},
+      {"WIG_USER_TASK_DFT", "0x1000"},
+      {"SCF_E0_PREFIX", "(1<<7)"},
+      {"SCF_KEY_UP", "(1<<8)"},
+      {"SCF_SHIFT", "(1<<9)"},
+      {"SCF_CTRL", "(1<<10)"},
+      {"SCF_ALT", "(1<<11)"},
+      {"SCF_CAPS", "(1<<12)"},
+      {"SCF_NUM", "(1<<13)"},
+      {"SCF_SCROLL", "(1<<14)"},
       {"MSG_NULL", "0"},
       {"MSG_CMD", "1"},
       {"MSG_KEY_DOWN", "2"},
@@ -767,7 +841,8 @@ static bool CmpFillHash(CHashTable *table)
     }
     HashAdd(&entry->sym.hash,table);
   }
-  return CmpRuntimeData(table) && CmpTaskData(table) && CmpRuntimeHeaders(table);
+  return CmpRuntimeData(table) && CmpTaskData(table) && CmpKbdData(table) &&
+         CmpRuntimeHeaders(table);
 }
 
 CHashTable *CmpAsmHashNew()

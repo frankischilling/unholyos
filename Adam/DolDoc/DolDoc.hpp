@@ -2,7 +2,6 @@
 
 #include "../../Kernel/KernelB.hpp"
 
-constexpr char CH_CURSOR = 5;
 constexpr uint64_t DOCG_PLAIN = DOCF_PLAIN_TEXT | DOCF_PLAIN_TEXT_TABS;
 constexpr uint64_t DOCG_PLAIN_ENTRY =
     DOCEF_TAG | DOCG_BL_IV_UL | DOCEF_HIGHLIGHT | DOCEF_WORD_WRAP |

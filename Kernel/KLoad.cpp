@@ -61,6 +61,8 @@ void TaskMsgHC(),JobResScanHC(),JobResGetHC(),TaskWaitHC();
 void PostMsgHC(),PostMsgWaitHC(),MsgHC(),JobsHndlrHC();
 void SrvTaskContHC(),ScanMsgHC(),FlushMsgsHC(),GetMsgHC();
 void InputFilterTaskHC();
+void Char2ScanCodeHC(),ScanCode2CharHC(),KbdTypeMaticHC(),PutKeyHC();
+void ScanCharHC(),ScanKeyHC(),GetKeyHC(),GetCharHC();
 void _HASH_REM_DEL(), SysSymImportsResolveHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
     DocWriteHC();
@@ -462,6 +464,7 @@ bool LoadKernel(CTask &task)
   static const CKernelExport exports[]{
       {"SYS_COMPILE_TIME", reinterpret_cast<uintptr_t>(SYS_COMPILE_TIME)},
       {"cnts", reinterpret_cast<uintptr_t>(&cnts)},
+      {"kbd", reinterpret_cast<uintptr_t>(&kbd)},
       {"scrncast", reinterpret_cast<uintptr_t>(&scrncast)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
       {"SYS_RUN_LEVEL", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
@@ -586,6 +589,14 @@ bool LoadKernel(CTask &task)
       {"FlushMsgs", reinterpret_cast<uintptr_t>(FlushMsgsHC)},
       {"GetMsg", reinterpret_cast<uintptr_t>(GetMsgHC)},
       {"InputFilterTask", reinterpret_cast<uintptr_t>(InputFilterTaskHC)},
+      {"Char2ScanCode", reinterpret_cast<uintptr_t>(Char2ScanCodeHC)},
+      {"ScanCode2Char", reinterpret_cast<uintptr_t>(ScanCode2CharHC)},
+      {"KbdTypeMatic", reinterpret_cast<uintptr_t>(KbdTypeMaticHC)},
+      {"PutKey", reinterpret_cast<uintptr_t>(PutKeyHC)},
+      {"ScanChar", reinterpret_cast<uintptr_t>(ScanCharHC)},
+      {"ScanKey", reinterpret_cast<uintptr_t>(ScanKeyHC)},
+      {"GetKey", reinterpret_cast<uintptr_t>(GetKeyHC)},
+      {"GetChar", reinterpret_cast<uintptr_t>(GetCharHC)},
       {"Ona2Freq", reinterpret_cast<uintptr_t>(Ona2FreqHC)},
       {"Freq2Ona", reinterpret_cast<uintptr_t>(Freq2OnaHC)},
       {"Snd", reinterpret_cast<uintptr_t>(SndHC)},

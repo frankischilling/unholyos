@@ -68,7 +68,7 @@ uint64_t HPET()
                                                 HPET_MAIN_CNT);
 }
 
-static uint64_t GetTSC()
+uint64_t GetTSC()
 {
   uint32_t lo, hi;
   asm volatile("rdtsc" : "=a"(lo), "=d"(hi) : : "memory");

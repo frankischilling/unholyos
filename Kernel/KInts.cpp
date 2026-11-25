@@ -5,8 +5,8 @@ constexpr uint16_t IDTET_IRQ = 0xE, GDT_CS64_SELECTOR = 0x40;
 
 extern "C" void IntNop();
 
-static void IntEntrySet(unsigned irq, void (*handler)(), uint16_t type,
-                        uint16_t dpl)
+void IntEntrySet(unsigned irq, void (*handler)(), uint16_t type,
+                 uint16_t dpl)
 {
   uintptr_t addr = reinterpret_cast<uintptr_t>(handler);
   uint64_t flags;
