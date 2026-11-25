@@ -164,8 +164,20 @@ private:
   uint32_t PrsFunCall(const CHashFun &callee, unsigned depth,
                       CCallSyntax syntax = CS_NORMAL)
   {
+    if (callee.cls.flags & FF_INTERNAL) {
+      if (syntax != CS_NORMAL || !callee.return_class ||
+          reinterpret_cast<uintptr_t>(callee.exe_addr) != IC_FS)
+        return NO_IC;
+      if (Lex(cc) == '(') {
+        if (Lex(cc) != ')')
+          return NO_IC;
+        Lex(cc);
+      }
+      return Add({0, NO_IC, NO_IC, IC_FS, ClassRawType(*callee.return_class),
+                  false, false, true, NO_IC, callee.return_class});
+    }
     bool variadic = callee.cls.flags & FF_DOT_DOT_DOT;
-    if ((callee.cls.flags & FF_INTERNAL) || (variadic && FunPopsArgs(callee)) ||
+    if ((variadic && FunPopsArgs(callee)) ||
         (!callee.exe_addr && &callee != fun &&
          !(cc.aot && (cc.flags & CCF_AOT_COMPILE) &&
            (callee.cls.flags & CF_EXTERN))) ||
@@ -441,6 +453,17 @@ private:
     }
     if (token == '&' || token == '*') {
       Lex(cc);
+      if (token == '&' && cc.token == TK_IDENT && !cc.local_var_entry &&
+          cc.hash_entry && (cc.hash_entry->type & HTT_FUN)) {
+        auto *callee = reinterpret_cast<const CHashFun *>(cc.hash_entry);
+        if ((callee->cls.flags & FF_INTERNAL) ||
+            (!callee->exe_addr && callee != fun &&
+             !(cc.flags & CCF_AOT_COMPILE)))
+          return NO_IC;
+        Lex(cc);
+        return Add({reinterpret_cast<uintptr_t>(callee), NO_IC, NO_IC, IC_ADDR,
+                    RT_I64, false, false, true});
+      }
       auto value = Term(depth + 1);
       if (token == '*')
         return Deref(value);

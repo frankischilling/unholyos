@@ -141,21 +141,9 @@ extern "C" void SleepUntilCpp(int64_t wake_jiffy)
   auto old = __atomic_fetch_or(&task.task_flags, TASKF_IDLE, __ATOMIC_RELAXED);
   task.wake_jiffy = wake_jiffy;
 
-  // The bootstrap task waits on the timer until Yield can switch tasks.
-  uint64_t flags;
-  asm volatile("pushfq; popq %0; cli" : "=r"(flags) : : "memory");
-  auto now = int64_t(__atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED));
-  if (flags & (1 << 9)) {
-    while (now < wake_jiffy) {
-      asm volatile("sti; hlt; cli" : : : "memory");
-      now = int64_t(__atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED));
-    }
-  } else if (now < wake_jiffy) {
-    BusyCpp((wake_jiffy - now) * (1000000 / JIFFY_FREQ));
-  }
+  _YIELD();
   if (!(old & TASKF_IDLE))
     __atomic_fetch_and(&task.task_flags, ~TASKF_IDLE, __ATOMIC_RELAXED);
-  asm volatile("pushq %0; popfq" : : "r"(flags) : "cc", "memory");
 }
 
 extern "C" void SleepCpp(int64_t ms)
@@ -163,7 +151,8 @@ extern "C" void SleepCpp(int64_t ms)
   if (ms) {
     auto delta = int64_t(uint64_t(ms) * JIFFY_FREQ) / 1000;
     SleepUntilCpp(__atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED) + delta);
-  }
+  } else
+    _YIELD();
 }
 
 extern "C" uint64_t Ona2FreqCpp(int8_t ona)
@@ -282,4 +271,16 @@ extern "C" uint64_t MuteCpp(uint8_t val)
 extern "C" uint64_t IsMuteCpp()
 {
   return __atomic_load_n(&sys_semas[SEMA_MUTE].flags, __ATOMIC_RELAXED) & 1;
+}
+
+extern "C" uint64_t SingleUserCpp(uint8_t val)
+{
+  auto &flags = sys_semas[SEMA_SINGLE_USER].flags;
+  return (val ? __atomic_fetch_or(&flags, 1, __ATOMIC_RELAXED)
+              : __atomic_fetch_and(&flags, ~uint64_t{1}, __ATOMIC_RELAXED)) & 1;
+}
+
+extern "C" uint64_t IsSingleUserCpp()
+{
+  return __atomic_load_n(&sys_semas[SEMA_SINGLE_USER].flags, __ATOMIC_RELAXED) & 1;
 }

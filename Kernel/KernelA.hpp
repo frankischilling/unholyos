@@ -28,7 +28,8 @@ struct CCPU
 };
 
 static_assert(sizeof(CCPU) == 0x100 && offsetof(CCPU, num) == 8);
-static_assert(__builtin_offsetof(CCPU, seth_task) == 0x38);
+static_assert(offsetof(CCPU, seth_task) == 0x38 &&
+              offsetof(CCPU, idle_task) == 0x40);
 static_assert(__builtin_offsetof(CCPU, next_dying) == 0x60);
 
 constexpr uint32_t MBS_UNUSED_SIGNATURE_VAL = 0x6E55424D; // MBUn
@@ -39,6 +40,7 @@ constexpr uintptr_t SYS_FIXED_AREA = 0x100000;
 constexpr size_t MEM_PAGE_SIZE = 0x200000;
 constexpr size_t MEM_PAG_BITS = 9;
 constexpr size_t MEM_PAG_SIZE = 1 << MEM_PAG_BITS;
+constexpr size_t MEM_DFT_STK = MEM_PAG_SIZE * 512;
 constexpr size_t MEM_HEAP_HASH_SIZE = 1024;
 constexpr size_t MEM_FREE_PAG_HASH_SIZE = 256;
 constexpr size_t MEM_EXTRA_HASH2_PAGS = 2;
@@ -325,6 +327,8 @@ struct CSema
   uint64_t flags;
   uint8_t pad[120];
 };
+
+static_assert(sizeof(CSema) == 128 && SEMA_SINGLE_USER == 10);
 
 struct [[gnu::packed]] CAUData
 {
@@ -943,8 +947,18 @@ struct CWinScroll
   uint8_t color, pad[3];
 };
 
-constexpr uint32_t TASKF_IDLE = 1 << 3;
+constexpr uint32_t TASKF_KILL_TASK = 1 << 1, TASKF_SUSPENDED = 1 << 2,
+                   TASKF_IDLE = 1 << 3, TASKF_AWAITING_MSG = 1 << 9;
+constexpr uint64_t JOBF_ADD_TO_QUE = 1 << 8;
+constexpr int64_t DYING_JIFFIES = JIFFY_FREQ / 5;
+
+struct [[gnu::may_alias]] CTaskDying
+{
+  CTaskDying *next, *last;
+  int64_t wake_jiffy;
+};
 constexpr uint32_t DISPLAYF_NOT_RAW = 1 << 1, DISPLAYF_SILENT = 1 << 2;
+constexpr uint8_t TTS_TASK_NAME = 2;
 
 struct CTask
 {
@@ -1014,7 +1028,11 @@ static_assert(offsetof(CHeapCtrl, hc_signature) == 8);
 static_assert(offsetof(CHeapCtrl, next_um) == 0x50);
 static_assert(offsetof(CTask, code_heap) == 0x20 &&
               offsetof(CTask, rsp) == 0x128);
-static_assert(offsetof(CTask, task_flags) == 0x18);
+static_assert(offsetof(CTask, task_flags) == 0x18 &&
+              offsetof(CTask, next_task) == 0x80);
+static_assert(offsetof(CTask, wake_jiffy) == 0x10 &&
+              offsetof(CTaskDying, wake_jiffy) == offsetof(CTask, wake_jiffy));
+static_assert(sizeof(CTaskStk) == 24 && offsetof(CTaskStk, stk_size) == 8);
 static_assert(offsetof(CTask, rip) == 0x118 &&
               offsetof(CTask, rflags) == 0x120);
 static_assert(offsetof(CTask, rsi) == 0x130 && offsetof(CTask, rax) == 0x138);

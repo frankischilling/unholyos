@@ -321,6 +321,26 @@ source and the guest-built `SwitchProbe.BIN.Z`. Pinned TempleOS
 produced the same line from the source and the UnholyOS-built module.
 The suite rejects overlapping cases and saves the module under `BUILD`.
 
+## Cooperative task scheduling
+
+`make -j4 test BUILD=build/scheduler` builds
+`build/scheduler/unholyos-startup-test.iso` and runs
+`SchedulerProbe.HC` from source and as a guest-built `.BIN.Z` module.
+The probe checks the child task pointer, suspended tasks, single-user
+mode, stack arguments, PIT wakeups, and x87 state across a switch.
+It checks termination by return and by `Exit`. The suite also checks
+that the dying queue drains and accounts for the idle task's pages in
+the code and data pools.
+
+Pinned TempleOS and UnholyOS printed `sched 1234 1 1 1 1` from both
+the same source and the UnholyOS-built module. Both guests ran under
+QEMU 9.2.0 with the PC machine, `qemu64`, and 512 MiB.
+
+The scheduler runs on Core 0. `Sleep` and `SleepUntil` yield there, and
+the timer wakes the idle task when the runnable queue has no ready work.
+The cross-core job queue, window focus and keyboard controls, and the
+remaining task end callbacks are pending.
+
 ## PC speaker and recorded sound events
 
 `make -j4 test BUILD=build/pc-speaker` builds
@@ -399,7 +419,7 @@ This verifies the clean boot to the current kernel; the desktop is pending.
 | DVD boot and CPU startup | `BootDVD.HC`, `KStart16.HC` through `KStart64.HC`, `PCIBIOS.HC` | DVD entry, firmware discovery, segmentation, paging, long mode, and BIOS32 PCI reads |
 | Interrupts and timers | `Kernel/KInts.HC`, `Kernel/KMain.HC`, `Kernel/KMisc.HC` | Both IDT stages, PIC setup, PIT ticks, HPET, the initial TSC calibration sample, and boot fault diagnostics. Debugger recovery is pending. |
 | Memory | `Kernel/Mem/PageTables.HC`, `BlkPool.HC`, `MAllocFree.HC` | Initial identity map, code and data pools, and early heap allocation. Heap allocation and freeing, the 32-bit device range list, and the uncached device alias are active. |
-| Tasking and CPUs | `Kernel/KTask.HC`, `Sched.HC`, `MultiProc.HC` | Bootstrap CPU and Adam task, with GS and FS set. IRQ0 saves and restores Adam's context. Switching tasks and starting additional CPUs are pending. |
+| Tasking and CPUs | `Kernel/KTask.HC`, `Sched.HC`, `MultiProc.HC` | Core 0 runs Adam, the idle task, and spawned tasks with cooperative switching and PIT wakeups. Starting additional CPUs remains pending. |
 | Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. Persistent writes and FAT32 are pending. |
 | Graphics | `Kernel/Display.HC`, `Adam/Gr/GrScrn.HC` | BIOS VGA mode and a kernel entry line |
 | Input and sound | `Kernel/KeyDev.HC`, `Adam/AMouse.HC`, `Adam/ASnd.HC`, `Adam/Snd` | Speaker reset at entry. Input and sound APIs are pending. |

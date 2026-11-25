@@ -313,6 +313,53 @@ static bool CmpRuntimeData(CHashTable *table)
   return true;
 }
 
+static bool CmpTaskData(CHashTable *table)
+{
+  auto *heap = CurrentTask()->data_heap;
+  auto *cls = PrsClassNew();
+  if (!cls)
+    return false;
+  cls->sym.hash.type |= HTF_PUBLIC;
+  cls->sym.hash.str = StrNew("CTask", heap);
+  cls->size = sizeof(CTask);
+  if (!cls->sym.hash.str) {
+    HashDel(&cls->sym.hash);
+    return false;
+  }
+  HashAdd(&cls->sym.hash, table);
+  auto *u32 = FindType("U32", table);
+  auto *i64 = FindType("I64", table);
+  auto *u8 = FindType("U8", table);
+  struct {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+  } members[]{
+      {"addr", cls + 1, offsetof(CTask, addr)},
+      {"task_signature", u32, offsetof(CTask, task_signature)},
+      {"wake_jiffy", i64, offsetof(CTask, wake_jiffy)},
+      {"task_flags", u32, offsetof(CTask, task_flags)},
+      {"display_flags", u32, offsetof(CTask, display_flags)},
+      {"cur_dir", u8 + 1, offsetof(CTask, cur_dir)},
+      {"parent_task", cls + 1, offsetof(CTask, parent_task)},
+      {"next_task", cls + 1, offsetof(CTask, next_task)},
+      {"last_task", cls + 1, offsetof(CTask, last_task)},
+      {"next_child_task", cls + 1, offsetof(CTask, next_child_task)},
+      {"last_child_task", cls + 1, offsetof(CTask, last_child_task)},
+      {"swap_cnter", i64, offsetof(CTask, swap_cnter)},
+      {"task_num", i64, offsetof(CTask, task_num)},
+      {"user_data", i64, offsetof(CTask, user_data)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    if (!name || !MemberAdd(*cls, name, *member.type, member.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool CmpRuntimeHeaders(CHashTable *table)
 {
   enum : uint8_t
@@ -323,13 +370,14 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     I8,
     F64,
     Bool,
-    U8Ptr
+    U8Ptr,
+    TaskPtr
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
       FindType("I64", table),    FindType("I8", table),
       FindType("F64", table),    FindType("Bool", table),
-      FindType("U8", table) + 1,
+      FindType("U8", table) + 1, FindType("CTask", table) + 1,
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -344,7 +392,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       bool has_default = false;
       uint64_t dft_val = 0;
       const char *dft_str = nullptr;
-    } args[4];
+    } args[7];
+    const char *import_name = nullptr;
   } headers[]{
       {"Print", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
       {"PutHex", U0, FF_RET1, {{"num", U64}, {"width", I64}}},
@@ -354,6 +403,23 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Busy", U0, FF_RET1, {{"microseconds", I64}}},
       {"SleepUntil", U0, FF_RET1, {{"wake_jiffy", I64}}},
       {"Sleep", U0, FF_RET1, {{"mS", I64}}},
+      {"Fs", TaskPtr, FF_INTERNAL, {}},
+      {"Yield", U0, FF_RET1, {}, "_YIELD"},
+      {"Spawn",
+       TaskPtr,
+       FF_RET1,
+       {{"fp_addr", U8Ptr}, {"data", U8Ptr, true}, {"task_name", U8Ptr, true},
+        {"target_cpu", I64, true, UINT64_MAX}, {"parent", TaskPtr, true},
+        {"stk_size", I64, true}, {"flags", I64, true, JOBF_ADD_TO_QUE}}},
+      {"Exit", U0, FF_RET1, {}},
+      {"TaskValidate", Bool, FF_RET1, {{"task", TaskPtr}}},
+      {"Suspend", Bool, FF_RET1,
+       {{"task", TaskPtr, true}, {"state", Bool, true, 1}}},
+      {"IsSuspended", Bool, FF_RET1, {{"task", TaskPtr, true}}},
+      {"TaskQueIns", U0, FF_RET1, {{"task", TaskPtr}, {"pred", TaskPtr, true}}},
+      {"TaskQueRem", U0, FF_RET1, {{"task", TaskPtr}}},
+      {"SingleUser", Bool, FF_RET1, {{"val", Bool}}},
+      {"IsSingleUser", Bool, FF_RET1, {}},
       {"Ona2Freq", F64, FF_RET1, {{"ona", I64}}},
       {"Freq2Ona", I8, FF_RET1, {{"freq", F64}}},
       {"Snd", U0, FF_RET1, {{"ona", I8, true}}},
@@ -395,7 +461,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
   for (const auto &header : headers) {
     auto *symbol = reinterpret_cast<CHashExport *>(
         HashFind(header.name, task->hash_table, HTT_EXPORT_SYS_SYM));
-    if (!symbol)
+    if (!symbol && !(header.flags & FF_INTERNAL))
       continue;
     auto *fun =
         reinterpret_cast<CHashFun *>(CAlloc(sizeof(CHashFun), task->data_heap));
@@ -403,7 +469,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       return false;
     fun->cls.sym.hash.type = HTT_FUN | HTF_PUBLIC;
     fun->cls.sym.hash.str = StrNew(header.name, task->data_heap);
-    if (!fun->cls.sym.hash.str) {
+    if (header.import_name)
+      fun->cls.sym.import_name = StrNew(header.import_name, task->data_heap);
+    if (!fun->cls.sym.hash.str || (header.import_name && !fun->cls.sym.import_name)) {
       HashDel(&fun->cls.sym.hash);
       return false;
     }
@@ -436,7 +504,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     }
     fun->cls.flags = FF__EXTERN | header.flags;
     fun->return_class = types[header.result];
-    fun->exe_addr = reinterpret_cast<uint8_t *>(symbol->val);
+    fun->exe_addr = reinterpret_cast<uint8_t *>(symbol ? symbol->val : uintptr_t{IC_FS});
     HashAdd(&fun->cls.sym.hash, table);
   }
   return true;
@@ -564,6 +632,7 @@ static bool CmpFillHash(CHashTable *table)
   constexpr struct {
     const char *name, *data;
   } defines[]{
+      {"NULL", "0"}, {"TRUE", "1"}, {"FALSE", "0"}, {"ON", "1"}, {"OFF", "0"},
       {"PUSH_C_REGS","PUSH RAX PUSH RCX PUSH RDX PUSH RBX PUSH R8 PUSH R9"},
       {"POP_C_REGS","POP R9 POP R8 POP RBX POP RDX POP RCX POP RAX"},
   };
@@ -582,7 +651,7 @@ static bool CmpFillHash(CHashTable *table)
     }
     HashAdd(&entry->sym.hash,table);
   }
-  return CmpRuntimeData(table) && CmpRuntimeHeaders(table);
+  return CmpRuntimeData(table) && CmpTaskData(table) && CmpRuntimeHeaders(table);
 }
 
 CHashTable *CmpAsmHashNew()

@@ -505,7 +505,7 @@ static std::string StopAtIdle(CMonitor &vm)
 }
 
 static void VerifyInterrupts(CMonitor &vm, const std::string &output,
-                             const std::string &registers)
+                             const std::string &registers, bool startup)
 {
   const std::regex report(R"(IDT (0x[0-9a-f]+))");
   const std::regex idtr(R"(IDT=\s*([0-9a-f]+)\s+([0-9a-f]+))");
@@ -576,12 +576,19 @@ static void VerifyInterrupts(CMonitor &vm, const std::string &output,
   auto counters = ReadPhysical<2>(vm, std::stoull(match[1].str(), nullptr, 16));
   uint64_t timer_read = std::stoull(match[2].str(), nullptr, 16);
   uint64_t ticks = counters[0] - 1;
+  auto idle_ticks = ReadPhysical<1>(vm, 0x100220)[0];
+  auto swaps = ReadPhysical<1>(vm, 0x100250)[0];
+  auto adam_swaps = ReadPhysical<1>(vm, 0x1004B8)[0];
   Check(counters[0] >= 3 && counters[1] == ticks * 1193 &&
             timer_read <= counters[1] + 1193 &&
-            ReadPhysical<1>(vm, 0x100230)[0] == ticks &&
-            ReadPhysical<1>(vm, 0x100250)[0] == ticks &&
-            ReadPhysical<1>(vm, 0x1004B8)[0] == ticks,
-        "PIT interrupts did not advance the timer and restore Adam");
+            ReadPhysical<1>(vm, 0x100230)[0] == ticks && idle_ticks <= ticks &&
+            swaps >= ticks - idle_ticks && adam_swaps <= swaps,
+        "PIT timer and task restoration counters disagree");
+  if (startup)
+    Check(idle_ticks > 0, "The scheduler did not idle while tasks slept");
+  else
+    Check(!idle_ticks && swaps == ticks && adam_swaps == ticks,
+          "PIT interrupt did not restore Adam during bootstrap");
 }
 
 static void VerifyClock(CMonitor &vm, const std::string &output,
@@ -671,11 +678,7 @@ static void VerifyBootDrive(CMonitor &vm, const std::string &output,
         "Invalid ATAPI block device record");
 }
 
-constexpr uint64_t late_pages = 19, late_alloced = late_pages * 512;
-constexpr uint64_t late_used = 0x2828;
-constexpr uint64_t fault_pages = 4, fault_alloced = fault_pages * 512;
-constexpr uint64_t fault_used = 0x7E8;
-constexpr uint64_t symbol_pages = 32, symbol_alloced = symbol_pages * 512;
+constexpr uint64_t late_used = 0x2828, fault_used = 0x7E8;
 constexpr uint64_t drive_pages = 7 + 9, drive_alloced = drive_pages * 512;
 constexpr uint64_t drive_used = drive_alloced - 2 * 24 + 40 + 40 + 32 + 24;
 
@@ -732,10 +735,64 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
   return used;
 }
 
-static uint64_t VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
-                            const std::string &output, uint64_t range_bytes,
-                            uint64_t symbol_used,
-                            const std::vector<CTestE820> &e820)
+using BlockRanges = std::vector<std::pair<uint64_t, uint64_t>>;
+
+struct CTestHeap
+{
+  BlockRanges ranges;
+  uint64_t alloced, used;
+};
+
+static CTestHeap VerifyHeap(CMonitor &vm, uint64_t heap, uint64_t pool,
+                            uint64_t task)
+{
+  auto hc = ReadPhysical<12>(vm, heap);
+  constexpr uint64_t page = 512;
+  const uint64_t head = heap + 0x30;
+  Check(hc[0] == pool && hc[1] == 0x56536348 && !hc[2] && hc[5] == task &&
+            hc[4] <= hc[3] && hc[10] == heap + 0x48 && hc[11] == hc[10],
+        "Invalid task heap controller");
+  CTestHeap result{{}, hc[3], hc[4]};
+  uint64_t prev = head, bytes = 0;
+  bool mergeable = !hc[8], malloc_free = !hc[9];
+  for (uint64_t addr = hc[6]; addr != head;) {
+    Check(addr && !(addr & (page - 1)) && bytes < result.alloced,
+          "Task heap block outside its allocation");
+    auto block = ReadPhysical<3>(vm, addr);
+    uint64_t size = (block[2] >> 32) * page;
+    Check(block[1] == prev && static_cast<uint32_t>(block[2]) == 0x7355424D &&
+              size && size <= result.alloced - bytes,
+          "Invalid task heap block");
+    result.ranges.emplace_back(addr, addr + size);
+    bytes += size;
+    mergeable |= addr == hc[8];
+    malloc_free |= hc[9] >= addr + 24 && hc[9] <= addr + size - 16 && !(hc[9] & 7);
+    prev = addr;
+    addr = block[0];
+  }
+  Check(bytes == result.alloced && prev == hc[7] && mergeable && malloc_free,
+        "Invalid task heap accounting or links");
+  return result;
+}
+
+static void VerifyCoverage(BlockRanges blocks, const BlockRanges &ranges)
+{
+  std::sort(blocks.begin(), blocks.end());
+  auto block = blocks.begin();
+  for (auto [start, end] : ranges) {
+    while (start < end) {
+      Check(block != blocks.end() && block->first == start && block->second <= end,
+            "Block pool has a gap or overlap");
+      start = block++->second;
+    }
+  }
+  Check(block == blocks.end(), "Block pool has pages outside its ranges");
+}
+
+static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
+                        const std::string &output, uint64_t range_bytes,
+                        uint64_t symbol_used, const std::vector<CTestE820> &e820,
+                        uint64_t idle)
 {
   constexpr uint64_t adam = 0x100300, adam_hc = 0x101188, code_pool = 0x1007A8;
   constexpr uint64_t code_base = 0x1000000, page = 512;
@@ -748,111 +805,82 @@ static uint64_t VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   uint64_t limit = total > 0x100000000  ? 0x80000000
                    : total > 0x80000000 ? total / 4
                                         : total;
-  uint64_t high_pages = (limit - code_base) / page;
-
-  uint64_t pool = 0, data_free = 0, data_bytes = 0, data_end = 0;
+  uint64_t pool = 0, data_bytes = 0;
+  BlockRanges data_ranges;
   if (limit < total) {
-    std::vector<std::pair<uint64_t, uint64_t>> blocks;
     for (auto entry : e820) {
       if (entry.type != 1)
         continue;
-      uint64_t base = entry.base, end = base + entry.size;
-      base = std::max(base, limit);
+      uint64_t base = std::max(entry.base, limit), end = entry.base + entry.size;
       if (base >= end)
         continue;
-      uint64_t pages = (end - base) / page;
-      uint64_t free_base = base;
+      data_bytes += end - base;
       if (!pool) {
         pool = base;
-        free_base = (base + 0x9E0 + page - 1) & ~(page - 1);
-        pages -= (free_base - base) / page;
-        data_bytes += free_base - base;
+        base = (base + 0x9E0 + page - 1) & ~(page - 1);
       }
-      blocks.emplace_back(free_base, pages);
-      data_bytes += pages * page;
+      data_ranges.emplace_back(base, end);
     }
-
-    Check(!blocks.empty(), "Data pool has no free blocks");
-    auto [last_base, last_pages] = blocks.back();
-    data_end = last_base + last_pages * page;
-    for (auto [base, pages] : blocks) {
-      auto block = ReadPhysical<3>(vm, base);
-      uint64_t free_pages =
-          pages - (base == last_base
-                       ? 16 + late_pages + symbol_pages + drive_pages
-                       : 0);
-      Check(block[0] == data_free &&
-                block[2] == ((free_pages << 32) | 0x6E55424D),
-            "Bad data pool free-list entry");
-      data_free = base;
-    }
-    Check(pool != 0 &&
-              ReadPhysical<4>(vm, pool) ==
-                  std::array<uint64_t, 4>{0, data_bytes,
-                                          0x2000 + late_alloced +
-                                              symbol_alloced + drive_alloced,
-                                          data_free},
-          "Invalid data block pool");
   }
 
-  uint64_t hc_block = pool ? code_base + (high_pages - 3) * page : 0;
-  auto block = ReadPhysical<3>(vm, code_base);
-  uint64_t remaining = high_pages -
-                       (pool ? 3 : late_pages + symbol_pages + drive_pages) -
-                       fault_pages;
-  Check(block[0] == heap && block[2] == ((remaining << 32) | 0x6E55424D),
-        "Invalid high code block");
-  Check(ReadPhysical<4>(vm, code_pool) ==
-            std::array<uint64_t, 4>{
-                0, ram_end - heap + high_pages * page,
-                0x44800 +
-                    (pool ? 0x600ULL
-                          : late_alloced + symbol_alloced + drive_alloced) +
-                    fault_alloced,
-                code_base},
+  const uint64_t expected_data_hc = pool ? limit - 3 * page + 0x28 : adam_hc;
+  auto adam_heaps = ReadPhysical<2>(vm, adam + 0x20);
+  auto idle_heaps = ReadPhysical<2>(vm, idle + 0x20);
+  Check(adam_heaps == std::array<uint64_t, 2>{adam_hc, expected_data_hc} &&
+            (idle_heaps[0] != idle_heaps[1]) == bool(pool),
+        "Invalid task heap selection");
+  auto idle_task = ReadPhysical<2>(vm, idle - 16);
+  auto idle_code_hc = ReadPhysical<2>(vm, idle_heaps[0] - 16);
+  Check(idle_task[0] == adam_hc && idle_task[1] == 3 * page - 24 &&
+            idle_code_hc[0] == expected_data_hc,
+        "Idle task or heap is owned by the wrong allocator");
+  const uint64_t boot_used = range_bytes + late_used + symbol_used + drive_used;
+  auto code = VerifyHeap(vm, adam_hc, code_pool, adam);
+  auto idle_code = VerifyHeap(vm, idle_heaps[0], code_pool, idle);
+  Check(code.used == 0x42840 + fault_used + idle_task[1] +
+                       (pool ? 0x5E8 : boot_used + idle_code_hc[1]),
+        "Invalid Adam code heap usage");
+  uint64_t code_bytes = ram_end - heap + limit - code_base;
+  Check(ReadPhysical<4>(vm, code_pool) == std::array<uint64_t, 4>{
+            0, code_bytes, code.alloced + idle_code.alloced, code_base},
         "Invalid code block pool");
-  if (hc_block) {
-    uint64_t data_hc = hc_block + 0x28;
-    auto hc = ReadPhysical<12>(vm, data_hc);
-    uint64_t allocated = 0x2000 + late_alloced + symbol_alloced + drive_alloced;
-    Check(hc[0] == pool && hc[1] == 0x56536348 && !hc[2] &&
-              hc[3] == allocated &&
-              hc[4] == range_bytes + late_used + symbol_used + drive_used &&
-              hc[5] == adam && hc[10] == data_hc + 0x48 && hc[11] == hc[10],
-          "Invalid Adam data heap");
+  auto high_free = ReadPhysical<3>(vm, code_base);
+  auto low_free = ReadPhysical<3>(vm, heap);
+  Check(high_free[0] == heap && !low_free[0] &&
+            static_cast<uint32_t>(high_free[2]) == 0x6E55424D &&
+            low_free[2] == ((((ram_end - heap) / page - 0x224) << 32) | 0x6E55424D),
+        "Invalid code pool free list");
+  code.ranges.insert(code.ranges.end(), idle_code.ranges.begin(), idle_code.ranges.end());
+  code.ranges.emplace_back(heap, heap + (low_free[2] >> 32) * page);
+  code.ranges.emplace_back(code_base, code_base + (high_free[2] >> 32) * page);
+  VerifyCoverage(std::move(code.ranges), {{heap, ram_end}, {code_base, limit}});
 
-    // Registering another symbol can change which small blocks merge.
-    uint64_t begin = data_end - allocated, head = data_hc + 0x30, prev = head;
-    std::vector<std::pair<uint64_t, uint64_t>> ranges;
-    bool mergeable = false;
-    for (uint64_t addr = hc[6]; addr != head;) {
-      Check(addr >= begin && addr < data_end && !(addr & (page - 1)) &&
-                ranges.size() < allocated / page,
-            "Adam data heap block outside allocated pages");
-      auto blk = ReadPhysical<3>(vm, addr);
-      uint64_t bytes = (blk[2] >> 32) * page;
-      Check(blk[1] == prev && static_cast<uint32_t>(blk[2]) == 0x7355424D &&
-                bytes && bytes <= data_end - addr,
-            "Invalid Adam data heap block");
-      ranges.emplace_back(addr, addr + bytes);
-      mergeable |= addr == hc[8];
-      prev = addr;
-      addr = blk[0];
+  if (pool) {
+    auto idle_data_hc = ReadPhysical<2>(vm, idle_heaps[1] - 16);
+    Check(idle_data_hc[0] == expected_data_hc, "Invalid idle data heap owner");
+    auto data = VerifyHeap(vm, expected_data_hc, pool, adam);
+    auto idle_data = VerifyHeap(vm, idle_heaps[1], pool, idle);
+    Check(data.used == boot_used + idle_code_hc[1] + idle_data_hc[1] &&
+              !idle_code.alloced && idle_data.alloced > 256 * 1024,
+          "Invalid data heap usage");
+    data.ranges.insert(data.ranges.end(), idle_data.ranges.begin(), idle_data.ranges.end());
+    uint64_t prev = 0;
+    for (auto [base, end] : data_ranges) {
+      auto block = ReadPhysical<3>(vm, base);
+      uint64_t free_end = base + (block[2] >> 32) * page;
+      Check(block[0] == prev && static_cast<uint32_t>(block[2]) == 0x6E55424D &&
+                free_end <= end,
+            "Invalid data pool free list");
+      prev = base;
+      data.ranges.emplace_back(base, free_end);
     }
-    Check(prev == hc[7] && mergeable && hc[9] >= begin + 0x18 &&
-              hc[9] <= data_end - 0x10 && !(hc[9] & 7),
-          "Invalid Adam data heap links");
-    std::sort(ranges.begin(), ranges.end());
-    for (auto [lo, hi] : ranges) {
-      Check(begin == lo, "Adam data heap blocks do not cover allocated pages");
-      begin = hi;
-    }
-    Check(begin == data_end, "Adam data heap has untracked pages");
-  }
-  Check(ReadPhysical<2>(vm, adam + 0x20) ==
-            std::array<uint64_t, 2>{adam_hc,
-                                    hc_block ? hc_block + 0x28 : adam_hc},
-        "Adam is using the wrong heap");
+    Check(ReadPhysical<4>(vm, pool) == std::array<uint64_t, 4>{
+              0, data_bytes, data.alloced + idle_data.alloced, prev},
+          "Invalid data block pool");
+    VerifyCoverage(std::move(data.ranges), data_ranges);
+  } else
+    Check(idle_code.alloced > 256 * 1024, "Idle stack is missing from the code heap");
+
   const std::regex pools(
       R"(heap limit (0x[0-9a-f]+), data pool (0x[0-9a-f]+))");
   std::smatch match;
@@ -860,7 +888,6 @@ static uint64_t VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
             std::stoull(match[1].str(), nullptr, 16) == limit - 1 &&
             std::stoull(match[2].str(), nullptr, 16) == pool,
         "Incorrect heap limit or data pool");
-  return hc_block;
 }
 
 static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
@@ -868,30 +895,32 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
                             const std::string &output)
 {
   constexpr uint64_t fixed = 0x100000, boot_cpu = fixed + 0x200,
-                     adam = fixed + 0x300, code_pool = fixed + 0x7A8;
+                     adam = fixed + 0x300;
   uint64_t e801 = ReadPhysical<1>(vm, 0x7C40, 'h')[0];
   uint64_t ram_end = fixed + e801 * 1024;
   Check(heap < ram_end, "Code pool starts beyond E801 RAM");
-  uint64_t pages = (ram_end - heap) / 512;
   uint64_t top = ram_end - 0x4400;
   const auto e820 = ReadE820(vm);
   uint64_t range_bytes = VerifyDeviceRanges(vm, output, e820);
   uint64_t owner = ReadPhysical<1>(vm, adam + 0x28)[0];
   uint64_t symbol_used = VerifyKernelSymbols(vm, top + 0x28, owner);
-  uint64_t hc_block =
-      VerifyPools(vm, heap, ram_end, output, range_bytes, symbol_used, e820);
-  auto block = ReadPhysical<3>(vm, heap);
-  Check(!block[0] && block[2] == (((pages - 0x224) << 32) | 0x6E55424D),
-        "Invalid first free block in the code pool");
-
   Check(ReadPhysical<1>(vm, fixed, 'h')[0] == 0x37F,
         "Missing initial FPU image");
   auto cpu = ReadPhysical<14>(vm, boot_cpu);
   Check(cpu[0] == boot_cpu && !cpu[1] && cpu[5] == 0x3F847AE147AE147C &&
-            cpu[7] == adam && cpu[12] == boot_cpu + 0x60 && cpu[13] == cpu[12],
+            cpu[7] == adam && cpu[8] && cpu[8] != adam &&
+            cpu[12] == boot_cpu + 0x60 && cpu[13] == cpu[12],
         "Invalid bootstrap CPU record");
+  uint64_t idle = cpu[8];
+  auto idle_task = ReadPhysical<4>(vm, idle);
+  Check(idle_task[0] == idle && static_cast<uint32_t>(idle_task[1]) == 0x536B7354 &&
+            static_cast<uint32_t>(idle_task[3]) == 8 &&
+            ReadPhysical<3>(vm, idle + 0x78) == std::array<uint64_t, 3>{adam, idle, idle} &&
+            ReadPhysical<1>(vm, idle + 0x1A8)[0] == boot_cpu,
+        "Invalid idle task record");
+  VerifyPools(vm, heap, ram_end, output, range_bytes, symbol_used, e820, idle);
 
-  constexpr uint64_t adam_hc = 0x101188, task_alloced = 0x44800;
+  constexpr uint64_t task_alloced = 0x44800;
   uint64_t used_block = ram_end - task_alloced;
   uint64_t stk = used_block + 0x28;
   Check(ReadPhysical<1>(vm, adam)[0] == adam &&
@@ -922,25 +951,10 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
                 std::array<uint64_t, 4>{0, 1023, 0, top + 0x28},
         "Invalid Adam hash table");
 
-  uint64_t extra =
-      hc_block ? 0x600 : late_alloced + symbol_alloced + drive_alloced;
-  auto high_block = ReadPhysical<3>(vm, 0x1000000);
-  uint64_t code_last = 0x1000000 + (high_block[2] >> 32) * 512;
-  uint64_t last_chunk = hc_block ? ram_end - 0x2200 : code_last + drive_alloced;
-  auto hc = ReadPhysical<12>(vm, adam_hc);
-  Check(hc ==
-            std::array<uint64_t, 12>{
-                code_pool, 0x56536348, 0, task_alloced + extra + fault_alloced,
-                0x42840 +
-                    (hc_block
-                         ? 0x5E8ULL
-                         : range_bytes + late_used + symbol_used + drive_used) +
-                    fault_used,
-                adam, ram_end - 0x2200, code_last, last_chunk,
-                last_chunk + 0x18, adam_hc + 0x48, adam_hc + 0x48},
-        "Invalid Adam heap state");
-  uint64_t range_heap = hc_block ? hc_block + 0x28 : adam_hc;
-  uint64_t cached = ReadPhysical<1>(vm, range_heap + 0x98)[0];
+  auto idle_hash = ReadPhysical<1>(vm, idle + 0x3D0)[0];
+  Check(ReadPhysical<1>(vm, idle_hash)[0] == hash,
+        "Idle task does not inherit Adam's hash table");
+  uint64_t cached = ReadPhysical<1>(vm, owner + 0x98)[0];
   if (cached)
     Check(!(cached & 7) &&
               ReadPhysical<2>(vm, cached) == std::array<uint64_t, 2>{0, 56},
@@ -1136,7 +1150,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       VerifyFixedArea(vm, heap, registers, output);
     VerifyUncachedAlias(vm, output);
     VerifyKernelGlobals(vm, output);
-    VerifyInterrupts(vm, output, registers);
+    VerifyInterrupts(vm, output, registers, startup);
     VerifyClock(vm, output, host_bridge, hpet_enabled);
     VerifyBootDrive(vm, output, media, host_bridge == 0x12378086,
                     secondary_slave);
@@ -1433,6 +1447,10 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          "Zero [One] Two [Three] Four [Five] \n", '1');
       for (const char *name : {"/SwitchProbe.HC", "/SwitchProbe.BIN.Z"})
         CheckProgramOutput(output, name, "switch 12 2 -1 99 17 34\n", '1');
+      for (const char *name : {"/SchedulerProbe.HC", "/SchedulerProbe.BIN.Z"})
+        CheckProgramOutput(output, name, "sched 1234 1 1 1 1\n", '1');
+      Check(output.find("UnholyOS: dead tasks reaped") != std::string::npos,
+            "Terminated tasks remain in the scheduler queues");
       CheckProgramOutput(output, "/DivByHand.BIN.Z", "123456/10=12345\n", '1');
       CheckProgramOutput(output, "/AsmProbe.BIN.Z",
                          "asm import\nasm result 42\n", '1');
@@ -1442,7 +1460,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
               "GotoProbe.BIN.Z", "SwitchProbe.BIN.Z", "OpcodeProbe.BIN.Z",
               "FixedImage.BIN", "AsmBranchProbe.BIN.Z",
               "AsmBranchImport.BIN.Z", "AsmListingProbe.BIN.Z",
-              "SoundRecord.BIN.Z"})
+              "SchedulerProbe.BIN.Z", "SoundRecord.BIN.Z"})
           fs::copy_file(CaptureGuestFile(vm, dir, output, name),
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);

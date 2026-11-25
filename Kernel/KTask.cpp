@@ -57,6 +57,8 @@ static CFPU *TaskFPUInit(CHeapCtrl *hc, const CFPU *initial)
 
 static CTaskStk *TaskStkNew(size_t size, CHeapCtrl *hc)
 {
+  if (size > SIZE_MAX - sizeof(CTaskStk))
+    return nullptr;
   auto *ptr = MAlloc(size + sizeof(CTaskStk), hc);
   if (!ptr)
     return nullptr;
@@ -101,7 +103,7 @@ extern "C" CTask *TaskInitCpp(CTask *task, size_t stk_size)
     return nullptr;
   if (!(task->hash_table = HashTableNew(1024, data)))
     return nullptr;
-  if (!(task->stk = TaskStkNew(stk_size, data)))
+  if (!(task->stk = TaskStkNew(stk_size ? stk_size : MEM_DFT_STK, data)))
     return nullptr;
   task->rsp = reinterpret_cast<uintptr_t>(task->stk + 1) + task->stk->stk_size;
 
@@ -113,15 +115,151 @@ extern "C" CTask *TaskInitCpp(CTask *task, size_t stk_size)
   task->win_top = 13;
   task->win_right = task->win_bottom = -2;
 
-  task->cur_dir = reinterpret_cast<char *>(MAlloc(sizeof(HOME_DIR), data));
+  const char *home = blkdev.home_dir;
+  if (home)
+    task->cur_dv = PathDrive(*task, *home);
+  task->cur_dir = StrNew(home ? home + 2 : HOME_DIR, data);
   if (!task->cur_dir)
     return nullptr;
-  MemCpy(task->cur_dir, HOME_DIR, sizeof(HOME_DIR));
 
   uint32_t lo, hi;
   asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
   task->rand_seed ^= (uint64_t{hi} << 32) | lo;
   return task;
+}
+
+extern "C" uint64_t TaskValidateCpp(CTask *task)
+{
+  auto addr = reinterpret_cast<uintptr_t>(task);
+  return addr && addr <= INT32_MAX && task->addr == task &&
+         task->task_signature == TASK_SIGNATURE_VAL;
+}
+
+extern "C" uint64_t SuspendCpp(CTask *task, uint8_t state)
+{
+  if (!task)
+    task = CurrentTask();
+  if (!TaskValidateCpp(task))
+    return false;
+  auto old = state
+      ? __atomic_fetch_or(&task->task_flags, TASKF_SUSPENDED, __ATOMIC_RELAXED)
+      : __atomic_fetch_and(&task->task_flags, ~TASKF_SUSPENDED, __ATOMIC_RELAXED);
+  return (old & TASKF_SUSPENDED) != 0;
+}
+
+extern "C" uint64_t IsSuspendedCpp(CTask *task)
+{
+  if (!task)
+    task = CurrentTask();
+  return TaskValidateCpp(task) &&
+         (__atomic_load_n(&task->task_flags, __ATOMIC_RELAXED) & TASKF_SUSPENDED);
+}
+
+static void TaskDel(CTask *task)
+{
+  auto *code = task->code_heap;
+  auto *data = task->data_heap;
+  HeapCtrlDel(code);
+  if (data != code)
+    HeapCtrlDel(data);
+  Free(task);
+}
+
+extern "C" CTask *SpawnCpp(uintptr_t fp_start_addr, uint8_t *data,
+                          const char *task_name, int64_t target_cpu,
+                          CTask *parent, int64_t stk_size, uint64_t flags)
+{
+  auto *cpu = CurrentCPU();
+  if (target_cpu > cpu->num || stk_size < 0 ||
+      (!fp_start_addr && (flags & JOBF_ADD_TO_QUE)))
+    return nullptr;
+  if (!parent)
+    parent = cpu->seth_task;
+  if (!TaskValidateCpp(parent))
+    return nullptr;
+  auto *task = reinterpret_cast<CTask *>(CAlloc(sizeof(CTask), adam_task->code_heap));
+  if (!task)
+    return nullptr;
+  task->task_signature = TASK_SIGNATURE_VAL;
+  task->parent_task = parent;
+  task->gs = cpu;
+  task->code_heap = HeapCtrlInit(task, SYS_CODE_BP);
+  task->data_heap = SYS_DATA_BP ? HeapCtrlInit(task, SYS_DATA_BP) : task->code_heap;
+  if (!task->code_heap || !task->data_heap || !TaskInitCpp(task, stk_size)) {
+    TaskDel(task);
+    return nullptr;
+  }
+
+  task->rip = fp_start_addr;
+  auto *rsp = reinterpret_cast<uintptr_t *>(task->rsp);
+  *--rsp = reinterpret_cast<uintptr_t>(data);
+  *--rsp = reinterpret_cast<uintptr_t>(Exit);
+  task->rsp = reinterpret_cast<uintptr_t>(rsp);
+  task->hash_table->next = parent->hash_table;
+
+  if (!task_name)
+    task_name = "Unnamed Task";
+  size_t len = 0;
+  while (len < sizeof(task->task_name) && task_name[len])
+    ++len;
+  MemCpy(task->task_name, task_name, len);
+  MemCpy(task->task_title, task->task_name, len);
+  task->title_src = TTS_TASK_NAME;
+
+  if (flags & JOBF_ADD_TO_QUE) {
+    uint64_t rflags;
+    asm volatile("pushfq; popq %0; cli" : "=r"(rflags) : : "memory");
+    TaskQueInsChild(task);
+    TaskQueInsCpp(task, nullptr);
+    asm volatile("pushq %0; popfq" : : "r"(rflags) : "cc", "memory");
+  }
+  return task;
+}
+
+extern "C" CTask *TaskEnd()
+{
+  auto *task = CurrentTask();
+  auto *next = task->next_task;
+  auto *child_head = reinterpret_cast<CTask *>(
+      reinterpret_cast<uintptr_t>(&task->next_child_task) -
+      offsetof(CTask, next_sibling_task));
+  if (task->next_child_task != child_head) {
+    for (auto *child = task->next_child_task; child != child_head;
+         child = child->next_sibling_task)
+      child->task_flags |= TASKF_KILL_TASK;
+    return next;
+  }
+
+  if (sys_focus_task == task) {
+    SingleUserCpp(false);
+    sys_focus_task = nullptr;
+  }
+  task->task_signature = 0;
+  task->last_input_filter_task->next_input_filter_task = task->next_input_filter_task;
+  task->next_input_filter_task->last_input_filter_task = task->last_input_filter_task;
+  task->last_sibling_task->next_sibling_task = task->next_sibling_task;
+  task->next_sibling_task->last_sibling_task = task->last_sibling_task;
+  TaskQueRemCpp(task);
+
+  task->wake_jiffy = __atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED) + DYING_JIFFIES;
+  auto *cpu = CurrentCPU();
+  QueIns(*reinterpret_cast<CTaskDying *>(task), *cpu->last_dying);
+  return next;
+}
+
+extern "C" void TaskKillDying()
+{
+  auto *cpu = CurrentCPU();
+  auto now = int64_t(__atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED));
+  if (cpu->kill_jiffy >= now)
+    return;
+  auto *head = reinterpret_cast<CTaskDying *>(&cpu->next_dying);
+  while (cpu->next_dying != head && cpu->next_dying->wake_jiffy < now) {
+    auto *task = cpu->next_dying;
+    QueRem(*task);
+    TaskDel(reinterpret_cast<CTask *>(task));
+  }
+  cpu->kill_jiffy = now + DYING_JIFFIES;
 }
 
 extern "C" [[noreturn]] void TaskInitFailed()
