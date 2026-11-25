@@ -94,9 +94,16 @@ pinned tree. `AsmPrsArgType` uses the operand list from
 while the compiler directory is absent from the guest boot media.
 `Compiler/Asm.cpp` uses its opcode, alias, and register records for
 instruction selection and emission. The current encoder covers integer,
-segment, and x87 forms used by the tests. MMX, XMM, far and `MOFFS`
-operand forms, and directives such as `ORG`, `BINFILE`, and `LIST`
-remain pending. [Pinned opcode dictionary](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Compiler/OpCodes.DD)
+segment, and x87 forms used by the tests. Far and `MOFFS` operand forms
+and the `LIST` and `NOLIST` directives remain pending. [Pinned opcode dictionary](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Compiler/OpCodes.DD)
+
+`ORG` and `PrsBinFile` in `Compiler/Asm.cpp` follow `Compiler/Asm.HC`.
+`BINFILE` uses `ExtDft` and `FileRead` with the native `.BIN` default.
+`Compiler/CMain.cpp` writes the requested origin into `CBinFile.org`.
+`Kernel/KLoad.cpp` places the module header at that address and uses
+the following bytes as the relocation base. The loader validates the
+patch table and allocates patch records before copying to caller-owned
+storage.
 
 The compiler also registers the 65-byte `CCntsGlbls` guest class
 from `Kernel/KernelA.HH`. Its typed `cnts` symbol aliases the

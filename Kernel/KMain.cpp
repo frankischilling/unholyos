@@ -880,6 +880,99 @@ static void BootAsmReport(const CDrv &dvd, CTask &task)
     SerialPutS("UnholyOS: opcode table mode bytes matched\r\n");
 }
 
+static void BootFixedAsmReport(const CDrv &dvd, CTask &task)
+{
+  auto *ram = MountedDrive('B');
+  constexpr uint8_t payload[]{0xB8, 42, 0, 0, 0, 0xC3};
+  if (!ram ||
+      !RedSeaFileWrite(*ram, "/FixedPayload.BIN", payload, sizeof(payload), 0,
+                       0) ||
+      !BootFileProgramReport(dvd, "/FixedAsm.HC").okay)
+    return;
+
+  auto symbol = [&](const char *name) {
+    return reinterpret_cast<const CHashExport *>(
+        HashFind(name, task.hash_table, HTT_EXPORT_SYS_SYM));
+  };
+  auto missing = ExePutS("asm { _FIXED_ASM_MISSING::"
+                         " BINFILE \"B:/FixedMissing\"; RET }",
+                         nullptr, 0);
+  auto malformed = ExePutS("asm { _FIXED_ASM_BAD_FILE::"
+                           " BINFILE \"B:/FixedPayload\" }",
+                           nullptr, 0);
+  auto *empty = symbol("_FIXED_ASM_MISSING");
+  if (missing.okay && !malformed.okay && !symbol("_FIXED_ASM_BAD_FILE") &&
+      empty && *reinterpret_cast<const uint8_t *>(empty->val) == 0xC3)
+    SerialPutS("UnholyOS: BINFILE checked missing file and terminator\r\n");
+
+  auto *jit = symbol("_FIXED_ASM_BYTES");
+  if (!jit)
+    return;
+  auto rejected = ExePutS("asm { ORG fixed_asm_bytes _FIXED_ASM_REJECTED::"
+                          " DU8 1; JMP @@missing }",
+                          nullptr, 0);
+  auto misplaced = ExePutS("asm { NOP ORG fixed_asm_bytes }", nullptr, 0);
+  auto duplicate =
+      ExePutS("asm { ORG fixed_asm_bytes ORG fixed_asm_bytes }", nullptr, 0);
+  auto in_fun =
+      ExePutS("U0 FixedAsmInFun() { asm { ORG fixed_asm_bytes } }", nullptr, 0);
+  if (!rejected.okay && !misplaced.okay && !duplicate.okay && !in_fun.okay &&
+      !symbol("_FIXED_ASM_REJECTED") &&
+      *reinterpret_cast<const uint8_t *>(jit->val) == payload[0])
+    SerialPutS("UnholyOS: invalid ORG left the destination intact\r\n");
+
+  auto *dest = CAlloc(4096, task.code_heap);
+  if (!dest)
+    return;
+  const uint64_t address = reinterpret_cast<uintptr_t>(dest);
+  auto *src = MStrPrintCpp(
+      "#define FIXED_IMAGE_ORG 0x%X\n#include \"::/FixedImage.HC\"\n", 1,
+      &address);
+  bool wrote = src && RedSeaFileWrite(*ram, "/FixedImageBuild.HC",
+                                      reinterpret_cast<const uint8_t *>(src),
+                                      StrLen(src), 0, 0);
+  Free(src);
+  if (!wrote)
+    return;
+  auto built = ExePutS("Cmp(\"B:/FixedImageBuild.HC\",,\"B:/FixedImage.BIN\");",
+                       nullptr, 0);
+  if (!built.okay || built.value)
+    return;
+
+  size_t file_size;
+  auto *file = FileRead(*ram, "/FixedImage.BIN", file_size, task.data_heap);
+  if (file && file_size >= sizeof(CBinFile)) {
+    reinterpret_cast<CBinFile *>(file)->patch_table_offset = file_size;
+    if (RedSeaFileWrite(*ram, "/FixedBad.BIN", file, file_size, 0, 0) &&
+        !Load(*ram, "/FixedBad.BIN", task, LDF_JUST_LOAD) &&
+        !symbol("_FIXED_IMAGE") && !*reinterpret_cast<uint64_t *>(dest))
+      SerialPutS("UnholyOS: rejected malformed fixed image before copying\r\n");
+  }
+  Free(file);
+  SerialPutS("UnholyOS: executing /FixedImage.BIN\r\n");
+  auto *mod = Load(*ram, "/FixedImage.BIN", task, LDF_JUST_LOAD);
+  auto *entry = symbol("_FIXED_IMAGE");
+  auto *ptr = symbol("_FIXED_PTR");
+  auto *body = symbol("_FIXED_BODY");
+  uint64_t target = 0;
+  if (ptr)
+    MemCpy(&target, reinterpret_cast<const uint8_t *>(ptr->val),
+           sizeof(target));
+  auto &bfh = *reinterpret_cast<const CBinFile *>(dest);
+  uint64_t result = 0;
+  if (mod && bfh.org == address && entry &&
+      entry->val == address + sizeof(bfh) && body && target == body->val &&
+      LoadPass2(*mod) &&
+      CallHolyC0Checked(reinterpret_cast<const uint8_t *>(entry->val),
+                        &result) &&
+      result == 42) {
+    SerialPutS("fixed load 42\n");
+    SerialPutS(
+        "UnholyOS: finished /FixedImage.BIN, checks 0x0000000000000001\r\n");
+    BootGuestFileReport(*ram, "/FixedImage.BIN");
+  }
+}
+
 static void BootSwitchReport(const CDrv &dvd, CTask &task)
 {
   auto *ram = MountedDrive('B');
@@ -1089,6 +1182,7 @@ extern "C" void KMainCpp()
     BootCmpReport(*adam_task->cur_dv, *adam_task);
     BootImportReport(*adam_task->cur_dv, *adam_task);
     BootAsmReport(*adam_task->cur_dv, *adam_task);
+    BootFixedAsmReport(*adam_task->cur_dv, *adam_task);
     BootSwitchReport(*adam_task->cur_dv, *adam_task);
     BootISOReport(*adam_task->cur_dv);
   } else {

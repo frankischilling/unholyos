@@ -24,7 +24,7 @@ struct CLoadedModule
   uint8_t *image;
   CLoadRecord *records;
   size_t count, unresolved;
-  bool started;
+  bool owns_image, started;
 };
 
 extern "C" {
@@ -167,7 +167,8 @@ static void LoadDiscard(CLoadedModule *module)
     }
     Free(module->records);
   }
-  Free(module->image);
+  if (module->owns_image)
+    Free(module->image);
   Free(module);
 }
 
@@ -215,7 +216,6 @@ static bool LoadPrepare(CLoadedModule &module, CTask &task)
         return false;
       rec.imported->entry.sym.hash.type = HTT_IMPORT_SYS_SYM;
       rec.imported->entry.module_base = ModuleBase(module);
-      rec.imported->entry.module_header_entry = rec.raw;
       rec.imported->module = &module;
       rec.imported->first = i;
       size_t j = i + 1;
@@ -340,7 +340,8 @@ static CLoadedModule *LoadImage(const uint8_t *input, size_t size,
     return nullptr;
   MemCpy(&header, input, sizeof(header));
   size_t count;
-  if (header.bin_signature != BIN_SIGNATURE_VAL || header.org != INVALID_PTR ||
+  if (header.bin_signature != BIN_SIGNATURE_VAL ||
+      (header.org != INVALID_PTR && size > UINTPTR_MAX - header.org) ||
       header.file_size != size || header.patch_table_offset < sizeof(header) ||
       header.patch_table_offset >= size || header.module_align_bits >= 63 ||
       !LoadRecords(input, header, nullptr, count) ||
@@ -352,20 +353,24 @@ static CLoadedModule *LoadImage(const uint8_t *input, size_t size,
   if (!module)
     return nullptr;
 
-  size_t align = size_t{1} << header.module_align_bits;
-  if (align < 16)
-    align = 16;
-  module->image = MAllocAligned(size, align, task.code_heap,
-                                (0 - sizeof(header)) & (align - 1));
+  module->owns_image = header.org == INVALID_PTR;
+  if (module->owns_image) {
+    size_t align = size_t{1} << header.module_align_bits;
+    if (align < 16)
+      align = 16;
+    module->image = MAllocAligned(size, align, task.code_heap,
+                                  (0 - sizeof(header)) & (align - 1));
+  } else {
+    module->image = reinterpret_cast<uint8_t *>(header.org);
+  }
   if (!module->image) {
     LoadDiscard(module);
     return nullptr;
   }
-  MemCpy(module->image, input, size);
   module->records = reinterpret_cast<CLoadRecord *>(
       MAlloc(count * sizeof(CLoadRecord), task.data_heap));
   if (!module->records ||
-      !LoadRecords(module->image, header, module->records, module->count) ||
+      !LoadRecords(input, header, module->records, module->count) ||
       !LoadPrepare(*module, task)) {
     LoadDiscard(module);
     return nullptr;
@@ -386,6 +391,18 @@ static CLoadedModule *LoadImage(const uint8_t *input, size_t size,
       name[len - 2] == 'I' && name[len - 1] == 'N')
     len -= 4;
   name[len] = 0;
+  // A module with ORG uses caller-owned memory. Prepare its patches before
+  // replacing those bytes.
+  MemCpy(module->image, input, size);
+  for (size_t i = 0; i < module->count; i++) {
+    auto &rec = module->records[i];
+    rec.raw = module->image + (rec.raw - input);
+    rec.name = reinterpret_cast<const char *>(rec.raw + 1 + sizeof(rec.value));
+    if (rec.offsets)
+      rec.offsets = module->image + (rec.offsets - input);
+    if (rec.imported)
+      rec.imported->entry.module_header_entry = rec.raw;
+  }
   entry->hash.str = name;
   entry->hash.type = HTT_MODULE | HTF_PUBLIC;
   entry->user_data0 = reinterpret_cast<uintptr_t>(module->image);

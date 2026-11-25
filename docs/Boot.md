@@ -249,6 +249,26 @@ make -j4 test BUILD=build/opcode-table
 qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom build/opcode-table/unholyos-startup-test.iso -display none -serial file:build/opcode-table/windows-pc512.log -monitor none -no-reboot -no-shutdown
 ```
 
+`FixedAsm.HC` places JIT code in a HolyC array with `ORG`, inserts
+machine code from a `BINFILE` path without an extension, and calls the
+result. The test expects `fixed jit 1 42`. A guest-built
+`FixedImage.BIN` places the TOSB header at the requested address. The
+suite checks the relocated `DU64` pointer and calls the relocated
+code to verify that it returns 42. It also checks that an invalid `ORG` or malformed fixed image
+leaves its destination intact. A missing `BINFILE` prints the file
+diagnostic and contributes zero bytes.
+
+In QEMU 9.2.0 with PC, `qemu64`, and 512 MiB, pinned TempleOS
+printed `fixed jit 1 42` from the same source. It compiled
+`FixedImage.HC` with its own allocated origin and loaded it with
+the header and relocated pointer at the expected addresses. The
+loaded entry returned 42.
+
+```sh
+make -j4 test BUILD=build/fixed-image
+qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom build/fixed-image/unholyos-startup-test.iso -display none -serial file:build/fixed-image/windows-pc512.log -monitor none -no-reboot -no-shutdown
+```
+
 Full opcode, operand, and directive coverage is pending.
 
 ## HolyC switch statements

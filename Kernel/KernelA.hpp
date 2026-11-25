@@ -184,7 +184,9 @@ struct CBinFile
 };
 
 static_assert(sizeof(CBinFile) == BIN_HEADER_SIZE &&
-              offsetof(CBinFile, patch_table_offset) == 16);
+              offsetof(CBinFile, org) == 8 &&
+              offsetof(CBinFile, patch_table_offset) == 16 &&
+              offsetof(CBinFile, file_size) == 24);
 constexpr unsigned BOOT_SRC_DVD = 4;
 constexpr uint32_t BDT_NULL = 0, BDT_RAM = 1, BDT_ATA = 2,
                    BDT_ISO_FILE_READ = 3, BDT_ISO_FILE_WRITE = 4, BDT_ATAPI = 5;
