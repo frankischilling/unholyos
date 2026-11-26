@@ -27,6 +27,52 @@ static bool GrSetUpTables()
   return true;
 }
 
+static void WinZBufFill(CTask *task)
+{
+  const int64_t border = !(task->display_flags & DISPLAYF_NO_BORDER);
+  auto clamp = [](int64_t value, int64_t lo, int64_t hi) {
+    return value < lo ? lo : value > hi ? hi : value;
+  };
+  auto t = clamp(uint64_t(task->win_top) - border, 0, TEXT_ROWS - 1);
+  auto b = clamp(uint64_t(task->win_bottom) + border, t, TEXT_ROWS - 1);
+  auto l = clamp(uint64_t(task->win_left) - border, 0, TEXT_COLS - 1);
+  auto r = clamp(uint64_t(task->win_right) + border, l, TEXT_COLS - 1);
+  for (int64_t y = t; y <= b; y++)
+    for (int64_t x = l; x <= r; x++)
+      gr.win_z_buf[y * TEXT_COLS + x] = task->win_z_num;
+}
+
+extern "C" void WinZBufUpdateCpp()
+{
+  if (!sys_winmgr_task || !gr.win_z_buf)
+    return;
+  auto flags = GetRFlags();
+  asm volatile("cli" : : : "memory");
+  __atomic_fetch_and(&sys_semas[SEMA_UPDATE_WIN_Z_BUF].flags, ~uint64_t{1},
+                     __ATOMIC_RELAXED);
+  uint32_t z = 1;
+  MemSet(gr.win_z_buf, 0, TEXT_COLS * TEXT_ROWS * sizeof(uint16_t));
+  auto *task = sys_winmgr_task;
+  do {
+    if (!TaskValidateCpp(task))
+      break;
+    if (task->display_flags & DISPLAYF_SHOW) {
+      task->win_z_num = z++;
+      WinZBufFill(task);
+    }
+    task = task->next_task;
+  } while (task != sys_winmgr_task && z < 0x10000);
+
+  MemSet(gr.win_uncovered_bitmap, 0,
+         (gr.highest_uncovered / 16 + 1) * sizeof(uint16_t));
+  gr.highest_uncovered = z - 1;
+  for (size_t i = 0; i < TEXT_ROWS * TEXT_COLS; i++) {
+    auto depth = gr.win_z_buf[i];
+    gr.win_uncovered_bitmap[depth >> 4] |= 1 << (depth & 15);
+  }
+  SetRFlags(flags);
+}
+
 bool GrInit2()
 {
   gr.scrn_zoom = 1;
@@ -39,8 +85,10 @@ bool GrInit2()
       CAllocCpp(TEXT_COLS * TEXT_ROWS * sizeof(uint16_t), nullptr));
   auto *win_z_buf = reinterpret_cast<uint16_t *>(
       CAllocCpp(TEXT_COLS * TEXT_ROWS * sizeof(uint16_t), nullptr));
+  auto *win_uncovered_bitmap =
+      reinterpret_cast<uint16_t *>(CAllocCpp(0x10000 / 8, nullptr));
   CDC *dc[6]{};
-  bool okay = text_base && vga_text_cache && win_z_buf;
+  bool okay = text_base && vga_text_cache && win_z_buf && win_uncovered_bitmap;
   for (auto &surface : dc) {
     if (!okay)
       break;
@@ -50,6 +98,7 @@ bool GrInit2()
   if (!okay || !GrSetUpTables()) {
     for (auto *surface : dc)
       DCDelCpp(surface);
+    Free(win_uncovered_bitmap);
     Free(win_z_buf);
     Free(vga_text_cache);
     Free(text_base);
@@ -58,6 +107,7 @@ bool GrInit2()
   gr.text_base = text_base;
   gr.vga_text_cache = vga_text_cache;
   gr.win_z_buf = win_z_buf;
+  gr.win_uncovered_bitmap = win_uncovered_bitmap;
   gr.dc2 = dc[0];
   gr.dc2->flags |= DCF_SCRN_BITMAP;
   gr.dc_cache = dc[1];

@@ -2,6 +2,16 @@
 
 #include "../../Kernel/KernelA.hpp"
 
+extern "C" bool TextCharCpp(CTask *task, uint8_t allow_border, int64_t x,
+                             int64_t y, uint32_t d);
+extern "C" bool TextLenStrCpp(CTask *task, int64_t x, int64_t y, int64_t len,
+                               uint32_t attr, const char *s);
+extern "C" bool TextLenAttrCpp(CTask *task, int64_t x, int64_t y, int64_t len,
+                                uint32_t attr);
+extern "C" void TextRectCpp(int64_t l, int64_t r, int64_t t, int64_t b, uint32_t d);
+extern "C" void TextBorderCpp(CTask *task, int64_t l, int64_t r, int64_t t,
+                                int64_t b, uint32_t attr, uint8_t solid);
+
 bool GrPixelVisible(const CDC *dc, int64_t x, int64_t y, bool skip_top_task);
 extern "C" uint64_t IsPixCovered0Cpp(CTask *task, int64_t x, int64_t y);
 extern "C" uint64_t GrPlot0Cpp(CDC *dc, int64_t x, int64_t y);

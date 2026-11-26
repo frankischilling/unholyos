@@ -10,6 +10,8 @@ extern "C" void TaskQueInsCpp(CTask *task, CTask *pred)
   last->next_task = pred->last_task = task;
   task->last_task = last;
   task->next_task = pred;
+  if (task->display_flags & DISPLAYF_SHOW)
+    __atomic_fetch_or(&sys_semas[SEMA_UPDATE_WIN_Z_BUF].flags, 1, __ATOMIC_RELAXED);
   asm volatile("pushq %0; popfq" : : "r"(rflags) : "cc", "memory");
 }
 
@@ -21,6 +23,8 @@ extern "C" void TaskQueRemCpp(CTask *task)
   auto *last = task->last_task;
   last->next_task = next;
   next->last_task = last;
+  if (task->display_flags & DISPLAYF_SHOW)
+    __atomic_fetch_or(&sys_semas[SEMA_UPDATE_WIN_Z_BUF].flags, 1, __ATOMIC_RELAXED);
   asm volatile("pushq %0; popfq" : : "r"(rflags) : "cc", "memory");
 }
 

@@ -394,6 +394,35 @@ static bool CmpJobData(CHashTable *table, CHashClass *task)
   return true;
 }
 
+static bool CmpDocData(CHashTable *table)
+{
+  auto *doc = CmpKernelClass(table, "CDoc", sizeof(CDoc));
+  auto *entry = CmpKernelClass(table, "CDocEntry", sizeof(CDocEntry));
+  if (!doc || !entry)
+    return false;
+  auto *i32 = FindType("I32", table);
+  auto *u64 = FindType("U64", table);
+  auto *heap = CurrentTask()->data_heap;
+  const struct
+  {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+  } members[]{
+      {"flags", u64, offsetof(CDoc, flags)},
+      {"top_line_num", i32, offsetof(CDoc, top_line_num)},
+      {"line_start_col", i32, offsetof(CDoc, line_start_col)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    if (!name || !MemberAdd(*doc, name, *member.type, member.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool CmpTaskData(CHashTable *table)
 {
   auto *heap = CurrentTask()->data_heap;
@@ -432,6 +461,15 @@ static bool CmpTaskData(CHashTable *table)
       {"wake_jiffy", i64, offsetof(CTask, wake_jiffy)},
       {"task_flags", u32, offsetof(CTask, task_flags)},
       {"display_flags", u32, offsetof(CTask, display_flags)},
+      {"text_attr", u8, offsetof(CTask, text_attr)},
+      {"border_attr", u8, offsetof(CTask, border_attr)},
+      {"put_doc", FindType("CDoc", table) + 1, offsetof(CTask, put_doc)},
+      {"display_doc", FindType("CDoc", table) + 1, offsetof(CTask, display_doc)},
+      {"border_doc", FindType("CDoc", table) + 1, offsetof(CTask, border_doc)},
+      {"win_left", i64, offsetof(CTask, win_left)},
+      {"win_right", i64, offsetof(CTask, win_right)},
+      {"win_top", i64, offsetof(CTask, win_top)},
+      {"win_bottom", i64, offsetof(CTask, win_bottom)},
       {"cur_dir", u8 + 1, offsetof(CTask, cur_dir)},
       {"parent_task", cls + 1, offsetof(CTask, parent_task)},
       {"next_task", cls + 1, offsetof(CTask, next_task)},
@@ -449,7 +487,8 @@ static bool CmpTaskData(CHashTable *table)
       return false;
     }
   }
-  return CmpJobData(table, cls);
+  return CmpKernelGlobal(table, "sys_winmgr_task", cls + 1, &sys_winmgr_task) &&
+         CmpJobData(table, cls);
 }
 
 static bool CmpKbdData(CHashTable *table)
@@ -800,6 +839,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     U16,
     I32,
     U32,
+    DocPtr,
+    DocEntryPtr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -812,6 +853,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CColorROPU32", table), FindType("CD3I32", table) + 1,
       FindType("I16", table), FindType("U16", table),
       FindType("I32", table), FindType("U32", table),
+      FindType("CDoc", table) + 1, FindType("CDocEntry", table) + 1,
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -871,6 +913,30 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"GrPaletteGet", U0, FF_RET1, {{"bgr48", BGR48Ptr}}},
       {"GrPaletteSet", U0, FF_RET1, {{"bgr48", BGR48Ptr}}},
       {"GrScaleZoom", U0, FF_RET1, {{"scale", F64}}},
+      {"WinHorz", Bool, FF_RET1, {{"left", I64}, {"right", I64}, {"task", TaskPtr, true}}},
+      {"WinVert", Bool, FF_RET1, {{"top", I64}, {"bottom", I64}, {"task", TaskPtr, true}}},
+      {"WinZBufUpdate", U0, FF_RET1, {}},
+      {"TextChar", Bool, FF_RET1,
+       {{"task", TaskPtr}, {"allow_border", Bool, true}, {"x", I64}, {"y", I64}, {"d", I64}},
+       "_TEXT_CHAR"},
+      {"TextLenStr", Bool, FF_RET1,
+       {{"task", TaskPtr}, {"x", I64}, {"y", I64}, {"len", I64}, {"attr", I64}, {"s", U8Ptr}},
+       "_TEXT_LEN_STR"},
+      {"TextLenAttr", Bool, FF_RET1,
+       {{"task", TaskPtr}, {"x", I64}, {"y", I64}, {"len", I64}, {"attr", I64}},
+       "_TEXT_LEN_ATTR"},
+      {"TextRect", U0, FF_RET1, {{"l", I64}, {"r", I64}, {"t", I64}, {"b", I64}, {"d", I64}}},
+      {"TextBorder", U0, FF_RET1,
+       {{"task", TaskPtr, true}, {"l", I64}, {"r", I64}, {"t", I64}, {"b", I64},
+        {"attr", I64}, {"solid", Bool}}},
+      {"DocNew", DocPtr, FF_RET1, {{"filename", U8Ptr, true}, {"task", TaskPtr, true}}},
+      {"DocPut", DocPtr, FF_RET1, {{"task", TaskPtr, true}}},
+      {"DocDisplay", DocPtr, FF_RET1, {{"task", TaskPtr, true}}},
+      {"DocBorder", DocPtr, FF_RET1, {{"task", TaskPtr, true}}},
+      {"DocDel", U0, FF_RET1, {{"doc", DocPtr}}},
+      {"DocRecalc", Bool, FF_RET1, {{"doc", DocPtr}, {"recalc_flags", I64, true}}},
+      {"DocPrint", DocEntryPtr, FF_DOT_DOT_DOT,
+       {{"doc", DocPtr, true}, {"fmt", U8Ptr}}},
       {"DrawStdMs", U0, FF_RET1, {{"dc", DCPtr}, {"x", I64}, {"y", I64}}},
       {"PaletteSetStd", U0, FF_RET1, {}},
       {"ClampI64", I64, FF_RET1, {{"i", I64}, {"lo", I64}, {"hi", I64}}, "_CLAMP_I64"},
@@ -1198,6 +1264,14 @@ static bool CmpFillHash(CHashTable *table)
       {"ROPF_PROBABILITY_DITHER","0x80000000"},
       {"CH_ESC", "0x1B"},
       {"CH_SHIFT_ESC", "0x1C"},
+      {"DOCF_BORDER_DOC", "0x100"},
+      {"DOCF_HIDE_CURSOR", "0x800"},
+      {"DOCF_DONT_SHOW", "0x8000"},
+      {"RECALCt_TO_SCRN", "2"},
+      {"RECALCF_HAS_CURSOR", "0x100"},
+      {"DISPLAYf_SHOW", "0"},
+      {"DISPLAYf_NO_BORDER", "3"},
+      {"WIF_SELF_DOC", "0x400"},
       {"WIF_SELF_MS_L", "0x0008"},
       {"WIF_SELF_MS_R", "0x0020"},
       {"WIF_FOCUS_TASK_MS_L_D", "0x100000"},
@@ -1263,7 +1337,8 @@ static bool CmpFillHash(CHashTable *table)
     }
     HashAdd(&entry->sym.hash,table);
   }
-  return CmpRuntimeData(table) && CmpTaskData(table) && CmpKbdData(table) &&
+  return CmpRuntimeData(table) && CmpDocData(table) && CmpTaskData(table) &&
+         CmpKbdData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
          CmpRuntimeHeaders(table);
 }

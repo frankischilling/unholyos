@@ -82,7 +82,7 @@ The source reference is [TempleOS at c26482bb6ad3f80106d28504ec5db3c6a360732c](h
 - The pinned compiler built `ExceptProbe.BIN` from HolyC `try`, `catch`, and `throw` statements. `PrsTryBlk` in `Compiler/PrsStmt.HC` emits separate catch and cleanup labels. `SysTry`, `TestExcept`, and `TakeExcept` in `Kernel/KExcept.HC` define the two stack transitions. A catch runs on the throw stack with the handler's saved registers, then resumes at its cleanup label on the saved stack if it accepts the exception. The probe covers early return, nested catches, propagation, caller addresses, interrupt flag restoration, and heap and queue cleanup. UnholyOS reports exceptions on serial. Adam's log, symbolic exception output, and the interactive debugger remain pending.
 - The pinned compiler built `FormatProbe.BIN` from `FormatProbe.HC`. Both guests reported `0x1ff` with QEMU PC, `qemu64`, and 512 MiB. `PrsExp.HC` supplies the caller-cleaned stack layout for variadic arguments. `StrPrintJoin` in `Kernel/StrPrint.HC`, the math routines in `Kernel/KMathA.HC`, and `DefineLstLoad` in `Kernel/KDefine.HC` supply the formatting and list behavior. The probe checks all four string entry points, buffer growth, integer and floating-point conversions, quoting, define lists, date and time, raw and linked pointers, file text, and exceptions. Boot tests also check ordinary output, diagnostics, and silent mode on serial. A link-only load of the pinned `Compiler.BIN.Z` at this stage left 26 unresolved import groups, down from 38.
 - The pinned compiler also built `HashCaller.BIN` and `HashProbe.BIN`. Both guests reported `0x3f` with QEMU PC, `qemu64`, and 512 MiB. `HashSrcFileSet` and `HashDel` in `Kernel/KHashB.HC` and `ClassMemberLstDel` in `Compiler/LexLib.HC` supply source links and ownership rules for compiler records. The probe checks help indexes, private flags, child tables, members, function pointer records, and owned and borrowed data. `SysSymImportsResolve` in `Kernel/KLoad.HC` patches the caller's function and global imports when the corresponding typed entries appear. The probe checks function names and offsets from `Kernel/FunSeg.HC` and confirms that the relocated call still works after the exports are removed from the table. The boot tests verify that kernel exports and their names belong to Adam's heap. A link-only load of the pinned compiler now leaves 22 unresolved import groups. The compiler initializers and debugger-backed symbol lookup remain pending.
-- The pinned compiler built `DocProbe.BIN`. Both guests reported `0x7f` with QEMU PC, `qemu64`, and 512 MiB. `DocNew.HC`, `DocPutS.HC`, `DocPlain.HC`, `DocRecalc.HC`, `DocBin.HC`, and `DocFile.HC` under `Adam/DolDoc` define the document records and storage rules. The probe checks the native ABI, allocation and deletion, text and cursor records, literal markup formatting, binary attachment renumbering, and a write to a RedSea RAM drive. It also reads the unmodified `StartOS.HC` into 86 document entries and saves the original 1,158 bytes unchanged. `%$F` now uses the document serializer. Rendering, editor input, prompt dialogs, external binary links, and HolyC expressions in markup need further work. A link-only load of the pinned compiler now leaves 13 unresolved import groups. The compiler initializers remain pending.
+- The pinned compiler built `DocProbe.BIN`. Both guests reported `0x7f` with QEMU PC, `qemu64`, and 512 MiB. `DocNew.HC`, `DocPutS.HC`, `DocPlain.HC`, `DocRecalc.HC`, `DocBin.HC`, and `DocFile.HC` under `Adam/DolDoc` define the document records and storage rules. The probe checks the native ABI, allocation and deletion, text and cursor records, literal markup formatting, binary attachment renumbering, and a write to a RedSea RAM drive. It also reads the unmodified `StartOS.HC` into 86 document entries and saves the original 1,158 bytes unchanged. `%$F` now uses the document serializer. Editor input, prompt dialogs, external binary links, and HolyC expressions in markup need further work. A link-only load of the pinned compiler now leaves 13 unresolved import groups. The compiler initializers remain pending.
 - The pinned compiler built `CompilerRuntimeProbe.BIN`. Both guests reported `0x3f` with QEMU PC, `qemu64`, and 512 MiB. `Kernel/BlkDev/DskAddDev.HC` and `DskDrv.HC` define the shared device and drive tables, including the boot and home aliases. The probe changes the home path and scratch document name and checks that path lookup and `DocNew` read both values. It also checks the boot DVD read counter, previous-state returns from `Raw` and `DbgMode` in `Kernel/KMisc.HC`, file and address links from `Kernel/BlkDev/DskDirA.HC`, sparse source maps from `Kernel/FunSeg.HC`, the fix link from `Kernel/EdLite.HC`, and the error message written to Adam's document by `AdamErr` from `Kernel/Job.HC`. Drive registry persistence, the debugger display, and cross-core jobs remain pending.
 
 In a separate QEMU run, GDB loaded the pinned `Compiler.BIN.Z` and called its `CmpCtrlNew` and `CmpCtrlDel` routines. The first call set up the supplied lexer buffer at line 1 and selected `~/Tmp.DD.Z` as the default file. The second restored heap usage, and both restored the caller's stack. Six import groups remained unresolved. Initialization of the pinned compiler module remained pending in that run.
@@ -384,7 +384,7 @@ Pinned TempleOS and UnholyOS produced the same 14-line probe trace under
 QEMU 9.2.0 with the PC machine, `qemu64`, and 512 MiB.
 
 The bootstrap input service drains the shared controller queues.
-The graphics desktop, pointer rendering, and window controls remain
+The full graphics desktop and interactive window controls remain
 pending.
 
 ## VGA palette
@@ -472,6 +472,19 @@ matched pinned TempleOS across 162 RGB pixels with the same VM settings
 and black background. The boot driver runs the probes again from the
 guest-built ISO.
 
+## DolDoc windows
+
+`make -j4 test BUILD=build/doldoc-display` runs `DocFrame.HC` in
+the startup guest and again from the guest-built ISO. Two HolyC tasks
+open overlapping document windows. QEMU screenshots check the frame,
+text palette, tab stop, underline, invert, glyph shift, and border
+document. The probe checks depth before and during overlap and after
+the upper window closes. Both guests reported depth tests of 0, 1,
+and 0. With the same QEMU 9.2.0 PC, `qemu64`, and 512 MiB settings,
+the three 144×96 window regions matched pinned TempleOS across
+41,472 RGB pixels. The boot driver also checks the cleared region
+against the UnholyOS background.
+
 ## PC speaker and recorded sound events
 
 `make -j4 test BUILD=build/pc-speaker` builds
@@ -554,5 +567,5 @@ This verifies the clean boot to the current kernel; the desktop is pending.
 | Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. Persistent writes and FAT32 are pending. |
 | Graphics | `Kernel/Display.HC`, `Adam/Gr/GrScrn.HC` | VGA text and graphics composition, 16-color palette, cursor, zoom, and a scheduled refresh task |
 | Input and sound | `Kernel/SerialDev/Keyboard.HC`, `Mouse.HC`, `Message.HC`, `Kernel/KMisc.HC` | PS/2 keyboard and mouse messages, PC speaker tones, and queued sound recording. Desktop input controls and AU output remain pending. |
-| Desktop and system tools | `StartOS.HC`, `Adam/MakeAdam.HC`, `Adam/WinMgr.HC`, `Adam/DolDoc`, `Apps` | The refresh task presents Adam's layers. Per-window DolDoc rendering and the interactive desktop remain pending. |
+| Desktop and system tools | `StartOS.HC`, `Adam/MakeAdam.HC`, `Adam/WinMgr.HC`, `Adam/DolDoc`, `Apps` | The refresh task draws visible DolDoc text and borders. The full editor and interactive desktop remain pending. |
 | HolyC | `Compiler/CMain.HC`, `Lex.HC`, `Prs*.HC`, `Back*.HC`, `Kernel/KLoad.HC` | Source execution with `ExeFile` and `ExePutS`, compile-time streams, plain and DolDoc tokenization, scalar expressions and functions, typed pointers, packed classes, unions, fixed arrays and their initializers, print calls, and TOSB module generation and loading for supported source. Full language support and native kernel compilation remain pending. |

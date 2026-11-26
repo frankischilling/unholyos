@@ -1,10 +1,9 @@
 #include "../../Kernel/KernelB.hpp"
 #include "GrExt.hpp"
+#include "../DolDoc/DolDoc.hpp"
 #include "GrGlbls.hpp"
 
 constexpr int64_t FONT_WIDTH = 8, FONT_HEIGHT = 8;
-constexpr uint32_t ATTRF_BLINK = 0x10000000, ATTRF_INVERT = 0x20000000,
-                   ATTRF_SEL = 0x40000000, ATTRF_UNDERLINE = 0x80000000;
 
 static void GrFixZoomScale()
 {
@@ -239,6 +238,40 @@ static void GrUpdateVGAGraphics()
   }
 }
 
+static void GrUpdateTaskWin(CTask *task)
+{
+  if (!(task->display_flags & DISPLAYF_NO_BORDER))
+    TextBorderCpp(sys_winmgr_task, task->win_left, task->win_right,
+                  task->win_top, task->win_bottom, task->border_attr,
+                  task == sys_focus_task);
+  TextRectCpp(task->win_left, task->win_right, task->win_top, task->win_bottom,
+              static_cast<uint32_t>(task->text_attr) << 8);
+  if (!(task->win_inhibit & WIF_SELF_DOC))
+    DocUpdateTaskDocs(task);
+}
+
+static void GrUpdateTasks()
+{
+  if (!sys_winmgr_task)
+    return;
+  if (__atomic_load_n(&sys_semas[SEMA_UPDATE_WIN_Z_BUF].flags,
+                      __ATOMIC_RELAXED) &
+      1)
+    WinZBufUpdateCpp();
+  BootTextLayer();
+  for (auto *task = sys_winmgr_task->next_task; task != sys_winmgr_task;
+       task = task->next_task) {
+    if (!TaskValidateCpp(task))
+      break;
+    if (!(task->display_flags & DISPLAYF_SHOW))
+      continue;
+    auto z = task->win_z_num;
+    if (!gr.highest_uncovered ||
+        gr.win_uncovered_bitmap[z >> 4] & (1 << (z & 15)))
+      GrUpdateTaskWin(task);
+  }
+}
+
 void GrUpdateScrn()
 {
   const bool blink =
@@ -248,8 +281,10 @@ void GrUpdateScrn()
     auto view = GrTextView();
     GrUpdateTextBG(view, blink);
     GrUpdateTextFG(view, blink);
-    DCBlotColor8(gr.dc2, gr.dc);
   }
+  GrUpdateTasks();
+  if (graphics)
+    DCBlotColor8(gr.dc2, gr.dc);
 
   if (sys_winmgr_task && gr.fp_final_scrn_update) {
     if (auto *dc = DCAliasCpp(gr.dc2, CurrentTask())) {

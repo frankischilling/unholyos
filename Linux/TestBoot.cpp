@@ -843,7 +843,13 @@ static uint64_t VerifyGraphicsContexts(CMonitor &vm, uint64_t graphics,
   Check(ReadPhysical<1>(vm, graphics + 10480)[0] == 1,
         "Invalid initial graphics zoom");
   constexpr uint64_t flags[] = {0, 0x24000, 0x4000, 0x4000, 0, 0x4000};
-  uint64_t used = 19 * 512 - 24;
+  auto bitmap = ReadPhysical<1>(vm, graphics + 88)[0];
+  Check(bitmap >= 16 &&
+            ReadPhysical<2>(vm, bitmap - 16) ==
+                std::array<uint64_t, 2>{owner, 17 * 512 - 24} &&
+            !ReadPhysical<1>(vm, bitmap)[0],
+        "Invalid initial window coverage bitmap");
+  uint64_t used = (19 + 17) * 512 - 48;
   auto text_base = ReadPhysical<1>(vm, graphics + 64)[0];
   auto vga_text_cache = ReadPhysical<1>(vm, graphics + 104)[0];
   Check(text_base >= 16 && vga_text_cache >= 16 &&
@@ -1509,6 +1515,72 @@ constexpr std::string_view function_ptr_output =
     "function pointer target 27\n"
     "function pointer rebound 207\n";
 
+static void DriveDocFrame(CMonitor &vm, const fs::path &serial)
+{
+  constexpr std::array<uint8_t, 3> black{}, blue{0, 0, 168}, red{168, 0, 0},
+      green{0, 168, 0}, yellow{255, 255, 87}, white{255, 255, 255};
+
+  auto capture = [&](const char *phase) {
+    vm.WaitSerial(serial, std::string("doc frame ") + phase + "\n");
+    auto path = serial.parent_path() / (std::string("doc-") + phase + ".ppm");
+    vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
+               path.string() + R"("}})");
+    return ReadVGA(path);
+  };
+  auto key = [&](const char *name) {
+    vm.Command(
+        R"({"execute":"human-monitor-command","arguments":{"command-line":"sendkey )" +
+        std::string(name) + R"( 65"}})");
+  };
+  auto cell = [](const Bytes &image, size_t col, size_t row, uint64_t glyph,
+                 const auto &fg, const auto &bg) {
+    for (size_t y = 0; y < 8; y++)
+      for (size_t x = 0; x < 8; x++) {
+        const auto &expected = (glyph >> (y * 8 + x)) & 1 ? fg : bg;
+        auto pixel = ((row * 8 + y) * 640 + col * 8 + x) * 3;
+        if (!std::equal(expected.begin(), expected.end(),
+                        image.begin() + pixel))
+          throw std::runtime_error("DolDoc VGA cell differs at " +
+                                   std::to_string(col) + "," +
+                                   std::to_string(row));
+      }
+  };
+
+  auto lower = capture("lower");
+  cell(lower, 30, 24, 0x006666667E66663C, white, blue); // A
+  cell(lower, 31, 25, 0, white, blue);
+  cell(lower, 38, 25, 0x000606063E06067E, white, blue);  // F after the tab
+  cell(lower, 30, 26, 0x00C6C6D6D6FEEEC6, white, red);   // M
+  cell(lower, 30, 28, 0xFF3C666666666666, white, blue);  // Underlined U
+  cell(lower, 30, 29, 0x007E18181818187E, blue, white);  // Inverted I
+  cell(lower, 29, 23, 0x181818F800000000, yellow, blue); // Top-left corner
+  cell(lower, 31, 23, 0x006666667E666666, yellow, blue); // Border document H
+  cell(lower, 36, 27, 0x003C66663E060C38, white, blue);  // 6
+  key("a");
+
+  auto overlap = capture("overlap");
+  cell(overlap, 36, 27, 0x001818181818187E, yellow, green); // T
+  cell(overlap, 30, 24, 0x006666667E66663C, white, blue);
+  key("o");
+
+  auto uncovered = capture("uncovered");
+  cell(uncovered, 36, 27, 0x003C66663E060C38, white, blue);
+  key("r");
+
+  auto cleared = capture("cleared");
+  cell(cleared, 30, 24, 0, white, black);
+  cell(cleared, 36, 27, 0, white, black);
+  key("c");
+}
+
+constexpr std::string_view doc_frame_output = "doc depth 0\n"
+                                              "doc frame lower\n"
+                                              "doc depth 1\n"
+                                              "doc frame overlap\n"
+                                              "doc depth 0\n"
+                                              "doc frame uncovered\n"
+                                              "doc frame cleared\n";
+
 static void DriveScreen(CMonitor &vm, const fs::path &serial)
 {
   constexpr std::array<std::array<uint8_t, 3>, 16> colors{{
@@ -1646,6 +1718,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     DriveLines(rebuilt, serial);
     DriveCursor(rebuilt, serial);
     DriveGrid(rebuilt, serial);
+    DriveDocFrame(rebuilt, serial);
     DriveScreen(rebuilt, serial);
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
@@ -1655,6 +1728,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/FunctionPtrProbe.HC", function_ptr_output, '1');
     CheckProgramOutput(boot, "/FunctionPtrProbe.BIN.Z", function_ptr_output,
                        '1');
+    CheckProgramOutput(boot, "/DocFrame.HC", doc_frame_output, '1');
     CheckProgramOutput(boot, "/ScreenProbe.HC", screen_output, '1');
     auto registers = StopAtIdle(rebuilt);
     VerifyHandoff(boot, media, registers);
@@ -1684,6 +1758,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       DriveLines(vm, serial);
       DriveCursor(vm, serial);
       DriveGrid(vm, serial);
+      DriveDocFrame(vm, serial);
       DriveScreen(vm, serial);
     }
     std::string output = vm.Boot(serial);
@@ -1708,6 +1783,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          '1');
       CheckProgramOutput(output, "/FunctionPtrProbe.BIN.Z", function_ptr_output,
                          '1');
+      CheckProgramOutput(output, "/DocFrame.HC", doc_frame_output, '1');
       CheckProgramOutput(output, "/ScreenProbe.HC", screen_output, '1');
       CheckProgramOutput(output, "/PaletteProbe.HC",
                          "palette tables 8 AAAA55550000 777777777777 12 BROWN LTRED\n"

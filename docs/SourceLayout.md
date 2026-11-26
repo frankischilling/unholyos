@@ -296,9 +296,28 @@ attribute stays stable between refreshes.
 `GrScaleZoom` updates the mouse scale and offset on all three axes.
 `CtrlAltZ` in `Adam/Gr/GrEnd.cpp` doubles the scale, or halves it with
 Shift. The keyboard decoder dispatches this shortcut while the rest of
-the reference callback table is pending. The bootstrap still uses a
-zero-filled window coverage map. Per-window DolDoc rendering, the
-mouse grid, menus, and grab-scroll interaction remain pending.
+the reference callback table is pending. Menus and grab-scroll
+interaction remain pending.
+
+## DolDoc windows
+
+`Adam/Gr/GrInitB.cpp` follows `WinZBufFill` and `WinZBufUpdate` to
+assign depth in task queue order and track which windows remain visible.
+The bootstrap keeps its depth buffer empty until the first window update.
+The map clears cells before walking the queue, so a removed window
+leaves no stale depth even when the desktop does not fill the screen.
+`Adam/Gr/GrScrn.cpp` draws visible windows over the boot banner and
+background, then expands that text layer on the next graphics refresh.
+`Adam/Gr/GrTextBase.asm` clips and writes text cells.
+`Adam/Gr/GrTextBase.cpp` fills rectangles and draws the original CP437 frame.
+
+`Adam/DolDoc/DocDblBuf.cpp` provides the task's put, display, and border
+document accessors. `DocRecalcLib.cpp` draws the display and border
+documents using `RECALCt_TO_SCRN` in `DocRecalc.cpp`. This path handles
+text cells, attributes, tab stops, scrolling offsets, and cursor placement.
+A document locked by another task is retried on a later refresh in the
+cooperative bootstrap. Wrapping, live data and sprites, the full
+editor, and per-task graphics callbacks remain pending.
 
 ## HolyC function pointers
 

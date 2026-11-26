@@ -321,6 +321,7 @@ enum : size_t
   SEMA_FLUSH_VGA_IMAGE = 9,
   SEMA_SINGLE_USER = 10,
   SEMA_VGA = 14,
+  SEMA_UPDATE_WIN_Z_BUF = 15,
   SEMA_MUTE = 17,
   SEMA_FIX = 20,
   SEMA_SEMAS_NUM = 21,
@@ -853,7 +854,9 @@ enum : uint8_t
 constexpr uint64_t DOCF_PLAIN_TEXT = 1, DOCF_PLAIN_TEXT_TABS = 2,
                    DOCF_NO_CURSOR = 8, DOCF_CARRIAGE_RETURN = 16,
                    DOCF_DBL_DOLLARS = 32, DOCF_COLOR_NAMES = 64,
-                   DOCF_BREAK_UNLOCKED = 0x400000;
+                   DOCF_BORDER_DOC = 0x100, DOCF_HIDE_CURSOR = 0x800,
+                   DOCF_DONT_HIGHLIGHT_CURSOR = 0x1000,
+                   DOCF_DONT_SHOW = 0x8000, DOCF_BREAK_UNLOCKED = 0x400000;
 constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
                    DOCEF_DEFINE = 8, DOCEF_HTML_LINK = 16, DOCEF_LEFT_EXP = 32,
                    DOCEF_LEFT_MACRO = 64, DOCEF_RIGHT_EXP = 128,
@@ -861,11 +864,18 @@ constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
                    DOCEF_BIN_PTR_LINK = 1024, DOCEF_RAW_TYPE = 2048,
                    DOCEF_HIGHLIGHT = 1ull << 26, DOCEF_WORD_WRAP = 1ull << 27,
                    DOCEF_TAG_CB = 1ull << 32,
+                   DOCEF_BORDER_PLOT = 1ull << 42,
                    DOCEF_REMALLOC_DATA = 1ull << 48, DOCEF_TREE = 1ull << 52,
                    DOCEF_LST = 1ull << 53, DOCEF_SKIP = 1ull << 54,
-                   DOCEF_FILTER_SKIP = 1ull << 57, DOCEF_DFT_LEN = 1ull << 60,
+                   DOCEF_FILTER_SKIP = 1ull << 57, DOCEF_DONT_DRAW = 1ull << 59,
+                   DOCEF_DFT_LEN = 1ull << 60,
                    DOCEF_DFT_RAW_TYPE = 1ull << 61;
-constexpr uint32_t DOCG_BL_IV_UL = 0xB0000000, DOC_SIGNATURE_VAL = 0x53636F44;
+constexpr uint32_t ATTRF_BLINK = 0x10000000, ATTRF_INVERT = 0x20000000,
+                   ATTRF_SEL = 0x40000000, ATTRF_UNDERLINE = 0x80000000;
+constexpr uint32_t DOCG_BL_IV_UL = ATTRF_BLINK | ATTRF_INVERT | ATTRF_UNDERLINE,
+                   DOC_SIGNATURE_VAL = 0x53636F44;
+constexpr uint32_t RECALCt_NORMAL = 0, RECALCt_TO_SCRN = 2, RECALCG_MASK = 0xFF,
+                   RECALCF_HAS_CURSOR = 0x100;
 constexpr int64_t DOC_DFT = INT32_MIN;
 
 struct CDocSettings
@@ -1182,7 +1192,8 @@ static_assert(sizeof(CMsStateGlbls) == 168 &&
               offsetof(CMsStateGlbls, lb) == 160);
 static_assert(sizeof(CGridGlbls) == 80 && offsetof(CGridGlbls, x) == 8);
 
-constexpr uint32_t WIF_SELF_FOCUS = 1, WIF_SELF_KEY_DESC = 1 << 12,
+constexpr uint32_t WIF_SELF_FOCUS = 1, WIF_SELF_DOC = 1 << 10,
+                   WIF_SELF_KEY_DESC = 1 << 12,
                    WIF_FOCUS_TASK_MS_L_D = 1 << 20,
                    WIF_FOCUS_TASK_MS_R_D = 1 << 22;
 
@@ -1286,6 +1297,12 @@ static_assert(offsetof(CTask, rcx) == 0x140 && offsetof(CTask, r15) == 0x1A0);
 static_assert(offsetof(CTask, fpu_mmx) == 0x1B0 &&
               offsetof(CTask, swap_cnter) == 0x1B8);
 static_assert(offsetof(CTask, win_z_num) == 0x30C);
+static_assert(offsetof(CTask, win_left) == 0x48 &&
+              offsetof(CTask, win_right) == 0x50 &&
+              offsetof(CTask, win_top) == 0x58 &&
+              offsetof(CTask, win_bottom) == 0x60 &&
+              offsetof(CTask, scroll_x) == 0x100 &&
+              offsetof(CTask, scroll_y) == 0x108);
 static_assert(offsetof(CTask, fault_num) == 0x440 &&
               offsetof(CTask, fault_err_code) == 0x448);
 static_assert(offsetof(CCPU, cpu_flags) == 0x10 &&
