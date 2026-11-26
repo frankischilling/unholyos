@@ -601,7 +601,7 @@ returning from a catch body. That path is outside the tested scope.
 
 ## Remaining structural work
 
-`Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. The probes and their serial output belong to `Linux/BootProbe.cpp`; their bodies and execution order are preserved.
+`Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. The probes and their serial output belong to `Linux/BootProbe.cpp`; their bodies and execution order are preserved. [Verification evidence](SourceStructureVerification.md) records the source comparison, build, artifact hashes, and QEMU results.
 
 Startup remains partial. The current kernel initializes several Adam subsystems directly. The reference loads the compiler and executes `StartOS.HC`, which includes `Adam/MakeAdam.HC`. Matching that startup path requires further compiler and runtime work. The probe extraction does not establish startup parity.
 
