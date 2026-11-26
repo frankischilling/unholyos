@@ -37,13 +37,19 @@ constexpr std::string_view math_helpers_output =
     "math indirect -10 20\n"
     "Math helpers done\n";
 
+constexpr std::string_view sprite_flood_output =
+    "sprite flood stream 95BB364C84E33F56\n"
+    "sprite flood single 026661834AEEFF05 66901F20C6B79EE1\n"
+    "sprite flood F\n";
+
 // Uses the same QMP input and physical-memory readers as the boot tests.
 static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
                                    const std::string &boot, bool reference,
                                    bool tic = false, bool breaks = false,
                                    bool screen_capture = false, bool spline = false,
                                    bool flood_fill = false, bool blot = false,
-                                   bool math = false)
+                                   bool math = false,
+                                   bool sprite_flood = false)
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -333,21 +339,6 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
     std::cout << math_helpers_output;
     return;
   }
-  if (flood_fill) {
-    upload(fs::absolute("Linux/Fixtures/FloodFillProbe.HC"));
-    auto cells = wait_text("flood fill 1FF");
-    const auto screen = visible(cells);
-    auto lines = flood_fill_output;
-    while (!lines.empty()) {
-      auto end = lines.find('\n');
-      Check(screen.find(lines.substr(0, end)) != std::string::npos,
-            "Flood-fill reference output mismatch");
-      lines.remove_prefix(end + 1);
-    }
-    snapshot("flood-fill");
-    std::cout << flood_fill_output;
-    return;
-  }
   if (screen_capture) {
     if (reference) {
       upload(fs::absolute("Linux/Fixtures/CaptureProbe.HC"));
@@ -355,6 +346,22 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
       snapshot("capture-probe");
       std::cout << "Capture probe 7F: exact success and missing-file returns\n";
     }
+    return;
+  }
+  if (flood_fill || sprite_flood) {
+    upload(fs::absolute(sprite_flood ? "Linux/Fixtures/SpriteFloodProbe.HC"
+                                    : "Linux/Fixtures/FloodFillProbe.HC"));
+    auto cells = wait_text(sprite_flood ? "sprite flood F" : "flood fill 1FF");
+    const auto screen = visible(cells);
+    auto lines = sprite_flood ? sprite_flood_output : flood_fill_output;
+    while (!lines.empty()) {
+      auto end = lines.find('\n');
+      Check(screen.find(lines.substr(0, end)) != std::string::npos,
+            "Flood-fill reference output mismatch");
+      lines.remove_prefix(end + 1);
+    }
+    snapshot(sprite_flood ? "sprite-flood" : "flood-fill");
+    std::cout << (sprite_flood ? sprite_flood_output : flood_fill_output);
     return;
   }
   if (spline) {

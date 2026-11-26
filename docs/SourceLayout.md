@@ -644,7 +644,9 @@ the sprite data. `Sprite3` draws points, packed point paths, lines,
 and polylines with the active pen width. `DocRecalc.cpp` draws sprite
 entries through a task alias of `gr.dc2` during screen refresh.
 Bitmap and rectangle elements pass through `GrBlot3` and `GrRect3`.
-These elements support depth, transforms, and planar symmetry.
+The two flood-fill elements pass through `GrFloodFill3`; the boundary-color
+variant clears the secondary color for that element and restores it before
+the next one. These elements support depth, transforms, and planar symmetry.
 `Sprite3B` applies its
 temporary translation and restores the caller's context. The remaining
 3D drawing elements, sprite hit testing, and the sprite editor remain

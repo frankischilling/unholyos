@@ -1492,6 +1492,7 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/ArcProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/SplineProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FloodFillProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/SpriteFloodProbe.HC");
     BootStartupReport(*adam_task->cur_dv);
     BootLexReport(*adam_task->cur_dv);
     BootDirectiveReport(*adam_task->cur_dv);
