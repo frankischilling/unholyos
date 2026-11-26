@@ -349,6 +349,21 @@ Pointer arithmetic loses the callable signature, as in the pinned
 compiler. Variadic function-pointer declarations, function-pointer casts, and
 relocatable initializers are still pending.
 
+## HolyC exception statements
+
+`Compiler/PrsStmt.cpp` follows `PrsTryBlk` in `Compiler/PrsStmt.HC`.
+The generated code installs the catch and cleanup labels with
+`SysTry` from `Kernel/KExcept.HC`. A handler can accept by setting
+`Fs->catch_except`. Declining leaves the original exception for the next
+handler. Cleanup removes the installed handler on the normal path and
+before evaluating a return from the try body.
+
+The backend emits RIP-relative label addresses and uses the existing
+external symbol machinery for the runtime calls in `.BIN.Z`. The
+bootstrap's `SysTryHC` aligns its internal C++ call and saves the
+unpadded guest stack for resumption. The original demo cautions against
+returning from a catch body. That path is outside the tested scope.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains guest verification routines for boot records, file access, compiler behavior, and runtime modules. The reference `Kernel/KMain.HC` concentrates on initialization and startup. Those probes remain a structural difference and should move into a separate verification component as the runtime startup path develops.

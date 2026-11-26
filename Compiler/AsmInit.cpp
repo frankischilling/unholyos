@@ -517,16 +517,60 @@ static bool CmpDateData(CHashTable *table)
   return true;
 }
 
+static CHashClass *CmpExceptData(CHashTable *table)
+{
+  auto *cls = CmpKernelClass(table, "CExcept", sizeof(CExcept));
+  if (!cls)
+    return nullptr;
+  auto *heap = CurrentTask()->data_heap;
+  auto *i64 = FindType("I64", table);
+  const struct
+  {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+  } members[]{
+      {"next", cls + 1, offsetof(CExcept, next)},
+      {"last", cls + 1, offsetof(CExcept, last)},
+      {"hndlr_catch", i64, offsetof(CExcept, hndlr_catch)},
+      {"hndlr_untry", i64, offsetof(CExcept, hndlr_untry)},
+      {"rsp", i64, offsetof(CExcept, rsp)},
+      {"rbp", i64, offsetof(CExcept, rbp)},
+      {"rflags", i64, offsetof(CExcept, rflags)},
+      {"rsi", i64, offsetof(CExcept, rsi)},
+      {"rdi", i64, offsetof(CExcept, rdi)},
+      {"r10", i64, offsetof(CExcept, r10)},
+      {"r11", i64, offsetof(CExcept, r11)},
+      {"r12", i64, offsetof(CExcept, r12)},
+      {"r13", i64, offsetof(CExcept, r13)},
+      {"r14", i64, offsetof(CExcept, r14)},
+      {"r15", i64, offsetof(CExcept, r15)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    if (!name || !MemberAdd(*cls, name, *member.type, member.offset)) {
+      Free(name);
+      return nullptr;
+    }
+  }
+  return cls;
+}
+
 static bool CmpTaskData(CHashTable *table, CHashClass *cls)
 {
+  auto *except = CmpExceptData(table);
+  if (!except)
+    return false;
   auto *heap = CurrentTask()->data_heap;
   auto *u32 = FindType("U32", table);
   auto *i64 = FindType("I64", table);
   auto *u8 = FindType("U8", table);
-  struct {
+  struct
+  {
     const char *name;
     CHashClass *type;
     size_t offset;
+    size_t count = 0;
   } members[]{
       {"addr", cls + 1, offsetof(CTask, addr)},
       {"task_signature", u32, offsetof(CTask, task_signature)},
@@ -538,7 +582,7 @@ static bool CmpTaskData(CHashTable *table, CHashClass *cls)
       {"pix_width", i64, offsetof(CTask, pix_width)},
       {"pix_height", i64, offsetof(CTask, pix_height)},
       {"rand_seed", i64, offsetof(CTask, rand_seed)},
-      {"win_z_num", FindType("U16",table), offsetof(CTask, win_z_num)},
+      {"win_z_num", FindType("U16", table), offsetof(CTask, win_z_num)},
       {"scroll_x", i64, offsetof(CTask, scroll_x)},
       {"scroll_y", i64, offsetof(CTask, scroll_y)},
       {"wake_jiffy", i64, offsetof(CTask, wake_jiffy)},
@@ -547,7 +591,8 @@ static bool CmpTaskData(CHashTable *table, CHashClass *cls)
       {"text_attr", u8, offsetof(CTask, text_attr)},
       {"border_attr", u8, offsetof(CTask, border_attr)},
       {"put_doc", FindType("CDoc", table) + 1, offsetof(CTask, put_doc)},
-      {"display_doc", FindType("CDoc", table) + 1, offsetof(CTask, display_doc)},
+      {"display_doc", FindType("CDoc", table) + 1,
+       offsetof(CTask, display_doc)},
       {"border_doc", FindType("CDoc", table) + 1, offsetof(CTask, border_doc)},
       {"win_left", i64, offsetof(CTask, win_left)},
       {"win_right", i64, offsetof(CTask, win_right)},
@@ -560,14 +605,34 @@ static bool CmpTaskData(CHashTable *table, CHashClass *cls)
       {"next_child_task", cls + 1, offsetof(CTask, next_child_task)},
       {"last_child_task", cls + 1, offsetof(CTask, last_child_task)},
       {"swap_cnter", i64, offsetof(CTask, swap_cnter)},
+      {"next_except", except + 1, offsetof(CTask, next_except)},
+      {"last_except", except + 1, offsetof(CTask, last_except)},
+      {"except_rbp", i64, offsetof(CTask, except_rbp)},
+      {"except_ch", i64, offsetof(CTask, except_ch)},
+      {"except_callers", u8 + 1, offsetof(CTask, except_callers),
+       sizeof(CTask::except_callers) / sizeof(uint8_t *)},
+      {"catch_except", FindType("Bool", table), offsetof(CTask, catch_except)},
       {"task_num", i64, offsetof(CTask, task_num)},
       {"user_data", i64, offsetof(CTask, user_data)},
   };
   for (const auto &member : members) {
     auto *name = StrNew(member.name, heap);
-    if (!name || !MemberAdd(*cls, name, *member.type, member.offset)) {
+    auto *entry =
+        name ? MemberAdd(*cls, name, *member.type, member.offset) : nullptr;
+    if (!entry) {
       Free(name);
       return false;
+    }
+    if (member.count) {
+      auto *axis =
+          reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return false;
+      axis->cnt = member.count;
+      axis->total_cnt = 1;
+      entry->dim.next = axis;
+      entry->dim.total_cnt = member.count;
+      entry->size = member.count * member.type->size;
     }
   }
   return CmpKernelGlobal(table, "sys_winmgr_task", cls + 1, &sys_winmgr_task) &&
@@ -944,7 +1009,12 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"StrPrint", U8Ptr, FF_DOT_DOT_DOT, {{"dst", U8Ptr}, {"fmt", U8Ptr}}},
       {"MAlloc", U8Ptr, FF_RET1, {{"size", I64}, {"mem_task", TaskPtr, true}}, "_MALLOC"},
       {"Now", Date, FF_RET1, {}},
+      {"SysTry", U0, FF_RET1, {{"catch_start", U8Ptr}, {"untry_start", U8Ptr}}},
+      {"SysUntry", U0, FF_RET1, {}},
       {"throw", U0, FF_RET1, {{"ch", I64, true}, {"no_log", Bool, true}}},
+      {"Caller", U8Ptr, FF_RET1, {{"num", I64, true, 1}}},
+      {"PutExcept", U0, FF_RET1, {{"catch_it", Bool, true, 1}}},
+      {"YorN", Bool, FF_RET1, {}},
       {"Free", U0, FF_RET1, {{"addr", U8Ptr}}, "_FREE"},
       {"MemCpy", U8Ptr, FF_RET1,
        {{"dst", U8Ptr}, {"src", U8Ptr}, {"cnt", I64}}, "_MEMCPY"},
