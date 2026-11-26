@@ -817,6 +817,39 @@ and port `0xE9` for output. The startup and guest-built ISO test driver
 also checks all four program outputs. The focused kernel ended its BSS
 at `0x9300b`, below the relocated DVD loader limit of `0x96600`.
 
+## Numeric and date prompts
+
+`Demo/Prompt.HC` retains Terry A. Davis's original bytes. The prompt
+driver enters an out-of-range integer, floating-point value and date,
+then supplies valid values. It runs the original demo and checks its
+integer, float, name default and date results.
+
+`DateOffsetProbe.HC` checks the native calendar ABI, fractional-day
+round trip, RTC offset, local midnight with positive and negative
+offsets, month/year boundaries, relative dates, omitted year, and the
+reference's numeric field narrowing. Both guests produced:
+
+```text
+date fraction EE4120D
+date local 02/29/24 00:00:00 utc B47ECC0000000
+date negative 02/29/24 00:00:00 utc B47ED40000000
+Date offset 3FF
+```
+
+The final bit records the pinned December behavior: `EM(12/1/24)`
+returns December 31, 2024, but `EM(12/1/23)` returns November 29, 2024.
+The reference `LastDayOfMon` uses month zero when advancing the year.
+The native implementation reproduces those observed results without
+indexing outside the calendar arrays.
+
+The focused build used `BUILD=build/date-offset`. The ISO contained
+`StartOS.HC.Z`, compressed `Doc/Start.DD`, Home, and the exact
+`DateOffsetProbe.HC` bytes. The reference executed the same bytes from
+an allocated guest buffer using `ExePutS`, with output captured at
+port `0xE9`. Both guests used QEMU 8.2.2, PC, `qemu64`, 512 MiB, and
+DVD boot. The startup and guest-built ISO tests check the same four
+lines and retain the existing prompt driver.
+
 ## DolDoc windows
 
 `make -j4 test BUILD=build/doldoc-display` runs `DocFrame.HC` in

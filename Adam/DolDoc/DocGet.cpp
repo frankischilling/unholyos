@@ -131,8 +131,6 @@ static CExeResult PromptExpression(const char *fmt, const char *st)
     return {};
   auto res=ExePutS(src,nullptr,0);
   Free(src);
-  if (res.exception)
-    CurrentTask()->catch_except=true;
   return res;
 }
 

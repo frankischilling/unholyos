@@ -51,6 +51,8 @@ GLOBAL MenuPopHC
 GLOBAL ScanCode2KeyNameHC
 GLOBAL WinBorderHC,SettingsPushHC,SettingsPopHC
 GLOBAL DocLockHC,DocUnlockHC,DocEntryRunHC,DocBottomHC,DocClearHC,NowHC
+GLOBAL Struct2DateHC,Date2StructHC,YearStartDateHC,DayOfWeekHC
+GLOBAL FirstDayOfMonHC,LastDayOfMonHC,FirstDayOfYearHC,LastDayOfYearHC
 GLOBAL DocTermNewHC,DocGetKeyHC,DocScanLineHC,GetStrHC,GetSHC,UserCmdLineHC
 GLOBAL TextCharHC,TextLenStrHC,TextLenAttrStrHC,TextLenAttrHC,TextPrintHC
 GLOBAL TextRectHC,TextBorderHC,WinZBufUpdateHC
@@ -174,6 +176,8 @@ EXTERN MenuPopCpp
 EXTERN ScanCode2KeyNameCpp
 EXTERN WinBorderCpp,SettingsPushCpp,SettingsPopCpp
 EXTERN DocLockCpp,DocUnlockCpp,DocEntryRunCpp,DocBottomCpp,DocClearCpp,NowCpp
+EXTERN Struct2DateCpp,Date2StructCpp,YearStartDateCpp,DayOfWeekCpp
+EXTERN FirstDayOfMonCpp,LastDayOfMonCpp,FirstDayOfYearCpp,LastDayOfYearCpp
 EXTERN DocTermNewCpp,DocGetKeyCpp,DocScanLineCpp,GetStrCpp,GetSCpp,UserCmdLineCpp
 EXTERN TextCharCpp,TextLenStrCpp,TextLenAttrStrCpp,TextLenAttrCpp,TextPrintCpp
 EXTERN TextRectCpp,TextBorderCpp,WinZBufUpdateCpp
@@ -598,6 +602,14 @@ HOLYC_CPP DocEntryRunHC,DocEntryRunCpp,4
 HOLYC_CPP DocBottomHC,DocBottomCpp,1
 HOLYC_CPP DocClearHC,DocClearCpp,2
 HOLYC_CPP NowHC,NowCpp,0
+HOLYC_CPP Struct2DateHC,Struct2DateCpp,1
+HOLYC_CPP Date2StructHC,Date2StructCpp,2
+HOLYC_CPP YearStartDateHC,YearStartDateCpp,1
+HOLYC_CPP DayOfWeekHC,DayOfWeekCpp,1
+HOLYC_CPP FirstDayOfMonHC,FirstDayOfMonCpp,1
+HOLYC_CPP LastDayOfMonHC,LastDayOfMonCpp,1
+HOLYC_CPP FirstDayOfYearHC,FirstDayOfYearCpp,1
+HOLYC_CPP LastDayOfYearHC,LastDayOfYearCpp,1
 HOLYC_CPP DocNewHC,DocNewCpp,2
 HOLYC_CPP DocDelHC,DocDelCpp,1
 HOLYC_CPP DocLoadHC,DocLoadCpp,3

@@ -2967,6 +2967,11 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/ClassMeta.HC", class_meta_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.HC", last_class_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.BIN.Z", last_class_output, '1');
+    CheckProgramOutput(boot, "/DateOffsetProbe.HC",
+                       "date fraction EE4120D\n"
+                       "date local 02/29/24 00:00:00 utc B47ECC0000000\n"
+                       "date negative 02/29/24 00:00:00 utc B47ED40000000\n"
+                       "Date offset 3FF\n", '1');
     CheckProgramOutput(boot, "/DocBinLinkProbe.HC", "Doc bin links 1F\n", '1');
     CheckProgramOutput(boot, "/SpriteProbe.HC", "sprite bitmap 12546 0 0 4\n",
                        '1');
@@ -3067,6 +3072,11 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/ClassMeta.HC", class_meta_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.HC", last_class_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.BIN.Z", last_class_output, '1');
+      CheckProgramOutput(output, "/DateOffsetProbe.HC",
+                         "date fraction EE4120D\n"
+                         "date local 02/29/24 00:00:00 utc B47ECC0000000\n"
+                         "date negative 02/29/24 00:00:00 utc B47ED40000000\n"
+                         "Date offset 3FF\n", '1');
       CheckProgramOutput(output, "/DocBinLinkProbe.HC", "Doc bin links 1F\n",
                          '1');
       CheckProgramOutput(output, "/SpriteProbe.HC", "sprite bitmap 12546 0 0 4\n",
