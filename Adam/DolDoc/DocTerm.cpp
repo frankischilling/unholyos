@@ -3,8 +3,12 @@
 static CDoc *DocBorderNew(CTask *task)
 {
   auto *doc = DocNewCpp(nullptr, task);
-  if (doc)
+  if (doc) {
     doc->flags |= DOCF_BORDER_DOC;
+    constexpr char controls[] = "$CM+H+TY+NC,0,-1$$TX+H+RX+BD,\"[X]\"$"
+                                "$BK,1$$TX+H+LX+BD,\"MENU\"$$BK,0$";
+    DocPutS(*doc, controls, sizeof(controls) - 1);
+  }
   return doc;
 }
 

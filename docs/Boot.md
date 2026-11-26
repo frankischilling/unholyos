@@ -541,6 +541,20 @@ and 512 MiB. The boot suite checks the default axis, a user-drawn axis,
 the single stroke after disabling reflection, and cleanup on Escape
 on the standard ISO and the one built in the guest.
 
+## Window border gestures
+
+Drag the title row or left edge of a bordered window to move it. The
+right edge resizes the width, the bottom edge resizes the height, and
+the bottom-right corner resizes both. The window comes to the front
+when the drag begins. The geometry follows the pointer in 8-pixel
+text cells and stays where you release it.
+
+The terminal border shows `MENU` and `[X]`. Clicking `[X]` sends
+Shift+Escape to a document-backed task. A task without a put document
+is marked for termination. The `MENU` area posts the reference Ctrl+M
+key message. The Personal Menu dialog still needs its DolDoc command
+handler.
+
 ## Pulldown menus
 
 Run `ExeFile("::/Demo/PullDownMenu.HC");` to open Terry A. Davis's

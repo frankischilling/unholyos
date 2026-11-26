@@ -52,7 +52,7 @@ inline void SetRFlags(uint64_t flags)
 
 extern "C" void _YIELD();
 extern "C" uint64_t TaskValidateCpp(CTask *task);
-bool KillTask(CTask *task);
+bool KillTask(CTask *task, bool wait = true);
 extern "C" uint64_t SuspendCpp(CTask *task, uint8_t state);
 extern "C" void MsgCpp(int64_t msg_code, int64_t arg1, int64_t arg2, int64_t flags);
 extern "C" CJob *TaskMsgCpp(CTask *srv, CTask *master, int64_t code,
