@@ -92,3 +92,12 @@ bool Circle(CDC *dc, int64_t cx, int64_t cy, int64_t cz, int64_t radius,
 bool Ellipse(CDC *dc, int64_t cx, int64_t cy, int64_t cz, int64_t xr,
              int64_t yr, GrLinePlotFn fp_plot, uint64_t rotation, int64_t step,
              uint64_t start, uint64_t length);
+bool RegPoly(CDC *dc, int64_t cx, int64_t cy, int64_t cz, int64_t xr,
+             int64_t yr, int64_t sides, GrLinePlotFn fp_plot, uint64_t rotation,
+             int64_t step, uint64_t start, uint64_t length);
+bool Bezier2(CDC *dc, const CD3I32 *ctrl, GrLinePlotFn fp_plot, bool first = true);
+bool Bezier3(CDC *dc, const CD3I32 *ctrl, GrLinePlotFn fp_plot, bool first = true);
+bool BSpline2(CDC *dc, const CD3I32 *ctrl, int64_t cnt, GrLinePlotFn fp_plot,
+              bool closed);
+bool BSpline3(CDC *dc, const CD3I32 *ctrl, int64_t cnt, GrLinePlotFn fp_plot,
+              bool closed);

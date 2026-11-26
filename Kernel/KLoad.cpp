@@ -90,6 +90,25 @@ void GrBlotHC(),GrRectHC(),GrRectBHC(),GrClampHC();
 void GrPlotHC(),GrPeekHC(),GrLineHC(),ClipLineHC();
 void GrFillCircleHC(),GrPlot3BHC(),GrPlot3HC(),GrLine3HC(),DCThickScaleHC();
 void CircleHC(),EllipseHC(),GrCircleHC(),GrEllipseHC(),GrCircle3HC(),GrEllipse3HC(),ArgHC();
+void LineHC();
+void RegPolyHC();
+void GrRegPolyHC();
+void GrRegPoly3HC();
+void Bezier2HC();
+void BSpline2HC();
+void Gr2BezierHC();
+void Gr2Bezier3HC();
+void Gr2BSplineHC();
+void Gr2BSpline3HC();
+void Bezier3HC();
+void BSpline3HC();
+void Gr3BezierHC();
+void Gr3Bezier3HC();
+void Gr3BSplineHC();
+void Gr3BSpline3HC();
+void D3I32DistHC();
+void D3I32DistSqrHC();
+void D3I32NormSqrHC();
 void SpriteSizeHC(),Sprite3HC(),Sprite3BHC(),DocSpriteHC(),SpriteHC();
 void GrBlot3HC(),DCSymmetry3SetHC(),DCReflectHC();
 void GrHLineHC(),GrVLineHC(),GrFillTri0HC(),GrFillPoly3HC(),GrRect3HC();
@@ -794,6 +813,25 @@ bool LoadKernel(CTask &task)
       {"GrCircle3", reinterpret_cast<uintptr_t>(GrCircle3HC)},
       {"GrEllipse3", reinterpret_cast<uintptr_t>(GrEllipse3HC)},
       {"Arg", reinterpret_cast<uintptr_t>(ArgHC)},
+      {"Line", reinterpret_cast<uintptr_t>(LineHC)},
+      {"RegPoly", reinterpret_cast<uintptr_t>(RegPolyHC)},
+      {"GrRegPoly", reinterpret_cast<uintptr_t>(GrRegPolyHC)},
+      {"GrRegPoly3", reinterpret_cast<uintptr_t>(GrRegPoly3HC)},
+      {"Bezier2", reinterpret_cast<uintptr_t>(Bezier2HC)},
+      {"BSpline2", reinterpret_cast<uintptr_t>(BSpline2HC)},
+      {"Gr2Bezier", reinterpret_cast<uintptr_t>(Gr2BezierHC)},
+      {"Gr2Bezier3", reinterpret_cast<uintptr_t>(Gr2Bezier3HC)},
+      {"Gr2BSpline", reinterpret_cast<uintptr_t>(Gr2BSplineHC)},
+      {"Gr2BSpline3", reinterpret_cast<uintptr_t>(Gr2BSpline3HC)},
+      {"Bezier3", reinterpret_cast<uintptr_t>(Bezier3HC)},
+      {"BSpline3", reinterpret_cast<uintptr_t>(BSpline3HC)},
+      {"Gr3Bezier", reinterpret_cast<uintptr_t>(Gr3BezierHC)},
+      {"Gr3Bezier3", reinterpret_cast<uintptr_t>(Gr3Bezier3HC)},
+      {"Gr3BSpline", reinterpret_cast<uintptr_t>(Gr3BSplineHC)},
+      {"Gr3BSpline3", reinterpret_cast<uintptr_t>(Gr3BSpline3HC)},
+      {"D3I32Dist", reinterpret_cast<uintptr_t>(D3I32DistHC)},
+      {"D3I32DistSqr", reinterpret_cast<uintptr_t>(D3I32DistSqrHC)},
+      {"D3I32NormSqr", reinterpret_cast<uintptr_t>(D3I32NormSqrHC)},
       {"DCThickScale", reinterpret_cast<uintptr_t>(DCThickScaleHC)},
       {"ClipLine", reinterpret_cast<uintptr_t>(ClipLineHC)},
       {"Mat4x4MulXYZ", reinterpret_cast<uintptr_t>(Mat4x4MulXYZHC)},
