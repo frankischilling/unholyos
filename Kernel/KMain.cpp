@@ -1,4 +1,5 @@
 #include "KernelB.hpp"
+#include "../Adam/Gr/GrGlbls.hpp"
 #include "../Adam/DolDoc/DolDoc.hpp"
 #include "../Compiler/CompilerA.hpp"
 
@@ -580,6 +581,18 @@ static void BootGuestFileReport(const CDrv &ram, const char *path)
   SerialPutS(", size ");
   SerialPutHex(entry.size);
   SerialPutS("\r\n");
+}
+
+static void BootRasterReport(const CDrv &dv)
+{
+  if (!BootFileProgramReport(dv, "/RasterProbe.HC").okay)
+    return;
+  if (auto *ram = MountedDrive('B'))
+    BootGuestFileReport(*ram, "/RasterProbe.GR.Z");
+  SerialPutS("UnholyOS: raster context ");
+  SerialPutHex(reinterpret_cast<uintptr_t>(gr.dc->body));
+  SerialPutS("\r\n");
+  BootFileProgramReport(dv, "/Lines.HC");
 }
 
 static void BootISOReport(const CDrv &dv)
@@ -1459,6 +1472,7 @@ extern "C" void KMainCpp()
     if (BootFileProgramReport(*adam_task->cur_dv, "/DCProbe.HC").okay)
       if (auto *ram = MountedDrive('B'))
         BootGuestFileReport(*ram, "/DCProbe.GR.Z");
+    BootRasterReport(*adam_task->cur_dv);
     BootSoundReport(*adam_task->cur_dv, *adam_task);
     BootFileProgramReport(*adam_task->cur_dv, "/AsmListingScope.HC");
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);

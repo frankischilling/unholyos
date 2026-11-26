@@ -353,6 +353,8 @@ static_assert(sizeof(CBGR48) == 8 && offsetof(CBGR48, b) == 0 &&
               offsetof(CBGR48, pad) == 6);
 
 constexpr uint8_t TRANSPARENT = 0xFF, COLOR_MONO = 0xFF;
+constexpr uint8_t ROPB_EQU = 0, ROPB_XOR = 1, ROPB_COLLISION = 2, ROPB_MONO = 3,
+                  ROPBF_DITHER = 0x40, ROPBF_PROBABILITY_DITHER = 0x80;
 constexpr uint32_t ROPF_HALF_RANGE_COLOR = 0x1000, ROPF_TWO_SIDED = 0x2000,
                    ROPF_DITHER = 0x40000000,
                    ROPF_PROBABILITY_DITHER = 0x80000000;
@@ -373,6 +375,7 @@ struct CD3I32
 };
 
 constexpr int64_t GR_WIDTH = 640, GR_HEIGHT = 480;
+constexpr int64_t TEXT_COLS = 80, TEXT_ROWS = 60;
 constexpr int64_t GR_SCALE = int64_t{1} << 32;
 enum : uint32_t
 {
@@ -1177,7 +1180,7 @@ static_assert(sizeof(CJobCtrl) == 0x28 && offsetof(CJobCtrl, next_done) == 0x10 
 constexpr uint32_t TASKF_KILL_TASK = 1 << 1, TASKF_SUSPENDED = 1 << 2,
                    TASKF_IDLE = 1 << 3, TASKF_CMD_LINE_PMT = 1 << 4,
                    TASKF_INPUT_FILTER_TASK = 1 << 5, TASKF_FILTER_INPUT = 1 << 6,
-                   TASKF_AWAITING_MSG = 1 << 9;
+                   TASKF_AWAITING_MSG = 1 << 9, TASKF_NONTIMER_RAND = 1 << 14;
 constexpr int64_t DYING_JIFFIES = JIFFY_FREQ / 5;
 
 struct [[gnu::may_alias]] CTaskDying
@@ -1267,6 +1270,7 @@ static_assert(offsetof(CTask, rsi) == 0x130 && offsetof(CTask, rax) == 0x138);
 static_assert(offsetof(CTask, rcx) == 0x140 && offsetof(CTask, r15) == 0x1A0);
 static_assert(offsetof(CTask, fpu_mmx) == 0x1B0 &&
               offsetof(CTask, swap_cnter) == 0x1B8);
+static_assert(offsetof(CTask, win_z_num) == 0x30C);
 static_assert(offsetof(CTask, fault_num) == 0x440 &&
               offsetof(CTask, fault_err_code) == 0x448);
 static_assert(offsetof(CCPU, cpu_flags) == 0x10 &&

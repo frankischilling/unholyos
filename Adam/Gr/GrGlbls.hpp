@@ -32,6 +32,7 @@ struct [[gnu::packed]] CGrGlbls
 };
 
 static_assert(sizeof(CGrGlbls) == 10507 && offsetof(CGrGlbls, dc) == 24 &&
+              offsetof(CGrGlbls, win_z_buf) == 72 &&
               offsetof(CGrGlbls, pen_brushes) == 168 &&
               offsetof(CGrGlbls, scrn_zoom) == 10480);
 

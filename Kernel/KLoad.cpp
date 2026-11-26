@@ -66,6 +66,11 @@ void Char2ScanCodeHC(),ScanCode2CharHC(),KbdTypeMaticHC(),PutKeyHC();
 void GridInitHC(),MsSetHC();
 void GrPaletteColorSetHC(),GrPaletteColorGetHC();
 void GrPaletteGetHC(),GrPaletteSetHC(),PaletteSetStdHC();
+void SignI64HC(),RandI16HC(),RandU16HC(),RandI32HC();
+void RandU32HC(),RandI64HC(),RandU64HC(),RandHC();
+void SeedHC(),IsPixCovered0HC(),GrPlot0HC(),GrPeek0HC();
+void GrBlotHC(),GrRectHC(),GrRectBHC(),GrClampHC();
+void GrPlotHC(),GrPeekHC(),GrLineHC(),ClipLineHC();
 void Mat4x4MulXYZHC(),DCTransformHC(),Mat4x4IdentEquHC(),Mat4x4IdentNewHC();
 void Mat4x4NormSqr65536HC(),DCMat4x4SetHC(),DCLightingHC(),DCFillHC();
 void DCClearHC(),DCRstHC(),DCExtentsInitHC(),DCAliasHC();
@@ -496,6 +501,7 @@ bool LoadKernel(CTask &task)
       {"_CALL", reinterpret_cast<uintptr_t>(_CALL)},
       {"Call", reinterpret_cast<uintptr_t>(_CALL)},
       {"_CLAMP_I64", reinterpret_cast<uintptr_t>(_CLAMP_I64)},
+      {"ClampI64", reinterpret_cast<uintptr_t>(_CLAMP_I64)},
       {"_MEMCPY", reinterpret_cast<uintptr_t>(_MEMCPY)},
       {"_MEMSET", reinterpret_cast<uintptr_t>(_MEMSET)},
       {"_MEMSET_I64", reinterpret_cast<uintptr_t>(_MEMSET_I64)},
@@ -617,6 +623,26 @@ bool LoadKernel(CTask &task)
       {"GrPaletteGet", reinterpret_cast<uintptr_t>(GrPaletteGetHC)},
       {"GrPaletteSet", reinterpret_cast<uintptr_t>(GrPaletteSetHC)},
       {"PaletteSetStd", reinterpret_cast<uintptr_t>(PaletteSetStdHC)},
+      {"SignI64", reinterpret_cast<uintptr_t>(SignI64HC)},
+      {"RandI16", reinterpret_cast<uintptr_t>(RandI16HC)},
+      {"RandU16", reinterpret_cast<uintptr_t>(RandU16HC)},
+      {"RandI32", reinterpret_cast<uintptr_t>(RandI32HC)},
+      {"RandU32", reinterpret_cast<uintptr_t>(RandU32HC)},
+      {"RandI64", reinterpret_cast<uintptr_t>(RandI64HC)},
+      {"RandU64", reinterpret_cast<uintptr_t>(RandU64HC)},
+      {"Rand", reinterpret_cast<uintptr_t>(RandHC)},
+      {"Seed", reinterpret_cast<uintptr_t>(SeedHC)},
+      {"IsPixCovered0", reinterpret_cast<uintptr_t>(IsPixCovered0HC)},
+      {"GrPlot0", reinterpret_cast<uintptr_t>(GrPlot0HC)},
+      {"GrPeek0", reinterpret_cast<uintptr_t>(GrPeek0HC)},
+      {"GrBlot", reinterpret_cast<uintptr_t>(GrBlotHC)},
+      {"GrRect", reinterpret_cast<uintptr_t>(GrRectHC)},
+      {"GrRectB", reinterpret_cast<uintptr_t>(GrRectBHC)},
+      {"GrClamp", reinterpret_cast<uintptr_t>(GrClampHC)},
+      {"GrPlot", reinterpret_cast<uintptr_t>(GrPlotHC)},
+      {"GrPeek", reinterpret_cast<uintptr_t>(GrPeekHC)},
+      {"GrLine", reinterpret_cast<uintptr_t>(GrLineHC)},
+      {"ClipLine", reinterpret_cast<uintptr_t>(ClipLineHC)},
       {"Mat4x4MulXYZ", reinterpret_cast<uintptr_t>(Mat4x4MulXYZHC)},
       {"DCTransform", reinterpret_cast<uintptr_t>(DCTransformHC)},
       {"Mat4x4IdentEqu", reinterpret_cast<uintptr_t>(Mat4x4IdentEquHC)},
