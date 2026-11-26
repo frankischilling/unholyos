@@ -96,8 +96,9 @@ extern "C" int64_t DelCpp(const char *mask, uint8_t make_mask,
 {
   int64_t res = 0;
   if (auto *dirc = DirContextNewCpp(mask, make_mask, false, false)) {
-    res = RedSeaFilesDel(*dirc->dv, CurrentTask()->cur_dir, dirc->mask, 0,
-                         del_dir, print_msg);
+    res = dirc->dv->fs_type==FSt_FAT32?
+        FAT32FilesDel(*dirc->dv,CurrentTask()->cur_dir,dirc->mask,0,del_dir,print_msg):
+        RedSeaFilesDel(*dirc->dv,CurrentTask()->cur_dir,dirc->mask,0,del_dir,print_msg);
     DirContextDelCpp(dirc, true);
   }
   return res;

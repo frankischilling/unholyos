@@ -410,10 +410,22 @@ bool FAT32FilesFind(CDrv &dv, uint64_t clus, const char *directory,
                     const char *mask, uint64_t flags, CDirEntry *parent,
                     CDirEntry *&res, uint64_t &dir_size);
 bool FAT32ReadBlocks(CFile &f, uint8_t *buf, uint64_t blk, uint64_t cnt);
+uint64_t FAT32FileWrite(CDrv &dv,const char *path,const uint8_t *data,
+                         size_t size,uint64_t date,uint16_t attr);
+bool FAT32MkDir(CDrv &dv,const char *path,int64_t entry_cnt=0);
+int64_t FAT32FilesDel(CDrv &dv,const char *cur_dir,const char *mask,
+                      uint64_t flags,bool del_dir,bool print_msg);
 inline bool ReadableFS(const CDrv &dv)
 {
   return dv.fs_type==FSt_REDSEA || dv.fs_type==FSt_FAT32;
 }
+inline bool WritableFS(const CDrv &dv)
+{
+  return dv.bd && !(dv.bd->flags&BDF_READ_ONLY) &&
+         ((dv.fs_type==FSt_REDSEA && dv.bd->type==BDT_RAM) ||
+          (dv.fs_type==FSt_FAT32 && dv.bd->type==BDT_ATA));
+}
+inline bool FsMkDir(CDrv &dv,const char *path,int64_t entry_cnt=0);
 bool Name2DirClus(const CDrv &dv, const char *path, size_t count, uint64_t &dir);
 bool FsIsDir(const CDrv &dv, const char *path);
 bool FsFileFind(const CDrv &dv, uint64_t dir, const char *name,
@@ -480,6 +492,10 @@ bool RedSeaFilesFind(CDrv &dv, uint64_t clus, uint64_t parent_clus,
                      const char *directory, const char *mask, uint64_t flags,
                      CDirEntry *parent, CDirEntry *&res);
 bool RedSeaMkDir(CDrv &dv, const char *path, int64_t entry_cnt = 0);
+inline bool FsMkDir(CDrv &dv,const char *path,int64_t entry_cnt)
+{
+  return dv.fs_type==FSt_FAT32?FAT32MkDir(dv,path,entry_cnt):RedSeaMkDir(dv,path,entry_cnt);
+}
 int64_t RedSeaFilesDel(CDrv &dv, const char *cur_dir, const char *mask,
                       uint64_t flags, bool del_dir, bool print_msg);
 void QSortI64Native(int64_t *base, int64_t count,

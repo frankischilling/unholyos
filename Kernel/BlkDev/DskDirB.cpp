@@ -69,7 +69,7 @@ extern "C" uint64_t CdCpp(const char *name, uint8_t make_dirs)
         dir[pos++] = '/';
       MemCpy(dir + pos, part, size + 1);
       if (dv &&
-          (FsIsDir(*dv, dir) || (make_dirs && RedSeaMkDir(*dv, dir)))) {
+          (FsIsDir(*dv, dir) || (make_dirs && FsMkDir(*dv, dir)))) {
         len = pos + size;
       } else {
         dir[len] = 0;
@@ -174,11 +174,10 @@ extern "C" uint64_t DirMkCpp(const char *filename, int64_t entry_cnt)
   if (auto *dirc = DirContextNewCpp(filename, false, false, false)) {
     if (*dirc->mask && FileNameChk(dirc->mask)) {
       auto *path = DirEntryFullName(CurrentTask()->cur_dir, dirc->mask);
-      if (path && dirc->dv->bd->type == BDT_RAM &&
-          !(dirc->dv->bd->flags & BDF_READ_ONLY)) {
+      if (path && WritableFS(*dirc->dv)) {
         uint64_t arg = reinterpret_cast<uintptr_t>(filename);
         PrintCpp("Make Directory:%s\n", 1, &arg);
-        res = RedSeaMkDir(*dirc->dv, path, entry_cnt);
+        res = FsMkDir(*dirc->dv, path, entry_cnt);
       }
       Free(path);
     }

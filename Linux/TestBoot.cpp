@@ -3838,6 +3838,49 @@ static void TestBoot(const char *qemu, const fs::path &iso,
 
 int main(int argc, char **argv)
 {
+  if (argc==5 && std::string_view(argv[1])=="--fat32-write") {
+    char path[]="/tmp/unholyos-fat32-write-XXXXXX";
+    if (!mkdtemp(path)) return 1;
+    fs::path dir=path,disk=dir/"owned.img";
+    try {
+      auto original=FileRead(argv[4]);
+      constexpr size_t fat1=2080*512,fat2=2593*512,fat_bytes=513*512;
+      Check(original.size()==68699136,"Wrong writable FAT32 geometry");
+      fs::copy_file(argv[4],disk);
+      auto expected=original;
+      for (unsigned pass=0;pass<2;pass++) {
+        auto run=dir/(pass?"reboot":"write");
+        fs::create_directory(run);
+        CMonitor vm(argv[2],argv[3],run,"pc","512",false,disk,true);
+        vm.Connect();
+        auto output=vm.Boot(run/"serial.log");
+        CheckProgramOutput(output,"/Fat32WriteProbe.HC",
+            pass?"FAT32 persisted files\nFAT32 file probe FF\n":
+                 "Make Directory:C:/Work\nMake Directory:C:/Work/Grow\n"
+                 "Make Directory:C:/Work/Empty\nFAT32 mutation 3F\nFAT32 file probe FF\n",'1');
+        vm.Quit();
+        auto actual=FileRead(disk);
+        Check(actual.size()==original.size(),"FAT32 image size changed");
+        Check(std::equal(actual.begin()+fat1,actual.begin()+fat1+fat_bytes,
+                         actual.begin()+fat2),"FAT32 mirrors differ");
+        Check(std::equal(actual.begin(),actual.begin()+2049*512,original.begin()),
+              "FAT32 changed MBR or boot sector");
+        if (pass) Check(actual==expected,"Read-only reboot changed FAT32 bytes");
+        else {
+          Check(actual!=original,"FAT32 mutations did not reach disk");
+          expected=std::move(actual);
+        }
+      }
+      Check(FileRead(argv[4])==original,"Original FAT32 fixture was modified");
+      std::cout<<"Verified FAT32 file and directory mutations, mirrored FATs and cold reboot\n";
+      fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr<<ReadText(dir/"write/serial.log")<<ReadText(dir/"reboot/serial.log")
+               <<error.what()<<'\n'<<"Evidence: "<<dir<<'\n';
+      return 1;
+    }
+  }
   if (argc==5 && std::string_view(argv[1])=="--ata-write") {
     char path[]="/tmp/unholyos-ata-XXXXXX";
     if (!mkdtemp(path)) return 1;
