@@ -249,7 +249,6 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
     cmd("DCDel(sd);");
     snapshot("capture-cleanup");
     std::cout << "Original ScrnCapture.HC saved, replayed and cleared a GR image\n";
-    return;
   }
   auto upload = [&](const fs::path &source) {
     Check(fs::file_size(source) < 4096, "Probe exceeds guest buffer");
@@ -297,6 +296,15 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
     Check(FileRead(uploaded) == expected, "Reference probe transfer changed source bytes");
     cmd("ExePutS(cgprobe);Free(cgprobe);");
   };
+  if (screen_capture) {
+    if (reference) {
+      upload(fs::absolute("Linux/Fixtures/CaptureProbe.HC"));
+      wait_text("capture probe 7F");
+      snapshot("capture-probe");
+      std::cout << "Capture probe 7F: exact success and missing-file returns\n";
+    }
+    return;
+  }
   if (flood_fill || sprite_flood) {
     upload(fs::absolute(sprite_flood ? "Linux/Fixtures/SpriteFloodProbe.HC"
                                     : "Linux/Fixtures/FloodFillProbe.HC"));
