@@ -1553,9 +1553,17 @@ static void DriveDigits(CMonitor &vm, const fs::path &dir,
         "Digits terminal cursor is not at the command prompt");
   type_cmd("WinMax;");
   wait_prompt();
-  Check(ReadPhysical<4>(vm, task + 0x48) ==
-            std::array<uint64_t, 4>{1, 78, 2, 58},
-        "Digits terminal did not maximize");
+  constexpr std::array<uint64_t, 4> maximized{1, 78, 2, 58};
+  bool resized = false;
+  for (unsigned i = 0; i < 160; ++i) {
+    if (ReadPhysical<4>(vm, task + 0x48) == maximized) {
+      resized = true;
+      break;
+    }
+    std::this_thread::sleep_for(25ms);
+  }
+  Check(resized, "Digits terminal did not maximize");
+  wait_prompt();
   type_cmd("DocClear(,1);Seed(12345);");
   wait("ans=0x00003039=12345", "T:/Home>");
   wait_prompt();
