@@ -1287,6 +1287,122 @@ static void VerifyVGA(const fs::path &path)
         "The VGA screenshot is blank");
 }
 
+static void MouseMove(CMonitor &vm, int x, int y)
+{
+  vm.Command(
+      R"({"execute":"input-send-event","arguments":{"events":[{"type":"rel","data":{"axis":"x","value":)" +
+      std::to_string(x) + R"(}},{"type":"rel","data":{"axis":"y","value":)" +
+      std::to_string(y) + R"(}}]}})");
+}
+
+static void MouseButton(CMonitor &vm, const char *name, bool down)
+{
+  vm.Command(
+      std::string(
+          R"({"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"button":")") +
+      name + R"(","down":)" + (down ? "true" : "false") + R"(}}]}})");
+}
+
+static void DriveSymmetry(CMonitor &vm, const fs::path &screen)
+{
+  auto wait_frame = [&](auto ready, const char *error) {
+    for (unsigned i = 0; i < 100; i++) {
+      vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
+                 screen.string() + R"("}})");
+      if (ready(ReadVGA(screen)))
+        return;
+      std::this_thread::sleep_for(25ms);
+    }
+    throw std::runtime_error(error);
+  };
+  auto pixel = [](const Bytes &rgb, int x, int y) {
+    auto pos = (y * 640 + x) * 3;
+    return uint32_t(rgb[pos]) << 16 | uint32_t(rgb[pos + 1]) << 8 |
+           rgb[pos + 2];
+  };
+  auto button = [&](const char *name, bool down) {
+    MouseButton(vm, name, down);
+    std::this_thread::sleep_for(125ms);
+  };
+  enum class Stage
+  {
+    DefaultAxis,
+    NewAxis,
+    HorizontalPair,
+    SingleStroke
+  };
+  auto strokes = [&](const Bytes &rgb, Stage stage) {
+    for (int y = 150; y <= 286; y++)
+      for (int x = 174; x <= 466; x++) {
+        auto color = pixel(rgb, x, y);
+        if (stage >= Stage::NewAxis && y == 224 && 181 <= x && x <= 284) {
+          if (color < 0x800000 || (color & 0xFFFF))
+            return false;
+          continue;
+        }
+        if ((stage >= Stage::NewAxis && x == 180 && y == 224) ||
+            (stage == Stage::SingleStroke && x == 356 && y == 168)) {
+          if (color >= 0x800000 || (color & 0xFFFF) != 0xFFFF)
+            return false;
+          continue;
+        }
+        bool ink =
+            ((x == 180 || x == 460) && y >= 152 && y <= 224) ||
+            (stage >= Stage::HorizontalPair && (y == 168 || y == 280) &&
+             x >= 284 && x <= 356) ||
+            (stage == Stage::SingleStroke && x == 406 && y >= 208 && y <= 252);
+        if (color != (ink ? 0 : 0xFFFFFF))
+          return false;
+      }
+    return true;
+  };
+
+  button("left", true);
+  MouseMove(vm, 0, 144);
+  wait_frame([&](const Bytes &rgb) { return strokes(rgb, Stage::DefaultAxis); },
+             "Symmetry.HC did not mirror the stroke across the default axis");
+  button("left", false);
+
+  button("right", true);
+  MouseMove(vm, 208, 0);
+  wait_frame([&](const Bytes &rgb) { return strokes(rgb, Stage::NewAxis); },
+             "Symmetry.HC did not show its red axis");
+  button("right", false);
+  wait_frame([&](const Bytes &rgb) { return strokes(rgb, Stage::NewAxis); },
+             "Symmetry.HC did not retain its red axis");
+
+  MouseMove(vm, 0, -112);
+  std::this_thread::sleep_for(125ms);
+  button("left", true);
+  MouseMove(vm, 144, 0);
+  wait_frame(
+      [&](const Bytes &rgb) { return strokes(rgb, Stage::HorizontalPair); },
+      "Symmetry.HC did not mirror the stroke across the new axis");
+  button("left", false);
+
+  button("right", true);
+  button("right", false);
+  MouseMove(vm, 100, 80);
+  std::this_thread::sleep_for(125ms);
+  button("left", true);
+  MouseMove(vm, 0, 88);
+  wait_frame(
+      [&](const Bytes &rgb) { return strokes(rgb, Stage::SingleStroke); },
+      "Symmetry.HC did not disable symmetry after a stationary click");
+  button("left", false);
+
+  vm.Hmp("sendkey esc 60");
+  wait_frame(
+      [&](const Bytes &rgb) {
+        for (int y = 150; y <= 286; y++)
+          for (int x = 174; x <= 466; x++)
+            if (pixel(rgb, x, y) != 0xFFFFFF)
+              return false;
+        return true;
+      },
+      "Symmetry.HC left strokes on VGA after Escape");
+}
+
 static void DriveUserTask(CMonitor &vm, const fs::path &dir,
                           const std::string &boot)
 {
@@ -1344,6 +1460,9 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
         case '>': key("shift-dot"); break;
         case '_': key("shift-minus"); break;
         case ';': key("semicolon"); break;
+        case '=':
+          key("equal");
+          break;
         case ':':
           key("shift-semicolon");
           break;
@@ -1511,6 +1630,23 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
       throw std::runtime_error(std::string(demo) + " left pixels on VGA");
     std::cout << demo << " animated and returned to the prompt\n";
   }
+
+  vm.ResetDeadline(27s);
+  constexpr uint64_t win_inhibit = 0xC;
+  const auto old_inhibit = ReadPhysical<1>(vm, left + win_inhibit, 'w');
+  type_cmd("DocClear(,1);");
+  type_cmd("MsSet(180,152);ms.show=FALSE;");
+  type_cmd(R"(ExeFile("::/Demo/Graphics/Symmetry.HC");)");
+  wait_mem(left + win_left, 0, "Symmetry.HC did not remove its border");
+  wait_mem(left + win_left + 8, 79, "Symmetry.HC did not maximize the window");
+  DriveSymmetry(vm, screen);
+  wait_text("T:/Home>");
+  wait_mem(left + win_left, 1, "Symmetry.HC did not restore the window");
+  Check(ReadPhysical<1>(vm, left + win_inhibit, 'w') == old_inhibit,
+        "Symmetry.HC did not restore the task's input masks");
+  type_cmd("ms.show=TRUE;");
+  std::cout
+      << "Symmetry.HC drew both reflections, disabled symmetry, and exited\n";
 }
 
 static fs::path CaptureGuestFile(CMonitor &vm, const fs::path &dir,
@@ -1666,12 +1802,10 @@ static void DriveKeyboard(CMonitor &vm, const fs::path &serial)
 static void DriveMouse(CMonitor &vm, const fs::path &serial)
 {
   auto button = [&](const char *name, bool down) {
-    vm.Command(
-        std::string(R"({"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"button":")") +
-        name + R"(","down":)" + (down ? "true" : "false") + R"(}}]}})");
+    MouseButton(vm, name, down);
   };
   vm.WaitSerial(serial, "mouse ready ");
-  vm.Command(R"({"execute":"input-send-event","arguments":{"events":[{"type":"rel","data":{"axis":"x","value":20}},{"type":"rel","data":{"axis":"y","value":-12}}]}})");
+  MouseMove(vm, 20, -12);
   vm.WaitSerial(serial, "mouse msg 4 ");
   button("left", true);
   vm.WaitSerial(serial, "mouse msg 5 ");
