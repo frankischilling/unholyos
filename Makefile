@@ -89,10 +89,10 @@ CMP_PROBES := $(addprefix Linux/Fixtures/,CmpProbeRunner.HC CmpProbe.PRJ CmpProb
 	NullCase.HC SubSwitch.HC SwitchProbe.HC SwitchBuild.HC OpcodeProbe.HC \
 	FixedAsm.HC FixedImage.HC AsmBranchProbe.HC AsmBranchImport.HC BuzzFizz.HC \
 	AsmListingProbe.HC AsmListingScope.HC SchedulerProbe.HC JobProbe.HC SoundProbe.HC SoundRecord.HC \
-	KeyboardProbe.HC MsgLoop.HC MouseProbe.HC PaletteProbe.HC DCProbe.HC BitmapDiffProbe.HC RasterProbe.HC Blot3Probe.HC DepthSpansProbe.HC MatrixProbe.HC PenProbe.HC ArrowProbe.HC ArcProbe.HC TaskSettingsProbe.HC WinScrollProbe.HC ScrollControlsProbe.HC DocRefreshProbe.HC ViewAnglesProbe.HC MenuProbe.HC MenuProbe.DD Lines.HC \
+	KeyboardProbe.HC MsgLoop.HC MouseProbe.HC PaletteProbe.HC DCProbe.HC BitmapDiffProbe.HC CaptureProbe.HC RasterProbe.HC Blot3Probe.HC DepthSpansProbe.HC MatrixProbe.HC PenProbe.HC ArrowProbe.HC ArcProbe.HC TaskSettingsProbe.HC WinScrollProbe.HC ScrollControlsProbe.HC DocRefreshProbe.HC ViewAnglesProbe.HC MenuProbe.HC MenuProbe.DD Lines.HC \
 	ScreenProbe.HC FontTextProbe.HC PromptProbe.HC DateOffsetProbe.HC CursorProbe.HC CursorExcept.HC Grid.HC FunctionPtrProbe.HC VariadicProbe.HC VariadicPtrProbe.HC DocFrame.HC DocButton.HC DocCallback.HC TryProbe.HC Exceptions.HC DirectoryProbe.HC DirContextProbe.HC FileStreamProbe.HC FileCopyProbe.HC FileOperationsProbe.HC DocBinLinkProbe.HC SpriteProbe.HC MemberMetaProbe.HC LastClassProbe.HC)
 GRAPHICS_DEMOS := Demo/Graphics/3DPoly.HC Demo/Graphics/Box.HC \
-	Demo/Graphics/Symmetry.HC Demo/Graphics/CommonAncestor.HC Demo/Graphics/Shading.HC \
+	Demo/Graphics/Symmetry.HC Demo/Graphics/CommonAncestor.HC Demo/Graphics/Shading.HC Demo/Graphics/ScrnCapture.HC \
 	Demo/PullDownMenu.HC Demo/ExtChars.HC Demo/Prompt.HC
 GAME_DEMOS := Demo/Games/Digits.HC Demo/Games/Maze.HC Demo/Games/CharDemo.HC Demo/Games/TicTacToe.HC
 APP_FILES := Apps/TimeClock/Load.HC Apps/TimeClock/Install.HC Apps/TimeClock/TimeClk.HC
@@ -208,6 +208,7 @@ test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $
 	$(BOOT_TEST) "$(QEMU)" $< $(KERNEL) $(STARTUP_TEST_ISO)
 	$(BOOT_TEST) --character-graphics "$(QEMU)" $<
 	$(BOOT_TEST) --tic-tac-toe "$(QEMU)" $<
+	$(BOOT_TEST) --screen-capture "$(QEMU)" $<
 	$(BOOT_TEST) --break "$(QEMU)" $(BREAK_TEST_ISO)
 	$(BOOT_TEST) --database "$(QEMU)" $<
 	$(BOOT_TEST) --database-persistent "$(QEMU)" $< $(FAT_WRITE_DISK)

@@ -2,6 +2,7 @@
 #include "../../Kernel/KernelB.hpp"
 #include "GrGlbls.hpp"
 #include "Gr.hpp"
+#include "GrExt.hpp"
 
 extern "C" void DCTransformHC(CDC *dc, int64_t *x, int64_t *y, int64_t *z);
 extern "C" void DCLightingHC(CDC *dc, CD3I32 *p1, CD3I32 *p2, CD3I32 *p3,
@@ -469,4 +470,23 @@ extern "C" void DocGRCpp(CDoc *doc,const char *filename)
     Free(elems);
     DCDelCpp(dc);
   }
+}
+
+extern "C" CDC *DCScrnCaptureCpp(uint8_t include_zoom,CTask *task)
+{
+  RefreshCpp(0,false);
+  CDC *dc=DCCopyCpp(include_zoom?gr.scrn_image:gr.dc1,task);
+  if (!dc)
+    return nullptr;
+  dc->flags&=~DCF_SCRN_BITMAP;
+  int64_t size=dc->width_internal*dc->height;
+  uint8_t *dst=MAllocCpp(size,task);
+  if (!dst) {
+    DCDelCpp(dc);
+    return nullptr;
+  }
+  GrBitMap4ToBitMap8(dst,dc->body,size>>1,COLOR_INVALID);
+  Free(dc->body);
+  dc->body=dst;
+  return dc;
 }

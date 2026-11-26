@@ -1532,6 +1532,7 @@ void BootProbe()
       if (auto *ram = MountedDrive('B'))
         BootGuestFileReport(*ram, "/DCProbe.GR.Z");
     BootFileProgramReport(*adam_task->cur_dv, "/BitmapDiffProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/CaptureProbe.HC");
     BootRasterReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/CursorProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/CursorExcept.HC");

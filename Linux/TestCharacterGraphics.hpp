@@ -3,7 +3,8 @@
 // Uses the same QMP input and physical-memory readers as the boot tests.
 static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
                                    const std::string &boot, bool reference,
-                                   bool tic = false, bool breaks = false)
+                                   bool tic = false, bool breaks = false,
+                                   bool screen_capture = false)
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -40,6 +41,7 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
         case ' ': key("spc"); break;
         case '-': key("minus"); break;
         case '_': key("shift-minus"); break;
+        case '~': key("shift-grave_accent"); break;
         default: key(std::string(1, ch)); break;
         }
       }
@@ -133,6 +135,63 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
   };
   wait_text("T:/Home>");
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
+  if (screen_capture) {
+    cmd("CBlkDev *scbd=BlkDevNextFreeSlot('B',BDT_RAM);");
+    cmd("scbd->max_blk=4095;BlkDevAdd(scbd,,0,1);HomeSet(\"B:/\");");
+    cmd("Let2Drv('B',0)->drv_let;");
+    wait_text("=66");
+    cmd("CTask *sct=gr.dc->win_task;");
+    cmd(R"("SC %X %X %X\n",gr.dc->body,&sct->pix_left,&sct->pix_top;)");
+    auto [pixels, left, top] = addresses("SC ");
+    cmd("DocClear(,1);DCFill;MsSet(480,360);");
+    cmd("U8 *scbody=gr.dc->body;");
+    cmd("I64 sci;for(sci=0;sci<8;sci++)MemSet(scbody+156484+sci*640,4,16);");
+    auto bitmap = [&] {
+      auto file = dir / "capture-bitmap.bin";
+      vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+                 std::to_string(pixels) + R"(,"size":307200,"filename":")" +
+                 file.string() + R"("}})");
+      auto data = FileRead(file);
+      Check(data.size() == 640 * 480, "Incomplete capture overlay");
+      return data;
+    };
+    cmd(R"(ExeFile("::/Demo/Graphics/ScrnCapture.HC");)");
+    wait_text("Capture scrn...");
+    wait_text("PRESS A KEY");
+    snapshot("capture-prompt");
+    key("spc");
+    wait_text("View captured scrn...");
+    snapshot("capture-view-prompt");
+    key("spc");
+    const int x = 324 + int(ReadPhysical<1>(vm, left)[0]);
+    const int y = 244 + int(ReadPhysical<1>(vm, top)[0]);
+    Check(x >= 0 && x + 16 <= 640 && y >= 0 && y + 8 <= 480,
+          "Screen capture rectangle outside window");
+    wait([&](const Cells &) {
+      const auto data = bitmap();
+      if (std::count_if(data.begin(), data.end(), [](uint8_t c) {return c < 16;}) < 10000)
+        return false;
+      for (int j = 0; j < 8; j++)
+        for (int i = 0; i < 16; i++)
+          if (data[(y+j)*640+x+i] != 4)
+            return false;
+      return true;
+    }, "Original capture did not restore the image and test rectangle");
+    snapshot("capture-replay");
+    key("spc");
+    wait([&](const Cells &) {
+      const auto data = bitmap();
+      return std::all_of(data.begin(), data.end(), [](uint8_t c) {return c == 255;});
+    }, "Screen capture did not clear the overlay");
+    wait_text("T:/Home>");
+    cmd(R"(CDC *sd=GRRead("B:/DemoScrnShot");)");
+    cmd(R"("SAVED %d %d %d\n",sd->width,sd->height,sd->body[156484];)");
+    wait_text("SAVED 640 480 4");
+    cmd("DCDel(sd);");
+    snapshot("capture-cleanup");
+    std::cout << "Original ScrnCapture.HC saved, replayed and cleared a GR image\n";
+    return;
+  }
   auto upload = [&](const fs::path &source) {
     Check(fs::file_size(source) < 4096, "Probe exceeds guest buffer");
     cmd("U8 *cgprobe=CAlloc(4096);");

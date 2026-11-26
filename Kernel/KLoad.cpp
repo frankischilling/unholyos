@@ -101,6 +101,7 @@ void DCClearHC(),DCRstHC(),DCExtentsInitHC(),DCAliasHC();
 void DCNewHC(),DCDelHC(),DCSizeHC(),DCDepthBufRstHC();
 void DCDepthBufAllocHC(),DCCopyHC(),DCMonoHC(),DCColorChgHC();
 void DCSaveHC(),DCLoadHC(),GRWriteHC(),GRReadHC();
+void DCScrnCaptureHC(),GRScrnCaptureReadHC(),GRScrnCaptureWriteHC();
 void Mat4x4EquHC(),Mat4x4NewHC(),Mat4x4MulMat4x4EquHC(),Mat4x4MulMat4x4NewHC();
 void Mat4x4RotXHC(),Mat4x4RotYHC(),Mat4x4RotZHC(),Mat4x4ScaleHC();
 void Mat4x4TranslationEquHC(),Mat4x4TranslationAddHC(),DCSymmetrySetHC(),RefreshHC();
@@ -826,6 +827,9 @@ bool LoadKernel(CTask &task)
       {"DCLoad", reinterpret_cast<uintptr_t>(DCLoadHC)},
       {"GRWrite", reinterpret_cast<uintptr_t>(GRWriteHC)},
       {"GRRead", reinterpret_cast<uintptr_t>(GRReadHC)},
+      {"DCScrnCapture", reinterpret_cast<uintptr_t>(DCScrnCaptureHC)},
+      {"GRScrnCaptureRead", reinterpret_cast<uintptr_t>(GRScrnCaptureReadHC)},
+      {"GRScrnCaptureWrite", reinterpret_cast<uintptr_t>(GRScrnCaptureWriteHC)},
       {"Mat4x4Equ", reinterpret_cast<uintptr_t>(Mat4x4EquHC)},
       {"Mat4x4MulMat4x4Equ", reinterpret_cast<uintptr_t>(Mat4x4MulMat4x4EquHC)},
       {"Mat4x4MulMat4x4New", reinterpret_cast<uintptr_t>(Mat4x4MulMat4x4NewHC)},

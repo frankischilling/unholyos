@@ -1579,6 +1579,46 @@ trace, and before/after keyboard screenshots were captured in
 `build/time-clock/`. Persistent hard-disk writes and the complete
 reference file-error diagnostics remain pending.
 
+## Screen capture
+
+`Demo/Graphics/ScrnCapture.HC` is the original Terry A. Davis source from
+the pinned TempleOS tree. Its SHA-256 is
+`9d80656342da13734305dd82cc22d24c7f9f05829f5b2cebb87ef5a738f473dd`.
+The demo is included in the boot and startup-test ISOs.
+
+`CaptureProbe.HC` draws a 32-by-8 pattern containing all 16 indexed
+colors. It checks dimensions and ownership of the captured bitmap, the
+original pattern, each doubled pixel at 2x zoom, the unzoomed capture
+while zoomed, a GR file with a changed VGA palette, and clipped playback
+into a 32-by-8 device context. Both guests returned `capture probe 3F`.
+The fixture is also checked by the native startup and guest-built ISO
+tests. Screen content outside the deterministic pattern differs between
+the guests; the full screenshot is not claimed to be byte-identical.
+
+The original demo was also driven from the guest terminal in both
+systems. A fresh RedSea RAM drive serves as `Home`. The test places a
+16-by-8 red rectangle on the screen, presses Space at each of the three
+prompts, checks that the image is replayed into the graphics overlay and
+that the rectangle survived, and verifies that the overlay is entirely
+transparent on exit. Reading `B:/DemoScrnShot.GR.Z` returns a 640-by-480
+image with the expected red pixel. Both interactive runs passed.
+
+From the repository root, the interactive tests can be run with:
+
+```sh
+build/capture-check/Linux/TestBoot --screen-capture qemu-system-x86_64 \
+  build/capture-check/unholyos.iso build/capture-check/demo-native
+build/capture-check/Linux/TestBoot --screen-capture-reference qemu-system-x86_64 \
+  /path/to/TOS_Distro.ISO build/capture-check/demo-reference
+```
+
+The focused native image was built with
+`make -j4 BUILD=build/capture-check all` and `Linux/MakeISO`, adding
+`Linux/Fixtures/CaptureProbe.HC`, `Linux/Fixtures/FileWriteProbe.BIN`,
+the startup document and a `Home` directory. The reference ran the same
+fixture via `ExePutS` after creating a RAM drive. Both ran under QEMU
+8.2.2, PC, `qemu64`, 512 MiB. Logs are in `build/capture-check/`.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |
