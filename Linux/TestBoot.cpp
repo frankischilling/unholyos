@@ -219,7 +219,7 @@ class CMonitor
 public:
   CMonitor(const char *qemu, const fs::path &iso, const fs::path &dir,
            const char *machine, const char *memory, bool secondary_slave,
-           const fs::path &disk={})
+           const fs::path &disk={}, bool persistent_disk=false)
       : deadline(Clock::now() + 30s)
   {
     std::string image = fs::absolute(iso).string();
@@ -236,7 +236,8 @@ public:
         ata+=ch;
         if (ch==',') ata+=ch;
       }
-      ata+=",if=ide,index=0,format=raw,snapshot=on";
+      ata+=",if=ide,index=0,format=raw,snapshot=";
+      ata+=persistent_disk?"off":"on";
     }
     std::string serial = "file:" + (dir / "serial.log").string();
     std::string log = (dir / "qemu.log").string();
@@ -321,6 +322,21 @@ public:
   void ResetDeadline(Clock::duration timeout)
   {
     deadline = Clock::now() + timeout;
+  }
+
+  void Quit()
+  {
+    Command(R"({"execute":"quit"})");
+    for (unsigned attempt=0;attempt<200;attempt++) {
+      int status=0;
+      if (waitpid(pid,&status,WNOHANG)==pid) {
+        pid=-1;
+        Check(WIFEXITED(status) && WEXITSTATUS(status)==0,"QEMU quit failed");
+        return;
+      }
+      std::this_thread::sleep_for(10ms);
+    }
+    throw std::runtime_error("QEMU did not exit after quit");
   }
 
   std::string Hmp(const std::string &command)
@@ -3904,6 +3920,45 @@ static void TestBoot(const char *qemu, const fs::path &iso,
 
 int main(int argc, char **argv)
 {
+  if (argc==5 && std::string_view(argv[1])=="--ata-write") {
+    char path[]="/tmp/unholyos-ata-XXXXXX";
+    if (!mkdtemp(path)) return 1;
+    fs::path dir=path,disk=dir/"owned.img";
+    try {
+      auto original=FileRead(argv[4]);
+      constexpr size_t size=68699136,bytes=130*512,start=size-131*512;
+      Check(original.size()==size,"Wrong ATA fixture geometry");
+      Check(std::all_of(original.begin()+start-512,original.end(),
+                       [](uint8_t b){return b==0;}),"ATA fixture scratch area is not empty");
+      fs::copy_file(argv[4],disk);
+      auto expected=original;
+      for (size_t i=0;i<bytes;i++) expected[start+i]=i*37+(i>>8)+90;
+      for (unsigned pass=0;pass<2;pass++) {
+        auto run=dir/(pass?"reboot":"write");
+        fs::create_directory(run);
+        CMonitor vm(argv[2],argv[3],run,"pc","512",false,disk,true);
+        vm.Connect();
+        auto output=vm.Boot(run/"serial.log");
+        CheckProgramOutput(output,"/AtaWriteProbe.HC",
+            pass?"ATA persisted pattern\nATA write probe 3F\n":
+                 "ATA wrote pattern\nATA write probe 3F\n",'1');
+        CheckProgramOutput(output,"/AtaWriteRejectProbe.HC","ATA reject probe 1F\n",'1');
+        Check(output.find("UnholyOS: ATA partial sectors 0x0000000000000001\r\n")!=std::string::npos,
+              "ATA partial sector write or restore failed");
+        CheckProgramOutput(output,"/Fat32RejectProbe.HC","FAT32 reject probe 1F\n",'1');
+        vm.Quit();
+        Check(FileRead(disk)==expected,"ATA disk bytes differed from expected image");
+      }
+      Check(FileRead(argv[4])==original,"Original ATA fixture was modified");
+      std::cout<<"Verified ATA writes, protection, exact disk bytes and cold reboot\n";
+      fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr<<ReadText(dir/"write/serial.log")<<ReadText(dir/"reboot/serial.log")
+               <<error.what()<<'\n'<<"Evidence: "<<dir<<'\n';
+      return 1;
+    }
+  }
   if (argc==6 && std::string_view(argv[1])=="--fat32") {
     char path[]="/tmp/unholyos-fat32-XXXXXX";
     if (!mkdtemp(path)) return 1;

@@ -227,6 +227,7 @@ constexpr uint8_t MBR_PT_REDSEA = 0x88;
 constexpr uint32_t BD_SIGNATURE_VAL = 0x56534442;  // BDSV
 constexpr uint32_t DRV_SIGNATURE_VAL = 0x56535644; // DVSV
 constexpr uint32_t BDF_REMOVABLE = 1, BDF_INITIALIZED = 2, BDF_READ_ONLY = 4,
+                   BDF_READ_ONLY_OVERRIDE = 8, BDF_LAST_WAS_WRITE = 0x10,
                    BDF_READ_CACHE = 0x20, BDF_INIT_IN_PROGRESS = 0x80;
 
 struct [[gnu::packed]] CPalindromeU16
