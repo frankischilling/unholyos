@@ -324,6 +324,16 @@ from `GrPrimatives.HC`, including the shared row in opposing sweeps.
 fan in `GrComposites.HC`. They call the device context's transform
 callback and reflect vertices when symmetry is enabled.
 
+`GrRayLenMinus` and `GrRayLen` in `Adam/Gr/GrBitMap.cpp` preserve
+the leftward scan and two-direction drawing pass from `GrBitMap.HC`.
+They check window coverage at character-cell boundaries and update
+explicit depth values before testing the boundary color. `GrFloodFill`
+and `GrFloodFill3` in `GrPrimatives.cpp` follow the reference's
+`CFFRay` state machine and restore the brush, secondary color and flags.
+The mirrored pass in `GrFloodFill3` runs first; the normal pass replaces
+its returned count. The C++ traversal stops at the reference's fixed
+stack allocation limit rather than writing outside it.
+
 ## Round pens and 3D lines
 
 `GrSetUpTables` in `Adam/Gr/GrInitB.cpp` builds the circle spans and

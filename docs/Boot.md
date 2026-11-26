@@ -1087,6 +1087,22 @@ copies the exact probe into allocated guest memory with GDB and
 checks the uploaded bytes before executing it. Native regression
 runs do not require GDB.
 
+## Flood filling
+
+`FloodFillProbe.HC` compares region fills, boundary-color fills, dither
+and XOR pixels, depth rejection and boundary depth updates, symmetry,
+and transformed coordinates. It checks restoration of the brush,
+secondary color, flags and recorded extents. Both the pinned reference
+and native PC guests report `flood fill 1FF`; all seven printed counts
+and pixel/depth fingerprints agree. The startup and guest-built ISO
+tests require those exact lines. Run the reference fixture with
+`build/Linux/TestBoot --flood-fill-reference qemu-system-x86_64
+<reference.iso> build/flood-reference`. The driver verifies the uploaded
+source bytes before executing it in a 512 MiB QEMU PC guest. Native
+verification uses the regular startup test ISO. Coverage does not yet
+include overlapping windows, probability dithering or the fixed ray
+stack's exhaustion behavior.
+
 ## Regular polygons, Bezier curves, and B-splines
 
 `SplineProbe.HC` exercises the typed callbacks, distance helpers,

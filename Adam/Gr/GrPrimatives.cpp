@@ -110,6 +110,102 @@ extern "C" int64_t GrPeekCpp(CDC *dc, int64_t x, int64_t y)
   return GrClipPoint(dc, x, y) ? GrPeek0Cpp(dc, x, y) : -1;
 }
 
+struct CFFRay
+{
+  int64_t state, x, y, j, x1, ray_len, ray_len2;
+};
+
+static int64_t GrFloodFillRay(CDC *dc, int64_t x, int64_t y, int64_t z, int32_t *db)
+{
+  constexpr size_t count = 0x80000;
+  auto *base = reinterpret_cast<CFFRay *>(MAllocCpp(sizeof(CFFRay) * count, nullptr));
+  if (!base)
+    return 0;
+  size_t i = 0;
+  int64_t res = 0;
+  base[0] = {0, x, y, 0, 0, 0, 0};
+  for (;;) {
+    auto &f = base[i];
+    switch (f.state) {
+    case 0:
+      f.state++;
+      res += f.ray_len = GrRayLen(dc, &f.x, f.y, z, db);
+      f.y--;
+      f.j = f.ray_len;
+      f.x1 = f.x;
+      break;
+    case 1:
+    case 4:
+      if (f.j > 0) {
+        f.state++;
+        if ((f.ray_len2 = GrRayLenMinus(dc, f.x1, f.y))) {
+          if (i + 1 == count)
+            goto done;
+          base[i + 1] = {0, f.x1, f.y, 0, 0, 0, 0};
+          i++;
+        }
+      } else
+        f.state += 2;
+      break;
+    case 2:
+    case 5:
+      f.state--;
+      f.j -= f.ray_len2 + 1;
+      f.x1 -= f.ray_len2 + 1;
+      break;
+    case 3:
+      f.state++;
+      f.y += 2;
+      f.j = f.ray_len;
+      f.x1 = f.x;
+      break;
+    case 6:
+      if (!i)
+        goto done;
+      i--;
+      break;
+    }
+  }
+done:
+  Free(base);
+  return res;
+}
+
+extern "C" int64_t GrFloodFillCpp(CDC *dc, int64_t x, int64_t y,
+                                  bool not_color, int64_t z, int32_t *db)
+{
+  if (!dc)
+    dc = gr.dc;
+  if (dc->flags & DCF_DONT_DRAW)
+    return 0;
+  int64_t res = 0;
+  auto old_flags = dc->flags;
+  auto old_color2 = dc->color2;
+  auto *old_brush = dc->brush;
+  dc->brush = nullptr;
+  int64_t j = GrPeekCpp(dc, x, y);
+  if (j >= 0) {
+    if (not_color) {
+      dc->color2 = {{dc->color.c0.color, 0}, {0, 0}};
+      dc->flags |= DCF_FILL_NOT_COLOR;
+      if (j != dc->color2.c0.color)
+        res = GrFloodFillRay(dc, x, y, z, db);
+    } else {
+      dc->color2 = {{uint8_t(j), 0}, {0, 0}};
+      if (j != dc->color.c0.color ||
+          ((dc->color.c1.rop & ROPBF_DITHER) &&
+           dc->color.c0.color != dc->color.c1.color)) {
+        dc->flags &= ~DCF_FILL_NOT_COLOR;
+        res = GrFloodFillRay(dc, x, y, z, db);
+      }
+    }
+  }
+  dc->brush = old_brush;
+  dc->flags = old_flags;
+  dc->color2 = old_color2;
+  return res;
+}
+
 static int64_t GrFillCircleRows(CDC *dc, int64_t cx, int64_t cy, int64_t z,
                                 int64_t diameter, bool vertical, int64_t i,
                                 int64_t end)
@@ -673,6 +769,31 @@ static bool GrBlot3Pass(CDC &dc, CDC &img, const CD3I64 &p1, const CD3I64 &p2,
     x += dw;
   }
   return true;
+}
+
+extern "C" int64_t GrFloodFill3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z,
+                                   bool not_color)
+{
+  if (!dc)
+    dc = gr.dc;
+  auto old_flags = dc->flags;
+  CD3I64 p{x, y, z};
+  if (dc->flags & DCF_TRANSFORMATION) {
+    DCTransformPoint(*dc, p);
+    dc->flags &= ~DCF_TRANSFORMATION;
+  }
+  int64_t res = 0;
+  if (dc->flags & DCF_SYMMETRY) {
+    auto reflected = p;
+    DCReflectCpp(dc, &reflected.x, &reflected.y, &reflected.z);
+    dc->flags &= ~DCF_SYMMETRY;
+    res = GrFloodFillCpp(dc, reflected.x, reflected.y, not_color, reflected.z, dc->depth_buf);
+  }
+  // The non-mirrored pass replaces, rather than adds to, the returned count.
+  if (!(old_flags & DCF_SYMMETRY) || !(dc->flags & DCF_JUST_MIRROR))
+    res = GrFloodFillCpp(dc, p.x, p.y, not_color, p.z, dc->depth_buf);
+  dc->flags = old_flags;
+  return res;
 }
 
 extern "C" int64_t GrBlot3Cpp(CDC *dc, int64_t x1, int64_t y1, int64_t z1,

@@ -91,6 +91,7 @@ Linux/Fixtures/ViewAnglesProbe.HC text eol=lf
 Linux/Fixtures/DCProbe.HC text eol=lf
 Linux/Fixtures/BitmapDiffProbe.HC text eol=lf
 Linux/Fixtures/RasterProbe.HC text eol=lf
+Linux/Fixtures/FloodFillProbe.HC text eol=lf
 Linux/Fixtures/Blot3Probe.HC text eol=lf
 Linux/Fixtures/DepthSpansProbe.HC text eol=lf
 Linux/Fixtures/MatrixProbe.HC text eol=lf

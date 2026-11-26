@@ -88,6 +88,7 @@ void RandU32HC(),RandI64HC(),RandU64HC(),RandHC();
 void SeedHC(),IsPixCovered0HC(),GrPlot0HC(),GrPeek0HC();
 void GrBlotHC(),GrRectHC(),GrRectBHC(),GrClampHC();
 void GrPlotHC(),GrPeekHC(),GrLineHC(),ClipLineHC();
+void GrFloodFillHC(),GrFloodFill3HC();
 void GrFillCircleHC(),GrPlot3BHC(),GrPlot3HC(),GrLine3HC(),DCThickScaleHC();
 void CircleHC(),EllipseHC(),GrCircleHC(),GrEllipseHC(),GrCircle3HC(),GrEllipse3HC(),ArgHC();
 void LineHC();
@@ -810,6 +811,8 @@ bool LoadKernel(CTask &task)
       {"DocSprite", reinterpret_cast<uintptr_t>(DocSpriteHC)},
       {"Sprite", reinterpret_cast<uintptr_t>(SpriteHC)},
       {"GrPeek", reinterpret_cast<uintptr_t>(GrPeekHC)},
+      {"GrFloodFill", reinterpret_cast<uintptr_t>(GrFloodFillHC)},
+      {"GrFloodFill3", reinterpret_cast<uintptr_t>(GrFloodFill3HC)},
       {"GrLine", reinterpret_cast<uintptr_t>(GrLineHC)},
       {"GrLine3", reinterpret_cast<uintptr_t>(GrLine3HC)},
       {"Circle", reinterpret_cast<uintptr_t>(CircleHC)},

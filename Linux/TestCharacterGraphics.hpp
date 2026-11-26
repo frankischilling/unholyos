@@ -1,10 +1,21 @@
 #pragma once
 
+constexpr std::string_view flood_fill_output =
+    "fill region 48 A1B582AFB5972DE5\n"
+    "fill boundary 48 8421AE126C7CED25\n"
+    "fill dither 128 B16124DE9090DEA5\n"
+    "fill xor 6 BC485F29989517E5\n"
+    "fill depth 4 041C8166341270CB 18B09C2E6758C549\n"
+    "fill symmetry 6 101D6F5E76191AC5 1CA312FDBF5F72ED\n"
+    "fill transform 12 DA390E6207FC8CB5 796135481584641D\n"
+    "flood fill 1FF\n";
+
 // Uses the same QMP input and physical-memory readers as the boot tests.
 static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
                                    const std::string &boot, bool reference,
                                    bool tic = false, bool breaks = false,
-                                   bool screen_capture = false, bool spline = false)
+                                   bool screen_capture = false, bool spline = false,
+                                   bool flood_fill = false)
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -238,6 +249,21 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
     Check(FileRead(uploaded) == expected, "Reference probe transfer changed source bytes");
     cmd("ExePutS(cgprobe);Free(cgprobe);");
   };
+  if (flood_fill) {
+    upload(fs::absolute("Linux/Fixtures/FloodFillProbe.HC"));
+    auto cells = wait_text("flood fill 1FF");
+    const auto screen = visible(cells);
+    auto lines = flood_fill_output;
+    while (!lines.empty()) {
+      auto end = lines.find('\n');
+      Check(screen.find(lines.substr(0, end)) != std::string::npos,
+            "Flood-fill reference output mismatch");
+      lines.remove_prefix(end + 1);
+    }
+    snapshot("flood-fill");
+    std::cout << flood_fill_output;
+    return;
+  }
   if (spline) {
     cmd(R"("SP1 %X %X %X\n",gr.dc->body,&ms.pos.x,&winmgr.updates;)");
     auto [pixels, mouse, updates] = addresses("SP1 ");

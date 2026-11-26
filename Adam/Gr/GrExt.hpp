@@ -27,6 +27,12 @@ extern "C" bool GrPlot3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z);
 extern "C" int64_t GrFillCircleCpp(CDC *dc, int64_t x, int64_t y, int64_t z,
                                    int64_t diameter);
 extern "C" int64_t GrPeekCpp(CDC *dc, int64_t x, int64_t y);
+int64_t GrRayLenMinus(CDC *dc, int64_t x, int64_t y);
+int64_t GrRayLen(CDC *dc, int64_t *x1, int64_t y, int64_t z, int32_t *db);
+extern "C" int64_t GrFloodFillCpp(CDC *dc, int64_t x, int64_t y,
+                                  bool not_color, int64_t z, int32_t *db);
+extern "C" int64_t GrFloodFill3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z,
+                                   bool not_color);
 extern "C" int64_t GrBlot3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z,
                               CDC *img);
 extern "C" int64_t *Mat4x4IdentEquCpp(int64_t *r);

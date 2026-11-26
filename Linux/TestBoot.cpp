@@ -3729,6 +3729,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/ArrowProbe.HC", arrow_output, '1');
     CheckProgramOutput(boot, "/ArcProbe.HC", arc_output, '1');
     CheckProgramOutput(boot, "/SplineProbe.HC", spline_output, '1');
+    CheckProgramOutput(boot, "/FloodFillProbe.HC", flood_fill_output, '1');
     CheckProgramOutput(boot, "/TaskSettingsProbe.HC", task_settings_output,
                        '1');
     CheckProgramOutput(boot, "/WinScrollProbe.HC", win_scroll_output, '1');
@@ -3840,6 +3841,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/ArrowProbe.HC", arrow_output, '1');
       CheckProgramOutput(output, "/ArcProbe.HC", arc_output, '1');
       CheckProgramOutput(output, "/SplineProbe.HC", spline_output, '1');
+      CheckProgramOutput(output, "/FloodFillProbe.HC", flood_fill_output, '1');
       CheckProgramOutput(output, "/TaskSettingsProbe.HC", task_settings_output,
                          '1');
       CheckProgramOutput(output, "/WinScrollProbe.HC", win_scroll_output, '1');
@@ -4547,6 +4549,7 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--screen-capture-reference" ||
        std::string_view(argv[1]) == "--spline" ||
        std::string_view(argv[1]) == "--spline-reference" ||
+       std::string_view(argv[1]) == "--flood-fill-reference" ||
        std::string_view(argv[1]) == "--database" ||
        std::string_view(argv[1]) == "--database-reference" ||
        std::string_view(argv[1]) == "--form")) {
@@ -4555,6 +4558,7 @@ int main(int argc, char **argv)
     bool breaks = std::string_view(argv[1]).starts_with("--break");
     bool screen_capture = std::string_view(argv[1]).starts_with("--screen-capture");
     bool spline = std::string_view(argv[1]).starts_with("--spline");
+    bool flood_fill = std::string_view(argv[1]).starts_with("--flood-fill");
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -4564,8 +4568,8 @@ int main(int argc, char **argv)
       fs::create_directories(dir);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
-      if (character || tic || breaks || screen_capture || spline)
-        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference, tic, breaks, screen_capture, spline);
+      if (character || tic || breaks || screen_capture || spline || flood_fill)
+        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference, tic, breaks, screen_capture, spline, flood_fill);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");

@@ -86,6 +86,7 @@ GLOBAL RandU32HC,RandI64HC,RandU64HC,RandHC
 GLOBAL SeedHC,IsPixCovered0HC,GrPlot0HC,GrPeek0HC
 GLOBAL GrBlotHC,GrRectHC,GrRectBHC,GrClampHC
 GLOBAL GrPlotHC,GrPeekHC,GrLineHC,ClipLineHC
+GLOBAL GrFloodFillHC,GrFloodFill3HC
 GLOBAL GrFillCircleHC,GrPlot3BHC,GrPlot3HC,GrLine3HC,DCThickScaleHC
 GLOBAL CircleHC,EllipseHC,GrCircleHC,GrEllipseHC,GrCircle3HC,GrEllipse3HC,ArgHC
 GLOBAL LineHC
@@ -142,6 +143,7 @@ EXTERN RandU32Cpp,RandI64Cpp,RandU64Cpp,RandCpp
 EXTERN SeedCpp,IsPixCovered0Cpp,GrPlot0Cpp,GrPeek0Cpp
 EXTERN GrBlotCpp,GrRectCpp,GrRectBCpp,GrClampCpp
 EXTERN GrPlotCpp,GrPeekCpp,GrLineCpp,ClipLineCpp
+EXTERN GrFloodFillCpp,GrFloodFill3Cpp
 EXTERN GrFillCircleCpp,GrPlot3BCpp,GrPlot3Cpp,GrLine3Cpp,DCThickScaleCpp
 EXTERN CircleCpp,EllipseCpp,GrCircleCpp,GrEllipseCpp,GrCircle3Cpp,GrEllipse3Cpp,F64ArgBits
 EXTERN LineCpp
@@ -419,6 +421,8 @@ HOLYC_CPP DCReflectHC,DCReflectCpp,4
 HOLYC_CPP DocSpriteHC,DocSpriteCpp,3
 HOLYC_CPP SpriteHC,SpriteCpp,2
 HOLYC_CPP GrPeekHC,GrPeekCpp,3
+HOLYC_CPP GrFloodFillHC,GrFloodFillCpp,6
+HOLYC_CPP GrFloodFill3HC,GrFloodFill3Cpp,5
 HOLYC_CPP GrLineHC,GrLineCpp,7
 HOLYC_CPP GrLine3HC,GrLine3Cpp,9,1
 HOLYC_CPP CircleHC,CircleCpp,9,1
