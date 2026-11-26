@@ -26,6 +26,8 @@ GLOBAL FileAttrHC,CopySingleHC
 GLOBAL DelHC,CopyHC,MoveHC,CopyTreeHC,DelTreeHC,DirMkHC,ScanFlagsHC
 GLOBAL RedSeaISOHC
 GLOBAL SysUntryHC,PutExceptHC,YorNHC
+GLOBAL BreakHC,BreakLockHC,BreakUnlockHC
+EXTERN BreakCpp,BreakLockCpp,BreakUnlockCpp
 GLOBAL StrPrintJoinHC,StrPrintHC,CatPrintHC,MStrPrintHC,PrintHC,PrintErrHC,PrintWarnHC
 GLOBAL PutSHC,PutHexHC
 GLOBAL ExePutSHC,ExeFileHC,StreamPrintHC,StreamExePrintHC,StreamDirHC
@@ -85,6 +87,7 @@ GLOBAL SeedHC,IsPixCovered0HC,GrPlot0HC,GrPeek0HC
 GLOBAL GrBlotHC,GrRectHC,GrRectBHC,GrClampHC
 GLOBAL GrPlotHC,GrPeekHC,GrLineHC,ClipLineHC
 GLOBAL GrFillCircleHC,GrPlot3BHC,GrPlot3HC,GrLine3HC,DCThickScaleHC
+GLOBAL CircleHC,EllipseHC,GrCircleHC,GrEllipseHC,GrCircle3HC,GrEllipse3HC,ArgHC
 GLOBAL SpriteSizeHC,Sprite3HC,Sprite3BHC,DocSpriteHC,SpriteHC
 GLOBAL GrBlot3HC,DCSymmetry3SetHC,DCReflectHC
 GLOBAL GrHLineHC,GrVLineHC,GrFillTri0HC,GrFillPoly3HC,GrRect3HC
@@ -119,6 +122,7 @@ EXTERN SeedCpp,IsPixCovered0Cpp,GrPlot0Cpp,GrPeek0Cpp
 EXTERN GrBlotCpp,GrRectCpp,GrRectBCpp,GrClampCpp
 EXTERN GrPlotCpp,GrPeekCpp,GrLineCpp,ClipLineCpp
 EXTERN GrFillCircleCpp,GrPlot3BCpp,GrPlot3Cpp,GrLine3Cpp,DCThickScaleCpp
+EXTERN CircleCpp,EllipseCpp,GrCircleCpp,GrEllipseCpp,GrCircle3Cpp,GrEllipse3Cpp,F64ArgBits
 EXTERN SpriteSizeCpp,Sprite3Cpp,Sprite3BCpp,DocSpriteCpp,SpriteCpp
 EXTERN GrBlot3Cpp,DCSymmetry3SetCpp,DCReflectCpp
 EXTERN GrHLineCpp,GrVLineCpp,GrFillTri0Cpp,GrFillPoly3Cpp,GrRect3Cpp
@@ -214,26 +218,14 @@ BITS 64
 
 %macro HC_FRAME_CALL 1-2 0
 	AND	RSP,-16
-%if %2>=9
-	SUB	RSP,32
-%elif %2>=7
-	SUB	RSP,16
-%endif
-%if %2>=7
-	MOV	RAX,[RBP+64]
-	MOV	[RSP],RAX
-%endif
-%if %2>=8
-	MOV	RAX,[RBP+72]
-	MOV	[RSP+8],RAX
-%endif
-%if %2>=9
-	MOV	RAX,[RBP+80]
-	MOV	[RSP+16],RAX
-%endif
-%if %2>=10
-	MOV	RAX,[RBP+88]
-	MOV	[RSP+24],RAX
+%if %2>6
+	SUB	RSP,((%2-6)*8+15)&~15
+%assign %%arg 6
+%rep %2-6
+	MOV	RAX,[RBP+16+%%arg*8]
+	MOV	[RSP+(%%arg-6)*8],RAX
+%assign %%arg %%arg+1
+%endrep
 %endif
 	CALL	%1
 	LEA	RSP,[RBP-32]
@@ -383,6 +375,13 @@ HOLYC_CPP SpriteHC,SpriteCpp,2
 HOLYC_CPP GrPeekHC,GrPeekCpp,3
 HOLYC_CPP GrLineHC,GrLineCpp,7
 HOLYC_CPP GrLine3HC,GrLine3Cpp,9,1
+HOLYC_CPP CircleHC,CircleCpp,9,1
+HOLYC_CPP EllipseHC,EllipseCpp,11,1
+HOLYC_CPP GrCircleHC,GrCircleCpp,7,1
+HOLYC_CPP GrEllipseHC,GrEllipseCpp,9,1
+HOLYC_CPP GrCircle3HC,GrCircle3Cpp,8,1
+HOLYC_CPP GrEllipse3HC,GrEllipse3Cpp,10,1
+HOLYC_CPP ArgHC,F64ArgBits,2
 HOLYC_CPP DCThickScaleHC,DCThickScaleCpp,1
 HOLYC_CPP ClipLineHC,ClipLineCpp,8
 HOLYC_CPP Mat4x4MulXYZHC,Mat4x4MulXYZCpp,4
@@ -551,6 +550,9 @@ HOLYC_CPP FmtHC,FmtCpp,4
 HOLYC_CPP SysUntryHC,SysUntryCpp,0
 HOLYC_CPP YorNHC,YorNCpp,0
 HOLYC_CPP PutExceptHC,PutExceptCpp,1
+HOLYC_CPP BreakHC,BreakCpp,0
+HOLYC_CPP BreakLockHC,BreakLockCpp,1,1
+HOLYC_CPP BreakUnlockHC,BreakUnlockCpp,1,1
 HOLYC_CPP StrPrintJoinHC,StrPrintJoin,4
 HOLYC_PRINT StrPrintHC,StrPrintJoin,2
 HOLYC_PRINT CatPrintHC,CatPrintCpp,2

@@ -87,3 +87,8 @@ inline int64_t GrFixed32(int64_t n)
 using GrLinePlotFn = bool (*)(CDC *dc, int64_t x, int64_t y, int64_t z);
 bool Line(CDC *dc, int64_t x1, int64_t y1, int64_t z1, int64_t x2, int64_t y2,
           int64_t z2, GrLinePlotFn fp_plot, int64_t step, int64_t start);
+bool Circle(CDC *dc, int64_t cx, int64_t cy, int64_t cz, int64_t radius,
+            GrLinePlotFn fp_plot, int64_t step, uint64_t start, uint64_t length);
+bool Ellipse(CDC *dc, int64_t cx, int64_t cy, int64_t cz, int64_t xr,
+             int64_t yr, GrLinePlotFn fp_plot, uint64_t rotation, int64_t step,
+             uint64_t start, uint64_t length);

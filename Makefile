@@ -61,6 +61,8 @@ FAT_TREE_ISO := $(BUILD)/fat32-tree-test.iso
 FAT_TREE_PROBE := Linux/Fixtures/Fat32TreeProbe.HC
 ATA_TEST_ISO := $(BUILD)/ata-test.iso
 ATA_PROBES := Linux/Fixtures/AtaWriteProbe.HC Linux/Fixtures/AtaWriteRejectProbe.HC
+BREAK_TEST_ISO := $(BUILD)/break-test.iso
+BREAK_PROBE := Linux/Fixtures/BreakProbe.HC
 STARTUP_FIXTURE := Linux/Fixtures/StartOS.HC.Z
 STARTUP_DOC := Doc/Start.DD
 MODULE_PROBE := Linux/Fixtures/LoadProbe.BIN
@@ -87,12 +89,12 @@ CMP_PROBES := $(addprefix Linux/Fixtures/,CmpProbeRunner.HC CmpProbe.PRJ CmpProb
 	NullCase.HC SubSwitch.HC SwitchProbe.HC SwitchBuild.HC OpcodeProbe.HC \
 	FixedAsm.HC FixedImage.HC AsmBranchProbe.HC AsmBranchImport.HC BuzzFizz.HC \
 	AsmListingProbe.HC AsmListingScope.HC SchedulerProbe.HC JobProbe.HC SoundProbe.HC SoundRecord.HC \
-	KeyboardProbe.HC MsgLoop.HC MouseProbe.HC PaletteProbe.HC DCProbe.HC RasterProbe.HC Blot3Probe.HC DepthSpansProbe.HC MatrixProbe.HC PenProbe.HC ArrowProbe.HC TaskSettingsProbe.HC WinScrollProbe.HC ScrollControlsProbe.HC DocRefreshProbe.HC ViewAnglesProbe.HC MenuProbe.HC MenuProbe.DD Lines.HC \
+	KeyboardProbe.HC MsgLoop.HC MouseProbe.HC PaletteProbe.HC DCProbe.HC RasterProbe.HC Blot3Probe.HC DepthSpansProbe.HC MatrixProbe.HC PenProbe.HC ArrowProbe.HC ArcProbe.HC TaskSettingsProbe.HC WinScrollProbe.HC ScrollControlsProbe.HC DocRefreshProbe.HC ViewAnglesProbe.HC MenuProbe.HC MenuProbe.DD Lines.HC \
 	ScreenProbe.HC FontTextProbe.HC PromptProbe.HC DateOffsetProbe.HC CursorProbe.HC CursorExcept.HC Grid.HC FunctionPtrProbe.HC VariadicProbe.HC VariadicPtrProbe.HC DocFrame.HC DocButton.HC DocCallback.HC TryProbe.HC Exceptions.HC DirectoryProbe.HC DirContextProbe.HC FileStreamProbe.HC FileCopyProbe.HC FileOperationsProbe.HC DocBinLinkProbe.HC SpriteProbe.HC MemberMetaProbe.HC LastClassProbe.HC)
 GRAPHICS_DEMOS := Demo/Graphics/3DPoly.HC Demo/Graphics/Box.HC \
 	Demo/Graphics/Symmetry.HC Demo/Graphics/CommonAncestor.HC Demo/Graphics/Shading.HC \
 	Demo/PullDownMenu.HC Demo/ExtChars.HC Demo/Prompt.HC
-GAME_DEMOS := Demo/Games/Digits.HC Demo/Games/Maze.HC Demo/Games/CharDemo.HC
+GAME_DEMOS := Demo/Games/Digits.HC Demo/Games/Maze.HC Demo/Games/CharDemo.HC Demo/Games/TicTacToe.HC
 APP_FILES := Apps/TimeClock/Load.HC Apps/TimeClock/Install.HC Apps/TimeClock/TimeClk.HC
 CLASS_META_DEMO := Demo/ClassMeta.HC Demo/LastClass.HC
 FORM_DEMOS := Demo/Dsk/DataBase.HC Demo/DolDoc/Form.HC
@@ -173,6 +175,9 @@ $(FAT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_PROBES)
 $(ATA_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_PROBES) $(ATA_PROBES)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(FAT_PROBES) $(ATA_PROBES))
 
+$(BREAK_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(BREAK_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(BREAK_PROBE)
+
 $(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home \
 		$(foreach demo,$(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS),--file-at $(demo) $(demo))
@@ -191,7 +196,7 @@ $(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(STARTU
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO)
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO)
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_DISK) valid
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_INVALID_DISK) invalid
@@ -202,6 +207,8 @@ test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $
 	$(BOOT_TEST) --fat32-tree "$(QEMU)" $(FAT_TREE_ISO) $(FAT_WRITE_DISK)
 	$(BOOT_TEST) "$(QEMU)" $< $(KERNEL) $(STARTUP_TEST_ISO)
 	$(BOOT_TEST) --character-graphics "$(QEMU)" $<
+	$(BOOT_TEST) --tic-tac-toe "$(QEMU)" $<
+	$(BOOT_TEST) --break "$(QEMU)" $(BREAK_TEST_ISO)
 	$(BOOT_TEST) --database "$(QEMU)" $<
 	$(BOOT_TEST) --database-persistent "$(QEMU)" $< $(FAT_WRITE_DISK)
 
