@@ -3696,6 +3696,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     DrivePrompts(rebuilt,serial);
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
+    CheckProgramOutput(boot, "/CaptureProbe.HC", "capture probe 3F\n", '1');
     CheckProgramOutput(boot, "/RasterProbe.HC", raster_output, '1');
     CheckProgramOutput(boot, "/Blot3Probe.HC", blot3_output, '1');
     CheckProgramOutput(boot, "/DepthSpansProbe.HC", depth_spans_output, '1');
@@ -3804,6 +3805,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
 
     if (startup) {
       CheckProgramOutput(output, "/DCProbe.HC", dc_output, '1');
+      CheckProgramOutput(output, "/CaptureProbe.HC", "capture probe 3F\n", '1');
       CheckProgramOutput(output, "/RasterProbe.HC", raster_output, '1');
       CheckProgramOutput(output, "/Blot3Probe.HC", blot3_output, '1');
       CheckProgramOutput(output, "/DepthSpansProbe.HC", depth_spans_output, '1');
@@ -4514,12 +4516,15 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--tic-tac-toe-reference" ||
        std::string_view(argv[1]) == "--break" ||
        std::string_view(argv[1]) == "--break-reference" ||
+       std::string_view(argv[1]) == "--screen-capture" ||
+       std::string_view(argv[1]) == "--screen-capture-reference" ||
        std::string_view(argv[1]) == "--database" ||
        std::string_view(argv[1]) == "--database-reference" ||
        std::string_view(argv[1]) == "--form")) {
     bool character = std::string_view(argv[1]).starts_with("--character-graphics");
     bool tic = std::string_view(argv[1]).starts_with("--tic-tac-toe");
     bool breaks = std::string_view(argv[1]).starts_with("--break");
+    bool screen_capture = std::string_view(argv[1]).starts_with("--screen-capture");
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -4529,8 +4534,8 @@ int main(int argc, char **argv)
       fs::create_directories(dir);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
-      if (character || tic || breaks)
-        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference, tic, breaks);
+      if (character || tic || breaks || screen_capture)
+        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference, tic, breaks, screen_capture);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");
@@ -4645,7 +4650,9 @@ int main(int argc, char **argv)
               << "       " << argv[0]
               << " --tic-tac-toe[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
-              << " --break[-reference] qemu image.iso [capture-dir]\n";
+              << " --break[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --screen-capture[-reference] qemu image.iso [capture-dir]\n";
     return 2;
   }
   try {

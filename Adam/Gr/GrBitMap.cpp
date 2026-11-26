@@ -204,6 +204,23 @@ extern "C" int64_t GrBlotCpp(CDC *dc, int64_t x, int64_t y, CDC *img)
   return 1;
 }
 
+uint8_t *GrBitMap4ToBitMap8(uint8_t *dst,const uint8_t *src,int64_t src_size,
+                            int64_t bkcolor)
+{
+  int64_t i=src_size*2,i1=i>>3;
+  for (int64_t k=0;k<i;k++) {
+    int64_t c=0;
+    uint8_t mask=1U<<(k&7);
+    if (src[k>>3]&mask) c|=1;
+    if (src[i1+(k>>3)]&mask) c|=2;
+    if (src[i1*2+(k>>3)]&mask) c|=4;
+    if (src[i1*3+(k>>3)]&mask) c|=8;
+    if (c==bkcolor) c=TRANSPARENT;
+    *dst++=c;
+  }
+  return dst;
+}
+
 extern "C" int64_t GrPutCharCpp(CDC *dc, int64_t x, int64_t y, uint8_t ch)
 {
   if (!dc)

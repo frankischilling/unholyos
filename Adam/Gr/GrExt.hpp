@@ -39,6 +39,11 @@ extern "C" uint64_t DCSymmetry3SetCpp(CDC *dc, int64_t x1, int64_t y1,
                                       int64_t z3);
 extern "C" int64_t GrPeek0Cpp(CDC *dc, int64_t x, int64_t y);
 extern "C" int64_t GrBlotCpp(CDC *dc, int64_t x, int64_t y, CDC *img);
+uint8_t *GrBitMap4ToBitMap8(uint8_t *dst,const uint8_t *src,int64_t src_size,
+                            int64_t bkcolor);
+extern "C" CDC *DCScrnCaptureCpp(uint8_t include_zoom,CTask *task);
+extern "C" CDC *GRReadCpp(const char *filename,CTask *task);
+extern "C" int64_t GRWriteCpp(const char *filename,CDC *dc,int64_t dcsf_flags);
 extern "C" int64_t GrRectCpp(CDC *dc, int64_t x, int64_t y, int64_t w,
                              int64_t h);
 extern "C" int64_t GrHLineCpp(CDC *dc, int64_t x1, int64_t x2, int64_t y,

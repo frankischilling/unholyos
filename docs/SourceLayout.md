@@ -243,6 +243,14 @@ serialization. `GrMath.cpp` supplies the matrix copy used by `DCCopy`.
 precedes the pixel body. `DCSave` and `DCLoad` use the kernel's TempleOS
 LZW codec. `GRRead` also checks that the serialized data fits in the file.
 
+`GrBitMap.cpp` expands the four screen bitplanes into indexed pixels in
+the same order as `GrBitMap4ToBitMap8` in `GrBitMap.HC`. `DCScrnCapture`
+in `GrDC.cpp` copies either the displayed (possibly zoomed) screen or the
+unzoomed composite. `GrComposites.cpp` carries `GRScrnCaptureWrite` and
+`GRScrnCaptureRead`, including the current VGA palette on write and the
+equivalent raster operation on read. Movie capture and playback remain
+pending.
+
 `GrInit2` allocates the six screen contexts. The persistent `gr.dc`
 starts transparent with `DCF_SCRN_BITMAP | DCF_ON_TOP`. The context
 holds HolyC ABI addresses for the transform and lighting callbacks.

@@ -98,6 +98,7 @@ GLOBAL DCClearHC,DCRstHC,DCExtentsInitHC,DCAliasHC
 GLOBAL DCNewHC,DCDelHC,DCSizeHC,DCDepthBufRstHC
 GLOBAL DCDepthBufAllocHC,DCCopyHC,DCMonoHC,DCColorChgHC
 GLOBAL DCSaveHC,DCLoadHC,GRWriteHC,GRReadHC
+GLOBAL DCScrnCaptureHC,GRScrnCaptureReadHC,GRScrnCaptureWriteHC
 GLOBAL Mat4x4EquHC,Mat4x4NewHC
 GLOBAL Mat4x4MulMat4x4EquHC,Mat4x4MulMat4x4NewHC,Mat4x4RotXHC,Mat4x4RotYHC
 GLOBAL Mat4x4RotZHC,Mat4x4ScaleHC,Mat4x4TranslationEquHC,Mat4x4TranslationAddHC
@@ -133,6 +134,7 @@ EXTERN DCClearCpp,DCRstCpp,DCExtentsInitCpp,DCAliasCpp
 EXTERN DCNewCpp,DCDelCpp,DCSizeCpp,DCDepthBufRstCpp
 EXTERN DCDepthBufAllocCpp,DCCopyCpp,DCMonoCpp,DCColorChgCpp
 EXTERN DCSaveCpp,DCLoadCpp,GRWriteCpp,GRReadCpp
+EXTERN DCScrnCaptureCpp,GRScrnCaptureReadCpp,GRScrnCaptureWriteCpp
 EXTERN Mat4x4EquCpp,Mat4x4NewCpp
 EXTERN Mat4x4MulMat4x4EquCpp,Mat4x4MulMat4x4NewCpp,Mat4x4RotXCpp,Mat4x4RotYCpp
 EXTERN Mat4x4RotZCpp,Mat4x4ScaleCpp,Mat4x4TranslationEquCpp,Mat4x4TranslationAddCpp
@@ -409,6 +411,9 @@ HOLYC_CPP DCSaveHC,DCSaveCpp,3
 HOLYC_CPP DCLoadHC,DCLoadCpp,3
 HOLYC_CPP GRWriteHC,GRWriteCpp,3
 HOLYC_CPP GRReadHC,GRReadCpp,2
+HOLYC_CPP DCScrnCaptureHC,DCScrnCaptureCpp,2
+HOLYC_CPP GRScrnCaptureReadHC,GRScrnCaptureReadCpp,4
+HOLYC_CPP GRScrnCaptureWriteHC,GRScrnCaptureWriteCpp,2
 HOLYC_CPP Mat4x4MulMat4x4EquHC,Mat4x4MulMat4x4EquCpp,3
 HOLYC_CPP Mat4x4MulMat4x4NewHC,Mat4x4MulMat4x4NewCpp,3
 HOLYC_CPP Mat4x4RotXHC,Mat4x4RotXCpp,2
