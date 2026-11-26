@@ -540,12 +540,20 @@ private:
       Lex(cc);
       return Add({bits, NO_IC, NO_IC, IC_IMM_F64, RT_F64, false, false, false});
     }
-    if (token == TK_STR && strings) {
+    if ((token == TK_STR || token == TK_INS_BIN) && strings) {
       size_t size = 0;
       auto *byte = reinterpret_cast<CHashClass *>(
           HashFind("U8", cc.htc.hash_table_lst, HTT_INTERNAL_TYPE));
       if (!byte)
         return NO_IC;
+      if (token == TK_INS_BIN) {
+        auto *data = const_cast<char *>(cc.cur_str);
+        size = cc.cur_str_len;
+        cc.cur_str = nullptr;
+        cc.cur_str_len = 0;
+        Lex(cc);
+        return StringConst(data, size, byte + 1);
+      }
       auto *text = LexExtStr(cc, size);
       return StringConst(text, size, byte + 1);
     }

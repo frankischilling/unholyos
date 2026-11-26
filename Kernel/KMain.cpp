@@ -1557,6 +1557,7 @@ extern "C" void KMainCpp()
       auto run_level = SYS_RUN_LEVEL;
       SYS_RUN_LEVEL |= RLF_DOC;
       BootFileProgramReport(*adam_task->cur_dv, "/DocBinLinkProbe.HC");
+      BootFileProgramReport(*adam_task->cur_dv, "/SpriteProbe.HC");
       SYS_RUN_LEVEL = run_level;
     }
     if (BootFileProgramReport(*adam_task->cur_dv, "/DocCallback.HC").okay) {
@@ -1580,6 +1581,7 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not mount the boot DVD\r\n");
   }
   adam_task->win_inhibit |= WIF_SELF_FOCUS;
+  SYS_RUN_LEVEL |= RLF_DOC;
   adam_task->display_flags |= DISPLAYF_CHILDREN_NOT_ON_TOP;
   DbgModeCpp(false);
   if (!StartUpTasks())

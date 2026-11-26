@@ -75,6 +75,7 @@ void RandU32HC(),RandI64HC(),RandU64HC(),RandHC();
 void SeedHC(),IsPixCovered0HC(),GrPlot0HC(),GrPeek0HC();
 void GrBlotHC(),GrRectHC(),GrRectBHC(),GrClampHC();
 void GrPlotHC(),GrPeekHC(),GrLineHC(),ClipLineHC();
+void SpriteSizeHC(),Sprite3HC(),DocSpriteHC(),SpriteHC();
 void Mat4x4MulXYZHC(),DCTransformHC(),Mat4x4IdentEquHC(),Mat4x4IdentNewHC();
 void Mat4x4NormSqr65536HC(),DCMat4x4SetHC(),DCLightingHC(),DCFillHC();
 void DCClearHC(),DCRstHC(),DCExtentsInitHC(),DCAliasHC();
@@ -673,6 +674,10 @@ bool LoadKernel(CTask &task)
       {"GrRectB", reinterpret_cast<uintptr_t>(GrRectBHC)},
       {"GrClamp", reinterpret_cast<uintptr_t>(GrClampHC)},
       {"GrPlot", reinterpret_cast<uintptr_t>(GrPlotHC)},
+      {"SpriteSize", reinterpret_cast<uintptr_t>(SpriteSizeHC)},
+      {"Sprite3", reinterpret_cast<uintptr_t>(Sprite3HC)},
+      {"DocSprite", reinterpret_cast<uintptr_t>(DocSpriteHC)},
+      {"Sprite", reinterpret_cast<uintptr_t>(SpriteHC)},
       {"GrPeek", reinterpret_cast<uintptr_t>(GrPeekHC)},
       {"GrLine", reinterpret_cast<uintptr_t>(GrLineHC)},
       {"ClipLine", reinterpret_cast<uintptr_t>(ClipLineHC)},
