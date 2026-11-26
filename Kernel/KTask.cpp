@@ -188,17 +188,19 @@ extern "C" uint64_t TaskValidateCpp(CTask *task)
          task->task_signature == TASK_SIGNATURE_VAL;
 }
 
-bool KillTask(CTask *task)
+bool KillTask(CTask *task, bool wait)
 {
   if (!TaskValidateCpp(task) || task == sys_winmgr_task ||
       task == task->gs->seth_task)
     return false;
   __atomic_fetch_or(&task->task_flags, TASKF_KILL_TASK, __ATOMIC_RELAXED);
-  do {
-    _YIELD();
-  } while (
-      TaskValidateCpp(task) &&
-      (__atomic_load_n(&task->task_flags, __ATOMIC_RELAXED) & TASKF_KILL_TASK));
+  if (wait) {
+    do {
+      _YIELD();
+    } while (TaskValidateCpp(task) &&
+             (__atomic_load_n(&task->task_flags, __ATOMIC_RELAXED) &
+              TASKF_KILL_TASK));
+  }
   return true;
 }
 

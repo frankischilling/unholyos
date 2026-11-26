@@ -1543,13 +1543,24 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   auto right = ReadPhysical<1>(vm, left + last_task)[0];
   auto wait_windows = [&](const std::array<uint64_t, 4> &left_geometry,
                           const std::array<uint64_t, 4> &right_geometry) {
+    std::array<uint64_t, 4> actual_left{}, actual_right{};
     for (unsigned i = 0; i < 80; ++i) {
-      if (ReadPhysical<4>(vm, left + win_left) == left_geometry &&
-          ReadPhysical<4>(vm, right + win_left) == right_geometry)
+      actual_left = ReadPhysical<4>(vm, left + win_left);
+      actual_right = ReadPhysical<4>(vm, right + win_left);
+      if (actual_left == left_geometry && actual_right == right_geometry)
         return;
       std::this_thread::sleep_for(20ms);
     }
-    throw std::runtime_error("Terminal window bounds differ from TempleOS");
+    auto bounds = [](const std::array<uint64_t, 4> &box) {
+      return std::to_string(int64_t(box[0])) + "," +
+             std::to_string(int64_t(box[1])) + "," +
+             std::to_string(int64_t(box[2])) + "," +
+             std::to_string(int64_t(box[3]));
+    };
+    throw std::runtime_error(
+        "Terminal bounds expected " + bounds(left_geometry) + " / " +
+        bounds(right_geometry) + ", got " + bounds(actual_left) + " / " +
+        bounds(actual_right));
   };
   wait_windows({1, 39, 2, 58}, {41, 78, 2, 58});
   type_cmd("WinMax;");
@@ -1559,12 +1570,64 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   type_cmd("WinTileVert;");
   wait_windows({1, 39, 2, 58}, {41, 78, 2, 58});
 
+  vm.ResetDeadline(35s);
+  constexpr std::array<uint64_t, 4> right_pane_geometry{41, 78, 2, 58};
+  type_cmd("WinHorz(4,32);WinVert(5,32);");
+  wait_windows({4, 32, 5, 32}, right_pane_geometry);
+  wait_text("MENU", false, 1, 4, 4);
+  wait_text("[X]", false, 1, 4, 30);
+  auto set_pointer = [&](int x, int y, bool right_pane = false) {
+    auto marker = x * 1000 + y;
+    type_cmd("MsSet(" + std::to_string(x) + "," + std::to_string(y) + ");" +
+             std::to_string(marker) + ";");
+    std::ostringstream reply;
+    reply << "ans=0x" << std::uppercase << std::hex << std::setw(8)
+          << std::setfill('0') << marker;
+    wait_text(reply.str(), right_pane);
+  };
+  auto drag = [&](int dx, int dy, const std::array<uint64_t, 4> &expected) {
+    MouseButton(vm, "left", true);
+    std::this_thread::sleep_for(125ms);
+    MouseMove(vm, dx, dy);
+    wait_windows(expected, right_pane_geometry);
+    MouseButton(vm, "left", false);
+    std::this_thread::sleep_for(125ms);
+  };
+  set_pointer(163, 35);
   type_cmd("WinFocus(Fs->last_task);");
-  wait_mem(winmgr + last_task, right, "WinFocus did not raise the right terminal");
+  wait_mem(winmgr + last_task, right,
+           "WinFocus did not raise the right terminal");
+  drag(48, 32, {7, 35, 7, 34});
+  wait_mem(winmgr + last_task, left,
+           "Title drag did not raise the left terminal");
+  MouseMove(vm, 16, 16);
+  std::this_thread::sleep_for(125ms);
+  wait_windows({7, 35, 7, 34}, right_pane_geometry);
+  set_pointer(51, 99);
+  drag(32, 32, {9, 37, 9, 36});
+  set_pointer(307, 299);
+  drag(48, 64, {9, 40, 9, 40});
+  set_pointer(331, 115);
+  drag(-32, 32, {9, 38, 9, 40});
+  set_pointer(163, 331);
+  drag(16, -48, {9, 38, 9, 37});
+  std::cout << "Window borders moved and resized the terminal\n";
+  type_cmd("WinTileVert;");
+  wait_windows({1, 39, 2, 58}, right_pane_geometry);
+
+  vm.ResetDeadline(15s);
+  type_cmd("WinFocus(Fs->last_task);");
+  wait_mem(winmgr + last_task, right,
+           "WinFocus did not raise the right terminal");
   keys({"7", "shift-8", "8", "semicolon", "ret"});
   wait_text("ans=0x00000038=56", true);
-  vm.Hmp("sendkey shift-esc 100");
-  wait_mem(winmgr + last_task, left, "Shift+Escape did not close the right terminal");
+  set_pointer(620, 12, true);
+  wait_text("[X]", true, 1, 1, 36);
+  MouseButton(vm, "left", true);
+  std::this_thread::sleep_for(125ms);
+  MouseButton(vm, "left", false);
+  wait_mem(winmgr + last_task, left, "Title-bar close did not close the right terminal");
+  std::cout << "Title-bar close dismissed the right terminal\n";
   // The window manager restores focus on its next refresh.
   std::this_thread::sleep_for(150ms);
   keys({"7", "shift-8", "9", "semicolon", "ret"});

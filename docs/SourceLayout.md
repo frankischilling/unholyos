@@ -348,6 +348,18 @@ and `UserCmdLine` switches to `WIG_USER_TASK_DFT`, as in `KTask.HC`.
 `Demo/Graphics/Symmetry.HC` uses the same mask expression as the
 reference to receive left and right mouse drags while drawing.
 
+The border handling from `Adam/WinMgr.HC`'s `WinMgrTask` lives in
+`Adam/WinMgr.cpp`. It uses the same hit order for title, left, lower
+right, bottom, and right edges. The held drag keeps its task through
+successive refreshes, using `WinHorz` and `WinVert` for bounds and
+raising the task with `WinToTop` at the start. `WIF_SELF_BORDER`
+and `WIF_FOCUS_TASK_BORDER` gate the gestures and title actions.
+
+`Adam/DolDoc/DocTerm.cpp` puts `MENU` and `[X]` in the border
+document at the reference positions. The rest of the standard
+border document from `Adam/DolDoc/DocTerm.HC`'s `DocBorderNew`
+still needs its title, task address, and editor indicators.
+
 ## Task settings and drawing callbacks
 
 `Adam/TaskSettings.cpp` follows `SettingsPush`, `SettingsPop2`, and
