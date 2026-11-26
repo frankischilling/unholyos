@@ -59,6 +59,7 @@ void PUT_HEX_U64(), PUT_HEX_U32(), PUT_HEX_U16(), PUT_HEX_U8(), PUT_CHARS(),
 void CmpHC(), ExePutSHC(), ExeFileHC(), StreamPrintHC(), StreamExePrintHC();
 void DefineSubHC(), DefineMatchHC();
 void HashValHC(), HashDelHC(), HashTableDelHC(), HashSrcFileSetHC();
+void MemberMetaDataHC(), MemberMetaFindHC(), MemberFindHC();
 void SpawnHC(), TaskValidateHC(), SuspendHC(), IsSuspendedHC();
 void TaskQueInsHC(), TaskQueRemHC(), SingleUserHC(), IsSingleUserHC();
 void _TASK_END_NOW();
@@ -564,6 +565,7 @@ bool LoadKernel(CTask &task)
       {"_HASH_ADD", reinterpret_cast<uintptr_t>(_HASH_ADD)},
       {"_HASH_ADD_AFTER", reinterpret_cast<uintptr_t>(_HASH_ADD_AFTER)},
       {"_HASH_FIND", reinterpret_cast<uintptr_t>(_HASH_FIND)},
+      {"HashFind", reinterpret_cast<uintptr_t>(_HASH_FIND)},
       {"_HASH_SINGLE_TABLE_FIND",
        reinterpret_cast<uintptr_t>(_HASH_SINGLE_TABLE_FIND)},
       {"HashTableNew", reinterpret_cast<uintptr_t>(HashTableNewHC)},
@@ -572,6 +574,9 @@ bool LoadKernel(CTask &task)
       {"HashDel", reinterpret_cast<uintptr_t>(HashDelHC)},
       {"HashTableDel", reinterpret_cast<uintptr_t>(HashTableDelHC)},
       {"HashSrcFileSet", reinterpret_cast<uintptr_t>(HashSrcFileSetHC)},
+      {"MemberMetaData", reinterpret_cast<uintptr_t>(MemberMetaDataHC)},
+      {"MemberMetaFind", reinterpret_cast<uintptr_t>(MemberMetaFindHC)},
+      {"MemberFind", reinterpret_cast<uintptr_t>(MemberFindHC)},
       {"_HASH_REM_DEL", reinterpret_cast<uintptr_t>(_HASH_REM_DEL)},
       {"SysSymImportsResolve",
        reinterpret_cast<uintptr_t>(SysSymImportsResolveHC)},

@@ -1,6 +1,22 @@
 #include "../Kernel/KernelB.hpp"
 #include "CompilerA.hpp"
 
+extern "C" uint64_t MemberMetaDataCpp(const char *name, CMemberLst *member)
+{
+  auto *meta = MemberMetaFindCpp(name, member);
+  return meta ? meta->user_data : 0;
+}
+
+extern "C" CMemberLstMeta *MemberMetaFindCpp(const char *name, CMemberLst *member)
+{
+  if (member && name)
+    for (auto *meta = member->meta; meta; meta = meta->next)
+      if (!StrCmpCpp(reinterpret_cast<const uint8_t *>(meta->str),
+                     reinterpret_cast<const uint8_t *>(name)))
+        return meta;
+  return nullptr;
+}
+
 CMemberLst *MemberFind(const char *name, CHashClass *cls)
 {
   for (; cls; cls = cls->base_class)
@@ -14,6 +30,11 @@ CMemberLst *MemberFind(const char *name, CHashClass *cls)
       member = cmp < 0 ? member->left : member->right;
     }
   return nullptr;
+}
+
+extern "C" CMemberLst *MemberFindCpp(const char *name, CHashClass *cls)
+{
+  return name ? MemberFind(name, cls) : nullptr;
 }
 
 static void MemberLstDel(CMemberLst *member)
