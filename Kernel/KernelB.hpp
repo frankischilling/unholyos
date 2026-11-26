@@ -410,6 +410,13 @@ bool FAT32FilesFind(CDrv &dv, uint64_t clus, const char *directory,
                     const char *mask, uint64_t flags, CDirEntry *parent,
                     CDirEntry *&res, uint64_t &dir_size);
 bool FAT32ReadBlocks(CFile &f, uint8_t *buf, uint64_t blk, uint64_t cnt);
+bool FAT32WriteBlocks(CFile &f, const uint8_t *buf, uint64_t blk, uint64_t cnt);
+bool FAT32StreamPrepare(CFile &f, const char *path, int64_t cnt);
+bool FAT32StreamCommit(CFile &f, const char *path);
+bool FAT32StreamEnsure(CFile &f, uint64_t blocks, bool grow);
+bool FAT32StreamCluster(CFile &f, uint64_t index, uint32_t &clus);
+bool FAT32ClusRead(CDrv &dv, uint32_t clus, uint8_t *buf, uint64_t blocks);
+bool FAT32ClusWrite(CDrv &dv, uint32_t clus, const uint8_t *buf, uint64_t blocks);
 uint64_t FAT32FileWrite(CDrv &dv,const char *path,const uint8_t *data,
                          size_t size,uint64_t date,uint16_t attr);
 bool FAT32MkDir(CDrv &dv,const char *path,int64_t entry_cnt=0);
