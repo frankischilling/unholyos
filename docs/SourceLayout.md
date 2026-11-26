@@ -329,6 +329,24 @@ callback, including the original endpoint rules.
 `SPT_THICK` and restores the caller's width. Point and line elements
 use the 3D primitives, including their packed variants.
 
+## Circle and ellipse walkers
+
+`Adam/Gr/GrMath.cpp` follows `Circle` and `Ellipse` in
+`GrMath.HC`. Rotation uses a 24-bit fixed-point coefficient and
+an 8-bit point fraction. The circle calls the plotter at each
+step; the ellipse skips consecutive duplicate coordinates.
+The callback adapters use the HolyC stack convention and
+preserve the Boolean return. The public compiler headers describe
+the four-argument plot callback rather than an untyped address.
+
+`GrCircle`, `GrEllipse`, `GrCircle3` and `GrEllipse3` in
+`GrPrimatives.cpp` follow their counterparts in `GrPrimatives.HC`.
+The 2D variants temporarily bypass the depth buffer. The transformed
+3D variants project the two ellipse axes and restore the transform
+flag after plotting. `F64ArgBits` in `Kernel/KMathA.asm` follows
+the reference `_ARG` x87 instruction sequence. Regular polygons,
+splines and additional sprite elements remain pending.
+
 ## Arrows and raster text
 
 `GrBorder` and `GrArrow3` in `Adam/Gr/GrComposites.cpp` follow
@@ -873,6 +891,17 @@ external symbol machinery for the runtime calls in `.BIN.Z`. The
 bootstrap's `SysTryHC` aligns its internal C++ call and saves the
 unpadded guest stack for resumption. The original demo cautions against
 returning from a catch body. That path is outside the tested scope.
+
+`Kernel/KExcept.cpp` follows `Break`, `BreakLock`, and
+`BreakUnlock` in `KExcept.HC`. `KeyDev.cpp` records the
+Ctrl-Alt-C request and `Sched.asm` handles it after saving the
+task context, following `BREAK_FOCUS_USER` in `Sched.HC`.
+Locked tasks receive a pending flag; unlocking delivers the
+exception. The Shift-Esc path posts a keyboard message without
+replacing the saved return address. Native drive and block locks
+do not yield while held. Full drive-lock release, general
+Ctrl-Alt callback registration and preemptive scheduling remain
+pending.
 
 ## Remaining structural work
 

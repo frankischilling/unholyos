@@ -55,6 +55,146 @@ bool Line(CDC *dc, int64_t x1, int64_t y1, int64_t z1, int64_t x2, int64_t y2,
          fp_plot(dc, x2, y2, z2);
 }
 
+// The arc walkers use a 24-bit rotation and 8-bit point fraction.
+constexpr unsigned GR_SCALE1_BITS = 24, GR_SCALE2_BITS = 8;
+
+static int64_t GrArcMul(int64_t a, uint64_t b)
+{
+  return F64ToI64(F64MulBits(F64FromI64(a), b), 0x0C00);
+}
+
+static int64_t GrArcRotate(int64_t a, int64_t b, int64_t c, int64_t d)
+{
+  return int64_t(uint64_t(a) * b + uint64_t(c) * d) >> GR_SCALE1_BITS;
+}
+
+struct CGrArc
+{
+  int64_t c, s, x, y, len, step;
+
+  CGrArc(int64_t radius, int64_t max_radius, int64_t delta,
+         uint64_t start, uint64_t length)
+  {
+    auto t = F64DivBits(F64FromI64(1), F64FromI64(max_radius));
+    len = F64ToI64(F64MulBits(length, F64FromI64(max_radius)), 0x0800);
+    c = GrArcMul(1 << GR_SCALE1_BITS, F64CosBits(t));
+    s = GrArcMul(1 << GR_SCALE1_BITS, F64SinBits(t));
+    if (delta < 0)
+      s = -s;
+    step = static_cast<int64_t>(AbsI64(delta));
+    x = radius;
+    y = 0;
+    if (start & (UINT64_MAX >> 1)) {
+      x = GrArcMul(radius, F64CosBits(start));
+      y = -GrArcMul(radius, F64SinBits(start));
+    }
+    x = uint64_t(x) << GR_SCALE2_BITS;
+    y = uint64_t(y) << GR_SCALE2_BITS;
+  }
+
+  void Advance()
+  {
+    for (int64_t j = 0; j < step; j++) {
+      auto nx = GrArcRotate(c, x, s, y);
+      y = GrArcRotate(-s, x, c, y);
+      x = nx;
+    }
+  }
+};
+
+template<class Plot>
+static bool CircleArc(int64_t cx, int64_t cy, int64_t cz, int64_t radius,
+                      Plot plot, int64_t step, uint64_t start, uint64_t length)
+{
+  if (radius <= 0 || !step)
+    return true;
+  if (step == INT64_MIN)
+    return false;
+  CGrArc arc(radius, radius, step, start, length);
+  for (int64_t i = 0; i <= arc.len;) {
+    if (!plot(uint64_t(cx) + (arc.x >> GR_SCALE2_BITS),
+              uint64_t(cy) + (arc.y >> GR_SCALE2_BITS), cz))
+      return false;
+    if (arc.step > arc.len - i)
+      break;
+    arc.Advance();
+    i += arc.step;
+  }
+  return true;
+}
+
+template<class Plot>
+static bool EllipseArc(int64_t cx, int64_t cy, int64_t cz, int64_t xr,
+                       int64_t yr, Plot plot, uint64_t rotation, int64_t step,
+                       uint64_t start, uint64_t length)
+{
+  if (xr <= 0 || yr <= 0 || !step)
+    return true;
+  if (step == INT64_MIN)
+    return false;
+  CGrArc arc(xr, xr >= yr ? xr : yr, step, start, length);
+  auto c = GrArcMul(1 << GR_SCALE1_BITS, F64CosBits(rotation));
+  auto s = GrArcMul(1 << GR_SCALE1_BITS, F64SinBits(rotation));
+  int64_t old_x = 0, old_y = 0;
+  bool first = true;
+  for (int64_t i = 0; i <= arc.len;) {
+    auto scaled_y = int64_t(uint64_t(arc.y) * yr) / xr;
+    auto x = GrArcRotate(c, arc.x, s, scaled_y) >> GR_SCALE2_BITS;
+    auto y = GrArcRotate(-s, arc.x, c, scaled_y) >> GR_SCALE2_BITS;
+    if ((first || x != old_x || y != old_y) &&
+        !plot(uint64_t(cx) + x, uint64_t(cy) + y, cz))
+      return false;
+    first = false;
+    old_x = x;
+    old_y = y;
+    if (arc.step > arc.len - i)
+      break;
+    arc.Advance();
+    i += arc.step;
+  }
+  return true;
+}
+
+bool Circle(CDC *dc, int64_t cx, int64_t cy, int64_t cz, int64_t radius,
+            GrLinePlotFn fp_plot, int64_t step, uint64_t start, uint64_t length)
+{
+  return CircleArc(cx, cy, cz, radius,
+                   [=](int64_t x, int64_t y, int64_t z) {
+                     return fp_plot(dc, x, y, z);
+                   }, step, start, length);
+}
+
+bool Ellipse(CDC *dc, int64_t cx, int64_t cy, int64_t cz, int64_t xr,
+             int64_t yr, GrLinePlotFn fp_plot, uint64_t rotation, int64_t step,
+             uint64_t start, uint64_t length)
+{
+  return EllipseArc(cx, cy, cz, xr, yr,
+                    [=](int64_t x, int64_t y, int64_t z) {
+                      return fp_plot(dc, x, y, z);
+                    }, rotation, step, start, length);
+}
+
+extern "C" bool CircleCpp(uintptr_t aux, int64_t cx, int64_t cy, int64_t cz,
+                          int64_t radius, uintptr_t fp_plot, int64_t step,
+                          uint64_t start, uint64_t length)
+{
+  return CircleArc(cx, cy, cz, radius,
+                   [=](int64_t x, int64_t y, int64_t z) {
+                     return uint8_t(CallHolyC4(fp_plot, aux, x, y, z)) != 0;
+                   }, step, start, length);
+}
+
+extern "C" bool EllipseCpp(uintptr_t aux, int64_t cx, int64_t cy, int64_t cz,
+                           int64_t xr, int64_t yr, uintptr_t fp_plot,
+                           uint64_t rotation, int64_t step, uint64_t start,
+                           uint64_t length)
+{
+  return EllipseArc(cx, cy, cz, xr, yr,
+                    [=](int64_t x, int64_t y, int64_t z) {
+                      return uint8_t(CallHolyC4(fp_plot, aux, x, y, z)) != 0;
+                    }, rotation, step, start, length);
+}
+
 extern "C" int64_t *Mat4x4MulMat4x4EquCpp(int64_t *dst, const int64_t *m1,
                                           const int64_t *m2)
 {

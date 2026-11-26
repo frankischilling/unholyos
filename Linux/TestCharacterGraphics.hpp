@@ -2,7 +2,8 @@
 
 // Uses the same QMP input and physical-memory readers as the boot tests.
 static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
-                                   const std::string &boot, bool reference)
+                                   const std::string &boot, bool reference,
+                                   bool tic = false, bool breaks = false)
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -27,6 +28,8 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
         case '>': key("shift-dot"); break;
         case '[': key("bracket_left"); break;
         case ']': key("bracket_right"); break;
+        case '{': key("shift-bracket_left"); break;
+        case '}': key("shift-bracket_right"); break;
         case '/': key("slash"); break;
         case '.': key("dot"); break;
         case ',': key("comma"); break;
@@ -130,10 +133,8 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
   };
   wait_text("T:/Home>");
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
-  if (reference) {
-    // Transfer the exact HolyC probe to an allocated guest buffer.
-    const auto source = fs::absolute("Linux/Fixtures/MemSetProbe.HC");
-    Check(fs::file_size(source) < 4096, "Memory set probe exceeds guest buffer");
+  auto upload = [&](const fs::path &source) {
+    Check(fs::file_size(source) < 4096, "Probe exceeds guest buffer");
     cmd("U8 *cgprobe=CAlloc(4096);");
     cmd(R"("CGPROBE:%X:END\n",cgprobe;)");
     const std::regex pattern("CGPROBE:([0-9A-Fa-f]+):END");
@@ -177,6 +178,229 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
     expected.push_back(0);
     Check(FileRead(uploaded) == expected, "Reference probe transfer changed source bytes");
     cmd("ExePutS(cgprobe);Free(cgprobe);");
+  };
+  if (breaks) {
+    cmd(R"("BR %X %X %X\n",&Fs->task_flags,&Fs->except_ch,&Fs->last_except;)");
+    auto [flags, exception, last] = addresses("BR ");
+    auto old_last = ReadPhysical<1>(vm, last)[0];
+    if (reference)
+      upload(fs::absolute("Linux/Fixtures/BreakProbe.HC"));
+    else
+      cmd(R"(ExeFile("::/BreakProbe.HC");)");
+    wait_text("Break probe locked");
+    Check((ReadPhysical<1>(vm, flags)[0] & 0x1C00) == 0x400,
+          "BreakLock did not lock the task");
+    snapshot("break-locked");
+    key("ctrl-alt-c");
+    wait_text("Break probe shift");
+    Check((ReadPhysical<1>(vm, flags)[0] & 0x1C00) == 0x1000 &&
+              ReadPhysical<1>(vm, exception)[0] == 0x6B61657242,
+          "Pending break was not caught and cleared");
+    snapshot("break-shift");
+    key("ctrl-alt-c");
+    wait_text("Break probe 7F");
+    wait([&](const Cells &) {
+      return !(ReadPhysical<1>(vm, flags)[0] & 0x1C00) &&
+             ReadPhysical<1>(vm, last)[0] == old_last;
+    }, "Break probe leaked task flags or exception frames");
+    snapshot("break-complete");
+    std::cout << "Break probe 7F: direct, locked, pending and Shift-Esc delivery\n";
+    return;
+  }
+  if (tic) {
+    cmd(R"("TT1 %X %X %X\n",gr.dc->body,Fs->hash_table,&ms.pos.x;)");
+    auto [pixels, table, mouse] = addresses("TT1 ");
+    cmd(R"("TT2 %X %X %X\n",&Fs->pix_left,&Fs->pix_top,&ms.lb;)");
+    auto [left, top, button] = addresses("TT2 ");
+    cmd(R"("TT3 %X %X %X\n",&winmgr.updates,&Fs->task_flags,&Fs->except_ch;)");
+    auto [updates, flags, exception] = addresses("TT3 ");
+    cmd("DocClear(,1);MsSet(32,32);");
+    cmd(R"(ExeFile("::/Demo/Games/TicTacToe.HC");)");
+    wait_text("CTRL-ALT-c to exit.");
+    const auto x0 = int(ReadPhysical<1>(vm, left)[0]);
+    const auto y0 = int(ReadPhysical<1>(vm, top)[0]);
+    Check(x0 >= 0 && x0 + 403 < 640 && y0 >= 0 && y0 + 403 < 480,
+          "TicTacToe board outside the graphics buffer");
+    // Resolve the original program's global array from the guest hash table.
+    uint64_t hash = 0;
+    for (char c : std::string_view("board"))
+      hash = (hash << 1) + (hash >> 63) + uint8_t(c);
+    hash += (hash >> 16) + ((hash >> 15) & 1);
+    uint64_t board_addr = 0;
+    for (unsigned tries = 0; tries < 20 && !board_addr; tries++) {
+      for (uint64_t tab = table; tab && !board_addr;) {
+        auto hdr = ReadPhysical<4>(vm, tab);
+        auto entry = ReadPhysical<1>(vm, hdr[3] + (hash & hdr[1]) * 8)[0];
+        for (unsigned i = 0; entry && i < 128; i++) {
+          auto h = ReadPhysical<3>(vm, entry);
+          if ((h[2] & 8) && h[1] &&
+              ReadPhysical<6>(vm, h[1], 'b') ==
+                  std::array<uint64_t, 6>{'b','o','a','r','d',0}) {
+            board_addr = ReadPhysical<1>(vm, entry + 120)[0];
+            break;
+          }
+          entry = h[0];
+        }
+        tab = hdr[0];
+      }
+      if (!board_addr)
+        std::this_thread::sleep_for(100ms);
+    }
+    Check(board_addr && board_addr < 0x20000000, "TicTacToe board was not compiled");
+    using Board = std::array<uint64_t, 9>;
+    Board expected{};
+    auto board = [&] { return ReadPhysical<9>(vm, board_addr, 'b'); };
+    auto wait_board = [&] {
+      for (unsigned i = 0; i < 120; i++) {
+        if (board() == expected)
+          return;
+        std::this_thread::sleep_for(35ms);
+      }
+      std::ostringstream message;
+      message << "TicTacToe board state differs: expected ";
+      for (auto v : expected) message << v;
+      message << ", got ";
+      for (auto v : board()) message << v;
+      throw std::runtime_error(message.str());
+    };
+    auto frames = [&](uint64_t count) {
+      auto start = ReadPhysical<1>(vm, updates)[0];
+      for (unsigned i = 0; i < 500; i++) {
+        if (ReadPhysical<1>(vm, updates)[0] - start >= count)
+          return;
+        std::this_thread::sleep_for(30ms);
+      }
+      throw std::runtime_error("TicTacToe window manager did not refresh");
+    };
+    auto move = [&](int x, int y) {
+      for (unsigned i = 0; i < 50; i++) {
+        auto pos = ReadPhysical<2>(vm, mouse);
+        auto dx = x - int64_t(pos[0]), dy = y - int64_t(pos[1]);
+        if (!dx && !dy)
+          return;
+        MouseMove(vm, std::clamp(dx, int64_t(-40), int64_t(40)) * 2,
+                  std::clamp(dy, int64_t(-40), int64_t(40)) * 2);
+        std::this_thread::sleep_for(60ms);
+      }
+      throw std::runtime_error("TicTacToe mouse did not reach target");
+    };
+    auto click = [&](int x, int y) {
+      move(x0 + x, y0 + y);
+      frames(4);
+      for (bool down : {true, false}) {
+        MouseButton(vm, "left", down);
+        unsigned tries = 0;
+        while (ReadPhysical<1>(vm, button, 'b')[0] != down && ++tries < 100)
+          std::this_thread::sleep_for(25ms);
+        Check(tries < 100, "TicTacToe mouse button did not change");
+        frames(5);
+      }
+    };
+    auto image_path = dir / "tic-bitmap.bin";
+    auto image_hash = [&] {
+      vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+                 std::to_string(pixels) + R"(,"size":307200,"filename":")" +
+                 image_path.string() + R"("}})");
+      auto bitmap = FileRead(image_path);
+      Check(bitmap.size() == 640 * 480, "Incomplete TicTacToe graphics buffer");
+      uint64_t value = 0xCBF29CE484222325;
+      for (int y = 97; y <= 403; y++)
+        for (int x = 97; x <= 403; x++)
+          value = (value ^ bitmap[(y0 + y) * 640 + x0 + x]) * 0x100000001B3;
+      return value;
+    };
+    // The settled board region in each phase is measured on the pinned guest.
+    constexpr std::pair<std::string_view, uint64_t> oracle[] = {
+      {"tic-empty",0x9611FC41100952A6}, {"tic-x0",0x55A64FE52AD3D56F},
+      {"tic-occupied",0x55A64FE52AD3D56F}, {"tic-outside",0x55A64FE52AD3D56F},
+      {"tic-o3",0x4AB62BD7737049FD}, {"tic-x1",0xB3036FCE078BDB44},
+      {"tic-o4",0xF362F90B89421FF6}, {"tic-x-win",0x9611FC41100952A6},
+      {"tic-next-x0",0x55A64FE52AD3D56F}, {"tic-next-o3",0x4AB62BD7737049FD},
+      {"tic-next-x1",0xB3036FCE078BDB44}, {"tic-next-o4",0xF362F90B89421FF6},
+      {"tic-next-x8",0x6C21CB8B7740621F}, {"tic-o-win",0x9611FC41100952A6}};
+    size_t phase = 0;
+    auto draw = [&](const char *name) {
+      move(x0 + 32, y0 + 32);
+      // TakeTurn beeps for 500 ms, then sleeps another 200 ms before
+      // drawing the next frame. Do not compare a stale cursor preview.
+      frames(35);
+      auto value = image_hash();
+      for (unsigned i = 0; i < 30; i++) {
+        std::this_thread::sleep_for(40ms);
+        auto next = image_hash();
+        if (next == value) {
+          std::cout << "TicTacToe " << name << ' ' << std::hex << value
+                    << std::dec << '\n';
+          fs::copy_file(image_path, dir / (std::string(name) + ".raw"),
+                        fs::copy_options::overwrite_existing);
+          snapshot(name);
+          Check(phase < std::size(oracle) && oracle[phase].first == name &&
+                    oracle[phase].second == value,
+                "TicTacToe board pixels differ from the pinned guest");
+          ++phase;
+          return value;
+        }
+        value = next;
+      }
+      throw std::runtime_error("TicTacToe graphics did not settle");
+    };
+    wait_board();
+    const auto empty = draw("tic-empty");
+    uint64_t prior = empty;
+    auto play = [&](unsigned cell, unsigned player, const char *name,
+                    bool reset = false) {
+      click(150 + int(cell % 3) * 100, 150 + int(cell / 3) * 100);
+      expected[cell] = player;
+      wait_board();
+      if (reset) {
+        expected = {};
+        wait_board();
+      }
+      auto value = draw(name);
+      Check(reset ? value == empty : value != prior,
+            "TicTacToe did not redraw after the move");
+      prior = value;
+    };
+    play(0, 1, "tic-x0");
+    click(150, 150);
+    wait_board();
+    Check(draw("tic-occupied") == prior, "TicTacToe accepted an occupied cell");
+    click(50, 50);
+    wait_board();
+    Check(draw("tic-outside") == prior, "TicTacToe accepted an outside click");
+    play(3, 2, "tic-o3");
+    play(1, 1, "tic-x1");
+    play(4, 2, "tic-o4");
+    play(2, 1, "tic-x-win", true);
+    play(0, 1, "tic-next-x0");
+    play(3, 2, "tic-next-o3");
+    play(1, 1, "tic-next-x1");
+    play(4, 2, "tic-next-o4");
+    play(8, 1, "tic-next-x8");
+    play(5, 2, "tic-o-win", true);
+    key("ctrl-alt-c");
+    wait_text("T:/Home>");
+    Check(ReadPhysical<1>(vm, exception)[0] == 0x6B61657242,
+          "TicTacToe exit did not catch Break");
+    Check(!(ReadPhysical<1>(vm, flags)[0] & 0xC00),
+          "TicTacToe exit left a pending or locked break");
+    auto cleared = image_hash();
+    Check(cleared != empty, "TicTacToe did not clear graphics on exit");
+    auto bitmap = FileRead(image_path);
+    for (int y = 97; y <= 403; y++)
+      for (int x = 97; x <= 403; x++)
+        Check(bitmap[(y0 + y) * 640 + x0 + x] == 0xFF,
+              "TicTacToe left graphics in the board region");
+    Check(phase == std::size(oracle), "Missing TicTacToe board checkpoint");
+    snapshot("tic-exit");
+    cmd(R"("TicTacToe exit %d\n",7*9;)");
+    wait_text("TicTacToe exit 63");
+    std::cout << "TicTacToe.HC rejected invalid moves, reset both wins and exited on Ctrl-Alt-C\n";
+    return;
+  }
+  if (reference) {
+    // Transfer the exact HolyC probe to an allocated guest buffer.
+    upload(fs::absolute("Linux/Fixtures/MemSetProbe.HC"));
     wait_text("Memory set probe 3FF");
     snapshot("reference-memset");
     std::cout << "Reference memory set and cursor flags probe 3FF\n";
