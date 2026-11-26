@@ -204,6 +204,85 @@ extern "C" int64_t GrBlotCpp(CDC *dc, int64_t x, int64_t y, CDC *img)
   return 1;
 }
 
+extern "C" CDC *DCExtCpp(CDC *dc,int64_t x1,int64_t y1,int64_t x2,int64_t y2,
+                          CTask *task)
+{
+  if (!dc) dc=gr.dc;
+  if (x1>x2) {int64_t i=x1; x1=x2; x2=i;}
+  if (y1>y2) {int64_t i=y1; y1=y2; y2=i;}
+  if (dc->flags&DCF_SCRN_BITMAP) {
+    CTask *win_task=dc->win_task;
+    uint64_t x=uint64_t(win_task->pix_left)+win_task->scroll_x;
+    uint64_t y=uint64_t(win_task->pix_top)+win_task->scroll_y;
+    x1+=x; x2+=x;
+    y1+=y; y2+=y;
+  }
+  CDC *res=DCNewCpp(uint64_t(x2)-x1+1,uint64_t(y2)-y1+1,task,false);
+  if (res) {
+    DCFillCpp(res,TRANSPARENT);
+    GrBlotCpp(res,-uint64_t(x1),-uint64_t(y1),dc);
+  }
+  return res;
+}
+
+static bool GrDiffRow(const uint8_t *base,const uint8_t *update,int64_t width)
+{
+  for (int64_t i=0;i<width;i++)
+    if (base[i]!=update[i])
+      return true;
+  return false;
+}
+
+extern "C" CDC *DCDiffCpp(CDC *base,CDC *update)
+{
+  if (!base || !update || !base->body || !update->body ||
+      base->width!=update->width || base->height!=update->height ||
+      base->width_internal!=update->width_internal ||
+      update->width<=0 || update->height<=0)
+    return nullptr;
+  int64_t x1=0,y1=0,x2=update->width-1,y2=update->height-1;
+  const uint8_t *ptr_base=base->body,*ptr_update=update->body;
+  // The reference's vertical scans advance by the logical width, not stride.
+  while (y1<=y2) {
+    if (GrDiffRow(ptr_base,ptr_update,update->width))
+      break;
+    ptr_base+=update->width;
+    ptr_update+=update->width;
+    y1++;
+  }
+  if (y1>y2)
+    return nullptr;
+  ptr_base=base->body+static_cast<int64_t>(base->width_internal)*base->height;
+  ptr_update=update->body+static_cast<int64_t>(update->width_internal)*update->height;
+  while (y1<y2) {
+    ptr_base-=update->width;
+    ptr_update-=update->width;
+    if (GrDiffRow(ptr_base,ptr_update,update->width))
+      break;
+    y2--;
+  }
+  while (x1<x2) {
+    for (int64_t i=y1;i<=y2;i++)
+      if (GrPeek0Cpp(base,x1,i)!=GrPeek0Cpp(update,x1,i))
+        goto df_x2;
+    x1++;
+  }
+df_x2:
+  while (x1<x2) {
+    for (int64_t i=y1;i<=y2;i++)
+      if (GrPeek0Cpp(base,x2,i)!=GrPeek0Cpp(update,x2,i))
+        goto df_done;
+    x2--;
+  }
+df_done:
+  CDC *res=DCExtCpp(update,x1,y1,x2,y2,nullptr);
+  if (res) {
+    res->x0=x1;
+    res->y0=y1;
+  }
+  return res;
+}
+
 extern "C" int64_t GrPutCharCpp(CDC *dc, int64_t x, int64_t y, uint8_t ch)
 {
   if (!dc)

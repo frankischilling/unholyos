@@ -243,6 +243,14 @@ serialization. `GrMath.cpp` supplies the matrix copy used by `DCCopy`.
 precedes the pixel body. `DCSave` and `DCLoad` use the kernel's TempleOS
 LZW codec. `GRRead` also checks that the serialized data fits in the file.
 
+`DCExt` and `DCDiff` in `GrBitMap.cpp` follow the reference's inclusive
+rectangle, clipping, and difference bounds. The vertical difference
+scan advances by the logical width even when the bitmap is padded, as
+in `GrBitMap.HC`. `DC2Sprite` in `SpriteNew.cpp` writes the packed
+bitmap element and terminator, and `DocGR` in `GrDC.cpp` inserts that
+sprite into a document. Invalid geometry and failed allocations return
+without dereferencing a missing buffer.
+
 `GrInit2` allocates the six screen contexts. The persistent `gr.dc`
 starts transparent with `DCF_SCRN_BITMAP | DCF_ON_TOP`. The context
 holds HolyC ABI addresses for the transform and lighting callbacks.

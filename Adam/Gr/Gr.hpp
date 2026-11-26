@@ -152,6 +152,7 @@ bool Sprite3(CDC &dc, int64_t x, int64_t y, int64_t z, const uint8_t *elems,
              size_t available, bool just_one_elem = false);
 
 extern "C" int64_t SpriteSizeCpp(const uint8_t *elems);
+extern "C" uint8_t *DC2SpriteCpp(CDC *tmpb);
 extern "C" void Sprite3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z,
                            const uint8_t *elems, uint8_t just_one_elem);
 extern "C" CDocEntryBase *DocSpriteCpp(CDoc *doc, const uint8_t *elems,

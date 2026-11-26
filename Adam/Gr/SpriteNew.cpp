@@ -116,3 +116,18 @@ extern "C" int64_t SpriteSizeCpp(const uint8_t *elems)
 {
   return SpriteSize(elems, INT64_MAX);
 }
+
+extern "C" uint8_t *DC2SpriteCpp(CDC *tmpb)
+{
+  if (!tmpb || !tmpb->body || tmpb->width<0 || tmpb->height<0 ||
+      tmpb->width_internal<tmpb->width)
+    return nullptr;
+  size_t size=uint64_t(tmpb->width_internal)*tmpb->height;
+  auto *elems=CAllocCpp(sizeof(CSpritePtWH)+size+sizeof(CSpriteBase),nullptr);
+  if (elems) {
+    CSpritePtWH tmpg{{SPT_BITMAP,0,0},tmpb->width,tmpb->height};
+    MemCpy(elems,&tmpg,sizeof(tmpg));
+    MemCpy(elems+sizeof(tmpg),tmpb->body,size);
+  }
+  return elems;
+}
