@@ -529,7 +529,16 @@ directory afterward. `DocPlain.cpp` and `DocBin.cpp` resolve
 `DOCEF_BIN_PTR_LINK` by attachment number or tag. A cyclic link produces
 an error entry. Saving preserves the `BP` reference and omits the
 external binary from the appended data. Graphics-file dispatch through
-`DocGR`, word wrapping, and file-link navigation remain pending.
+`DocGR` and file-link navigation remain pending.
+
+`Adam/DolDoc/DocRecalc.cpp` follows `DocWordWrapDel`, `DocSplitTag`, and
+`DocWordWrapAdd` in `DocRecalc.HC` for ordinary editable text. `$WW,1$`
+enables word wrapping. Text splits at the preceding space when one is
+available within the reference's search range, and the inserted soft
+newline is omitted from serialization. A change in window bounds or
+cursor position permits rejoining the fragments before reflow. Complex
+tag editing and the complete DolDoc wrapping and highlighting rules
+remain pending.
 
 `Compiler/PrsExp.cpp` handles `TK_INS_BIN` as in `PrsExp.HC`. It retains
 the attachment's exact byte length in the generated image and gives
