@@ -583,9 +583,39 @@ by the short listing. `Cd` visits each path component and retains the
 valid prefix when a component fails. `DskDirContext.cpp` ports
 `DirContextNew` and `DirContextDel`, using the native `CDirContext`
 record to save the task's drive, directory, and mask. `FilesFind`,
-`FileFind`, and `IsDir` use those contexts to resolve RedSea DVD and
-RAM paths and restore the caller's working directory. FAT32,
-`PopUpCd`, and full drive error reporting remain pending.
+`FileFind`, and `IsDir` use those contexts to resolve RedSea DVD,
+RAM, and mounted read-only FAT32 paths and restore the caller's working
+directory. `PopUpCd` and full drive error reporting remain pending.
+
+## FAT32 reads
+
+`Kernel/BlkDev/FileSysFAT.cpp` follows `FileSysFAT.HC` for `FAT32Init`,
+`FATFromName`, `FATNameXSum`, `DirLongNameFill`, `FAT32CDirFill`,
+`FAT32FileFind`, `FAT32FileRead`, and `FAT32FilesFind`. The disk structures
+in `KernelA.hpp` retain the reference's 512-byte boot and FSInfo sectors
+and 32-byte directory records. Mounting checks the partition extent,
+sector and cluster sizes, FAT capacity, root cluster, and FSInfo
+signatures before exposing the volume. Cluster numbers map to the data
+area starting at cluster 2. Reads reject invalid, cyclic, and short
+allocation chains. DOS modification timestamps convert to `CDate`.
+
+`DskATA.cpp` now reads ATA IDENTIFY capacity and LBA28 sectors using
+PIO; `DskAddDev.cpp` recognizes validated primary MBR FAT32 partitions
+on ATA devices. DVD startup probes the primary IDE master for these
+partitions and assigns free drive letters starting at `C:`. The ATA
+device is marked read-only. `DskBlk.cpp` dispatches reads to that device.
+Extended partitions, general automatic IDE discovery, LBA48, disk caches,
+and physical-sector sizes other than 512 bytes remain pending.
+
+The generic path and lookup helpers in `DskFile.cpp` dispatch to either
+filesystem; directory contexts, `Cd`, masks, recursive listings, whole-file
+reads, and parent search use the same native `CDirEntry` ABI. Names follow
+the reference's case-sensitive lookup and limited long-name support:
+ASCII VFAT names of up to 25 characters, validated sequence and checksum,
+or the short name when no supported valid long name is present. The
+short alias of a valid long name is not an alternate lookup, matching
+the pinned reader. Unicode conversion, longer VFAT names, active FAT
+selection other than FAT 0, and complete error diagnostics remain pending.
 
 ## File streams
 
@@ -598,13 +628,20 @@ preallocation, `w` replacement, `w+` updates, and metadata changes on
 close, including preservation of the original timestamp. The containing
 directory must already exist.
 
-The current slice supports DVD reads and RAM reads and writes. It rejects
+The current slice supports DVD reads, RAM reads and writes, and FAT32
+ATA reads. It rejects
 positive writes to a new stream without a preallocated extent; the
 reference contiguous path would otherwise use cluster zero. A failed
 preallocation preserves the previous file rather than deleting it first.
 Close checks that changes to size stay within the allocated block count
-and that the entry still refers to the same file. FAT32, noncontiguous
-streams, dirty cluster buffers, and ATA writes remain pending.
+and that the entry still refers to the same file. FAT32 `FOpen` and
+`FBlkRead` follow allocation chains for reads, including seek and next-block
+operations. An explicit contiguous read requires the `.C` extension; the
+implementation still checks the actual FAT chain to avoid reading unrelated
+sectors. The current reader revalidates and traverses chains on each call;
+it does not reproduce the reference's `FSetClus` cache fields or dirty
+cluster-buffer behavior. FAT32 mutations, ATA writes, and write streams
+remain pending.
 
 `Kernel/BlkDev/DskCopy.cpp` follows `CopySingleZ` and `CopySingle` in
 `DskCopy.HC`. Equal filename attributes select the raw block-stream path
@@ -636,7 +673,7 @@ the reference does despite its files-only API comment. A same-drive
 destination inside the resolved source directory is rejected. `ScanFlags`
 in `Kernel/StrB.cpp` uses the file utility flag list from `KDefine.cpp`.
 Read-only devices are refused before mutation. Writable RAM RedSea is the
-implemented destination; ATA and FAT32 changes are pending. Error paths,
+implemented destination; ATA and FAT32 writes are pending. Error paths,
 resident-cache deletion behavior, and restoring a deleted current
 directory are not yet fully matched to TempleOS.
 

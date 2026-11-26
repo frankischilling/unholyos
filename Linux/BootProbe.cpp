@@ -1434,6 +1434,9 @@ void BootProbe()
   SerialPutS("\r\n");
   if (adam_task->cur_dv) {
     BootDVDReport(*adam_task->cur_dv);
+    if (MountedDrive('C'))
+      BootFileProgramReport(*adam_task->cur_dv,"/Fat32ReadProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv,"/Fat32RejectProbe.HC");
     BootStartupReport(*adam_task->cur_dv);
     BootLexReport(*adam_task->cur_dv);
     BootDirectiveReport(*adam_task->cur_dv);
