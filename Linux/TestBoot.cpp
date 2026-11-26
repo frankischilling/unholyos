@@ -4155,8 +4155,10 @@ static void TestBoot(const char *qemu, const fs::path &iso,
 int main(int argc, char **argv)
 {
   if (argc==5 && (std::string_view(argv[1])=="--fat32-write" ||
-                  std::string_view(argv[1])=="--fat32-stream")) {
+                  std::string_view(argv[1])=="--fat32-stream" ||
+                  std::string_view(argv[1])=="--fat32-tree")) {
     bool stream=std::string_view(argv[1])=="--fat32-stream";
+    bool tree=std::string_view(argv[1])=="--fat32-tree";
     char path[]="/tmp/unholyos-fat32-write-XXXXXX";
     if (!mkdtemp(path)) return 1;
     fs::path dir=path,disk=dir/"owned.img";
@@ -4172,7 +4174,32 @@ int main(int argc, char **argv)
         CMonitor vm(argv[2],argv[3],run,"pc","512",false,disk,true);
         vm.Connect();
         auto output=vm.Boot(run/"serial.log");
-        if (stream)
+        if (tree)
+          CheckProgramOutput(output,"/Fat32TreeProbe.HC",
+              pass?"FAT32 persisted tree\nFAT32 tree probe 3F\n":
+                   "Make Directory:C:/OPS\nMake Directory:C:/OPS/SUB\n"
+                   "Make Directory:C:/OPS/SUB/DEEP\nMake Directory:C:/OPS/EMPTY\n"
+                   "Make Directory:C:/PICK\nCopying C:/OPS/A.TXT to C:/PICK/A.TXT\n"
+                   "Copying C:/PICK/A.TXT to C:/PICK/R.TXT\nDel A.TXT\n"
+                   "Make Directory:C:/CLONE/EMPTY\nMake Directory:C:/CLONE/SUB\n"
+                   "Make Directory:C:/CLONE/SUB/DEEP\n"
+                   "Copying C:/OPS/SUB/DEEP/D.TXT to C:/CLONE/SUB/DEEP/D.TXT\n"
+                   "Copying C:/OPS/SUB/E.BIN.Z to C:/CLONE/SUB/E.BIN.Z\n"
+                   "Copying C:/OPS/SUB/C.TXT to C:/CLONE/SUB/C.TXT\n"
+                   "Copying C:/OPS/B.BIN to C:/CLONE/B.BIN\n"
+                   "Copying C:/OPS/A.TXT to C:/CLONE/A.TXT\n"
+                   "Make Directory:C:/TXT/EMPTY\nMake Directory:C:/TXT/SUB\n"
+                   "Make Directory:C:/TXT/SUB/DEEP\n"
+                   "Copying C:/OPS/SUB/DEEP/D.TXT to C:/TXT/SUB/DEEP/D.TXT\n"
+                   "Copying C:/OPS/SUB/C.TXT to C:/TXT/SUB/C.TXT\n"
+                   "Copying C:/OPS/A.TXT to C:/TXT/A.TXT\n"
+                   "Del D.TXT\nDel C.TXT\nDel DEEP\nDel E.BIN.Z\nDel EMPTY\n"
+                   "Del SUB\nDel B.BIN\nDel CLONE\nDel D.TXT\nDel DEEP\n"
+                   "Del C.TXT\nDel EMPTY\nDel SUB\nDel A.TXT\nDel TXT\n"
+                   "Del R.TXT\nDel PICK\nDel D.TXT\nDel DEEP\nDel C.TXT\n"
+                   "Del E.BIN.Z\nDel SUB\nDel EMPTY\nDel A.TXT\nDel B.BIN\nDel OPS\n"
+                   "FAT32 tree mutation FF\nFAT32 tree probe 3F\n",'1');
+        else if (stream)
           CheckProgramOutput(output,"/Fat32StreamProbe.HC",
               pass?"FAT32 persisted streams\nFAT32 stream probe 3F\n":
                    "Copying C:/ZIP.BIN.Z to C:/ZIP2.BIN.Z\n"
@@ -4188,6 +4215,16 @@ int main(int argc, char **argv)
                          actual.begin()+fat2),"FAT32 mirrors differ");
         Check(std::equal(actual.begin(),actual.begin()+2049*512,original.begin()),
               "FAT32 changed MBR or boot sector");
+        if (tree) {
+          for (size_t c=0;c<fat_bytes/4;c++) {
+            auto link=ReadLE(original,fat1+c*4,4);
+            if (c==19) link=21;
+            if (c==20 || c==22) link=0x0FFFFFFF;
+            if (c==21) link=22;
+            Check(ReadLE(actual,fat1+c*4,4)==link,
+                  "FAT32 tree leaked clusters or changed existing chains");
+          }
+        }
         if (pass) Check(actual==expected,"Read-only reboot changed FAT32 bytes");
         else {
           Check(actual!=original,"FAT32 mutations did not reach disk");
@@ -4195,7 +4232,8 @@ int main(int argc, char **argv)
         }
       }
       Check(FileRead(argv[4])==original,"Original FAT32 fixture was modified");
-      std::cout<<(stream?"Verified FAT32 buffered streams, growth, copy and cold reboot\n":
+      std::cout<<(tree?"Verified FAT32 fragmented stream, recursive file trees and reclamation\n":
+                  stream?"Verified FAT32 buffered streams, growth, copy and cold reboot\n":
                          "Verified FAT32 file and directory mutations, mirrored FATs and cold reboot\n");
       fs::remove_all(dir);
       return 0;
