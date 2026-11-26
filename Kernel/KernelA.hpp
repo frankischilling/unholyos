@@ -390,7 +390,7 @@ static_assert(sizeof(CBGR48) == 8 && offsetof(CBGR48, b) == 0 &&
               offsetof(CBGR48, g) == 2 && offsetof(CBGR48, r) == 4 &&
               offsetof(CBGR48, pad) == 6);
 
-constexpr uint8_t TRANSPARENT = 0xFF, COLOR_MONO = 0xFF;
+constexpr uint8_t TRANSPARENT = 0xFF, COLOR_INVALID = 16, COLOR_MONO = 0xFF;
 constexpr uint8_t ROPB_EQU = 0, ROPB_XOR = 1, ROPB_COLLISION = 2, ROPB_MONO = 3,
                   ROPBF_DITHER = 0x40, ROPBF_PROBABILITY_DITHER = 0x80;
 constexpr uint32_t ROPF_HALF_RANGE_COLOR = 0x1000, ROPF_TWO_SIDED = 0x2000,

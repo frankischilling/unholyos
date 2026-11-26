@@ -592,6 +592,7 @@ static void BootRasterReport(const CDrv &dv)
   BootFileProgramReport(dv, "/Blot3Probe.HC");
   BootFileProgramReport(dv, "/DepthSpansProbe.HC");
   BootFileProgramReport(dv, "/MatrixProbe.HC");
+  BootFileProgramReport(dv, "/PenProbe.HC");
   SerialPutS("UnholyOS: raster context ");
   SerialPutHex(reinterpret_cast<uintptr_t>(gr.dc->body));
   SerialPutS("\r\n");

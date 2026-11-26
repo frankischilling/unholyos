@@ -892,7 +892,7 @@ static bool CmpDCData(CHashTable *table)
     const char *name;
     CHashClass *record, *type;
     size_t offset;
-    size_t count = 0;
+    size_t count = 0, inner_count = 0;
   } members[]{
       {"color", color16, u8, offsetof(CColorROPU16, color)},
       {"rop", color16, u8, offsetof(CColorROPU16, rop)},
@@ -958,6 +958,18 @@ static bool CmpDCData(CHashTable *table)
       {"pan_text_x", glbl, i64, offsetof(CGrGlbls, pan_text_x)},
       {"pan_text_y", glbl, i64, offsetof(CGrGlbls, pan_text_y)},
       {"win_z_buf", glbl, FindType("U16",table) + 1, offsetof(CGrGlbls, win_z_buf)},
+      {"pen_brushes", glbl, dc + 1, offsetof(CGrGlbls, pen_brushes),
+       GR_PEN_BRUSHES_NUM},
+      {"collision_pen_brushes", glbl, dc + 1,
+       offsetof(CGrGlbls, collision_pen_brushes), GR_PEN_BRUSHES_NUM},
+      {"even_pen_brushes", glbl, dc + 1, offsetof(CGrGlbls, even_pen_brushes),
+       GR_PEN_BRUSHES_NUM},
+      {"odd_pen_brushes", glbl, dc + 1, offsetof(CGrGlbls, odd_pen_brushes),
+       GR_PEN_BRUSHES_NUM},
+      {"circle_lo", glbl, FindType("I8", table), offsetof(CGrGlbls, circle_lo),
+       GR_PEN_BRUSHES_NUM, GR_PEN_BRUSHES_NUM},
+      {"circle_hi", glbl, FindType("I8", table), offsetof(CGrGlbls, circle_hi),
+       GR_PEN_BRUSHES_NUM, GR_PEN_BRUSHES_NUM},
       {"scrn_zoom", glbl, i64, offsetof(CGrGlbls, scrn_zoom)},
       {"sx", glbl, i64, offsetof(CGrGlbls, sx)},
       {"sy", glbl, i64, offsetof(CGrGlbls, sy)},
@@ -983,8 +995,18 @@ static bool CmpDCData(CHashTable *table)
       axis->cnt = member.count;
       axis->total_cnt = 1;
       entry->dim.next = axis;
-      entry->dim.total_cnt = member.count;
-      entry->size = member.type->size * member.count;
+      if (member.inner_count) {
+        auto *inner =
+            reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+        if (!inner)
+          return false;
+        inner->cnt = member.inner_count;
+        inner->total_cnt = 1;
+        axis->next = inner;
+        axis->total_cnt = member.inner_count;
+      }
+      entry->dim.total_cnt = member.count * axis->total_cnt;
+      entry->size = member.type->size * entry->dim.total_cnt;
     }
   }
   constexpr struct
@@ -1246,6 +1268,13 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"dc", DCPtr, true}, {"left", I64Ptr}, {"top", I64Ptr}, {"right", I64Ptr},
         {"bottom", I64Ptr}, {"width", I64, true}, {"height", I64, true}}},
       {"GrPlot", Bool, FF_RET1, {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}}},
+      {"GrFillCircle", I64, FF_RET1,
+       {{"dc", DCPtr, true}, {"cx", I64}, {"cy", I64}, {"z", I64, true},
+        {"diameter", I64}}},
+      {"GrPlot3B", Bool, FF_RET1,
+       {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}, {"z", I64}}},
+      {"GrPlot3", Bool, FF_RET1,
+       {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}, {"z", I64}}},
       {"SpriteSize", I64, FF_RET1, {{"elems", U8Ptr}}},
       {"Sprite3", U0, FF_RET1,
        {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}, {"z", I64},
@@ -1286,6 +1315,11 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"GrLine", Bool, FF_RET1,
        {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"x2", I64},
         {"y2", I64}, {"step", I64, true, 1}, {"start", I64, true}}},
+      {"GrLine3", Bool, FF_RET1,
+       {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"z1", I64},
+        {"x2", I64}, {"y2", I64}, {"z2", I64}, {"step", I64, true, 1},
+        {"start", I64, true}}},
+      {"DCThickScale", U0, FF_RET1, {{"dc", DCPtr, true}}},
       {"ClipLine", Bool, FF_RET1,
        {{"_x1", I64Ptr}, {"_y1", I64Ptr}, {"_x2", I64Ptr}, {"_y2", I64Ptr},
         {"left", I64}, {"top", I64}, {"right", I64}, {"bottom", I64}}},
@@ -1576,14 +1610,21 @@ static bool CmpFillHash(CHashTable *table)
     const char *name, *data;
   } defines[]{
       {"NULL", "0"}, {"TRUE", "1"}, {"FALSE", "0"}, {"ON", "1"}, {"OFF", "0"},
+      {"I64_MAX", "0x7FFFFFFFFFFFFFFF"},
       {"BLACK","0"}, {"BLUE","1"}, {"GREEN","2"}, {"CYAN","3"},
       {"RED","4"}, {"PURPLE","5"}, {"BROWN","6"}, {"LTGRAY","7"},
       {"DKGRAY","8"}, {"LTBLUE","9"}, {"LTGREEN","10"}, {"LTCYAN","11"},
       {"LTRED","12"}, {"LTPURPLE","13"}, {"YELLOW","14"}, {"WHITE","15"},
       {"COLORS_NUM","16"},
-      {"TRANSPARENT","0xFF"}, {"COLOR_MONO","0xFF"},
+      {"TRANSPARENT","0xFF"}, {"COLOR_INVALID","16"}, {"COLOR_MONO","0xFF"},
       {"\xE3", "(0x400921FB54442D18(F64))"},
       {"GR_WIDTH","640"}, {"GR_HEIGHT","480"}, {"GR_SCALE","(1<<32)"},
+      {"GR_PEN_BRUSHES_NUM","64"},
+      {"SPT_END","0"}, {"SPT_COLOR","1"}, {"SPT_DITHER_COLOR","2"},
+      {"SPT_THICK","3"}, {"SPT_PLANAR_SYMMETRY","4"}, {"SPT_TRANSFORM_ON","5"},
+      {"SPT_TRANSFORM_OFF","6"}, {"SPT_SHIFT","7"}, {"SPT_PT","8"},
+      {"SPT_POLYPT","9"}, {"SPT_LINE","10"}, {"SPT_POLYLINE","11"},
+      {"SPT_RECT","12"}, {"SPT_BITMAP","23"},
       {"TEXT_COLS","80"}, {"TEXT_ROWS","60"}, {"TASKf_NONTIMER_RAND","14"},
       {"DCF_COMPRESSED","1"}, {"DCF_PALETTE","2"}, {"DCF_NO_TRANSPARENTS","4"},
       {"DCF_TRANSFORMATION","0x100"}, {"DCF_SYMMETRY","0x200"},

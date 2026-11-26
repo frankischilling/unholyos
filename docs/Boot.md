@@ -483,6 +483,17 @@ and UnholyOS with QEMU 9.2.0, PC, `qemu64`, and 512 MiB. The boot suite
 checks those lines at each tested RAM size and after booting the ISO
 built in the guest.
 
+## Round pens and 3D lines
+
+`PenProbe.HC` checks all pen masks and circle span tables, clipped
+circles, dither, collision counts, and depth-buffered thick lines.
+It also exercises reflected and stepped strokes, custom brushes,
+and packed sprite shapes under a scaled transform. The same HolyC
+source produced nine matching trace lines on pinned TempleOS and
+UnholyOS with QEMU 9.2.0, PC, `qemu64`, and 512 MiB. The boot suite
+checks them on the startup-test ISO and on the ISO rebuilt from it
+inside the guest.
+
 ## Rotating polygons
 
 Both boot discs include Terry A. Davis's unchanged

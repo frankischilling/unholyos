@@ -49,6 +49,7 @@ GLOBAL RandU32HC,RandI64HC,RandU64HC,RandHC
 GLOBAL SeedHC,IsPixCovered0HC,GrPlot0HC,GrPeek0HC
 GLOBAL GrBlotHC,GrRectHC,GrRectBHC,GrClampHC
 GLOBAL GrPlotHC,GrPeekHC,GrLineHC,ClipLineHC
+GLOBAL GrFillCircleHC,GrPlot3BHC,GrPlot3HC,GrLine3HC,DCThickScaleHC
 GLOBAL SpriteSizeHC,Sprite3HC,Sprite3BHC,DocSpriteHC,SpriteHC
 GLOBAL GrBlot3HC,DCSymmetry3SetHC,DCReflectHC
 GLOBAL GrHLineHC,GrVLineHC,GrFillTri0HC,GrFillPoly3HC,GrRect3HC
@@ -81,6 +82,7 @@ EXTERN RandU32Cpp,RandI64Cpp,RandU64Cpp,RandCpp
 EXTERN SeedCpp,IsPixCovered0Cpp,GrPlot0Cpp,GrPeek0Cpp
 EXTERN GrBlotCpp,GrRectCpp,GrRectBCpp,GrClampCpp
 EXTERN GrPlotCpp,GrPeekCpp,GrLineCpp,ClipLineCpp
+EXTERN GrFillCircleCpp,GrPlot3BCpp,GrPlot3Cpp,GrLine3Cpp,DCThickScaleCpp
 EXTERN SpriteSizeCpp,Sprite3Cpp,Sprite3BCpp,DocSpriteCpp,SpriteCpp
 EXTERN GrBlot3Cpp,DCSymmetry3SetCpp,DCReflectCpp
 EXTERN GrHLineCpp,GrVLineCpp,GrFillTri0Cpp,GrFillPoly3Cpp,GrRect3Cpp
@@ -171,7 +173,8 @@ BITS 64
 	POP	RBP
 %endmacro
 
-%macro HOLYC_CPP 3
+; The optional fourth argument widens a SysV Bool return for HolyC.
+%macro HOLYC_CPP 3-4 0
 %1:
 	HC_FRAME_ENTER
 %if %3>=1
@@ -193,6 +196,9 @@ BITS 64
 	MOV	R9,[RBP+56]
 %endif
 	HC_FRAME_CALL %2,%3
+%if %4
+	MOVZX	EAX,AL
+%endif
 	RET	%3*8
 %endmacro
 
@@ -273,6 +279,9 @@ HOLYC_CPP GrRectHC,GrRectCpp,5
 HOLYC_CPP GrRectBHC,GrRectBCpp,5
 HOLYC_CPP GrClampHC,GrClampCpp,7
 HOLYC_CPP GrPlotHC,GrPlotCpp,3
+HOLYC_CPP GrFillCircleHC,GrFillCircleCpp,5
+HOLYC_CPP GrPlot3BHC,GrPlot3BCpp,4,1
+HOLYC_CPP GrPlot3HC,GrPlot3Cpp,4,1
 HOLYC_CPP SpriteSizeHC,SpriteSizeCpp,1
 HOLYC_CPP Sprite3HC,Sprite3Cpp,6
 HOLYC_CPP Sprite3BHC,Sprite3BCpp,5
@@ -288,6 +297,8 @@ HOLYC_CPP DocSpriteHC,DocSpriteCpp,3
 HOLYC_CPP SpriteHC,SpriteCpp,2
 HOLYC_CPP GrPeekHC,GrPeekCpp,3
 HOLYC_CPP GrLineHC,GrLineCpp,7
+HOLYC_CPP GrLine3HC,GrLine3Cpp,9,1
+HOLYC_CPP DCThickScaleHC,DCThickScaleCpp,1
 HOLYC_CPP ClipLineHC,ClipLineCpp,8
 HOLYC_CPP Mat4x4MulXYZHC,Mat4x4MulXYZCpp,4
 HOLYC_CPP DCTransformHC,DCTransformCpp,4

@@ -36,6 +36,11 @@ static_assert(sizeof(CGrGlbls) == 10507 && offsetof(CGrGlbls, dc) == 24 &&
               offsetof(CGrGlbls, fp_draw_ms) == 144 &&
               offsetof(CGrGlbls, fp_draw_grab_ms) == 152 &&
               offsetof(CGrGlbls, pen_brushes) == 168 &&
+              offsetof(CGrGlbls, collision_pen_brushes) == 680 &&
+              offsetof(CGrGlbls, even_pen_brushes) == 1192 &&
+              offsetof(CGrGlbls, odd_pen_brushes) == 1704 &&
+              offsetof(CGrGlbls, circle_lo) == 2216 &&
+              offsetof(CGrGlbls, circle_hi) == 6312 &&
               offsetof(CGrGlbls, scrn_zoom) == 10480);
 
 extern CGrGlbls gr;

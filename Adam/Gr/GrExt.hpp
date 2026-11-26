@@ -17,11 +17,19 @@ extern "C" uint64_t IsPixCovered0Cpp(CTask *task, int64_t x, int64_t y);
 extern "C" uint64_t GrPlot0Cpp(CDC *dc, int64_t x, int64_t y);
 extern "C" uint64_t GrPlotCpp(CDC *dc, int64_t x, int64_t y);
 bool GrPlot1(CDC *dc, int64_t x, int64_t y);
+void GrNearest(CDC *dc, int64_t x, int64_t y);
+void GrExtents(CDC *dc, int64_t left, int64_t top, int64_t right,
+               int64_t bottom);
+extern "C" bool GrPlot3BCpp(CDC *dc, int64_t x, int64_t y, int64_t z);
+extern "C" bool GrPlot3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z);
+extern "C" int64_t GrFillCircleCpp(CDC *dc, int64_t x, int64_t y, int64_t z,
+                                   int64_t diameter);
 extern "C" int64_t GrPeekCpp(CDC *dc, int64_t x, int64_t y);
 extern "C" int64_t GrBlot3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z,
                               CDC *img);
 extern "C" int64_t *Mat4x4IdentEquCpp(int64_t *r);
 void DCTransformPoint(CDC &dc, CD3I64 &p);
+extern "C" void DCThickScaleCpp(CDC *dc);
 extern "C" void DCReflectCpp(CDC *dc, int64_t *x, int64_t *y, int64_t *z);
 extern "C" uint64_t DCSymmetry3SetCpp(CDC *dc, int64_t x1, int64_t y1,
                                       int64_t z1, int64_t x2, int64_t y2,
@@ -52,6 +60,20 @@ extern "C" void DCBlotColor4(uint8_t *dst, const uint8_t *src, uint8_t *cache,
                              size_t groups);
 extern "C" uint64_t GrLineCpp(CDC *dc, int64_t x1, int64_t y1, int64_t x2,
                               int64_t y2, int64_t step, int64_t start);
+extern "C" bool GrLine3Cpp(CDC *dc, int64_t x1, int64_t y1, int64_t z1,
+                           int64_t x2, int64_t y2, int64_t z2, int64_t step,
+                           int64_t start);
+
+inline uint64_t AbsI64(int64_t n)
+{
+  return n < 0 ? -static_cast<uint64_t>(n) : n;
+}
+
+inline int64_t GrFixed32(int64_t n)
+{
+  return static_cast<uint64_t>(n) << 32;
+}
+
 using GrLinePlotFn = bool (*)(CDC *dc, int64_t x, int64_t y, int64_t z);
 bool Line(CDC *dc, int64_t x1, int64_t y1, int64_t z1, int64_t x2, int64_t y2,
           int64_t z2, GrLinePlotFn fp_plot, int64_t step, int64_t start);

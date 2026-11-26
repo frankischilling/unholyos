@@ -2,7 +2,7 @@
 #include "GrExt.hpp"
 #include "GrGlbls.hpp"
 
-static void GrNearest(CDC *dc, int64_t x, int64_t y)
+void GrNearest(CDC *dc, int64_t x, int64_t y)
 {
   uint64_t dx = static_cast<uint64_t>(x) - dc->cur_x;
   uint64_t dy = static_cast<uint64_t>(y) - dc->cur_y;
@@ -11,8 +11,8 @@ static void GrNearest(CDC *dc, int64_t x, int64_t y)
     dc->nearest_dist = dist;
 }
 
-static void GrExtents(CDC *dc, int64_t left, int64_t top, int64_t right,
-                      int64_t bottom)
+void GrExtents(CDC *dc, int64_t left, int64_t top, int64_t right,
+               int64_t bottom)
 {
   if (left < dc->min_x)
     dc->min_x = left;

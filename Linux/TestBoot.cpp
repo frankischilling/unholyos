@@ -1011,6 +1011,14 @@ static uint64_t VerifyGraphicsContexts(CMonitor &vm, uint64_t graphics,
           "Invalid graphics device context initialization");
     used += context_alloc[1] + matrix_alloc[1] + body_alloc[1];
   }
+  // Each diameter has four pen contexts with their own matrices and bodies.
+  for (uint64_t diameter = 0; diameter < 64; diameter++) {
+    const auto stride = (diameter + 7) & ~7ULL;
+    uint64_t body = stride * diameter + 16;
+    if (body >= 1024)
+      body = CeilDiv(body + 24, 512) * 512 - 24;
+    used += 4 * (424 + 144 + body);
+  }
   return used;
 }
 
@@ -2137,6 +2145,17 @@ constexpr std::string_view matrix_output =
     "matrix symmetry 1 0 2130900514 -3729075900 -2 17 6\n"
     "matrix refresh 1 1 1 1 1\n";
 
+constexpr std::string_view pen_output =
+    "pen tables 6B9F06DB42815298 29C67144FDAE53A0\n"
+    "pen flat 230CA4FC4A9D5ED8 400E0001\n"
+    "pen record -2 7 7 16 36\n"
+    "pen circles 122 1376 4DD4E698261C23BF\n"
+    "pen depth 30D56E30C8ED43BF 93DFD7862B827E46\n"
+    "pen collision 129 129 1297A29A79C68C91\n"
+    "pen lines 1 1 1 790FA048009D2069 598F028775D2A11A\n"
+    "pen steps 4 B689D485B6519259 36DCE5178A4AE735 700\n"
+    "pen sprite 77 4 2E999C28B3F2E0F4 2AA8A172D6B8FEB6\n";
+
 constexpr std::string_view depth_spans_output =
     "zs flat 6 6 3FADA006F427EE28\n"
     "zs depth 15 19 0 49125D7AEFFFF671 E85F2E55D1C242AE\n"
@@ -2224,6 +2243,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/Blot3Probe.HC", blot3_output, '1');
     CheckProgramOutput(boot, "/DepthSpansProbe.HC", depth_spans_output, '1');
     CheckProgramOutput(boot, "/MatrixProbe.HC", matrix_output, '1');
+    CheckProgramOutput(boot, "/PenProbe.HC", pen_output, '1');
     CheckProgramOutput(boot, "/CursorProbe.HC", cursor_output, '1');
     CheckProgramOutput(boot, "/CursorExcept.HC", "cursor exception 1\n", '1');
     CheckProgramOutput(boot, "/FunctionPtrProbe.HC", function_ptr_output, '1');
@@ -2297,6 +2317,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/Blot3Probe.HC", blot3_output, '1');
       CheckProgramOutput(output, "/DepthSpansProbe.HC", depth_spans_output, '1');
       CheckProgramOutput(output, "/MatrixProbe.HC", matrix_output, '1');
+      CheckProgramOutput(output, "/PenProbe.HC", pen_output, '1');
       CheckProgramOutput(output, "/CursorProbe.HC", cursor_output, '1');
       CheckProgramOutput(output, "/CursorExcept.HC", "cursor exception 1\n",
                          '1');

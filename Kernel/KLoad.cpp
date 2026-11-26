@@ -75,6 +75,7 @@ void RandU32HC(),RandI64HC(),RandU64HC(),RandHC();
 void SeedHC(),IsPixCovered0HC(),GrPlot0HC(),GrPeek0HC();
 void GrBlotHC(),GrRectHC(),GrRectBHC(),GrClampHC();
 void GrPlotHC(),GrPeekHC(),GrLineHC(),ClipLineHC();
+void GrFillCircleHC(),GrPlot3BHC(),GrPlot3HC(),GrLine3HC(),DCThickScaleHC();
 void SpriteSizeHC(),Sprite3HC(),Sprite3BHC(),DocSpriteHC(),SpriteHC();
 void GrBlot3HC(),DCSymmetry3SetHC(),DCReflectHC();
 void GrHLineHC(),GrVLineHC(),GrFillTri0HC(),GrFillPoly3HC(),GrRect3HC();
@@ -679,6 +680,9 @@ bool LoadKernel(CTask &task)
       {"GrRectB", reinterpret_cast<uintptr_t>(GrRectBHC)},
       {"GrClamp", reinterpret_cast<uintptr_t>(GrClampHC)},
       {"GrPlot", reinterpret_cast<uintptr_t>(GrPlotHC)},
+      {"GrFillCircle", reinterpret_cast<uintptr_t>(GrFillCircleHC)},
+      {"GrPlot3B", reinterpret_cast<uintptr_t>(GrPlot3BHC)},
+      {"GrPlot3", reinterpret_cast<uintptr_t>(GrPlot3HC)},
       {"SpriteSize", reinterpret_cast<uintptr_t>(SpriteSizeHC)},
       {"Sprite3", reinterpret_cast<uintptr_t>(Sprite3HC)},
       {"Sprite3B", reinterpret_cast<uintptr_t>(Sprite3BHC)},
@@ -694,6 +698,8 @@ bool LoadKernel(CTask &task)
       {"Sprite", reinterpret_cast<uintptr_t>(SpriteHC)},
       {"GrPeek", reinterpret_cast<uintptr_t>(GrPeekHC)},
       {"GrLine", reinterpret_cast<uintptr_t>(GrLineHC)},
+      {"GrLine3", reinterpret_cast<uintptr_t>(GrLine3HC)},
+      {"DCThickScale", reinterpret_cast<uintptr_t>(DCThickScaleHC)},
       {"ClipLine", reinterpret_cast<uintptr_t>(ClipLineHC)},
       {"Mat4x4MulXYZ", reinterpret_cast<uintptr_t>(Mat4x4MulXYZHC)},
       {"DCTransform", reinterpret_cast<uintptr_t>(DCTransformHC)},

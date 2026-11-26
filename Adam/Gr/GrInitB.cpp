@@ -1,10 +1,54 @@
 #include "../../Kernel/KernelB.hpp"
+#include "GrExt.hpp"
 #include "GrGlbls.hpp"
 
 extern "C" void DrawStdMsHC(), WinFinalUpdateHC();
 
+static void GrFreePenBrushes()
+{
+  for (unsigned i = 0; i < GR_PEN_BRUSHES_NUM; i++) {
+    DCDelCpp(gr.pen_brushes[i]);
+    DCDelCpp(gr.collision_pen_brushes[i]);
+    DCDelCpp(gr.even_pen_brushes[i]);
+    DCDelCpp(gr.odd_pen_brushes[i]);
+    gr.pen_brushes[i] = gr.collision_pen_brushes[i] = nullptr;
+    gr.even_pen_brushes[i] = gr.odd_pen_brushes[i] = nullptr;
+  }
+}
+
 static bool GrSetUpTables()
 {
+  for (int64_t i = 0; i < GR_PEN_BRUSHES_NUM; i++) {
+    auto *pen = gr.pen_brushes[i] = DCNewCpp(i, i, nullptr, false);
+    auto *collision = gr.collision_pen_brushes[i] =
+        DCNewCpp(i, i, nullptr, false);
+    auto *even = gr.even_pen_brushes[i] = DCNewCpp(i, i, nullptr, false);
+    auto *odd = gr.odd_pen_brushes[i] = DCNewCpp(i, i, nullptr, false);
+    if (!pen || !collision || !even || !odd) {
+      GrFreePenBrushes();
+      return false;
+    }
+    pen->color.c0.color = even->color.c0.color = odd->color.c0.color =
+        COLOR_MONO;
+    collision->color.c0.color = COLOR_INVALID;
+    const int64_t k = i + 1;
+    for (int64_t y = 1; y < k; y++) {
+      int64_t dy = y * 2 - k;
+      for (int64_t x = 1; x < k; x++) {
+        int64_t dx = x * 2 - k;
+        if (dx * dx + dy * dy < k * k) {
+          int64_t offset = x - 1 - (i >> 1);
+          if (offset < gr.circle_lo[i][i - y])
+            gr.circle_lo[i][i - y] = offset;
+          if (offset > gr.circle_hi[i][i - y])
+            gr.circle_hi[i][i - y] = offset;
+          GrPlot0Cpp(pen, x - 1, y - 1);
+          GrPlot0Cpp(collision, x - 1, y - 1);
+          GrPlot0Cpp(((x ^ y) & 1) ? odd : even, x - 1, y - 1);
+        }
+      }
+    }
+  }
   for (unsigned i = 1; i <= GR_SCRN_ZOOM_MAX; i++) {
     auto *dst = MAllocCpp(256 * i, nullptr);
     if (!dst) {
@@ -12,6 +56,7 @@ static bool GrSetUpTables()
         Free(gr.scrn_zoom_tables[j]);
         gr.scrn_zoom_tables[j] = nullptr;
       }
+      GrFreePenBrushes();
       return false;
     }
     gr.scrn_zoom_tables[i] = dst;
