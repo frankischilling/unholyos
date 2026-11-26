@@ -3,7 +3,8 @@ GLOBAL _MEMCPY,_MEMSET,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_CLAMP_I64
 GLOBAL memcpy
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
-GLOBAL Str2I64HC
+GLOBAL Str2I64HC,Str2DateHC
+GLOBAL GetI64HC,GetF64HC,GetDateHC
 GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
 GLOBAL MemberMetaDataHC,MemberMetaFindHC,MemberFindHC
@@ -50,6 +51,8 @@ GLOBAL MenuPopHC
 GLOBAL ScanCode2KeyNameHC
 GLOBAL WinBorderHC,SettingsPushHC,SettingsPopHC
 GLOBAL DocLockHC,DocUnlockHC,DocEntryRunHC,DocBottomHC,DocClearHC,NowHC
+GLOBAL Struct2DateHC,Date2StructHC,YearStartDateHC,DayOfWeekHC
+GLOBAL FirstDayOfMonHC,LastDayOfMonHC,FirstDayOfYearHC,LastDayOfYearHC
 GLOBAL DocTermNewHC,DocGetKeyHC,DocScanLineHC,GetStrHC,GetSHC,UserCmdLineHC
 GLOBAL TextCharHC,TextLenStrHC,TextLenAttrStrHC,TextLenAttrHC,TextPrintHC
 GLOBAL TextRectHC,TextBorderHC,WinZBufUpdateHC
@@ -136,7 +139,8 @@ EXTERN QSortCpp,QSortI64Cpp,LstMatchCpp
 EXTERN FileReadCpp,FileNameAbsCpp,DirNameAbsCpp,DirCurCpp,DirFileCpp,ExtChgCpp,ExtDftCpp
 EXTERN CdCpp,IsDirCpp,DirCpp,PutDirLinkCpp,FilesFindCpp,FileFindCpp,FilesFindMatchCpp
 EXTERN DirEntryDelCpp,DirEntryDel2Cpp,DirTreeDelCpp,DirTreeDel2Cpp
-EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp
+EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp,Str2DateCpp
+EXTERN GetI64Cpp,GetF64Cpp,GetDateCpp
 EXTERN FileWriteCpp,BlkDevNextFreeSlotCpp,BlkDevAddCpp,Let2DrvCpp,BlkReadCpp,BlkWriteCpp
 EXTERN FSizeCpp,FOpenCpp,FCloseCpp,FBlkReadCpp,FBlkWriteCpp
 EXTERN RedSeaISOCpp
@@ -172,6 +176,8 @@ EXTERN MenuPopCpp
 EXTERN ScanCode2KeyNameCpp
 EXTERN WinBorderCpp,SettingsPushCpp,SettingsPopCpp
 EXTERN DocLockCpp,DocUnlockCpp,DocEntryRunCpp,DocBottomCpp,DocClearCpp,NowCpp
+EXTERN Struct2DateCpp,Date2StructCpp,YearStartDateCpp,DayOfWeekCpp
+EXTERN FirstDayOfMonCpp,LastDayOfMonCpp,FirstDayOfYearCpp,LastDayOfYearCpp
 EXTERN DocTermNewCpp,DocGetKeyCpp,DocScanLineCpp,GetStrCpp,GetSCpp,UserCmdLineCpp
 EXTERN TextCharCpp,TextLenStrCpp,TextLenAttrStrCpp,TextLenAttrCpp,TextPrintCpp
 EXTERN TextRectCpp,TextBorderCpp,WinZBufUpdateCpp
@@ -490,6 +496,7 @@ HOLYC_CPP DirTreeDel2HC,DirTreeDel2Cpp,1
 HOLYC_CPP DirContextNewHC,DirContextNewCpp,4
 HOLYC_CPP DirContextDelHC,DirContextDelCpp,2
 HOLYC_CPP Str2I64HC,Str2I64Cpp,3
+HOLYC_CPP Str2DateHC,Str2DateCpp,1
 HOLYC_CPP FileWriteHC,FileWriteCpp,5
 HOLYC_CPP FSizeHC,FSizeCpp,1
 HOLYC_CPP FOpenHC,FOpenCpp,3
@@ -585,6 +592,9 @@ HOLYC_CPP DocTermNewHC,DocTermNewCpp,0
 HOLYC_CPP DocGetKeyHC,DocGetKeyCpp,1
 HOLYC_CPP DocScanLineHC,DocScanLineCpp,4
 HOLYC_CPP GetStrHC,GetStrCpp,3
+HOLYC_CPP GetI64HC,GetI64Cpp,4
+HOLYC_CPP GetF64HC,GetF64Cpp,4
+HOLYC_CPP GetDateHC,GetDateCpp,4
 HOLYC_CPP GetSHC,GetSCpp,3
 HOLYC_CPP DocLockHC,DocLockCpp,1
 HOLYC_CPP DocUnlockHC,DocUnlockCpp,1
@@ -592,6 +602,14 @@ HOLYC_CPP DocEntryRunHC,DocEntryRunCpp,4
 HOLYC_CPP DocBottomHC,DocBottomCpp,1
 HOLYC_CPP DocClearHC,DocClearCpp,2
 HOLYC_CPP NowHC,NowCpp,0
+HOLYC_CPP Struct2DateHC,Struct2DateCpp,1
+HOLYC_CPP Date2StructHC,Date2StructCpp,2
+HOLYC_CPP YearStartDateHC,YearStartDateCpp,1
+HOLYC_CPP DayOfWeekHC,DayOfWeekCpp,1
+HOLYC_CPP FirstDayOfMonHC,FirstDayOfMonCpp,1
+HOLYC_CPP LastDayOfMonHC,LastDayOfMonCpp,1
+HOLYC_CPP FirstDayOfYearHC,FirstDayOfYearCpp,1
+HOLYC_CPP LastDayOfYearHC,LastDayOfYearCpp,1
 HOLYC_CPP DocNewHC,DocNewCpp,2
 HOLYC_CPP DocDelHC,DocDelCpp,1
 HOLYC_CPP DocLoadHC,DocLoadCpp,3

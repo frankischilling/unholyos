@@ -21,6 +21,16 @@ struct CDate
 
 static_assert(sizeof(CDate) == 8 && offsetof(CDate, date) == 4);
 
+inline uint64_t DateBits(CDate cdt)
+{
+  return (uint64_t(uint32_t(cdt.date)) << 32) | cdt.time;
+}
+
+inline CDate DateFromBits(uint64_t bits)
+{
+  return {uint32_t(bits), int32_t(bits >> 32)};
+}
+
 struct CDateStruct
 {
   uint8_t sec10000, sec100, sec, min, hour, day_of_week, day_of_mon, mon;

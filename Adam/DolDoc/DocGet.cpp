@@ -1,4 +1,7 @@
 #include "DolDoc.hpp"
+#include "../../Compiler/CompilerA.hpp"
+
+extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 
 extern "C" int64_t DocGetKeyCpp(int64_t *sc)
 {
@@ -118,4 +121,86 @@ char *DocGetStr2(int64_t flags)
   }
   DocPutS(*doc, "$PT$$FG$$BG$", 12);
   return res;
+}
+
+static CExeResult PromptExpression(const char *fmt, const char *st)
+{
+  uint64_t arg=reinterpret_cast<uintptr_t>(st);
+  auto *src=MStrPrintCpp(fmt,1,&arg);
+  if (!src)
+    return {};
+  auto res=ExePutS(src,nullptr,0);
+  Free(src);
+  return res;
+}
+
+extern "C" int64_t GetI64Cpp(const char *msg,int64_t dft,int64_t lo,int64_t hi)
+{
+  for (;;) {
+    if (msg) {
+      uint64_t arg=dft;
+      PrintCpp(msg,1,&arg);
+    }
+    auto *st=GetStrCpp(nullptr,nullptr,0);
+    if (!st || !*st) {
+      Free(st);
+      return dft;
+    }
+    auto ans=PromptExpression("ToI64(%s);",st);
+    Free(st);
+    auto res=static_cast<int64_t>(ans.value);
+    if (ans.okay && lo<=res && res<=hi)
+      return res;
+  }
+}
+
+// F64 parameters are passed as their 64-bit representation by HolyC.
+static bool F64LE(uint64_t a,uint64_t b)
+{
+  constexpr uint64_t sign=1ULL<<63,inf=0x7FF0000000000000ULL;
+  if ((a&~sign)>inf || (b&~sign)>inf)
+    return false;
+  if (!((a|b)&~sign))
+    return true;
+  if ((a^b)&sign)
+    return a&sign;
+  return a&sign ? a>=b : a<=b;
+}
+
+extern "C" uint64_t GetF64Cpp(const char *msg,uint64_t dft,uint64_t lo,uint64_t hi)
+{
+  for (;;) {
+    if (msg)
+      PrintCpp(msg,1,&dft);
+    auto *st=GetStrCpp(nullptr,nullptr,0);
+    if (!st || !*st) {
+      Free(st);
+      return dft;
+    }
+    auto ans=PromptExpression("ToF64(%s);",st);
+    Free(st);
+    if (ans.okay && F64LE(lo,ans.value) && F64LE(ans.value,hi))
+      return ans.value;
+  }
+}
+
+extern "C" int64_t GetDateCpp(const char *msg,int64_t dft,int64_t lo,int64_t hi)
+{
+  if (dft==INT64_MIN)
+    dft=Now();
+  for (;;) {
+    if (msg) {
+      uint64_t args[]{uint64_t(dft),uint64_t(dft)};
+      PrintCpp(msg,2,args);
+    }
+    auto *st=GetStrCpp(nullptr,nullptr,0);
+    if (!st || !*st) {
+      Free(st);
+      return dft;
+    }
+    auto res=static_cast<int64_t>(Str2DateCpp(st));
+    Free(st);
+    if (lo<=res && res<=hi)
+      return res;
+  }
 }

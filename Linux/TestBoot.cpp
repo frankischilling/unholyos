@@ -2915,6 +2915,67 @@ static void DriveFontText(CMonitor &vm,const fs::path &serial)
   vm.WaitSerial(serial,"font restored 1 1\n");
 }
 
+static void DrivePrompts(CMonitor &vm,const fs::path &serial)
+{
+  vm.ResetDeadline(30s);
+  auto retry=[&](std::string_view marker) {
+    auto deadline=Clock::now()+5s;
+    do {
+      auto output=ReadText(serial);
+      auto first=output.find(marker);
+      if (first!=std::string::npos && output.find(marker,first+marker.size())!=std::string::npos)
+        return;
+      std::this_thread::sleep_for(50ms);
+    } while (Clock::now()<deadline);
+    throw std::runtime_error("Prompt did not retry: "+std::string(marker));
+  };
+  auto type=[&](std::string_view input) {
+    auto key=[&](const std::string &name) {
+      vm.Hmp("sendkey "+name+" 30");
+      std::this_thread::sleep_for(70ms);
+    };
+    for (char ch:input) {
+      switch (ch) {
+        case '+': key("shift-equal"); break;
+        case '*': key("shift-8"); break;
+        case '-': key("minus"); break;
+        case '.': key("dot"); break;
+        case '/': key("slash"); break;
+        default: key(std::string(1,ch)); break;
+      }
+    }
+    key("ret");
+  };
+  vm.WaitSerial(serial,"probe int(42):");
+  type("99");
+  retry("probe int(42):");
+  type("-3.75");
+  vm.WaitSerial(serial,"probe float(");
+  type("99");
+  retry("probe float(");
+  type("-2.5+1");
+  vm.WaitSerial(serial,"probe date(");
+  type("1/1/25");
+  retry("probe date(");
+  type("2/29/24");
+  vm.WaitSerial(serial,"Enter int expression(123):");
+  type("2+3*4");
+  vm.WaitSerial(serial,"Enter float expression(");
+  type("1.25*4");
+  vm.WaitSerial(serial,"Name (John):");
+  type("");
+  vm.WaitSerial(serial,"Date (");
+  type("2/29/24");
+  auto output=vm.WaitSerial(serial,"UnholyOS: finished /Demo/Prompt.HC, checks 0x0000000000000001\r\n");
+  for (auto expected:{"prompt conversion -3 17 42\n",
+                      "prompt dates 02/29/24 02/04/24 02/29/24 01/01/25 12/31/25\n",
+                      "probe int result -3\n","probe float result -2\n",
+                      "probe date result 02/29/24\n","Int=14\n","Float=5.00000000e0\n","Name:John\n","Date=02/29/24\n"})
+    Check(output.find(expected)!=std::string::npos,("Prompt result mismatch: "+std::string(expected)).c_str());
+  Check(output.find("UnholyOS: finished /PromptProbe.HC, checks 0x0000000000000001\r\n")!=std::string::npos,
+        "Native prompt probe failed");
+}
+
 static void CheckFontText(const std::string &output)
 {
   CheckProgramOutput(output,"/FontTextProbe.HC",
@@ -3084,6 +3145,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     DriveExceptions(rebuilt, serial);
     DriveScreen(rebuilt, serial);
     DriveFontText(rebuilt,serial);
+    DrivePrompts(rebuilt,serial);
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
     CheckProgramOutput(boot, "/RasterProbe.HC", raster_output, '1');
@@ -3119,6 +3181,11 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/ClassMeta.HC", class_meta_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.HC", last_class_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.BIN.Z", last_class_output, '1');
+    CheckProgramOutput(boot, "/DateOffsetProbe.HC",
+                       "date fraction EE4120D\n"
+                       "date local 02/29/24 00:00:00 utc B47ECC0000000\n"
+                       "date negative 02/29/24 00:00:00 utc B47ED40000000\n"
+                       "Date offset 3FF\n", '1');
     CheckProgramOutput(boot, "/DocBinLinkProbe.HC", "Doc bin links 1F\n", '1');
     CheckProgramOutput(boot, "/SpriteProbe.HC", "sprite bitmap 12546 0 0 4\n",
                        '1');
@@ -3165,6 +3232,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       DriveExceptions(vm, serial);
       DriveScreen(vm, serial);
       DriveFontText(vm,serial);
+      DrivePrompts(vm,serial);
     }
     std::string output = vm.Boot(serial);
     std::string registers = StopAtIdle(vm);
@@ -3218,6 +3286,11 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/ClassMeta.HC", class_meta_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.HC", last_class_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.BIN.Z", last_class_output, '1');
+      CheckProgramOutput(output, "/DateOffsetProbe.HC",
+                         "date fraction EE4120D\n"
+                         "date local 02/29/24 00:00:00 utc B47ECC0000000\n"
+                         "date negative 02/29/24 00:00:00 utc B47ED40000000\n"
+                         "Date offset 3FF\n", '1');
       CheckProgramOutput(output, "/DocBinLinkProbe.HC", "Doc bin links 1F\n",
                          '1');
       CheckProgramOutput(output, "/SpriteProbe.HC", "sprite bitmap 12546 0 0 4\n",
