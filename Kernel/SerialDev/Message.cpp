@@ -1,5 +1,8 @@
 #include "../KernelB.hpp"
 #include "../../Compiler/CompilerA.hpp"
+#include "../../Adam/DolDoc/DolDoc.hpp"
+
+extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 
 extern "C" void InputFilterTaskCpp()
 {
@@ -168,4 +171,62 @@ extern "C" int64_t GetCharCpp(int64_t *scan_code, uint8_t echo, uint8_t raw_curs
   if (echo)
     PutKeyCpp(ch, 0);
   return ch;
+}
+
+extern "C" int64_t GetSCpp(char *buf, int64_t size, uint8_t allow_ext)
+{
+  if (!buf || size <= 0)
+    return 0;
+  int64_t len = 0;
+  if (allow_ext) {
+    auto *st = GetStrCpp(nullptr, nullptr, 0);
+    if (st) {
+      len = StrLen(st);
+      if (len >= size)
+        len = size - 1;
+      MemCpy(buf, st, len);
+      Free(st);
+    }
+  } else {
+    while (true) {
+      const auto ch = GetCharCpp(nullptr, false, IsDbgModeCpp());
+      if (ch == '\n') {
+        PutCharsCpp(ch);
+        break;
+      }
+      if (ch == CH_BACKSPACE) {
+        if (len) {
+          --len;
+          PutCharsCpp(ch);
+        }
+      } else if (len < size - 1) {
+        buf[len++] = ch;
+        PutCharsCpp(ch);
+      }
+    }
+  }
+  buf[len] = 0;
+  return len;
+}
+
+extern "C" char *GetStrCpp(const char *msg, const char *dft, int64_t flags)
+{
+  auto *task = CurrentTask();
+  if (msg) {
+    uint64_t arg = reinterpret_cast<uintptr_t>(dft);
+    PrintCpp(msg, 1, &arg);
+  }
+  char *st;
+  if (!IsRawCpp() && DocPut())
+    st = DocGetStr2(flags);
+  else {
+    char buf[512];
+    GetSCpp(buf, sizeof(buf), false);
+    st = StrNew(buf, task->data_heap);
+  }
+  if (st && !*st && dft) {
+    Free(st);
+    st = StrNew(dft, task->data_heap);
+  }
+  return st;
 }

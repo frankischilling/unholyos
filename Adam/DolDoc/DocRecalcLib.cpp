@@ -1,5 +1,23 @@
 #include "DolDoc.hpp"
 
+bool DocDelToNum(CDoc &doc, int64_t count)
+{
+  bool removed = false;
+  for (auto *entry = doc.head.next; entry != &doc.head && count-- > 0;) {
+    auto *next = entry->next;
+    if (!(entry->de_flags & (DOCEF_HOLD | DOCEF_FILTER_SKIP))) {
+      if (entry == doc.cur_entry) {
+        doc.cur_entry = next;
+        doc.cur_col = next->min_col;
+      }
+      DocEntryDel(doc, *entry);
+      removed = true;
+    }
+    entry = next;
+  }
+  return removed;
+}
+
 void DocDelToEntry(CDoc &doc, CDocEntryBase *clear_entry, bool clear_holds)
 {
   for (auto *entry = doc.head.next; entry != &doc.head;) {

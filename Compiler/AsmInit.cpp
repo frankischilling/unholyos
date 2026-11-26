@@ -971,6 +971,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     U32,
     DocPtr,
     DocEntryPtr,
+    DocEntryPtrPtr,
     Date,
   };
   CHashClass *types[]{
@@ -985,6 +986,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("I16", table), FindType("U16", table),
       FindType("I32", table), FindType("U32", table),
       FindType("CDoc", table) + 1, FindType("CDocEntry", table) + 1,
+      FindType("CDocEntry", table) + 2,
       FindType("CDate", table),
   };
   auto *task = CurrentTask();
@@ -1077,6 +1079,14 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"DocDel", U0, FF_RET1, {{"doc", DocPtr}}},
       {"DocRecalc", Bool, FF_RET1, {{"doc", DocPtr}, {"recalc_flags", I64, true}}},
       {"DocPutKey", U0, FF_RET1, {{"doc", DocPtr}, {"ch", I64, true}, {"sc", I64, true}}},
+      {"DocTermNew", U0, FF_RET1, {}},
+      {"DocGetKey", I64, FF_RET1, {{"_sc", I64Ptr, true}}},
+      {"DocScanLine", U8Ptr, FF_RET1, {{"doc", DocPtr}, {"doc_e", DocEntryPtr},
+       {"cur_col", I64Ptr, true}, {"_do_e_end", DocEntryPtrPtr, true}}},
+      {"GetStr", U8Ptr, FF_RET1,
+       {{"msg", U8Ptr, true}, {"dft", U8Ptr, true}, {"flags", I64, true}}},
+      {"GetS", I64, FF_RET1, {{"buf", U8Ptr}, {"size", I64}, {"allow_ext", Bool, true, 1}}},
+      {"UserCmdLine", U0, FF_RET1, {{"dummy", I64, true}}},
       {"DocLock", Bool, FF_RET1, {{"doc", DocPtr}}},
       {"DocUnlock", Bool, FF_RET1, {{"doc", DocPtr}}},
       {"DocBottom", U0, FF_RET1, {{"doc", DocPtr, true}}},

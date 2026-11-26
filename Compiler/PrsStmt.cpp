@@ -1032,14 +1032,15 @@ bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
   }
   if (visibility || flags)
     return false;
-  if (cc.token == '{' || cc.token == TK_STR || cc.token == TK_CHAR_CONST ||
+  bool print = cc.token == TK_STR || cc.token == TK_CHAR_CONST;
+  if (cc.token == '{' || print ||
       keyword == KW_IF || keyword == KW_FOR || keyword == KW_WHILE ||
       keyword == KW_DO || keyword == KW_TRY) {
     CCodeCtrl coc;
     CPrsStmt ps(cc, coc);
     if (!ps.Statement(0, NO_IC))
       return false;
-    type = RT_I64;
+    type = print ? RT_U0 : RT_I64;
     machine = COCCompile(coc, NO_IC, type, nullptr, aot, &size);
     if (machine && coc.has_misc_data)
       cc.flags |= CCF_HAS_MISC_DATA;

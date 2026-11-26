@@ -863,8 +863,8 @@ constexpr uint64_t DOCF_PLAIN_TEXT = 1, DOCF_PLAIN_TEXT_TABS = 2,
                    DOCF_NO_CURSOR = 8, DOCF_CARRIAGE_RETURN = 16,
                    DOCF_DBL_DOLLARS = 32, DOCF_COLOR_NAMES = 64,
                    DOCF_BORDER_DOC = 0x100, DOCF_HIDE_CURSOR = 0x800,
-                   DOCF_DONT_HIGHLIGHT_CURSOR = 0x1000,
-                   DOCF_DONT_SHOW = 0x8000, DOCF_BREAK_UNLOCKED = 0x400000;
+                   DOCF_DONT_HIGHLIGHT_CURSOR = 0x1000, DOCF_DONT_SHOW = 0x8000,
+                   DOCF_BREAK_UNLOCKED = 0x400000, DOCF_IN_DOLLAR = 0x200000000;
 constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
                    DOCEF_DEFINE = 8, DOCEF_HTML_LINK = 16, DOCEF_LEFT_EXP = 32,
                    DOCEF_LEFT_MACRO = 64, DOCEF_RIGHT_EXP = 128,
@@ -1070,6 +1070,7 @@ struct CCmpCtrl
   CAOT *aot;
   int64_t pass, opts;
   int64_t jit_exception;
+  char *pmt_buf;
 };
 
 static_assert(sizeof(CLexFile) == 80 && offsetof(CLexFile, full_name) == 40);
@@ -1130,7 +1131,10 @@ constexpr uint32_t SCF_E0_PREFIX = 1 << 7, SCF_KEY_UP = 1 << 8,
                    SCF_KEY_DESC = 1U << 31;
 constexpr uint8_t SC_ENTER = 0x1C, SC_SHIFT = 0x2A, SC_CTRL = 0x1D,
                   SC_ALT = 0x38, SC_CAPS = 0x3A, SC_NUM = 0x45,
-                  SC_SCROLL = 0x46, SC_INS = 0x52, SC_DELETE = 0x53;
+                  SC_SCROLL = 0x46, SC_HOME = 0x47, SC_CURSOR_LEFT = 0x4B,
+                  SC_CURSOR_RIGHT = 0x4D, SC_END = 0x4F, SC_INS = 0x52,
+                  SC_DELETE = 0x53;
+constexpr int64_t GSF_SHIFT_ESC_EXIT = 1, GSF_WITH_NEW_LINE = 2;
 
 template <typename T> struct CFifo
 {

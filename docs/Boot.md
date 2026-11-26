@@ -11,6 +11,21 @@ The C++20 host tools build the RedSea image and check it against the kernel buil
 
 `make test` also builds `build/unholyos-startup-test.iso` with the original `StartOS.HC.Z`, compiler fixtures, and eleven TOSB module fixtures. The guest asks for `/StartOS.HC` through `FileRead` and reports the length and checksum of the expanded bytes. At 512 MiB, 3 GiB, and 4.5 GiB, the test scans the lexer fixtures, compiles and runs scalar HolyC expressions and functions, compiles and runs the original `Demo/Print.HC` from source, and runs the compiled modules from the RedSea DVD. `build/unholyos.iso` is the standard boot image.
 
+## HolyC terminal
+
+After startup the focused DolDoc window accepts HolyC commands. Type
+`6*7;` and press Enter to see `ans=0x0000002A=42`. Open statements
+continue on the next line. The cursor keys, Backspace, and Delete edit
+the document before the compiler reads the command. Shift+Escape closes
+the terminal task.
+
+The boot suite sends PS/2 keyboard events and checks the display text
+for the results of editing a line, entering an expression across two
+lines, recovering from a syntax error, and reading an edited string
+through `GetStr`. It repeats the commands on the ISO built in the guest.
+The standard boot starts one terminal. The reference's second terminal,
+startup documents, menus, autocomplete, and full editor are pending.
+
 ## Building a RedSea ISO in the guest
 
 `RedSeaISO` takes an output filename, a source directory, and an optional

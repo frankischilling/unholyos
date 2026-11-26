@@ -86,6 +86,7 @@ void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
 void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC(), DocPutKeyHC();
 void DocLockHC(), DocUnlockHC(), DocEntryRunHC(), DocBottomHC(), DocClearHC(), NowHC();
+void DocTermNewHC(), DocGetKeyHC(), DocScanLineHC(), GetStrHC(), GetSHC(), UserCmdLineHC();
 void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
     TextRectHC(), TextBorderHC(), WinZBufUpdateHC();
 void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
@@ -618,6 +619,7 @@ bool LoadKernel(CTask &task)
       {"Msg", reinterpret_cast<uintptr_t>(MsgHC)},
       {"JobsHndlr", reinterpret_cast<uintptr_t>(JobsHndlrHC)},
       {"SrvTaskCont", reinterpret_cast<uintptr_t>(SrvTaskContHC)},
+      {"UserCmdLine", reinterpret_cast<uintptr_t>(UserCmdLineHC)},
       {"ScanMsg", reinterpret_cast<uintptr_t>(ScanMsgHC)},
       {"FlushMsgs", reinterpret_cast<uintptr_t>(FlushMsgsHC)},
       {"GetMsg", reinterpret_cast<uintptr_t>(GetMsgHC)},
@@ -684,6 +686,8 @@ bool LoadKernel(CTask &task)
       {"ScanChar", reinterpret_cast<uintptr_t>(ScanCharHC)},
       {"ScanKey", reinterpret_cast<uintptr_t>(ScanKeyHC)},
       {"GetKey", reinterpret_cast<uintptr_t>(GetKeyHC)},
+      {"GetStr", reinterpret_cast<uintptr_t>(GetStrHC)},
+      {"GetS", reinterpret_cast<uintptr_t>(GetSHC)},
       {"GetChar", reinterpret_cast<uintptr_t>(GetCharHC)},
       {"Ona2Freq", reinterpret_cast<uintptr_t>(Ona2FreqHC)},
       {"Freq2Ona", reinterpret_cast<uintptr_t>(Freq2OnaHC)},
@@ -725,6 +729,9 @@ bool LoadKernel(CTask &task)
       {"DocBorder", reinterpret_cast<uintptr_t>(DocBorderHC)},
       {"DocRecalc", reinterpret_cast<uintptr_t>(DocRecalcHC)},
       {"DocPutKey", reinterpret_cast<uintptr_t>(DocPutKeyHC)},
+      {"DocTermNew", reinterpret_cast<uintptr_t>(DocTermNewHC)},
+      {"DocGetKey", reinterpret_cast<uintptr_t>(DocGetKeyHC)},
+      {"DocScanLine", reinterpret_cast<uintptr_t>(DocScanLineHC)},
       {"DocLock", reinterpret_cast<uintptr_t>(DocLockHC)},
       {"DocUnlock", reinterpret_cast<uintptr_t>(DocUnlockHC)},
       {"DocEntryRun", reinterpret_cast<uintptr_t>(DocEntryRunHC)},

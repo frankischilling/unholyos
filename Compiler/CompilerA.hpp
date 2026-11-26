@@ -102,12 +102,12 @@ enum CKeyword : int64_t
   KW_NOARGPOP,
 };
 
-constexpr int64_t CCF_NO_DEFINES = 0x010, CCF_IN_IF = 0x020,
-                  CCF_JUST_LOAD = 0x040, CCF_KEEP_NEW_LINES = 0x080,
-                  CCF_KEEP_DOT = 0x100, CCF_KEEP_SIGN_NUM = 0x200,
-                  CCF_KEEP_AT_SIGN = 0x400, CCF_NO_CHAR_CONST = 0x800,
-                  CCF_IN_QUOTES = 0x0000080000, CCF_EXE_BLK = 0x0000100000,
-                  CCF_HAS_MISC_DATA = 0x0000200000,
+constexpr int64_t CCF_CMD_LINE = 0x001, CCF_PMT = 0x002, CCF_NO_DEFINES = 0x010,
+                  CCF_IN_IF = 0x020, CCF_JUST_LOAD = 0x040,
+                  CCF_KEEP_NEW_LINES = 0x080, CCF_KEEP_DOT = 0x100,
+                  CCF_KEEP_SIGN_NUM = 0x200, CCF_KEEP_AT_SIGN = 0x400,
+                  CCF_NO_CHAR_CONST = 0x800, CCF_IN_QUOTES = 0x0000080000,
+                  CCF_EXE_BLK = 0x0000100000, CCF_HAS_MISC_DATA = 0x0000200000,
                   CCF_ASM_EXPRESSIONS = 0x0000800000,
                   CCF_USE_LAST_U16 = 0x0200000000,
                   CCF_LAST_WAS_DOT = 0x0400000000,
@@ -116,6 +116,7 @@ constexpr int64_t LFSF_DOC = 1, LFSF_DEFINE = 2;
 constexpr int64_t COMPILER_ERROR = 0x72656C69706D6F43; // Compiler
 constexpr int64_t OPTF_WARN_UNUSED_VAR = 1 << 0x10,
                   OPTF_WARN_HEADER_MISMATCH = 1 << 0x13;
+char *CmdLinePmt();
 
 // The caller owns the root source and filename. The lexer owns nested sources
 // and token text. The caller owns the symbol table.
