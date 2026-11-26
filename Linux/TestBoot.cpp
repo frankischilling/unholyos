@@ -2085,6 +2085,19 @@ constexpr std::string_view screen_output = "screen normal\n"
                                            "screen zoom\n"
                                            "screen restored\n";
 
+constexpr std::string_view depth_spans_output =
+    "zs flat 6 6 3FADA006F427EE28\n"
+    "zs depth 15 19 0 49125D7AEFFFF671 E85F2E55D1C242AE\n"
+    "zs extents 0 -3 -4 22 23 16\n"
+    "zs dither 9 8 9 1 2DA8FDEE696B9A4E 9B71953947B40053\n"
+    "zs window 15 15 E905D4084BB73416 343107A434F7EF32\n"
+    "zs triangle 102 88 40C64284EF01AD55 22E4F7B2E2D793F2\n"
+    "zs sweep D385EC40E7041395\n"
+    "zs polygon 63 E3124EE47CD8A137 C0C617D516576B08\n"
+    "zs mirror 61 D7C1A0C19BF3C47D 68594A1EE5D083E1\n"
+    "zs rect 52 0D3B6136E1141B70 C07EE8E956ED11A5\n"
+    "zs sprite 0D3B6136E1141B70 C07EE8E956ED11A5\n";
+
 constexpr std::string_view blot3_output =
     "b3 matrix 1 6FB24FB965721A91 9 3 12 9\n"
     "b3 depth EFC05ABCF35F18E6 4 2 12 6\n"
@@ -2157,6 +2170,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
     CheckProgramOutput(boot, "/RasterProbe.HC", raster_output, '1');
     CheckProgramOutput(boot, "/Blot3Probe.HC", blot3_output, '1');
+    CheckProgramOutput(boot, "/DepthSpansProbe.HC", depth_spans_output, '1');
     CheckProgramOutput(boot, "/CursorProbe.HC", cursor_output, '1');
     CheckProgramOutput(boot, "/CursorExcept.HC", "cursor exception 1\n", '1');
     CheckProgramOutput(boot, "/FunctionPtrProbe.HC", function_ptr_output, '1');
@@ -2228,6 +2242,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/DCProbe.HC", dc_output, '1');
       CheckProgramOutput(output, "/RasterProbe.HC", raster_output, '1');
       CheckProgramOutput(output, "/Blot3Probe.HC", blot3_output, '1');
+      CheckProgramOutput(output, "/DepthSpansProbe.HC", depth_spans_output, '1');
       CheckProgramOutput(output, "/CursorProbe.HC", cursor_output, '1');
       CheckProgramOutput(output, "/CursorExcept.HC", "cursor exception 1\n",
                          '1');

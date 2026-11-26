@@ -24,6 +24,23 @@ static void GrExtents(CDC *dc, int64_t left, int64_t top, int64_t right,
     dc->max_y = bottom;
 }
 
+static void GrWritePixel(CDC &dc, uint8_t &dst, CColorROPU16 color)
+{
+  switch (color.rop) {
+  case ROPB_EQU:
+  case ROPB_MONO:
+    dst = color.color;
+    break;
+  case ROPB_COLLISION:
+    if (dst != TRANSPARENT && dst != dc.bkcolor.c0.color)
+      dc.collision_cnt++;
+    break;
+  case ROPB_XOR:
+    dst ^= color.color;
+    break;
+  }
+}
+
 extern "C" uint64_t GrPlot0Cpp(CDC *dc, int64_t x, int64_t y)
 {
   if (!dc)
@@ -49,20 +66,7 @@ extern "C" uint64_t GrPlot0Cpp(CDC *dc, int64_t x, int64_t y)
           : (color.c1.rop & ROPBF_DITHER) && ((x ^ y) & 1))
     color.c0.color = color.c1.color;
 
-  auto &dst = dc->body[d];
-  switch (color.c0.rop) {
-  case ROPB_EQU:
-  case ROPB_MONO:
-    dst = color.c0.color;
-    break;
-  case ROPB_COLLISION:
-    if (dst != TRANSPARENT && dst != dc->bkcolor.c0.color)
-      dc->collision_cnt++;
-    break;
-  case ROPB_XOR:
-    dst ^= color.c0.color;
-    break;
-  }
+  GrWritePixel(*dc, dc->body[d], color.c0);
   return true;
 }
 
@@ -249,4 +253,131 @@ extern "C" int64_t GrRectCpp(CDC *dc, int64_t x, int64_t y, int64_t w,
     alternate = probability && RandU16Cpp() < dc->dither_probability_u16;
   }
   return res;
+}
+
+static int64_t GrSpan(CDC &dc, int64_t first, int64_t last, int64_t across,
+                      int64_t z1, int64_t z2, bool vertical)
+{
+  const bool screen = dc.flags & DCF_SCRN_BITMAP;
+  auto *task = dc.win_task;
+  if (screen) {
+    int64_t scroll = vertical ? task->scroll_y : task->scroll_x;
+    first += uint64_t(scroll);
+    last += uint64_t(scroll);
+    across += uint64_t(vertical ? task->scroll_x : task->scroll_y);
+    z1 += uint64_t(task->scroll_z);
+    z2 += uint64_t(task->scroll_z);
+  }
+  if (last < first) {
+    auto temp = first;
+    first = last;
+    last = temp;
+    temp = z1;
+    z1 = z2;
+    z2 = temp;
+  }
+  if (dc.flags & DCF_RECORD_EXTENTS) {
+    if (vertical)
+      GrExtents(&dc, across, first, across, last);
+    else
+      GrExtents(&dc, first, across, last, across);
+  }
+  if (across < 0 || last < 0)
+    return 0;
+
+  int64_t dist = uint64_t(last) - first;
+  if (dist < 0)
+    return 0;
+  int64_t dz = dist ? int64_t((uint64_t(z2) - z1) << 32) / dist : 0;
+  uint64_t z = uint64_t(z1) << 32;
+  // Advance from the unclipped start in window coordinates.
+  if (first < 0) {
+    z -= uint64_t(first) * dz;
+    first = 0;
+  }
+  int64_t limit = (vertical ? dc.height : dc.width) - 1;
+  int64_t across_limit = (vertical ? dc.width : dc.height) - 1;
+  if (screen) {
+    int64_t origin = vertical ? task->pix_top : task->pix_left;
+    first += uint64_t(origin);
+    last += uint64_t(origin);
+    across += uint64_t(vertical ? task->pix_left : task->pix_top);
+    int64_t edge = vertical ? task->pix_bottom : task->pix_right;
+    if (edge < limit)
+      limit = edge;
+    edge = vertical ? task->pix_right : task->pix_bottom;
+    if (edge < across_limit)
+      across_limit = edge;
+  }
+  if (across < 0 || across > across_limit || first > limit || last < 0)
+    return 0;
+  if (first < 0) {
+    z -= uint64_t(first) * dz;
+    first = 0;
+  }
+  if (last > limit)
+    last = limit;
+  if (first > last)
+    return 0;
+  if (dc.flags & DCF_LOCATE_NEAREST) {
+    int64_t cursor = vertical ? dc.cur_y : dc.cur_x;
+    int64_t nearest = cursor < first ? first : cursor > last ? last : cursor;
+    GrNearest(&dc, vertical ? across : nearest, vertical ? nearest : across);
+  }
+  if ((dc.flags & DCF_DONT_DRAW) || !dc.body)
+    return 0;
+
+  const auto color = dc.color;
+  const bool probability = color.c1.rop & ROPBF_PROBABILITY_DITHER;
+  const bool dither = color.c1.rop & ROPBF_DITHER;
+  bool alternate = probability ? RandU16Cpp() < dc.dither_probability_u16
+                               : dither && ((first ^ across) & 1);
+  auto visible = [&](int64_t along) {
+    return !screen || (dc.flags & DCF_ON_TOP) ||
+           task->next_task == sys_winmgr_task ||
+           !IsPixCovered0Cpp(task, vertical ? across : along,
+                             vertical ? along : across);
+  };
+  bool char_clear = visible(first);
+  int64_t d = vertical ? first * dc.width_internal + across
+                       : across * dc.width_internal + first;
+  int64_t stride = vertical ? dc.width_internal : 1;
+  int64_t res = 0;
+  for (int64_t along = first; along <= last; along++, d += stride, z += dz) {
+    if (along != first && !(along & 7))
+      char_clear = visible(along);
+    int32_t depth = z >> 32;
+    if (char_clear && depth >= 0 && depth <= dc.depth_buf[d]) {
+      dc.depth_buf[d] = depth;
+      GrWritePixel(dc, dc.body[d],
+                   {alternate ? color.c1.color : color.c0.color, color.c0.rop});
+      res++;
+    }
+    // The reference samples after every position, even a rejected pixel.
+    alternate = probability ? RandU16Cpp() < dc.dither_probability_u16
+                            : dither && !alternate;
+  }
+  return res;
+}
+
+extern "C" int64_t GrHLineCpp(CDC *dc, int64_t x1, int64_t x2, int64_t y,
+                              int64_t z1, int64_t z2)
+{
+  if (!dc)
+    dc = gr.dc;
+  if (dc->depth_buf)
+    return GrSpan(*dc, x1, x2, y, z1, z2, false);
+  return x1 <= x2 ? GrRectCpp(dc, x1, y, uint64_t(x2) - x1 + 1, 1)
+                  : GrRectCpp(dc, x2, y, uint64_t(x1) - x2 + 1, 1);
+}
+
+extern "C" int64_t GrVLineCpp(CDC *dc, int64_t x, int64_t y1, int64_t y2,
+                              int64_t z1, int64_t z2)
+{
+  if (!dc)
+    dc = gr.dc;
+  if (dc->depth_buf)
+    return GrSpan(*dc, y1, y2, x, z1, z2, true);
+  return y1 <= y2 ? GrRectCpp(dc, x, y1, 1, uint64_t(y2) - y1 + 1)
+                  : GrRectCpp(dc, x, y2, 1, uint64_t(y1) - y2 + 1);
 }

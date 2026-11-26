@@ -273,8 +273,17 @@ and uses the device context's depth buffer through `GrPlot1`.
 `DCSymmetry3Set` and `DCReflect` follow `Adam/Gr/GrMath.HC`. The former
 passes ten fixed arguments through the HolyC adapter. Transform
 callbacks run through the HolyC stack convention, including callbacks
-assigned by guest programs. Thick pens, 3D lines, and polygon filling
-remain pending.
+assigned by guest programs. Thick pens and 3D lines remain pending.
+
+`GrHLine` and `GrVLine` in `GrBitMap.cpp` follow the depth-buffered
+spans in `GrBitMap.HC`. They interpolate 32.32 depth from the original
+endpoints, apply window scroll and clipping, and keep the reference
+dither sample order even for rejected pixels. `GrFillTri0` in
+`GrPrimatives.cpp` preserves the scan direction and inclusive edges
+from `GrPrimatives.HC`, including the shared row in opposing sweeps.
+`GrFillPoly3` and `GrRect3` in `GrComposites.cpp` follow the triangle
+fan in `GrComposites.HC`. They call the device context's transform
+callback and reflect vertices when symmetry is enabled.
 
 ## Screen composition and VGA
 
@@ -382,11 +391,11 @@ records from `Gr.HH`. `SpriteNew.cpp` follows `SpriteElemSize` and
 `SpriteSize` in `SpriteNew.HC`. It bounds reads when the caller supplies
 the attachment length. `GrSpritePlot.cpp` follows `DocSprite` and
 `Sprite` from `GrSpritePlot.HC` and gives the document its own copy of
-the sprite data. The initial `Sprite3` path draws untransformed bitmaps,
-points, packed point paths, thin lines, polylines, and rectangles.
-`DocRecalc.cpp` draws these entries through a task alias of `gr.dc2`
-during screen refresh. Bitmap elements pass through `GrBlot3` and
-support depth, transforms, and planar symmetry. `Sprite3B` applies its
+the sprite data. `Sprite3` draws untransformed points, packed point
+paths, thin lines, and polylines. `DocRecalc.cpp` draws sprite entries
+through a task alias of `gr.dc2` during screen refresh. Bitmap and
+rectangle elements pass through `GrBlot3` and `GrRect3` and support
+depth, transforms, and planar symmetry. `Sprite3B` applies its
 temporary translation and restores the caller's context. The remaining
 3D drawing elements, sprite hit testing, and the sprite editor remain
 pending.

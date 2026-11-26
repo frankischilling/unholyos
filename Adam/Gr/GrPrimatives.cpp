@@ -248,3 +248,152 @@ extern "C" int64_t GrBlot3Cpp(CDC *dc, int64_t x1, int64_t y1, int64_t z1,
   dc->brush = old_brush;
   return res;
 }
+
+struct CGrTriPoint
+{
+  int64_t along, across, z;
+};
+
+struct CGrTriEdge
+{
+  uint64_t across, z;
+  int64_t d_across = 0, dz = 0;
+
+  void Step(const CGrTriPoint &from, const CGrTriPoint &to, int64_t count)
+  {
+    d_across =
+        count ? int64_t(uint64_t(to.across - from.across) << 32) / count : 0;
+    dz = count ? int64_t(uint64_t(to.z - from.z) << 32) / count : 0;
+  }
+
+  void Advance(int64_t count)
+  {
+    across += uint64_t(d_across) * count;
+    z += uint64_t(dz) * count;
+  }
+};
+
+extern "C" int64_t GrFillTri0Cpp(CDC *dc, const CD3I32 *p1, const CD3I32 *p2,
+                                 const CD3I32 *p4)
+{
+  if (!dc)
+    dc = gr.dc;
+  auto abs = [](int64_t n) { return n < 0 ? -n : n; };
+  bool vertical = abs(int64_t(p1->y) - p2->y) + abs(int64_t(p1->y) - p4->y) >
+                  abs(int64_t(p1->x) - p2->x) + abs(int64_t(p1->x) - p4->x);
+  auto point = [vertical](const CD3I32 &p) -> CGrTriPoint {
+    return vertical ? CGrTriPoint{p.x, p.y, p.z} : CGrTriPoint{p.y, p.x, p.z};
+  };
+  auto a = point(*p1), b = point(*p2), c = point(*p4);
+  auto swap = [](CGrTriPoint &p, CGrTriPoint &q) {
+    auto temp = p;
+    p = q;
+    q = temp;
+  };
+  if (c.across < b.across)
+    swap(c, b);
+  if (b.across < a.across)
+    swap(b, a);
+  if (c.along < b.along)
+    swap(c, b);
+
+  int64_t min = 0, max = vertical ? dc->width : dc->height;
+  if (dc->flags & DCF_SCRN_BITMAP) {
+    const auto &win = *dc->win_task;
+    int64_t origin = vertical ? uint64_t(win.scroll_x) + win.pix_left
+                              : uint64_t(win.scroll_y) + win.pix_top;
+    int64_t end = vertical ? win.pix_right : win.pix_bottom;
+    if (max > end)
+      max = end;
+    min -= uint64_t(origin);
+    max -= uint64_t(origin);
+  }
+
+  CGrTriEdge e1{}, e2{};
+  int64_t scan = 0, res = 0;
+  auto start = [&](const CGrTriPoint &p) {
+    scan = p.along;
+    e2 = e1 = {uint64_t(p.across) << 32, uint64_t(p.z) << 32};
+  };
+  auto advance = [&](int64_t count, int64_t direction) {
+    scan += count * direction;
+    e1.Advance(count);
+    e2.Advance(count);
+  };
+  auto sweep = [&](int64_t count, int64_t direction) {
+    for (int64_t i = 0; i < count; i++) {
+      int64_t v1 = int32_t(e1.across >> 32), v2 = int32_t(e2.across >> 32);
+      int64_t z1 = int32_t(e1.z >> 32), z2 = int32_t(e2.z >> 32);
+      res += vertical ? GrVLineCpp(dc, scan, v1, v2, z1, z2)
+                      : GrHLineCpp(dc, v1, v2, scan, z1, z2);
+      advance(1, direction);
+    }
+  };
+  auto clip = [&](int64_t &count, int64_t direction, bool first_half) {
+    int64_t skip = direction > 0 ? uint64_t(scan) + count - max + 1
+                                 : uint64_t(min) - scan + count;
+    if (skip > count)
+      return false;
+    if (skip > 0)
+      count -= skip;
+    skip = direction > 0 ? uint64_t(min) - scan : uint64_t(scan) - max + 1;
+    if (skip > count) {
+      if (!first_half)
+        return false;
+      skip = count;
+    }
+    if (skip > 0) {
+      count -= skip;
+      advance(skip, direction);
+    }
+    return true;
+  };
+
+  if (c.along < a.along || b.along > a.along) {
+    int64_t direction = 1;
+    if (c.along < a.along) {
+      direction = -1;
+      swap(b, c);
+    }
+    int64_t count = (b.along - a.along) * direction;
+    start(a);
+    e1.Step(a, c, (c.along - a.along) * direction);
+    e2.Step(a, b, count);
+    if (!clip(count, direction, true))
+      return res;
+    sweep(count, direction);
+
+    count = (c.along - b.along) * direction;
+    if (count) {
+      e2.Step(b, c, count);
+      if (!clip(count, direction, false))
+        return res;
+    }
+    sweep(count + 1, direction);
+  } else {
+    // The two opposing sweeps can both draw the row through vertex a.
+    if (int64_t count = a.along - b.along) {
+      start(b);
+      e1.Step(b, a, count);
+      e2.Step(b, c, c.along - b.along);
+      if (scan < min) {
+        int64_t skip = uint64_t(min) - scan;
+        if (skip > count)
+          skip = count;
+        count -= skip;
+        advance(skip, 1);
+      }
+      int64_t available = uint64_t(max) - scan;
+      if (available > 0)
+        sweep(count < available ? count + 1 : available, 1);
+    }
+    if (int64_t count = c.along - a.along) {
+      start(c);
+      e1.Step(c, a, count);
+      e2.Step(c, b, c.along - b.along);
+      if (clip(count, -1, false))
+        sweep(count + 1, -1);
+    }
+  }
+  return res;
+}

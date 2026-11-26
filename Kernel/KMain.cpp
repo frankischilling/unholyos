@@ -590,6 +590,7 @@ static void BootRasterReport(const CDrv &dv)
   if (auto *ram = MountedDrive('B'))
     BootGuestFileReport(*ram, "/RasterProbe.GR.Z");
   BootFileProgramReport(dv, "/Blot3Probe.HC");
+  BootFileProgramReport(dv, "/DepthSpansProbe.HC");
   SerialPutS("UnholyOS: raster context ");
   SerialPutHex(reinterpret_cast<uintptr_t>(gr.dc->body));
   SerialPutS("\r\n");

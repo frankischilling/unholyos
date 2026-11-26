@@ -51,6 +51,7 @@ GLOBAL GrBlotHC,GrRectHC,GrRectBHC,GrClampHC
 GLOBAL GrPlotHC,GrPeekHC,GrLineHC,ClipLineHC
 GLOBAL SpriteSizeHC,Sprite3HC,Sprite3BHC,DocSpriteHC,SpriteHC
 GLOBAL GrBlot3HC,DCSymmetry3SetHC,DCReflectHC
+GLOBAL GrHLineHC,GrVLineHC,GrFillTri0HC,GrFillPoly3HC,GrRect3HC
 GLOBAL Mat4x4MulXYZHC,DCTransformHC,Mat4x4IdentEquHC,Mat4x4IdentNewHC
 GLOBAL Mat4x4NormSqr65536HC,DCMat4x4SetHC,DCLightingHC,DCFillHC
 GLOBAL DCClearHC,DCRstHC,DCExtentsInitHC,DCAliasHC
@@ -79,6 +80,7 @@ EXTERN GrBlotCpp,GrRectCpp,GrRectBCpp,GrClampCpp
 EXTERN GrPlotCpp,GrPeekCpp,GrLineCpp,ClipLineCpp
 EXTERN SpriteSizeCpp,Sprite3Cpp,Sprite3BCpp,DocSpriteCpp,SpriteCpp
 EXTERN GrBlot3Cpp,DCSymmetry3SetCpp,DCReflectCpp
+EXTERN GrHLineCpp,GrVLineCpp,GrFillTri0Cpp,GrFillPoly3Cpp,GrRect3Cpp
 EXTERN Mat4x4MulXYZCpp,DCTransformCpp,Mat4x4IdentEquCpp,Mat4x4IdentNewCpp
 EXTERN Mat4x4NormSqr65536Cpp,DCMat4x4SetCpp,DCLightingCpp,DCFillCpp
 EXTERN DCClearCpp,DCRstCpp,DCExtentsInitCpp,DCAliasCpp
@@ -269,6 +271,11 @@ HOLYC_CPP SpriteSizeHC,SpriteSizeCpp,1
 HOLYC_CPP Sprite3HC,Sprite3Cpp,6
 HOLYC_CPP Sprite3BHC,Sprite3BCpp,5
 HOLYC_CPP GrBlot3HC,GrBlot3Cpp,5
+HOLYC_CPP GrHLineHC,GrHLineCpp,6
+HOLYC_CPP GrVLineHC,GrVLineCpp,6
+HOLYC_CPP GrFillTri0HC,GrFillTri0Cpp,4
+HOLYC_CPP GrFillPoly3HC,GrFillPoly3Cpp,3
+HOLYC_CPP GrRect3HC,GrRect3Cpp,6
 HOLYC_CPP DCSymmetry3SetHC,DCSymmetry3SetCpp,10
 HOLYC_CPP DCReflectHC,DCReflectCpp,4
 HOLYC_CPP DocSpriteHC,DocSpriteCpp,3
