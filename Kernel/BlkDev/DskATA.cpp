@@ -109,6 +109,74 @@ uint32_t ATAProbe(const CBlkDev &bd)
              : BDT_NULL;
 }
 
+bool ATAReadCapacity(CBlkDev &bd)
+{
+  ATASel(bd);
+  uint64_t deadline=ATADeadline(1000);
+  if (ATAWait(bd,deadline,0)<=0)
+    return false;
+  ATACmd(bd,ATA_ID_DEV);
+  uint16_t id[256];
+  if (!ATAGetRes(bd,deadline,reinterpret_cast<uint8_t *>(id),sizeof(id),sizeof(id)) ||
+      !(id[49] & (1<<9)))
+    return false;
+  uint32_t sectors=uint32_t(id[60]) | uint32_t(id[61])<<16;
+  if (!sectors)
+    return false;
+  bd.max_blk=(sectors>0x10000000?0x10000000:sectors)-1;
+  bd.blk_size=BLK_SIZE;
+  return true;
+}
+
+static bool ATAReadBlks(const CBlkDev &bd,uint8_t *buf,uint32_t lba,uint8_t cnt)
+{
+  if (!cnt || uint64_t(lba)+cnt>0x10000000 ||
+      uint64_t(lba)+cnt>uint64_t(bd.max_blk)+1)
+    return false;
+  ATASel(bd);
+  uint64_t deadline=ATADeadline(1000+uint64_t(cnt)*10);
+  if (ATAWait(bd,deadline,0)<=0)
+    return false;
+  OutU8(bd.base0+ATAR0_SEL,0xE0 | bd.unit<<4 | (lba>>24));
+  OutU8(bd.base0+2,cnt);
+  OutU8(bd.base0+3,lba);
+  OutU8(bd.base0+4,lba>>8);
+  OutU8(bd.base0+5,lba>>16);
+  ATACmd(bd,0x20);
+  if (!ATAGetRes(bd,deadline,buf,size_t(cnt)*BLK_SIZE,BLK_SIZE))
+    return false;
+  __atomic_add_fetch(&blkdev.read_cnt,cnt,__ATOMIC_RELAXED);
+  return true;
+}
+
+bool ATAReadBytes(const CBlkDev &bd,uint8_t *buf,uint64_t pos,size_t bytes)
+{
+  uint64_t limit=(uint64_t(bd.max_blk)+1)*BLK_SIZE;
+  if (pos>limit || bytes>limit-pos)
+    return false;
+  uint8_t sector[BLK_SIZE];
+  while (bytes) {
+    size_t offset=pos%BLK_SIZE,take;
+    if (!offset && bytes>=BLK_SIZE) {
+      auto cnt=bytes/BLK_SIZE>128?128:bytes/BLK_SIZE;
+      if (!ATAReadBlks(bd,buf,pos/BLK_SIZE,cnt))
+        return false;
+      take=cnt*BLK_SIZE;
+    } else {
+      if (!ATAReadBlks(bd,sector,pos/BLK_SIZE,1))
+        return false;
+      take=BLK_SIZE-offset;
+      if (take>bytes)
+        take=bytes;
+      MemCpy(buf,sector+offset,take);
+    }
+    pos+=take;
+    buf+=take;
+    bytes-=take;
+  }
+  return true;
+}
+
 static bool ATAPIWritePktWord(const CBlkDev &bd, uint64_t deadline,
                               const uint16_t (&packet)[6])
 {

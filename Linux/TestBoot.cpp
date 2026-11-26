@@ -218,7 +218,8 @@ class CMonitor
 {
 public:
   CMonitor(const char *qemu, const fs::path &iso, const fs::path &dir,
-           const char *machine, const char *memory, bool secondary_slave)
+           const char *machine, const char *memory, bool secondary_slave,
+           const fs::path &disk={})
       : deadline(Clock::now() + 30s)
   {
     std::string image = fs::absolute(iso).string();
@@ -229,6 +230,14 @@ public:
         drive += ch;
     }
     drive += ",if=ide,index=3,media=cdrom";
+    std::string ata="file=";
+    if (!disk.empty()) {
+      for (char ch:fs::absolute(disk).string()) {
+        ata+=ch;
+        if (ch==',') ata+=ch;
+      }
+      ata+=",if=ide,index=0,format=raw,snapshot=on";
+    }
     std::string serial = "file:" + (dir / "serial.log").string();
     std::string log = (dir / "qemu.log").string();
 
@@ -244,6 +253,13 @@ public:
         _exit(126);
       close(fd[1]);
       close(err);
+      if (!disk.empty()) {
+        execlp(qemu,qemu,"-machine",machine,"-cpu","qemu64","-m",memory,
+               "-boot","d","-cdrom",image.c_str(),"-drive",ata.c_str(),
+               "-display","none","-monitor","none","-serial",serial.c_str(),
+               "-qmp","stdio","-no-reboot",static_cast<char *>(nullptr));
+        _exit(127);
+      }
       execlp(qemu, qemu, "-machine", machine, "-cpu", "qemu64", "-m", memory,
              "-boot", "d", secondary_slave ? "-drive" : "-cdrom",
              secondary_slave ? drive.c_str() : image.c_str(), "-display",
@@ -3806,6 +3822,39 @@ static void TestBoot(const char *qemu, const fs::path &iso,
 
 int main(int argc, char **argv)
 {
+  if (argc==6 && std::string_view(argv[1])=="--fat32") {
+    char path[]="/tmp/unholyos-fat32-XXXXXX";
+    if (!mkdtemp(path)) return 1;
+    fs::path dir=path;
+    try {
+      bool invalid=std::string_view(argv[5])=="invalid";
+      CMonitor vm(argv[2],argv[3],dir,"pc","512",false,argv[4]);
+      vm.Connect();
+      auto output=vm.Boot(dir/"serial.log");
+      if (invalid) {
+        Check(output.find("executing /Fat32ReadProbe.HC")==std::string::npos,
+              "Malformed FAT32 drive was mounted");
+        CheckProgramOutput(output,"/Fat32RejectProbe.HC",
+                           "FAT32 invalid geometry rejected\n",'1');
+      } else {
+        CheckProgramOutput(output,"/Fat32ReadProbe.HC",
+            "fat geometry 2 2048 132130 2 2 2080 3102\n"
+            "fat metadata FRAG.BIN 5 2501 20 02/29/24 12:34:56\n"
+            "fat entry SUB 1024\n"
+            "fat entry LongNameExample.txt 333\n"
+            "FAT32 read probe FFF\n",'1');
+        CheckProgramOutput(output,"/Fat32RejectProbe.HC","FAT32 reject probe 1F\n",'1');
+      }
+      vm.Command(R"({"execute":"quit"})");
+      std::cout<<(invalid?"Verified FAT32 invalid geometry refusal\n":
+                            "Verified FAT32 read, chain validation and write refusal\n");
+      fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr<<ReadText(dir/"serial.log")<<error.what()<<'\n'<<"Evidence: "<<dir<<'\n';
+      return 1;
+    }
+  }
   if ((argc == 4 || argc == 5) && std::string_view(argv[1]) == "--digits") {
     char path[] = "/tmp/unholyos-digits-XXXXXX";
     if (argc == 4 && !mkdtemp(path))

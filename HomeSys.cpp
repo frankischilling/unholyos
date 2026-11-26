@@ -7,7 +7,7 @@ void UserStartUp()
   auto *task = CurrentTask();
   if (!task->cur_dv)
     task->cur_dv = adam_task->cur_dv;
-  if (task->cur_dv && !RedSeaIsDir(*task->cur_dv, task->cur_dir)) {
+  if (task->cur_dv && !FsIsDir(*task->cur_dv, task->cur_dir)) {
     auto *path = StrNew("/", task->data_heap);
     if (path) {
       Free(task->cur_dir);

@@ -245,7 +245,7 @@ char *FileNameAbs(const char *name, const CTask &task, uint64_t flags)
     const auto *dv = PathDrive(task, res[0]);
     CRedSeaDirEntry found;
     size_t prefix;
-    if (dv && RedSeaFileLookup(*dv, res + 2, flags & FUF_Z_OR_NOT_Z,
+    if (dv && FsFileLookup(*dv, res + 2, flags & FUF_Z_OR_NOT_Z,
                                flags & FUF_SCAN_PARENTS, found, prefix)) {
       res[0] = dv->drv_let;
       res[prefix + 2] = 0;
@@ -373,7 +373,7 @@ extern "C" char *DirFileCpp(const char *dirname, const char *name,
   char *fallback = nullptr;
   if (dv && suffix) {
     auto *slash = LastSlash(dir);
-    while (slash && !RedSeaIsDir(*dv, dir + 2)) {
+    while (slash && !FsIsDir(*dv, dir + 2)) {
       *slash = 0;
       slash = LastSlash(dir);
     }
@@ -386,8 +386,8 @@ extern "C" char *DirFileCpp(const char *dirname, const char *name,
       CRedSeaDirEntry entry;
       size_t prefix;
       if ((!*suffix && (!name || !*name)) ||
-          RedSeaFileLookup(*dv, candidate + 2, false, false, entry, prefix) ||
-          RedSeaIsDir(*dv, candidate + 2)) {
+          FsFileLookup(*dv, candidate + 2, false, false, entry, prefix) ||
+          FsIsDir(*dv, candidate + 2)) {
         Free(fallback);
         fallback = candidate;
         break;

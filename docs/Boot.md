@@ -127,6 +127,61 @@ tests check this exact trace. The original account and distribution
 scripts that use these functions also require additional account setup,
 applications, and writable drives; they were not run.
 
+## Reading a FAT32 disk
+
+`Linux/MakeFAT32.cpp` generates a deterministic 68,699,136-byte raw disk
+with one primary MBR partition, 512-byte sectors, two mirrored FATs,
+two sectors per cluster, and 65,536 data clusters. The root directory
+and a 2,501-byte file are fragmented. A two-record VFAT long name crosses
+the root directory's cluster boundary. The image also includes a nested
+directory, an empty file, a contiguous-name file, and malformed file
+chains for rejection tests. A second image has an invalid cluster size.
+
+The native guest discovers the partition at `C:` while booting from DVD.
+`Fat32ReadProbe.HC` checks geometry, DOS dates and times, exact file bytes,
+the long name, recursive masks and parent links, directory context,
+parent file lookup, and explicit/next-block stream reads. Both guests
+printed these exact 165 bytes:
+
+```text
+fat geometry 2 2048 132130 2 2 2080 3102
+fat metadata FRAG.BIN 5 2501 20 02/29/24 12:34:56
+fat entry SUB 1024
+fat entry LongNameExample.txt 333
+FAT32 read probe FFF
+```
+
+The probe SHA-256 is
+`93501ef88a21a3a7387456686745e079a275d52e69ee1a0275211fda22573cc1`.
+The shared disk SHA-256 is
+`9c63ff36c1dac69265ad59539fda0777e2a01ab182555064cc807ab6ac57e31a`.
+Both guests ran on QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512`
+and `-drive file=build/fat-check/fat32.img,if=ide,index=0,format=raw,snapshot=on`.
+The reference used the pinned live distribution DVD. It did not mount
+the ATA disk automatically, so the reference wrapper called
+`ATAMount('C',BDT_ATA,0x1F0,0x3F4,0)`, marked the device read-only, and
+executed the unchanged source through `ExePutS` from a GDB-restored
+guest allocation. The image hash remained unchanged after both runs.
+
+The native-only `Fat32RejectProbe.HC` checks cycle, reserved/free-link,
+and short-chain rejection, plus write, deletion, and directory-creation
+refusal. It reports `FAT32 reject probe 1F` on the valid volume and
+`FAT32 invalid geometry rejected` on the invalid volume. These malformed
+cases are intentionally not run through the pinned reader. The focused
+and full-suite commands use generated images and QEMU snapshots:
+
+```sh
+make -j4 BUILD=build/fat-check test
+build/fat-check/Linux/TestBoot --fat32 qemu-system-x86_64 \
+  build/fat-check/fat32-test.iso build/fat-check/fat32.img valid
+build/fat-check/Linux/TestBoot --fat32 qemu-system-x86_64 \
+  build/fat-check/fat32-test.iso build/fat-check/fat32-invalid.img invalid
+```
+
+This is read-side FAT32 support. Formatting, allocation, deletion, and
+other FAT32 writes have not been implemented. No physical drive was
+used for these tests.
+
 ## Building a RedSea ISO in the guest
 
 `RedSeaISO` takes an output filename, a source directory, and an optional
@@ -193,7 +248,7 @@ The source reference is [TempleOS at c26482bb6ad3f80106d28504ec5db3c6a360732c](h
 - `IRQ_TIMER` and the context save and restore in `Kernel/Sched.HC` record Adam's interrupted state. `IntCore0TimerHndlr` in `Kernel/KMisc.HC` increments jiffies, adds 1193 to the timer count, and acknowledges IRQ0. UnholyOS resumes Adam after each tick. The boot test checks the timer and context-restore counters while the guest is halted between interrupts.
 - `IntFaultHndlrsNew` in `Kernel/KInts.HC` builds seven-byte exception stubs. In UnholyOS, `INT_FAULT` saves the vector, error code, and interrupted state, prints a serial diagnostic, and halts. In QEMU, GDB triggered an invalid opcode and a general-protection fault. Both diagnostics matched the expected instruction address and error code. TempleOS's debugger and exception recovery still need implementation.
 - `BootDVDProbeAll` and `BootDVDProbe` in `Kernel/BlkDev/DskATAId.HC` try PCI IDE ports and the legacy channels. The probe rereads the BIOS-supplied DVD block and compares the kernel compile timestamp at the supplied shift. QEMU traces for both guests show `START STOP UNIT` and `READ(12)` on the secondary IDE device. `ATAPIReadBlks2` in `Kernel/BlkDev/DskATA.HC` supplies the native 2,048-byte sectors for the 512-byte RedSea view.
-- `ISOInit` in `Kernel/BlkDev/DskCDDVD.HC` looks for the RedSea publisher in the supplementary descriptor and advances the volume offset for a bootable disc. `RedSeaInit` and `RedSeaFileFind` in `Kernel/BlkDev/FileSysRedSea.HC` read the boot record and the 64-byte directory records. UnholyOS attaches the read-only boot volume to Adam after mounting it. Its file reader can read a byte range from a contiguous file. In a separate test, GDB set the DVD handoff to the pinned TempleOS disc on the second IDE unit, and the guest checksum matched the full 189,760-byte kernel file on that disc. Disk caching and hard-disk support remain pending.
+- `ISOInit` in `Kernel/BlkDev/DskCDDVD.HC` looks for the RedSea publisher in the supplementary descriptor and advances the volume offset for a bootable disc. `RedSeaInit` and `RedSeaFileFind` in `Kernel/BlkDev/FileSysRedSea.HC` read the boot record and the 64-byte directory records. UnholyOS attaches the read-only boot volume to Adam after mounting it. Its file reader can read a byte range from a contiguous file. In a separate test, GDB set the DVD handoff to the pinned TempleOS disc on the second IDE unit, and the guest checksum matched the full 189,760-byte kernel file on that disc. Disk caching remains pending; the read-only ATA/FAT32 path is described above.
 - `FileRead` in `Kernel/BlkDev/DskFile.HC` checks Adam's resident file table, tries the requested and alternate names in the target directory, then searches its parents. The native RedSea entry point follows that order and returns the file size and attributes with a zero-terminated buffer. `ArcExpandBuf`, `ArcCompressBuf`, and `ArcEntryGet` in `Kernel/Compress.HC` define the stored, 7-bit, and 8-bit streams, width changes, and dictionary reuse at 12 bits. The host test reproduces both pinned compressed archive streams byte for byte.
 - `Cmp` in `Compiler/CMain.HC` emits the `CBinFile` header and patch records read by `LoadPass1` and `LoadPass2` in `Kernel/KLoad.HC`. UnholyOS validates the records, aligns the executable body, and installs symbols in Adam's hash table using the bucket order from `Kernel/KHashA.HC`. It resolves relative imports when a later module publishes an export. A module with unresolved imports can be loaded for linking, and its initializers wait for an explicit call after resolution. Fixed-address modules and the full kernel symbol set remain pending.
 - Kernel exports use HolyC stack arguments and callee cleanup. `Kernel/Mem/MAllocFree.HC` supplies the heap and string allocation contracts, including the negative offset before an aligned pointer. `Kernel/KHashA.HC` and `Kernel/KHashB.HC` supply the hash lookup and insertion rules, including matching across parent tables. `Kernel/StrA.HC`, `Kernel/KUtils.HC`, and `Kernel/KMathB.HC` supply the string, bit, memory, and numeric calls. Allocation exceptions and configurable variable initialization at boot are pending.
@@ -201,7 +256,7 @@ The source reference is [TempleOS at c26482bb6ad3f80106d28504ec5db3c6a360732c](h
 - The pinned compiler also built `RuntimeProbe.BIN` from `RuntimeProbe.HC`. Both guests reported `0xff` with QEMU PC, `qemu64`, and 512 MiB. The probe checks allocation and aligned heap headers, string calls, hash instances and use counts, numeric and bit calls, and imported globals. It checks the exact `Pow10I64(2)` return bits (`0x4058fffffffffffe`).
 - The same probe checks all 512 bits in each character map from `Kernel/StrA.HC`, including the high bytes and the special whitespace used by DolDoc. It checks `LstMatch` aliases and ambiguous prefixes, list sizing and queue cleanup from `Kernel/KDataTypes.HC`, and zero-filled gaps across 512-byte queue-vector nodes. It also checks the callback arguments, call count, and equal-key order from `Kernel/QSort.HC`. A separate link-only run of the pinned `Compiler.BIN.Z` left 49 unresolved import groups, down from 68 before these routines and maps were exported. Initializers stayed disabled.
 - The pinned compiler built `FileReadProbe.BIN` from `FileReadProbe.HC`. Both guests reported `0x7f` under QEMU PC with `qemu64` and 512 MiB. It checks `DirNameAbs`, `FileNameAbs`, `DirFile`, `ExtChg`, and `ExtDft` from `Kernel/BlkDev/DskStrA.HC`, including the first-dot extension rule. It reads the expanded `StartOS.HC` by relative name, by its archive name, and through parent search. It also checks the plain kernel file attributes, a missing file, and a resident file table hit. The path helpers use the current task directory and the boot and home aliases for the mounted DVD.
-- The same compiler built `FileWriteProbe.BIN`, which mounts a fresh `B:` RAM drive in each guest. `BlkDevInit` in `Kernel/BlkDev/DskBlkDev.HC` supplies the allocation and formatting rules. The probe checks the packed `CBlkDev` layout, disk geometry, bitmap, and root entries. It tests `RedSeaFileWrite` and `RedSeaDirNew` in `Kernel/BlkDev/FileSysRedSea.HC` through block reads and writes, nested directory creation and growth, file replacement, empty files, and resident cache updates. The resulting `StartOS.HC.Z` stream has the pinned 889-byte size and checksum. Hard-disk writes and FAT32 remain pending.
+- The same compiler built `FileWriteProbe.BIN`, which mounts a fresh `B:` RAM drive in each guest. `BlkDevInit` in `Kernel/BlkDev/DskBlkDev.HC` supplies the allocation and formatting rules. The probe checks the packed `CBlkDev` layout, disk geometry, bitmap, and root entries. It tests `RedSeaFileWrite` and `RedSeaDirNew` in `Kernel/BlkDev/FileSysRedSea.HC` through block reads and writes, nested directory creation and growth, file replacement, empty files, and resident cache updates. The resulting `StartOS.HC.Z` stream has the pinned 889-byte size and checksum. Hard-disk and FAT32 writes remain pending.
 - The pinned compiler built `ExceptProbe.BIN` from HolyC `try`, `catch`, and `throw` statements. `PrsTryBlk` in `Compiler/PrsStmt.HC` emits separate catch and cleanup labels. `SysTry`, `TestExcept`, and `TakeExcept` in `Kernel/KExcept.HC` define the two stack transitions. A catch runs on the throw stack with the handler's saved registers, then resumes at its cleanup label on the saved stack if it accepts the exception. The probe covers early return, nested catches, propagation, caller addresses, interrupt flag restoration, and heap and queue cleanup. UnholyOS reports exceptions on serial. Adam's log, symbolic exception output, and the interactive debugger remain pending.
 - The pinned compiler built `FormatProbe.BIN` from `FormatProbe.HC`. Both guests reported `0x1ff` with QEMU PC, `qemu64`, and 512 MiB. `PrsExp.HC` supplies the caller-cleaned stack layout for variadic arguments. `StrPrintJoin` in `Kernel/StrPrint.HC`, the math routines in `Kernel/KMathA.HC`, and `DefineLstLoad` in `Kernel/KDefine.HC` supply the formatting and list behavior. The probe checks all four string entry points, buffer growth, integer and floating-point conversions, quoting, define lists, date and time, raw and linked pointers, file text, and exceptions. Boot tests also check ordinary output, diagnostics, and silent mode on serial. A link-only load of the pinned `Compiler.BIN.Z` at this stage left 26 unresolved import groups, down from 38.
 - The pinned compiler also built `HashCaller.BIN` and `HashProbe.BIN`. Both guests reported `0x3f` with QEMU PC, `qemu64`, and 512 MiB. `HashSrcFileSet` and `HashDel` in `Kernel/KHashB.HC` and `ClassMemberLstDel` in `Compiler/LexLib.HC` supply source links and ownership rules for compiler records. The probe checks help indexes, private flags, child tables, members, function pointer records, and owned and borrowed data. `SysSymImportsResolve` in `Kernel/KLoad.HC` patches the caller's function and global imports when the corresponding typed entries appear. The probe checks function names and offsets from `Kernel/FunSeg.HC` and confirms that the relocated call still works after the exports are removed from the table. The boot tests verify that kernel exports and their names belong to Adam's heap. A link-only load of the pinned compiler now leaves 22 unresolved import groups. The compiler initializers and debugger-backed symbol lookup remain pending.
@@ -1063,7 +1118,7 @@ This verifies the clean boot to the current kernel; the desktop is pending.
 | Interrupts and timers | `Kernel/KInts.HC`, `Kernel/KMain.HC`, `Kernel/KMisc.HC` | Both IDT stages, PIC setup, PIT ticks, HPET, the initial TSC calibration sample, and boot fault diagnostics. Debugger recovery is pending. |
 | Memory | `Kernel/Mem/PageTables.HC`, `BlkPool.HC`, `MAllocFree.HC` | Initial identity map, code and data pools, and early heap allocation. Heap allocation and freeing, the 32-bit device range list, and the uncached device alias are active. |
 | Tasking and CPUs | `Kernel/KTask.HC`, `Sched.HC`, `MultiProc.HC` | Core 0 runs Adam, the idle task, and spawned tasks with cooperative switching and PIT wakeups. Starting additional CPUs remains pending. |
-| Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. Persistent writes and FAT32 are pending. |
+| Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `FileSysFAT.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. Read-only FAT32 on primary ATA partitions. Persistent writes are pending. |
 | Graphics | `Kernel/Display.HC`, `Adam/Gr/GrScrn.HC` | VGA text and graphics composition, 16-color palette, cursor, zoom, and a scheduled refresh task |
 | Input and sound | `Kernel/SerialDev/Keyboard.HC`, `Mouse.HC`, `Message.HC`, `Kernel/KMisc.HC` | PS/2 keyboard and mouse messages, PC speaker tones, and queued sound recording. Desktop input controls and AU output remain pending. |
 | Desktop and system tools | `StartOS.HC`, `Adam/MakeAdam.HC`, `Adam/WinMgr.HC`, `Adam/DolDoc`, `Apps` | The refresh task draws visible DolDoc text and borders. The full editor and interactive desktop remain pending. |

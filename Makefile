@@ -24,7 +24,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Kernel/PCIBIOS.cpp Kernel/Mem/MemPag.cpp Kernel/Mem/MAllocFree.cpp \
 	Kernel/Mem/BlkPool.cpp Kernel/Mem/HeapCtrl.cpp Kernel/Mem/MemPhysical.cpp Kernel/Mem/PageTables.cpp \
 	Kernel/BlkDev/DskATA.cpp Kernel/BlkDev/DskATAId.cpp Kernel/BlkDev/DskAddDev.cpp \
-	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
+	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/FileSysFAT.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
 	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/Compress.cpp \
 	Compiler/CMain.cpp Compiler/Asm.cpp Compiler/AsmResolve.cpp Compiler/AsmLib.cpp Compiler/CHash.cpp Compiler/CExcept.cpp Compiler/CMisc.cpp Compiler/Lex.cpp Compiler/LexLib.cpp Compiler/AsmInit.cpp Compiler/PrsLib.cpp \
 	Compiler/PrsExp.cpp Compiler/PrsStmt.cpp Compiler/PrsVar.cpp Compiler/OptLib.cpp Compiler/BackC.cpp \
@@ -45,6 +45,11 @@ ISO := $(BUILD)/unholyos.iso
 ISO_TOOL := $(BUILD)/Linux/MakeISO
 BOOT_TEST := $(BUILD)/Linux/TestBoot
 COMPRESS_TEST := $(BUILD)/Linux/TestCompress
+FAT_TOOL := $(BUILD)/Linux/MakeFAT32
+FAT_DISK := $(BUILD)/fat32.img
+FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
+FAT_TEST_ISO := $(BUILD)/fat32-test.iso
+FAT_PROBES := Linux/Fixtures/Fat32ReadProbe.HC Linux/Fixtures/Fat32RejectProbe.HC
 STARTUP_FIXTURE := Linux/Fixtures/StartOS.HC.Z
 STARTUP_DOC := Doc/Start.DD
 MODULE_PROBE := Linux/Fixtures/LoadProbe.BIN
@@ -122,6 +127,19 @@ $(COMPRESS_TEST): Linux/TestCompress.cpp Linux/BootMedia.hpp Kernel/Compress.cpp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ Linux/TestCompress.cpp Kernel/Compress.cpp
 
+$(FAT_TOOL): Linux/MakeFAT32.cpp
+	mkdir -p $(@D)
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
+
+$(FAT_DISK): $(FAT_TOOL)
+	$(FAT_TOOL) $@
+
+$(FAT_INVALID_DISK): $(FAT_TOOL)
+	$(FAT_TOOL) $@ invalid
+
+$(FAT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_PROBES)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(FAT_PROBES))
+
 $(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home \
 		$(foreach demo,$(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO),--file-at $(demo) $(demo))
@@ -140,8 +158,10 @@ $(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(STARTU
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO)
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK)
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
+	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_DISK) valid
+	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_INVALID_DISK) invalid
 	$(BOOT_TEST) "$(QEMU)" $< $(KERNEL) $(STARTUP_TEST_ISO)
 
 -include $(CXX_OBJ:.o=.d)
