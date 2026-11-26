@@ -1183,6 +1183,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     DirContextPtr,
     U8PtrPtr,
     TaskSettingsPtr,
+    D3I64Ptr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1202,6 +1203,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CDirContext", table) + 1,
       FindType("U8", table) + 2,
       FindType("CTaskSettings", table) + 1,
+      FindType("CD3I64", table) + 1,
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -1305,6 +1307,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"WinTileVert", U0, FF_RET1, {}},
       {"WinMax", U0, FF_RET1, {{"task", TaskPtr, true}}},
       {"WinBorder", Bool, FF_RET1, {{"val", Bool, true}, {"task", TaskPtr, true}}},
+      {"WinScrollNull", U0, FF_RET1, {{"task", TaskPtr}, {"s", D3I64Ptr}}},
+      {"WinScrollRestore", U0, FF_RET1, {{"task", TaskPtr}, {"s", D3I64Ptr}}},
       {"SettingsPush", TaskSettingsPtr, FF_RET1,
        {{"task", TaskPtr, true}, {"flags", I64, true}}},
       {"SettingsPop", U0, FF_RET1, {{"task", TaskPtr, true}, {"flags", I64, true}}},

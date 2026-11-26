@@ -1303,6 +1303,14 @@ static void MouseButton(CMonitor &vm, const char *name, bool down)
       name + R"(","down":)" + (down ? "true" : "false") + R"(}}]}})");
 }
 
+static void ControlKey(CMonitor &vm, bool down)
+{
+  vm.Command(
+      std::string(
+          R"({"execute":"input-send-event","arguments":{"events":[{"type":"key","data":{"key":{"type":"qcode","data":"ctrl"},"down":)") +
+      (down ? "true" : "false") + R"(}}]}})");
+}
+
 static void DriveSymmetry(CMonitor &vm, const fs::path &screen)
 {
   auto wait_frame = [&](auto ready, const char *error) {
@@ -1650,17 +1658,65 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
       << "Symmetry.HC drew both reflections, disabled symmetry, and exited\n";
 
   vm.ResetDeadline(30s);
+  type_cmd("MsSet(320,240);ms.show=FALSE;");
   type_cmd("Seed(12345);");
   type_cmd(R"(ExeFile("::/Demo/Graphics/CommonAncestor.HC");)");
   wait_text("PRESS A KEY", false, 1, 60, std::string_view::npos, 500);
-  Bytes tree(640 * 480);
+  Bytes tree(640 * 480), panned(tree.size());
   Check(shape_pixels(tree) > 800, "CommonAncestor.HC did not draw the tree");
+
+  constexpr uint64_t scroll_x = 0x100, scroll_y = 0x108, scroll_z = 0x110;
+  vm.ResetDeadline(10s);
+  ControlKey(vm, true);
+  std::this_thread::sleep_for(125ms);
+  MouseButton(vm, "left", true);
+  std::this_thread::sleep_for(125ms);
+  MouseMove(vm, 98, 70);
+  wait_mem(left + scroll_x, 48, "Ctrl-left drag did not pan horizontally");
+  wait_mem(left + scroll_y, 32, "Ctrl-left drag did not pan vertically");
+  auto wait_tree = [&](int dx, int dy) {
+    for (unsigned i = 0; i < 60; i++) {
+      shape_pixels(panned);
+      bool same = true;
+      for (int y = 132; y < 320 && same; y++)
+        for (int x = 24; x < 300 && same; x++)
+          same = tree[y * 640 + x] == panned[(y + dy) * 640 + x + dx];
+      if (same)
+        return true;
+      std::this_thread::sleep_for(20ms);
+    }
+    return false;
+  };
+  Check(wait_tree(48, 32), "The tree did not move with the window pan");
+  MouseButton(vm, "left", false);
+  std::this_thread::sleep_for(125ms);
+  MouseMove(vm, 20, 16);
+  std::this_thread::sleep_for(125ms);
+  Check(ReadPhysical<2>(vm, left + scroll_x) == std::array<uint64_t, 2>{48, 32},
+        "The pan changed after releasing the left button");
+
+  MouseButton(vm, "left", true);
+  std::this_thread::sleep_for(125ms);
+  MouseMove(vm, -114, -80);
+  wait_mem(left + scroll_x, uint64_t(-16),
+           "Negative horizontal pan was not snapped");
+  wait_mem(left + scroll_y, uint64_t(-8),
+           "Negative vertical pan was not snapped");
+  Check(wait_tree(-16, -8), "The tree did not move to the negative pan");
+  MouseButton(vm, "left", false);
+  MouseButton(vm, "right", true);
+  wait_mem(left + scroll_x, 0, "Ctrl-right did not reset the horizontal pan");
+  wait_mem(left + scroll_y, 0, "Ctrl-right did not reset the vertical pan");
+  wait_mem(left + scroll_z, 0, "Ctrl-right did not reset the depth pan");
+  Check(wait_tree(0, 0), "Ctrl-right did not restore the tree");
+  MouseButton(vm, "right", false);
+  ControlKey(vm, false);
   key("q");
   wait_text("T:/Home>");
   for (unsigned i = 0; i < 60; i++) {
     if (!shape_pixels(tree)) {
-      std::cout
-          << "CommonAncestor.HC drew the tree and returned to the prompt\n";
+      std::cout << "CommonAncestor.HC panned, reset the tree, and returned to "
+                   "the prompt\n";
       return;
     }
     std::this_thread::sleep_for(26ms);
@@ -2330,6 +2386,11 @@ constexpr std::string_view task_settings_output =
     "settings children 1 1 1\n"
     "settings nested 1 1 1 1 1\n";
 
+constexpr std::string_view win_scroll_output =
+    "scroll saved 48 -24 3\n"
+    "scroll cleared 0 0 0\n"
+    "scroll restored 48 -24 3\n";
+
 constexpr std::string_view pen_output =
     "pen tables 6B9F06DB42815298 29C67144FDAE53A0\n"
     "pen flat 230CA4FC4A9D5ED8 400E0001\n"
@@ -2432,6 +2493,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/ArrowProbe.HC", arrow_output, '1');
     CheckProgramOutput(boot, "/TaskSettingsProbe.HC", task_settings_output,
                        '1');
+    CheckProgramOutput(boot, "/WinScrollProbe.HC", win_scroll_output, '1');
     CheckProgramOutput(boot, "/CursorProbe.HC", cursor_output, '1');
     CheckProgramOutput(boot, "/CursorExcept.HC", "cursor exception 1\n", '1');
     CheckProgramOutput(boot, "/FunctionPtrProbe.HC", function_ptr_output, '1');
@@ -2509,6 +2571,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/ArrowProbe.HC", arrow_output, '1');
       CheckProgramOutput(output, "/TaskSettingsProbe.HC", task_settings_output,
                          '1');
+      CheckProgramOutput(output, "/WinScrollProbe.HC", win_scroll_output, '1');
       CheckProgramOutput(output, "/CursorProbe.HC", cursor_output, '1');
       CheckProgramOutput(output, "/CursorExcept.HC", "cursor exception 1\n",
                          '1');

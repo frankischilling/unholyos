@@ -25,6 +25,7 @@ GLOBAL DocReadHC,DocTypeHC,TypeHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC,DocPutKeyHC
 GLOBAL DocPutHC,DocDisplayHC,DocBorderHC,DocRecalcHC,WinHorzHC,WinVertHC
 GLOBAL WinRefocusHC,WinToTopHC,WinFocusHC,WinTileHorzHC,WinTileVertHC,WinMaxHC
+GLOBAL WinScrollNullHC,WinScrollRestoreHC
 GLOBAL WinBorderHC,SettingsPushHC,SettingsPopHC
 GLOBAL DocLockHC,DocUnlockHC,DocEntryRunHC,DocBottomHC,DocClearHC,NowHC
 GLOBAL DocTermNewHC,DocGetKeyHC,DocScanLineHC,GetStrHC,GetSHC,UserCmdLineHC
@@ -124,6 +125,7 @@ EXTERN DocReadCpp,DocTypeCpp,TypeCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp,DocPutKeyCpp
 EXTERN DocPutCpp,DocDisplayCpp,DocBorderCpp,DocRecalcCpp,WinHorzCpp,WinVertCpp
 EXTERN WinRefocusCpp,WinToTopCpp,WinFocusCpp,WinTileHorzCpp,WinTileVertCpp,WinMaxCpp
+EXTERN WinScrollNullCpp,WinScrollRestoreCpp
 EXTERN WinBorderCpp,SettingsPushCpp,SettingsPopCpp
 EXTERN DocLockCpp,DocUnlockCpp,DocEntryRunCpp,DocBottomCpp,DocClearCpp,NowCpp
 EXTERN DocTermNewCpp,DocGetKeyCpp,DocScanLineCpp,GetStrCpp,GetSCpp,UserCmdLineCpp
@@ -475,6 +477,8 @@ HOLYC_CPP WinFocusHC,WinFocusCpp,1
 HOLYC_CPP WinTileHorzHC,WinTileHorzCpp,0
 HOLYC_CPP WinTileVertHC,WinTileVertCpp,0
 HOLYC_CPP WinMaxHC,WinMaxCpp,1
+HOLYC_CPP WinScrollNullHC,WinScrollNullCpp,2
+HOLYC_CPP WinScrollRestoreHC,WinScrollRestoreCpp,2
 HOLYC_CPP WinBorderHC,WinBorderCpp,2,1
 HOLYC_CPP SettingsPushHC,SettingsPushCpp,2
 HOLYC_CPP SettingsPopHC,SettingsPopCpp,2

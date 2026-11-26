@@ -99,7 +99,7 @@ int64_t WinQueIPMsgs(bool que)
 {
   static CD3I64 single_ms;
   auto *task = sys_focus_task;
-  if (!TaskValidateCpp(task))
+  if (winmgr.grab_scroll || !TaskValidateCpp(task))
     return MSG_NULL;
   bool moved = old_ms.presnap.x != ms.presnap.x || old_ms.presnap.y != ms.presnap.y;
   if (!moved && ms.lb == ms_last.lb && ms.rb == ms_last.rb &&
@@ -139,6 +139,59 @@ static CTask *WinTaskAt(int64_t x, int64_t y)
       return task;
   }
   return nullptr;
+}
+
+static CTask *grab_task;
+static int64_t grab_task_num;
+static CD3I64 grab_origin;
+
+bool WinGrabScrollInput()
+{
+  bool ctrl = kbd.scan_code & SCF_CTRL;
+  if (grab_task && (!ctrl || !TaskValidateCpp(grab_task) ||
+                    grab_task->task_num != grab_task_num)) {
+    grab_task = nullptr;
+    winmgr.grab_scroll = winmgr.grab_scroll_closed = false;
+  }
+  if (!ctrl || !sys_winmgr_task)
+    return false;
+  if (!grab_task) {
+    auto *task = WinTaskAt(ms.pos.x, ms.pos.y);
+    auto *focus = sys_focus_task;
+    if (!task || (task->win_inhibit & WIF_SELF_GRAB_SCROLL) ||
+        (TaskValidateCpp(focus) &&
+         (focus->win_inhibit & WIF_FOCUS_TASK_GRAB_SCROLL)))
+      return false;
+    grab_task = task;
+    grab_task_num = task->task_num;
+    winmgr.grab_scroll_closed = false;
+    winmgr.grab_scroll = true;
+  }
+
+  if (ms.lb && !winmgr.grab_scroll_closed)
+    grab_origin = {int64_t(uint64_t(ms.pos.x) - grab_task->scroll_x),
+                   int64_t(uint64_t(ms.pos.y) - grab_task->scroll_y),
+                   int64_t(uint64_t(ms.pos.z) - grab_task->scroll_z)};
+  winmgr.grab_scroll_closed = ms.lb;
+  return ms.lb || ms.rb;
+}
+
+static bool WinGrabScroll()
+{
+  auto flags = GetRFlags();
+  asm volatile("cli" : : : "memory");
+  bool active = winmgr.grab_scroll && TaskValidateCpp(grab_task) &&
+                grab_task->task_num == grab_task_num;
+  if (active) {
+    if (winmgr.grab_scroll_closed) {
+      grab_task->scroll_x = (uint64_t(ms.pos.x) - grab_origin.x) & ~7ULL;
+      grab_task->scroll_y = (uint64_t(ms.pos.y) - grab_origin.y) & ~7ULL;
+      grab_task->scroll_z = uint64_t(ms.pos.z) - grab_origin.z;
+    } else if (ms.rb)
+      grab_task->scroll_x = grab_task->scroll_y = grab_task->scroll_z = 0;
+  }
+  SetRFlags(flags);
+  return active;
 }
 
 static CDoc *WinCursorPosSet(CTask &task, int64_t x, int64_t y)
@@ -234,8 +287,10 @@ static uint64_t WinMgrSleep(uint64_t ideal)
   static CWinDocMouse left, right;
   WinRefocusCpp(sys_focus_task);
   WinMsUpdate();
-  WinDocMouse(true, left);
-  WinDocMouse(false, right);
+  if (!WinGrabScroll()) {
+    WinDocMouse(true, left);
+    WinDocMouse(false, right);
+  }
   if (__atomic_fetch_and(&sys_semas[SEMA_JUST_PUMP_MSGS].flags, ~uint64_t{1},
                          __ATOMIC_RELAXED) &
       1)

@@ -101,6 +101,7 @@ void DocTermNewHC(), DocGetKeyHC(), DocScanLineHC(), GetStrHC(), GetSHC(), UserC
 void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
     TextRectHC(), TextBorderHC(), WinZBufUpdateHC();
 void WinRefocusHC(), WinToTopHC(), WinFocusHC(), WinTileHorzHC(), WinTileVertHC(), WinMaxHC();
+void WinScrollNullHC(), WinScrollRestoreHC();
 void WinBorderHC(), SettingsPushHC(), SettingsPopHC();
 void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
 void RawHC(), DbgModeHC(), IsDbgModeHC();
@@ -787,6 +788,8 @@ bool LoadKernel(CTask &task)
       {"WinTileVert", reinterpret_cast<uintptr_t>(WinTileVertHC)},
       {"WinMax", reinterpret_cast<uintptr_t>(WinMaxHC)},
       {"WinBorder", reinterpret_cast<uintptr_t>(WinBorderHC)},
+      {"WinScrollNull", reinterpret_cast<uintptr_t>(WinScrollNullHC)},
+      {"WinScrollRestore", reinterpret_cast<uintptr_t>(WinScrollRestoreHC)},
       {"SettingsPush", reinterpret_cast<uintptr_t>(SettingsPushHC)},
       {"SettingsPop", reinterpret_cast<uintptr_t>(SettingsPopHC)},
       {"WinZBufUpdate", reinterpret_cast<uintptr_t>(WinZBufUpdateHC)},
