@@ -49,7 +49,8 @@ GLOBAL RandU32HC,RandI64HC,RandU64HC,RandHC
 GLOBAL SeedHC,IsPixCovered0HC,GrPlot0HC,GrPeek0HC
 GLOBAL GrBlotHC,GrRectHC,GrRectBHC,GrClampHC
 GLOBAL GrPlotHC,GrPeekHC,GrLineHC,ClipLineHC
-GLOBAL SpriteSizeHC,Sprite3HC,DocSpriteHC,SpriteHC
+GLOBAL SpriteSizeHC,Sprite3HC,Sprite3BHC,DocSpriteHC,SpriteHC
+GLOBAL GrBlot3HC,DCSymmetry3SetHC,DCReflectHC
 GLOBAL Mat4x4MulXYZHC,DCTransformHC,Mat4x4IdentEquHC,Mat4x4IdentNewHC
 GLOBAL Mat4x4NormSqr65536HC,DCMat4x4SetHC,DCLightingHC,DCFillHC
 GLOBAL DCClearHC,DCRstHC,DCExtentsInitHC,DCAliasHC
@@ -76,7 +77,8 @@ EXTERN RandU32Cpp,RandI64Cpp,RandU64Cpp,RandCpp
 EXTERN SeedCpp,IsPixCovered0Cpp,GrPlot0Cpp,GrPeek0Cpp
 EXTERN GrBlotCpp,GrRectCpp,GrRectBCpp,GrClampCpp
 EXTERN GrPlotCpp,GrPeekCpp,GrLineCpp,ClipLineCpp
-EXTERN SpriteSizeCpp,Sprite3Cpp,DocSpriteCpp,SpriteCpp
+EXTERN SpriteSizeCpp,Sprite3Cpp,Sprite3BCpp,DocSpriteCpp,SpriteCpp
+EXTERN GrBlot3Cpp,DCSymmetry3SetCpp,DCReflectCpp
 EXTERN Mat4x4MulXYZCpp,DCTransformCpp,Mat4x4IdentEquCpp,Mat4x4IdentNewCpp
 EXTERN Mat4x4NormSqr65536Cpp,DCMat4x4SetCpp,DCLightingCpp,DCFillCpp
 EXTERN DCClearCpp,DCRstCpp,DCExtentsInitCpp,DCAliasCpp
@@ -131,14 +133,26 @@ BITS 64
 
 %macro HC_FRAME_CALL 1-2 0
 	AND	RSP,-16
-%if %2>=7
+%if %2>=9
+	SUB	RSP,32
+%elif %2>=7
 	SUB	RSP,16
+%endif
+%if %2>=7
 	MOV	RAX,[RBP+64]
 	MOV	[RSP],RAX
 %endif
 %if %2>=8
 	MOV	RAX,[RBP+72]
 	MOV	[RSP+8],RAX
+%endif
+%if %2>=9
+	MOV	RAX,[RBP+80]
+	MOV	[RSP+16],RAX
+%endif
+%if %2>=10
+	MOV	RAX,[RBP+88]
+	MOV	[RSP+24],RAX
 %endif
 	CALL	%1
 	LEA	RSP,[RBP-32]
@@ -253,6 +267,10 @@ HOLYC_CPP GrClampHC,GrClampCpp,7
 HOLYC_CPP GrPlotHC,GrPlotCpp,3
 HOLYC_CPP SpriteSizeHC,SpriteSizeCpp,1
 HOLYC_CPP Sprite3HC,Sprite3Cpp,6
+HOLYC_CPP Sprite3BHC,Sprite3BCpp,5
+HOLYC_CPP GrBlot3HC,GrBlot3Cpp,5
+HOLYC_CPP DCSymmetry3SetHC,DCSymmetry3SetCpp,10
+HOLYC_CPP DCReflectHC,DCReflectCpp,4
 HOLYC_CPP DocSpriteHC,DocSpriteCpp,3
 HOLYC_CPP SpriteHC,SpriteCpp,2
 HOLYC_CPP GrPeekHC,GrPeekCpp,3

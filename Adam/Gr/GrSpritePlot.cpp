@@ -37,16 +37,20 @@ static void SpritePolyline(CDC &dc, uint64_t x, uint64_t y,
   }
 }
 
-bool Sprite3(CDC &dc, int64_t x0, int64_t y0, const uint8_t *elems,
+bool Sprite3(CDC &dc, int64_t x0, int64_t y0, int64_t z0, const uint8_t *elems,
              size_t available, bool just_one_elem)
 {
-  constexpr uint32_t supported = (1u << SPT_END) | (1u << SPT_COLOR) |
-                                 (1u << SPT_DITHER_COLOR) | (1u << SPT_SHIFT) |
-                                 (1u << SPT_PT) | (1u << SPT_POLYPT) |
+  constexpr uint32_t supported =
+      (1u << SPT_END) | (1u << SPT_COLOR) | (1u << SPT_DITHER_COLOR) |
+      (1u << SPT_SHIFT) | (1u << SPT_PT) | (1u << SPT_POLYPT) |
+      (1u << SPT_LINE) | (1u << SPT_POLYLINE) | (1u << SPT_RECT) |
+      (1u << SPT_BITMAP) | (1u << SPT_TRANSFORM_ON) |
+      (1u << SPT_TRANSFORM_OFF) | (1u << SPT_PLANAR_SYMMETRY);
+  constexpr uint32_t shapes_2d = (1u << SPT_PT) | (1u << SPT_POLYPT) |
                                  (1u << SPT_LINE) | (1u << SPT_POLYLINE) |
-                                 (1u << SPT_RECT) | (1u << SPT_BITMAP);
-  if (!elems || !available || dc.depth_buf ||
-      (dc.flags & (DCF_TRANSFORMATION | DCF_SYMMETRY)))
+                                 (1u << SPT_RECT);
+  constexpr uint32_t flags_3d = DCF_TRANSFORMATION | DCF_SYMMETRY;
+  if (!elems || !available)
     return false;
   uint32_t mask = 0;
   size_t size;
@@ -59,8 +63,14 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, const uint8_t *elems,
   }
   if (!size || (mask & ~supported))
     return false;
-  uint64_t x = x0, y = y0;
+  if ((mask & shapes_2d) &&
+      (dc.depth_buf || (dc.flags & flags_3d) ||
+       (mask & ((1u << SPT_TRANSFORM_ON) | (1u << SPT_PLANAR_SYMMETRY)))))
+    return false;
+  uint64_t x = x0, y = y0, z = z0;
   auto old_color = dc.color;
+  auto old_flags = dc.flags;
+  auto old_sym = dc.sym;
   if (dc.flags & DCF_LOCATE_NEAREST)
     dc.nearest_dist = INT64_MAX;
   for (size_t pos = 0; pos < size;) {
@@ -79,6 +89,32 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, const uint8_t *elems,
       dc.color.c1.color = elem[2];
       dc.color.c1.rop |= ROPBF_DITHER;
       break;
+    case SPT_TRANSFORM_ON:
+      if (!(dc.flags & DCF_TRANSFORMATION)) {
+        x -= dc.x;
+        y -= dc.y;
+        z -= dc.z;
+      }
+      dc.flags |= DCF_TRANSFORMATION;
+      break;
+    case SPT_TRANSFORM_OFF:
+      if (dc.flags & DCF_TRANSFORMATION) {
+        x += dc.x;
+        y += dc.y;
+        z += dc.z;
+      }
+      dc.flags &= ~DCF_TRANSFORMATION;
+      break;
+    case SPT_PLANAR_SYMMETRY: {
+      CSpritePtPt pp;
+      MemCpy(&pp, elem, sizeof(pp));
+      if (DCSymmetry3SetCpp(&dc, pp.p.x1 + x, pp.p.y1 + y, z, pp.x2 + x,
+                            pp.y2 + y, z, pp.x2 + x, pp.y2 + y, z + 1))
+        dc.flags |= DCF_SYMMETRY;
+      else
+        dc.flags &= ~DCF_SYMMETRY;
+      break;
+    }
     case SPT_SHIFT:
     case SPT_PT: {
       CSpritePt pt;
@@ -123,23 +159,46 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, const uint8_t *elems,
       img.height = pwh.height;
       img.body = const_cast<uint8_t *>(elem + sizeof(pwh));
       img.dc_signature = DCS_SIGNATURE_VAL;
-      GrBlotCpp(&dc, pwh.p.x1 + x, pwh.p.y1 + y, &img);
+      GrBlot3Cpp(&dc, pwh.p.x1 + x, pwh.p.y1 + y, z, &img);
       break;
     }
     }
     pos += SpriteElemSize(elem, size - pos);
   }
+  dc.sym = old_sym;
   dc.color = old_color;
+  dc.flags = (dc.flags & ~flags_3d) | (old_flags & flags_3d);
   return true;
 }
 
-extern "C" void Sprite3Cpp(CDC *dc, int64_t x, int64_t y, int64_t,
+extern "C" void Sprite3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z,
                            const uint8_t *elems, uint8_t just_one_elem)
 {
   if (!dc)
     dc = gr.dc;
   if (dc)
-    Sprite3(*dc, x, y, elems, INT64_MAX, just_one_elem);
+    Sprite3(*dc, x, y, z, elems, INT64_MAX, just_one_elem);
+}
+
+extern "C" void Sprite3BCpp(CDC *dc, int64_t x, int64_t y, int64_t z,
+                            const uint8_t *elems)
+{
+  if (!dc)
+    dc = gr.dc;
+  if (!dc)
+    return;
+  auto old_x = dc->x, old_y = dc->y, old_z = dc->z;
+  auto old_flags = dc->flags;
+  dc->x = x;
+  dc->y = y;
+  dc->z = z;
+  dc->flags |= DCF_TRANSFORMATION;
+  Sprite3(*dc, 0, 0, 0, elems, INT64_MAX);
+  dc->x = old_x;
+  dc->y = old_y;
+  dc->z = old_z;
+  dc->flags =
+      (dc->flags & ~DCF_TRANSFORMATION) | (old_flags & DCF_TRANSFORMATION);
 }
 
 extern "C" CDocEntryBase *DocSpriteCpp(CDoc *doc, const uint8_t *elems,

@@ -1,5 +1,6 @@
 #include "../../Kernel/KernelB.hpp"
 #include "GrExt.hpp"
+#include "GrGlbls.hpp"
 
 static uint64_t AbsI64(int64_t n)
 {
@@ -75,6 +76,89 @@ extern "C" int64_t *Mat4x4NewCpp(const int64_t *src, CTask *mem_task)
   auto *dst =
       reinterpret_cast<int64_t *>(MAllocCpp(16 * sizeof(int64_t), mem_task));
   return dst ? Mat4x4EquCpp(dst, src) : nullptr;
+}
+
+void DCTransformPoint(CDC &dc, CD3I64 &p)
+{
+  CallHolyC4(
+      reinterpret_cast<uintptr_t>(dc.transform),
+      reinterpret_cast<uintptr_t>(&dc), reinterpret_cast<uintptr_t>(&p.x),
+      reinterpret_cast<uintptr_t>(&p.y), reinterpret_cast<uintptr_t>(&p.z));
+}
+
+extern "C" uint64_t DCSymmetry3SetCpp(CDC *dc, int64_t x1, int64_t y1,
+                                      int64_t z1, int64_t x2, int64_t y2,
+                                      int64_t z2, int64_t x3, int64_t y3,
+                                      int64_t z3)
+{
+  if (!dc)
+    dc = gr.dc;
+  uint64_t xx1 = uint64_t(x1) - x2, yy1 = uint64_t(y1) - y2,
+           zz1 = uint64_t(z1) - z2, xx2 = uint64_t(x3) - x2,
+           yy2 = uint64_t(y3) - y2, zz2 = uint64_t(z3) - z2;
+  if ((!xx1 && !yy1 && !zz1) || (!xx2 && !yy2 && !zz2) ||
+      (xx1 == xx2 && yy1 == yy2 && zz1 == zz2))
+    return false;
+
+  auto x = F64FromI64(yy1 * zz2 - zz1 * yy2),
+       y = F64FromI64(zz1 * xx2 - xx1 * zz2),
+       z = F64FromI64(xx1 * yy2 - yy1 * xx2);
+  if (dc->flags & DCF_TRANSFORMATION) {
+    auto mul = [=](const int64_t *r) {
+      return F64AddBits(F64AddBits(F64MulBits(x, F64FromI64(r[0])),
+                                   F64MulBits(y, F64FromI64(r[1]))),
+                        F64MulBits(z, F64FromI64(r[2])));
+    };
+    auto xx = mul(dc->r), yy = mul(dc->r + 4), zz = mul(dc->r + 8);
+    x = xx;
+    y = yy;
+    z = zz;
+  }
+  auto d = F64SqrtBits(F64AddBits(
+      F64AddBits(F64MulBits(x, x), F64MulBits(y, y)), F64MulBits(z, z)));
+  if (d) {
+    d = F64DivBits(F64FromI64(GR_SCALE), d);
+    dc->sym.snx = F64ToI64(F64MulBits(d, x), 0x0C00);
+    dc->sym.sny = F64ToI64(F64MulBits(d, y), 0x0C00);
+    dc->sym.snz = F64ToI64(F64MulBits(d, z), 0x0C00);
+  }
+  CD3I64 p{x1, y1, z1};
+  if (dc->flags & DCF_TRANSFORMATION)
+    DCTransformPoint(*dc, p);
+  dc->sym.sx = p.x;
+  dc->sym.sy = p.y;
+  dc->sym.sz = p.z;
+  return true;
+}
+
+extern "C" void DCReflectCpp(CDC *dc, int64_t *_x, int64_t *_y, int64_t *_z)
+{
+  const auto &s = dc->sym;
+  uint64_t x = GrFixed32(*_x), y = GrFixed32(*_y), z = GrFixed32(*_z);
+  uint64_t xx = uint64_t(*_x) - s.sx, yy = uint64_t(*_y) - s.sy,
+           zz = uint64_t(*_z) - s.sz;
+  uint64_t d = int64_t(xx * s.snx + yy * s.sny + zz * s.snz) >> 16;
+  uint64_t xn = int64_t(d * s.snx) >> 15, yn = int64_t(d * s.sny) >> 15,
+           zn = int64_t(d * s.snz) >> 15;
+  xx = x - xn;
+  yy = y - yn;
+  zz = z - zn;
+  uint64_t xx2 = x + xn, yy2 = y + yn, zz2 = z + zn;
+  auto distance = [&](uint64_t a, uint64_t b, uint64_t c) {
+    a = (int64_t(a) >> 16) - (uint64_t(s.sx) << 16);
+    b = (int64_t(b) >> 16) - (uint64_t(s.sy) << 16);
+    c = (int64_t(c) >> 16) - (uint64_t(s.sz) << 16);
+    return int64_t(a * a + b * b + c * c);
+  };
+  if (distance(xx, yy, zz) < distance(xx2, yy2, zz2)) {
+    *_x = int32_t(xx >> 32);
+    *_y = int32_t(yy >> 32);
+    *_z = int32_t(zz >> 32);
+  } else {
+    *_x = int32_t(xx2 >> 32);
+    *_y = int32_t(yy2 >> 32);
+    *_z = int32_t(zz2 >> 32);
+  }
 }
 
 constexpr unsigned CC_LEFT = 1, CC_RIGHT = 2, CC_TOP = 4, CC_BOTTOM = 8;

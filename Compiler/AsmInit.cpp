@@ -1003,6 +1003,12 @@ static bool CmpDCData(CHashTable *table)
                            callback.argc, args, types))
       return false;
 
+  const char *transform_args[]{"dc", "_x", "_y", "_z"};
+  CHashClass *transform_types[]{dc + 1, i64 + 1, i64 + 1, i64 + 1};
+  if (!CmpKernelCallback(table, *dc, "transform", offsetof(CDC, transform),
+                         *u0, 4, transform_args, transform_types))
+    return false;
+
   auto *wm = CmpKernelClass(table, "CWinMgrGlbls", sizeof(CWinMgrGlbls));
   if (!wm)
     return false;
@@ -1089,7 +1095,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       bool has_default = false;
       uint64_t dft_val = 0;
       const char *dft_str = nullptr;
-    } args[8];
+    } args[10];
     const char *import_name = nullptr;
     uint8_t internal_op = 0;
   } headers[]{
@@ -1125,6 +1131,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Free", U0, FF_RET1, {{"addr", U8Ptr}}, "_FREE"},
       {"MemCpy", U8Ptr, FF_RET1,
        {{"dst", U8Ptr}, {"src", U8Ptr}, {"cnt", I64}}, "_MEMCPY"},
+      {"MemSet", U8Ptr, FF_RET1,
+       {{"dst", U8Ptr}, {"val", I64}, {"cnt", I64}}, "_MEMSET"},
       {"PutHex", U0, FF_RET1, {{"num", U64}, {"width", I64}}},
       {"PutChars", U0, FF_RET1, {{"ch", U64}}},
       {"PutS", U0, FF_RET1, {{"st", U8Ptr}}},
@@ -1239,6 +1247,18 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Sprite3", U0, FF_RET1,
        {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}, {"z", I64},
         {"elems", U8Ptr}, {"just_one_elem", Bool, true}}},
+      {"Sprite3B", U0, FF_RET1,
+       {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}, {"z", I64},
+        {"elems", U8Ptr}}},
+      {"GrBlot3", I64, FF_RET1,
+       {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"z1", I64},
+        {"img", DCPtr}}},
+      {"DCSymmetry3Set", Bool, FF_RET1,
+       {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"z1", I64},
+        {"x2", I64}, {"y2", I64}, {"z2", I64}, {"x3", I64}, {"y3", I64},
+        {"z3", I64}}},
+      {"DCReflect", U0, FF_RET1,
+       {{"dc", DCPtr}, {"_x", I64Ptr}, {"_y", I64Ptr}, {"_z", I64Ptr}}},
       {"DocSprite", DocEntryPtr, FF_RET1,
        {{"doc", DocPtr, true}, {"elems", U8Ptr}, {"fmt", U8Ptr, true}}},
       {"Sprite", DocEntryPtr, FF_RET1, {{"elems", U8Ptr}, {"fmt", U8Ptr, true}}},

@@ -473,6 +473,16 @@ Pinned TempleOS and UnholyOS produced the same 15-line trace with
 QEMU 9.2.0, the PC machine, `qemu64`, and 512 MiB. The 118-byte
 `DCProbe.GR.Z` file matched byte for byte.
 
+## 3D bitmap drawing
+
+`Blot3Probe.HC` checks the bitmap contents and context state after
+matrix transforms, depth rejection, planar reflection, a custom HolyC
+transform callback, and a packed sprite stream that toggles transforms.
+The same source produced five matching trace lines on pinned TempleOS
+and UnholyOS with QEMU 9.2.0, PC, `qemu64`, and 512 MiB. The boot suite
+checks those lines at each tested RAM size and after booting the ISO
+built in the guest.
+
 ## 2D raster drawing
 
 `make -j4 test BUILD=build/raster` exercises clipping, extents, depth,

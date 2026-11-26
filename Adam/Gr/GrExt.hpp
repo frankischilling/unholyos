@@ -16,6 +16,16 @@ bool GrPixelVisible(const CDC *dc, int64_t x, int64_t y, bool skip_top_task);
 extern "C" uint64_t IsPixCovered0Cpp(CTask *task, int64_t x, int64_t y);
 extern "C" uint64_t GrPlot0Cpp(CDC *dc, int64_t x, int64_t y);
 extern "C" uint64_t GrPlotCpp(CDC *dc, int64_t x, int64_t y);
+bool GrPlot1(CDC *dc, int64_t x, int64_t y);
+extern "C" int64_t GrPeekCpp(CDC *dc, int64_t x, int64_t y);
+extern "C" int64_t GrBlot3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z,
+                              CDC *img);
+void DCTransformPoint(CDC &dc, CD3I64 &p);
+extern "C" void DCReflectCpp(CDC *dc, int64_t *x, int64_t *y, int64_t *z);
+extern "C" uint64_t DCSymmetry3SetCpp(CDC *dc, int64_t x1, int64_t y1,
+                                      int64_t z1, int64_t x2, int64_t y2,
+                                      int64_t z2, int64_t x3, int64_t y3,
+                                      int64_t z3);
 extern "C" int64_t GrPeek0Cpp(CDC *dc, int64_t x, int64_t y);
 extern "C" int64_t GrBlotCpp(CDC *dc, int64_t x, int64_t y, CDC *img);
 extern "C" int64_t GrRectCpp(CDC *dc, int64_t x, int64_t y, int64_t w,

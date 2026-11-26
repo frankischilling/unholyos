@@ -2085,6 +2085,13 @@ constexpr std::string_view screen_output = "screen normal\n"
                                            "screen zoom\n"
                                            "screen restored\n";
 
+constexpr std::string_view blot3_output =
+    "b3 matrix 1 6FB24FB965721A91 9 3 12 9\n"
+    "b3 depth EFC05ABCF35F18E6 4 2 12 6\n"
+    "b3 mirror 1 13 4 3 220BF8395DA653D5\n"
+    "b3 callback 3158DDC09ADC78D5 3 1 12 3 6\n"
+    "b3 sprite 8003AC30B2AF186D 123 0 6\n";
+
 constexpr std::string_view raster_output =
     "raster rect 20 0 0 4 3 4 255\n"
     "raster nearest 5 4 -1\n"
@@ -2149,6 +2156,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
     CheckProgramOutput(boot, "/RasterProbe.HC", raster_output, '1');
+    CheckProgramOutput(boot, "/Blot3Probe.HC", blot3_output, '1');
     CheckProgramOutput(boot, "/CursorProbe.HC", cursor_output, '1');
     CheckProgramOutput(boot, "/CursorExcept.HC", "cursor exception 1\n", '1');
     CheckProgramOutput(boot, "/FunctionPtrProbe.HC", function_ptr_output, '1');
@@ -2219,6 +2227,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
     if (startup) {
       CheckProgramOutput(output, "/DCProbe.HC", dc_output, '1');
       CheckProgramOutput(output, "/RasterProbe.HC", raster_output, '1');
+      CheckProgramOutput(output, "/Blot3Probe.HC", blot3_output, '1');
       CheckProgramOutput(output, "/CursorProbe.HC", cursor_output, '1');
       CheckProgramOutput(output, "/CursorExcept.HC", "cursor exception 1\n",
                          '1');
