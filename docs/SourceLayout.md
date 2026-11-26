@@ -63,10 +63,12 @@ adapter implement the reference's `UndefinedExtern` path.
 ## HolyC assembler
 
 `Compiler/Asm.cpp` follows `PrsAsmBlk` and `PrsAsmInst` in
-`Compiler/Asm.HC`. The current implementation also resolves assembly
-references there. The pinned compiler splits that work into
-`AOTLocalsResolve` and `AOTGlblsResolve` in `Compiler/AsmResolve.HC`.
-JIT assembly publishes its labels after resolving the block.
+`Compiler/Asm.HC`. `Compiler/AsmResolve.cpp` holds `AsmResolve` and
+`AsmUnresolvedAdd`, corresponding to the routines in
+`Compiler/AsmResolve.HC`. The current compiler resolves references
+when emitting each assembly block; the reference has separate
+`AOTLocalsResolve` and `AOTGlblsResolve` passes. JIT assembly publishes
+its labels after resolving the block.
 For assembly inside a function, `Compiler/PrsStmt.cpp` records
 `IC_ASM` as in `PrsStmt` in `Compiler/PrsStmt.HC`. The assembler
 retains the references until `Compiler/BackC.cpp` assigns code

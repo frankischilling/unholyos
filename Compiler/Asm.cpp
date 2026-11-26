@@ -13,34 +13,6 @@ static bool Same(const char *a, const char *b)
                     reinterpret_cast<const uint8_t *>(b));
 }
 
-struct CAsmSymbol
-{
-  CAsmSymbol *next;
-  CAsm *block;
-  char *name;
-  CHashExport *entry;
-  CCodeLabel *label;
-  size_t offset;
-  unsigned scope;
-  bool exported, imported;
-};
-
-struct CAsmNum
-{
-  uint64_t addend = 0;
-  CAsmSymbol *plus = nullptr, *minus = nullptr;
-  bool c_address = false;
-};
-
-struct CAsmUnresolvedRef
-{
-  CAsmUnresolvedRef *next;
-  CAsmNum num;
-  size_t offset, line_num;
-  unsigned width;
-  bool relative;
-};
-
 struct CAsmArg
 {
   CAsmNum num;
@@ -155,6 +127,11 @@ public:
     return size;
   }
 
+  size_t Origin() const
+  {
+    return origin;
+  }
+
   void LabelsLayout()
   {
     size_t base = aot ? aot->size : 0;
@@ -174,7 +151,7 @@ public:
     if (dest != buf)
       MemCpy(dest, buf, size);
     for (auto *fix = fixups; fix; fix = fix->next)
-      if (!AsmResolve(*fix, dest, base))
+      if (!AsmResolve(cc,aot,coc,origin,*fix,dest,base))
         return false;
     return true;
   }
@@ -580,7 +557,8 @@ private:
         return true;
       }
       auto *external =
-          symbol->scope || symbol->imported ? nullptr : External(symbol->name);
+          symbol->scope || symbol->imported ? nullptr :
+              AsmExternal(cc,aot,symbol->name);
       if (!external)
         return false;
       value += sign * external->val;
@@ -596,16 +574,10 @@ private:
       Scalar(n.addend, width);
       return;
     }
-    auto *fix = reinterpret_cast<CAsmUnresolvedRef *>(
-        MAlloc(sizeof(CAsmUnresolvedRef), hc));
-    if (!fix) {
+    if (!AsmUnresolvedAdd(cc,hc,fixups,n,size,width,relative,tail)) {
       failed = true;
       return;
     }
-    *fix = {fixups, n,       size, size_t(cc.lex_include_stk->line_num),
-            width,  relative};
-    fix->num.addend -= tail;
-    fixups = fix;
     uint64_t initial = 0;
     if (listing.lst) {
       initial = AsmListNum(n);
@@ -953,83 +925,6 @@ private:
     return PrsAsmInst(name);
   }
 
-  const CHashExport *External(const char *name) const
-  {
-    auto *entry = HashFind(name,cc.htc.hash_table_lst,HTT_EXPORT_SYS_SYM);
-    if (!entry && !aot)
-      entry = HashFind(name,CurrentTask()->hash_table,HTT_EXPORT_SYS_SYM);
-    return entry && !(entry->type & (HTF_IMPORT | HTF_UNRESOLVED))
-               ? reinterpret_cast<const CHashExport *>(entry)
-               : nullptr;
-  }
-
-  bool AsmResolve(const CAsmUnresolvedRef &fix, uint8_t *dest, uintptr_t base)
-  {
-    uint64_t value = fix.num.addend;
-    int bases = 0;
-    bool c_address = fix.num.c_address;
-    auto add = [&](const CAsmSymbol *symbol, int sign) {
-      if (!symbol)
-        return true;
-      if (symbol->block) {
-        value += sign * (symbol->block->origin + symbol->offset);
-        bases += sign;
-        return true;
-      }
-      if (coc && !symbol->imported) {
-        if (auto *label = coc->GoToLabelFind(symbol->name)) {
-          size_t offset = coc->code[label->ic].data;
-          value += sign * (offset + (aot ? aot->size : 0));
-          bases += sign;
-          return true;
-        }
-      }
-      auto *external = symbol->scope ? nullptr : External(symbol->name);
-      if (!external)
-        return false;
-      value += sign * external->val;
-      if (aot && !(external->sym.hash.type & HTF_IMM))
-        bases += sign;
-      else
-        c_address = !c_address;
-      return true;
-    };
-    if (aot && fix.num.plus && fix.num.plus->imported) {
-      if (fix.num.minus || value || (!fix.relative && fix.width != 8))
-        return false;
-      constexpr uint8_t rel_types[]{IET_REL_I8, IET_REL_I16, IET_REL_I32};
-      auto type = fix.relative ? rel_types[__builtin_ctz(fix.width)]
-                               : uint8_t{IET_IMM_I64};
-      return AOTRelAdd(*aot, origin + fix.offset, nullptr, fix.num.plus->name,
-                       type);
-    }
-    if (!add(fix.num.plus, 1) || !add(fix.num.minus, -1))
-      return false;
-    if (fix.relative) {
-      value -= origin + fix.offset + fix.width;
-      // Only an absolute target needs the image base subtracted.
-      bases = c_address ? -1 : 0;
-    }
-    if (!aot)
-      value += bases * base;
-    else if (bases) {
-      if (bases != 1 || fix.relative || fix.width < 4 ||
-          !AOTRelAdd(*aot, origin + fix.offset, nullptr, nullptr, IET_ABS_ADDR))
-        return false;
-    }
-    if (fix.relative) {
-      unsigned shift = 64 - 8 * fix.width;
-      if (uint64_t(int64_t(value << shift) >> shift) != value) {
-        auto *label = fix.num.plus ? fix.num.plus->name : "";
-        const uint64_t args[]{fix.line_num, reinterpret_cast<uintptr_t>(label)};
-        PrintErrCpp("Branch out of range at line:%04d %s\n", 2, args, nullptr);
-        return false;
-      }
-    }
-    MemCpy(dest + fix.offset, &value, fix.width);
-    return true;
-  }
-
   CCmpCtrl &cc;
   CAOT *aot;
   CCodeCtrl *coc;
@@ -1084,6 +979,11 @@ bool PrsAsmBlk(CCmpCtrl &cc, CAOT *aot, CCodeCtrl *coc, bool bare)
 size_t AsmLayout(CAsm &as, size_t offset)
 {
   return as.Layout(offset);
+}
+
+size_t AsmOrigin(const CAsm &as)
+{
+  return as.Origin();
 }
 
 void AsmLabelsLayout(CAsm &as)

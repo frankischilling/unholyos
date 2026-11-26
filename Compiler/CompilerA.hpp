@@ -492,6 +492,43 @@ struct CAsmListing
   bool lst = false;
 };
 
+struct CAsmSymbol
+{
+  CAsmSymbol *next;
+  CAsm *block;
+  char *name;
+  CHashExport *entry;
+  CCodeLabel *label;
+  size_t offset;
+  unsigned scope;
+  bool exported, imported;
+};
+
+struct CAsmNum
+{
+  uint64_t addend = 0;
+  CAsmSymbol *plus = nullptr, *minus = nullptr;
+  bool c_address = false;
+};
+
+struct CAsmUnresolvedRef
+{
+  CAsmUnresolvedRef *next;
+  CAsmNum num;
+  size_t offset, line_num;
+  unsigned width;
+  bool relative;
+};
+
+size_t AsmOrigin(const CAsm &as);
+const CHashExport *AsmExternal(const CCmpCtrl &cc, const CAOT *aot,
+                               const char *name);
+bool AsmResolve(CCmpCtrl &cc, CAOT *aot, CCodeCtrl *coc, size_t origin,
+                const CAsmUnresolvedRef &fix, uint8_t *dest, uintptr_t base);
+bool AsmUnresolvedAdd(CCmpCtrl &cc, CHeapCtrl *hc, CAsmUnresolvedRef *&fixups,
+                      const CAsmNum &n, size_t offset, unsigned width,
+                      bool relative, unsigned tail);
+
 void AsmLineLst(CCmpCtrl &cc, CAsmListing &listing, size_t rip);
 void AsmListCode(CAsmListing &listing, uint64_t value, unsigned width);
 bool MapFileWrite(const CHashTable &table, const char *name, uint8_t drv_let);
