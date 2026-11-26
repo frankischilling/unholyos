@@ -32,6 +32,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
 	Adam/DolDoc/DocNew.cpp Adam/DolDoc/DocDblBuf.cpp Adam/DolDoc/DocRecalc.cpp Adam/DolDoc/DocRecalcLib.cpp \
 	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp \
+	Adam/DolDoc/DocChar.cpp Adam/DolDoc/DocPutKey.cpp Adam/DolDoc/DocRun.cpp \
 	Adam/Opt/Boot/DskISORedSea.cpp
 ASM_OBJ := $(ASM_SRC:%.asm=$(BUILD)/%.asm.o)
 CXX_OBJ := $(CXX_SRC:%.cpp=$(BUILD)/%.o)
@@ -67,7 +68,7 @@ CMP_PROBES := $(addprefix Linux/Fixtures/,CmpProbeRunner.HC CmpProbe.PRJ CmpProb
 	FixedAsm.HC FixedImage.HC AsmBranchProbe.HC AsmBranchImport.HC BuzzFizz.HC \
 	AsmListingProbe.HC AsmListingScope.HC SchedulerProbe.HC JobProbe.HC SoundProbe.HC SoundRecord.HC \
 	KeyboardProbe.HC MsgLoop.HC MouseProbe.HC PaletteProbe.HC DCProbe.HC RasterProbe.HC Lines.HC \
-	ScreenProbe.HC CursorProbe.HC CursorExcept.HC Grid.HC FunctionPtrProbe.HC DocFrame.HC)
+	ScreenProbe.HC CursorProbe.HC CursorExcept.HC Grid.HC FunctionPtrProbe.HC DocFrame.HC DocButton.HC)
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 
 .PHONY: all run test

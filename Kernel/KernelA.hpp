@@ -864,17 +864,21 @@ constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
                    DOCEF_BIN_PTR_LINK = 1024, DOCEF_RAW_TYPE = 2048,
                    DOCEF_HIGHLIGHT = 1ull << 26, DOCEF_WORD_WRAP = 1ull << 27,
                    DOCEF_TAG_CB = 1ull << 32,
+                   DOCEF_ESC = 1ull << 37, DOCEF_QUIT = 1ull << 38,
+                   DOCEF_HAS_BORDER = 1ull << 40, DOCEF_SOLID_BORDER = 1ull << 41,
                    DOCEF_BORDER_PLOT = 1ull << 42,
                    DOCEF_REMALLOC_DATA = 1ull << 48, DOCEF_TREE = 1ull << 52,
                    DOCEF_LST = 1ull << 53, DOCEF_SKIP = 1ull << 54,
-                   DOCEF_FILTER_SKIP = 1ull << 57, DOCEF_DONT_DRAW = 1ull << 59,
+                   DOCEF_FILTER_SKIP = 1ull << 57, DOCEF_NO_CLICK_ON = 1ull << 58,
+                   DOCEF_DONT_DRAW = 1ull << 59,
                    DOCEF_DFT_LEN = 1ull << 60,
                    DOCEF_DFT_RAW_TYPE = 1ull << 61;
 constexpr uint32_t ATTRF_BLINK = 0x10000000, ATTRF_INVERT = 0x20000000,
                    ATTRF_SEL = 0x40000000, ATTRF_UNDERLINE = 0x80000000;
 constexpr uint32_t DOCG_BL_IV_UL = ATTRF_BLINK | ATTRF_INVERT | ATTRF_UNDERLINE,
                    DOC_SIGNATURE_VAL = 0x53636F44;
-constexpr uint32_t RECALCt_NORMAL = 0, RECALCt_TO_SCRN = 2, RECALCG_MASK = 0xFF,
+constexpr uint32_t RECALCt_NORMAL = 0, RECALCt_FIND_CURSOR = 1,
+                   RECALCt_TO_SCRN = 2, RECALCG_MASK = 0xFF,
                    RECALCF_HAS_CURSOR = 0x100;
 constexpr int64_t DOC_DFT = INT32_MIN;
 
@@ -918,7 +922,10 @@ struct CDocEntryBase
 struct CDocEntry
 {
   CDocEntryBase base;
-  int64_t attr;
+  union {
+    int64_t attr;
+    int64_t left_exp;
+  };
   char *left_macro;
   int64_t right_exp;
   char *right_macro;
@@ -986,7 +993,8 @@ static_assert(sizeof(CDocBin) == 56 && offsetof(CDocBin, num) == 32 &&
 static_assert(sizeof(CDocEntryBase) == 88 &&
               offsetof(CDocEntryBase, tag) == 16 &&
               offsetof(CDocEntryBase, settings) == 56 &&
-              sizeof(CDocEntry) == 208 && offsetof(CDocEntry, bin_data) == 192);
+              sizeof(CDocEntry) == 208 && offsetof(CDocEntry, left_exp) == 88 &&
+              offsetof(CDocEntry, right_exp) == 104 && offsetof(CDocEntry, bin_data) == 192);
 static_assert(sizeof(CDoc) == 768 && offsetof(CDoc, cur_entry) == 104 &&
               offsetof(CDoc, filename) == 304 &&
               offsetof(CDoc, bin_head) == 632);
@@ -1192,8 +1200,10 @@ static_assert(sizeof(CMsStateGlbls) == 168 &&
               offsetof(CMsStateGlbls, lb) == 160);
 static_assert(sizeof(CGridGlbls) == 80 && offsetof(CGridGlbls, x) == 8);
 
-constexpr uint32_t WIF_SELF_FOCUS = 1, WIF_SELF_DOC = 1 << 10,
+constexpr uint32_t WIF_SELF_FOCUS = 1, WIF_SELF_MS_L = 1 << 3,
+                   WIF_SELF_DOC = 1 << 10,
                    WIF_SELF_KEY_DESC = 1 << 12,
+                   WIF_FOCUS_TASK_MS_L = 1 << 19,
                    WIF_FOCUS_TASK_MS_L_D = 1 << 20,
                    WIF_FOCUS_TASK_MS_R_D = 1 << 22;
 

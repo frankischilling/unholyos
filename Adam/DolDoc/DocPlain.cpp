@@ -31,7 +31,7 @@ constexpr uint32_t DOCET_UNDERLINE = 1u << 31;
 static uint64_t DefaultFlags(unsigned type)
 {
   constexpr uint64_t deref = 1ull << 47, term = 1ull << 49,
-                     collapsible = 1ull << 44, escape = 1ull << 37;
+                     collapsible = 1ull << 44;
   switch (type) {
   case DOCT_TEXT:
   case DOCT_ANCHOR:
@@ -49,9 +49,9 @@ static uint64_t DefaultFlags(unsigned type)
     return DOCEF_TAG | (1ull << 36);
   case DOCT_MACRO:
   case DOCT_MENU_VAL:
-    return DOCEF_TAG | escape;
+    return DOCEF_TAG | DOCEF_ESC;
   case DOCT_BTTN:
-    return DOCEF_TAG | escape | (1ull << 40);
+    return DOCEF_TAG | DOCEF_ESC | DOCEF_HAS_BORDER;
   case DOCT_CHECK_BOX:
     return DOCEF_TAG | deref | collapsible | DOCEF_DFT_RAW_TYPE;
   case DOCT_LST:

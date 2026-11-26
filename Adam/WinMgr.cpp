@@ -1,4 +1,4 @@
-#include "../Kernel/KernelB.hpp"
+#include "DolDoc/DolDoc.hpp"
 #include "Gr/GrGlbls.hpp"
 
 static int64_t WinQueButton(CTask *task, bool que, bool left, uint64_t time,
@@ -68,11 +68,116 @@ int64_t WinQueIPMsgs(bool que)
   return right ? right : left ? left : moved ? MSG_MS_MOVE : MSG_NULL;
 }
 
+static bool WinInside(const CTask &task, int64_t x, int64_t y)
+{
+  return task.pix_left <= x && x <= task.pix_right && task.pix_top <= y &&
+         y <= task.pix_bottom;
+}
+
+static CTask *WinTaskAt(int64_t x, int64_t y)
+{
+  for (auto *task = sys_winmgr_task->last_task; task != sys_winmgr_task;
+       task = task->last_task) {
+    if (!TaskValidateCpp(task))
+      break;
+    if (!(task->display_flags & DISPLAYF_SHOW))
+      continue;
+    int64_t border = !(task->display_flags & DISPLAYF_NO_BORDER);
+    auto col = x >> 3, row = y >> 3;
+    if (col + border >= task->win_left && col - border <= task->win_right &&
+        row + border >= task->win_top && row - border <= task->win_bottom)
+      return task;
+  }
+  return nullptr;
+}
+
+static CDoc *WinCursorPosSet(CTask &task, int64_t x, int64_t y)
+{
+  auto *doc = DocDisplayCpp(&task);
+  if (!doc || (doc->flags & DOCF_DONT_SHOW) || !DocCanLock(*doc) ||
+      !WinInside(task, x, y))
+    return nullptr;
+  CDocLock lock(*doc);
+  doc->x = (x - task.pix_left - task.scroll_x) / 8 + doc->line_start_col;
+  doc->y = (y - task.pix_top - task.scroll_y) / 8 + doc->top_line_num;
+  if (!DocRecalc(*doc, RECALCt_FIND_CURSOR))
+    return nullptr;
+  task.scroll_x = task.scroll_y = task.scroll_z = 0;
+  if (&task != sys_winmgr_task->last_task) {
+    TaskQueRemCpp(&task);
+    TaskQueInsCpp(&task, sys_winmgr_task);
+    WinZBufUpdateCpp();
+  }
+  if (!(task.win_inhibit & WIF_SELF_FOCUS))
+    sys_focus_task = &task;
+  return doc;
+}
+
+static void WinDocMouse()
+{
+  static CTask *pressed_task;
+  static CDoc *pressed_doc;
+  static CDocEntryBase *pressed_entry;
+  static bool was_down;
+  bool down = ms.lb;
+  bool press = down && !was_down;
+  was_down = down;
+  auto x = ms.pos.x, y = ms.pos.y;
+
+  if (pressed_task && !down && !ms.left_dbl_time) {
+    auto *task = pressed_task;
+    auto *doc = TaskValidateCpp(task) ? DocDisplayCpp(task) : nullptr;
+    if (!doc || doc != pressed_doc) {
+      pressed_task = nullptr;
+      return;
+    }
+    if (!DocCanLock(*doc))
+      return;
+    pressed_task = nullptr;
+    CDocLock lock(*doc);
+    for (auto *entry = doc->head.next; entry != &doc->head;
+         entry = entry->next) {
+      if (entry != pressed_entry)
+        continue;
+      entry->de_flags &= ~DOCEF_SOLID_BORDER;
+      if (!(doc->flags & DOCF_DONT_SHOW) && WinTaskAt(x, y) == task &&
+          WinInside(*task, x, y) && doc->cur_entry == entry) {
+        if (ms.left_dbl)
+          TaskMsgCpp(task, nullptr, MSG_KEY_DOWN, CH_ESC, 0, 0);
+        else if (entry->de_flags & DOCEF_LEFT_EXP)
+          TaskMsgCpp(task, nullptr, MSG_KEY_DOWN, ' ', 0, 0);
+      }
+      break;
+    }
+  }
+  if (!press || pressed_task)
+    return;
+
+  auto *task = WinTaskAt(x, y);
+  if (!task || (task->win_inhibit & WIF_SELF_MS_L) ||
+      (TaskValidateCpp(sys_focus_task) &&
+       (sys_focus_task->win_inhibit & WIF_FOCUS_TASK_MS_L)))
+    return;
+  auto *doc = WinCursorPosSet(*task, x, y);
+  if (!doc)
+    return;
+  CDocLock lock(*doc);
+  auto *entry = doc->cur_entry;
+  if (entry == &doc->head)
+    return;
+  if (entry->de_flags & DOCEF_HAS_BORDER)
+    entry->de_flags |= DOCEF_SOLID_BORDER;
+  pressed_task = task;
+  pressed_doc = doc;
+  pressed_entry = entry;
+}
+
 extern "C" void WinMgrTaskEntry();
 
 static uint64_t WinMgrSleep(uint64_t ideal)
 {
   WinMsUpdate();
+  WinDocMouse();
   // WINMGR_PERIOD is 1001/30000 seconds. Keep 1/30-jiffy units here.
   auto now = __atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED) * 30 + 1001 / 8;
   if (ideal < now)

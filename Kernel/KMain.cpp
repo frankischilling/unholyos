@@ -1520,6 +1520,7 @@ extern "C" void KMainCpp()
     BootFunctionPtrReport(*adam_task->cur_dv, *adam_task);
     BootGridReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/DocFrame.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/DocButton.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ScreenProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/PaletteProbe.HC");
     BootSoundReport(*adam_task->cur_dv, *adam_task);

@@ -84,7 +84,7 @@ void _HASH_REM_DEL(), SysSymImportsResolveHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
     DocWriteHC();
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
-void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC();
+void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC(), DocPutKeyHC();
 void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
     TextRectHC(), TextBorderHC(), WinZBufUpdateHC();
 void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
@@ -721,6 +721,7 @@ bool LoadKernel(CTask &task)
       {"DocDisplay", reinterpret_cast<uintptr_t>(DocDisplayHC)},
       {"DocBorder", reinterpret_cast<uintptr_t>(DocBorderHC)},
       {"DocRecalc", reinterpret_cast<uintptr_t>(DocRecalcHC)},
+      {"DocPutKey", reinterpret_cast<uintptr_t>(DocPutKeyHC)},
       {"DocNew", reinterpret_cast<uintptr_t>(DocNewHC)},
       {"DocDel", reinterpret_cast<uintptr_t>(DocDelHC)},
       {"DocLoad", reinterpret_cast<uintptr_t>(DocLoadHC)},

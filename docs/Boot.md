@@ -485,6 +485,21 @@ the three 144×96 window regions matched pinned TempleOS across
 41,472 RGB pixels. The boot driver also checks the cleared region
 against the UnholyOS background.
 
+## DolDoc buttons
+
+`make -j4 test BUILD=build/buttons-gcc` drives `DocButton.HC` with
+PS/2 left-button transitions. It checks the single and double CP437
+outlines while the button is released and pressed. The fixture observes
+a Space key followed by `MSG_CMD` with value 73 for `BT-X`. The default
+`BT` entry sends Escape. Both sequences also ran on pinned TempleOS.
+The boot suite repeats the fixture after booting the guest-built ISO.
+
+Terry A. Davis's original `Demo/DolDoc/TextDemo.HC` ran in a separate
+test window with the DolDoc lexer enabled. On QEMU 9.2.0 with PC,
+`qemu64`, and 512 MiB in both guests, all 136,832 compared RGB pixels
+matched pinned TempleOS, including both button outlines. The capture
+comparison covers the text window interior with the pointer area excluded.
+
 ## PC speaker and recorded sound events
 
 `make -j4 test BUILD=build/pc-speaker` builds
