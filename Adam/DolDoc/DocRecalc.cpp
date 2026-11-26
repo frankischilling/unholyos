@@ -117,12 +117,13 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
 {
   if (doc.doc_signature != DOC_SIGNATURE_VAL)
     return false;
-  bool screen = (recalc_flags & RECALCG_MASK) == RECALCt_TO_SCRN;
+  const auto mode = recalc_flags & RECALCG_MASK;
+  const bool screen = mode == RECALCt_TO_SCRN;
+  const bool find_cursor = mode == RECALCt_FIND_CURSOR;
   if (screen && (!gr.text_base || !doc.win_task))
     return false;
   // The refresh task retries a document held by another task next frame.
-  if (screen && (__atomic_load_n(&doc.locked_flags, __ATOMIC_ACQUIRE) & 1) &&
-      __atomic_load_n(&doc.owning_task, __ATOMIC_ACQUIRE) != CurrentTask())
+  if (screen && !DocCanLock(doc))
     return false;
   CDocLock lock(doc);
   auto *task = doc.win_task;
@@ -137,6 +138,9 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
   const int64_t x0 = doc.line_start_col, y0 = doc.top_line_num;
   uint32_t format = 0;
   auto &head = doc.head;
+  auto *best_entry = &head;
+  uint32_t best_col = 0;
+  unsigned __int128 best_d = INT64_MAX;
   CDocSettings settings;
   MemCpy(&settings, &doc.settings_head, sizeof(settings));
   int32_t x = 0, y = 0, page_line = 0;
@@ -171,6 +175,24 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     entry->max_col = type == DOCT_TEXT ? len
                      : entry->tag      ? entry->min_col + 1
                                        : 0;
+    const bool newline = type == DOCT_NEW_LINE || type == DOCT_SOFT_NEW_LINE;
+    auto tab_width = ((x + 8) & ~7) - x;
+    if (find_cursor && !(entry->de_flags & DOCEF_NO_CLICK_ON) &&
+        ((entry->de_flags & DOCEF_TAG) || newline || type == DOCT_TAB)) {
+      int64_t width = type == DOCT_TAB ? tab_width : len;
+      int64_t col = int64_t(doc.x) - x;
+      if (col < 0)
+        col = 0;
+      if (col >= width)
+        col = width ? width - 1 : 0;
+      __int128 dx = int64_t(doc.x) - x - col, dy = int64_t(doc.y) - y;
+      unsigned __int128 distance = (dx * dx + dy * dy) * 64;
+      if (distance <= best_d) {
+        best_entry = entry;
+        best_d = distance;
+        best_col = type == DOCT_TEXT ? col : entry->min_col;
+      }
+    }
     if (screen && !(entry->de_flags & DOCEF_DONT_DRAW)) {
       const auto col = x - x0, row = y - y0;
       auto attr = entry->settings.final_u32_attr;
@@ -179,11 +201,11 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
       if (doc.cur_entry == entry && type != DOCT_TEXT &&
           !(doc.flags & DOCF_DONT_HIGHLIGHT_CURSOR))
         attr ^= 0xFF00;
-      if (type == DOCT_NEW_LINE || type == DOCT_SOFT_NEW_LINE) {
+      if (newline) {
         TextLenAttrCpp(task, col, row, task->win_width - col,
                        uint32_t(settings.cur_text_attr) << 8);
       } else if (type == DOCT_TAB) {
-        auto count = ((x + 8) & ~7) - x;
+        auto count = tab_width;
         if (border) {
           for (int64_t i = 0; i < count; ++i)
             TextCharCpp(task, true, col + i, row, attr | ' ');
@@ -197,8 +219,12 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
         } else
           TextLenStrCpp(task, col, row, len, attr, entry->tag);
       }
+      if (len && (entry->de_flags & DOCEF_HAS_BORDER))
+        TextBorderCpp(task, col, col + len - 1, row, row,
+                      static_cast<uint8_t>(attr >> 8),
+                      (entry->de_flags & DOCEF_SOLID_BORDER) != 0);
     }
-    if (type == DOCT_NEW_LINE || type == DOCT_SOFT_NEW_LINE) {
+    if (newline) {
       x = settings.left_margin + settings.indent;
       y++;
       if (++page_line >= settings.page_len)
@@ -251,6 +277,11 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
   head.y = y;
   head.page_line_num = page_line;
   MemCpy(&head.settings, &settings, sizeof(settings));
+  if (find_cursor) {
+    doc.cur_entry = best_entry;
+    doc.cur_col = best_col;
+    doc.best_d = best_d;
+  }
   doc.x = doc.cur_entry->x + doc.cur_col;
   doc.y = doc.cur_entry->y;
   if (screen) {

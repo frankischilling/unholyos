@@ -19,6 +19,7 @@ private:
   CDoc *locked;
 };
 
+bool DocCanLock(const CDoc &doc);
 CDoc *DocPut();
 extern "C" CDoc *DocPutCpp(CTask *task);
 extern "C" CDoc *DocDisplayCpp(CTask *task);
@@ -33,6 +34,9 @@ void DocEntryError(CDocEntry &entry);
 bool DocInsEntry(CDoc &doc, CDocEntryBase &entry);
 bool DocRecalc(CDoc &doc, uint64_t recalc_flags = RECALCt_NORMAL);
 void DocUpdateTaskDocs(CTask *task);
+extern "C" void DocPutKeyCpp(CDoc *doc, int64_t ch, int64_t sc);
+bool EdCharIns(CDoc &doc, int64_t ch, int64_t sc);
+bool DocEntryRun(CDoc &doc, CDocEntryBase &entry);
 CDocEntryBase *DocPutS(CDoc &doc, const char *src, size_t size);
 CDocEntry *PrsDollarCmd(CDoc &doc, const char *text, const char *end);
 void DocBinsValidate(CDoc &doc);

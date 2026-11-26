@@ -1,5 +1,11 @@
 #include "DolDoc.hpp"
 
+bool DocCanLock(const CDoc &doc)
+{
+  return !(__atomic_load_n(&doc.locked_flags, __ATOMIC_ACQUIRE) & 1) ||
+         __atomic_load_n(&doc.owning_task, __ATOMIC_ACQUIRE) == CurrentTask();
+}
+
 static bool DocLock(CDoc &doc)
 {
   auto *task = CurrentTask();

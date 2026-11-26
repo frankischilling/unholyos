@@ -316,8 +316,16 @@ document accessors. `DocRecalcLib.cpp` draws the display and border
 documents using `RECALCt_TO_SCRN` in `DocRecalc.cpp`. This path handles
 text cells, attributes, tab stops, scrolling offsets, and cursor placement.
 A document locked by another task is retried on a later refresh in the
-cooperative bootstrap. Wrapping, live data and sprites, the full
-editor, and per-task graphics callbacks remain pending.
+cooperative bootstrap.
+
+`RECALCt_FIND_CURSOR` finds the closest cell in the laid-out text and
+updates the document cursor. `Adam/WinMgr.cpp` finds the top visible
+window at the pointer, selects the entry on mouse-down, and draws a
+double-line border while the button is pressed. Releasing a button with
+a left expression sends Space to the document task. `DocPutKey.cpp`, `DocChar.cpp`,
+and `DocRun.cpp` handle numeric commands and the Escape and Shift-Escape
+flags. Right-click routing, callbacks, macros, wrapping, live data and
+sprites, the full editor, and per-task drawing remain pending.
 
 ## HolyC function pointers
 

@@ -1581,6 +1581,59 @@ constexpr std::string_view doc_frame_output = "doc depth 0\n"
                                               "doc frame uncovered\n"
                                               "doc frame cleared\n";
 
+static void DriveDocButton(CMonitor &vm, const fs::path &serial)
+{
+  auto button = [&](bool down) {
+    vm.Command(
+        std::string(
+            R"({"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"button":"left","down":)") +
+        (down ? "true" : "false") + R"(}}]}})");
+  };
+  auto check_corner = [&](size_t row, uint64_t glyph, const char *phase) {
+    auto path =
+        serial.parent_path() / (std::string("button-") + phase + ".ppm");
+    for (unsigned attempt = 0; attempt < 25; ++attempt) {
+      vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
+                 path.string() + R"("}})");
+      auto image = ReadVGA(path);
+      bool match = true;
+      for (size_t y = 0; y < 8; ++y) {
+        for (size_t x = 0; x < 8; ++x) {
+          size_t pixel = ((row * 8 + y) * 640 + 19 * 8 + x) * 3;
+          bool ink = (glyph >> (y * 8 + x)) & 1;
+          match &= image[pixel] == (ink ? 255 : 0) &&
+                   image[pixel + 1] == (ink ? 255 : 0) &&
+                   image[pixel + 2] == (ink ? 255 : 168);
+        }
+      }
+      if (match)
+        return;
+      std::this_thread::sleep_for(45ms);
+    }
+    throw std::runtime_error(
+        std::string("DolDoc button corner differs during ") + phase);
+  };
+
+  constexpr uint64_t single = 0x181818F800000000, solid = 0x6C6C6CEC0CFC0000;
+  vm.WaitSerial(serial, "doc button ready\n");
+  check_corner(20, single, "ready");
+  button(true);
+  check_corner(20, solid, "pressed");
+  button(false);
+  vm.WaitSerial(serial, "doc button exit ready\n");
+  check_corner(20, single, "released");
+  check_corner(22, single, "exit");
+  button(true);
+  check_corner(22, solid, "exit-pressed");
+  button(false);
+}
+
+constexpr std::string_view doc_button_output = "doc button ready\n"
+                                               "doc button key 32\n"
+                                               "doc button command 1 73 0\n"
+                                               "doc button exit ready\n"
+                                               "doc button cancel 2 27 0\n";
+
 static void DriveScreen(CMonitor &vm, const fs::path &serial)
 {
   constexpr std::array<std::array<uint8_t, 3>, 16> colors{{
@@ -1719,6 +1772,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     DriveCursor(rebuilt, serial);
     DriveGrid(rebuilt, serial);
     DriveDocFrame(rebuilt, serial);
+    DriveDocButton(rebuilt, serial);
     DriveScreen(rebuilt, serial);
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
@@ -1729,6 +1783,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/FunctionPtrProbe.BIN.Z", function_ptr_output,
                        '1');
     CheckProgramOutput(boot, "/DocFrame.HC", doc_frame_output, '1');
+    CheckProgramOutput(boot, "/DocButton.HC", doc_button_output, '1');
     CheckProgramOutput(boot, "/ScreenProbe.HC", screen_output, '1');
     auto registers = StopAtIdle(rebuilt);
     VerifyHandoff(boot, media, registers);
@@ -1759,6 +1814,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       DriveCursor(vm, serial);
       DriveGrid(vm, serial);
       DriveDocFrame(vm, serial);
+      DriveDocButton(vm, serial);
       DriveScreen(vm, serial);
     }
     std::string output = vm.Boot(serial);
@@ -1784,6 +1840,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/FunctionPtrProbe.BIN.Z", function_ptr_output,
                          '1');
       CheckProgramOutput(output, "/DocFrame.HC", doc_frame_output, '1');
+      CheckProgramOutput(output, "/DocButton.HC", doc_button_output, '1');
       CheckProgramOutput(output, "/ScreenProbe.HC", screen_output, '1');
       CheckProgramOutput(output, "/PaletteProbe.HC",
                          "palette tables 8 AAAA55550000 777777777777 12 BROWN LTRED\n"
