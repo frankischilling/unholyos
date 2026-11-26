@@ -686,10 +686,6 @@ static bool CmpDCData(CHashTable *table)
       {"dc_cache", glbl, dc + 1, offsetof(CGrGlbls, dc_cache)},
       {"zoomed_dc", glbl, dc + 1, offsetof(CGrGlbls, zoomed_dc)},
       {"text_base", glbl, u32 + 1, offsetof(CGrGlbls, text_base)},
-      {"fp_final_scrn_update", glbl, u0 + 1,
-       offsetof(CGrGlbls, fp_final_scrn_update)},
-      {"fp_draw_ms", glbl, u0 + 1, offsetof(CGrGlbls, fp_draw_ms)},
-      {"fp_draw_grab_ms", glbl, u0 + 1, offsetof(CGrGlbls, fp_draw_grab_ms)},
       {"pan_text_x", glbl, i64, offsetof(CGrGlbls, pan_text_x)},
       {"pan_text_y", glbl, i64, offsetof(CGrGlbls, pan_text_y)},
       {"win_z_buf", glbl, FindType("U16",table) + 1, offsetof(CGrGlbls, win_z_buf)},
@@ -722,6 +718,41 @@ static bool CmpDCData(CHashTable *table)
       entry->size = member.type->size * member.count;
     }
   }
+  constexpr struct
+  {
+    const char *name;
+    size_t offset;
+    unsigned argc;
+  } callbacks[]{
+      {"fp_final_scrn_update", offsetof(CGrGlbls, fp_final_scrn_update), 1},
+      {"fp_draw_ms", offsetof(CGrGlbls, fp_draw_ms), 3},
+      {"fp_draw_grab_ms", offsetof(CGrGlbls, fp_draw_grab_ms), 4},
+  };
+  const char *args[]{"dc", "x", "y", "closed"};
+  CHashClass *types[]{dc + 1, i64, i64, boolean};
+  for (const auto &callback : callbacks) {
+    CPrsDeclarator decl;
+    decl.name = StrNew(callback.name, heap);
+    decl.fun_ptr = PrsFunPtrNew(*u0, 1, FF_RET1);
+    if (!decl.name || !decl.fun_ptr)
+      return false;
+    auto *entry = MemberAdd(*glbl, decl.name, u0[1], callback.offset);
+    if (!entry)
+      return false;
+    auto &signature = *FunPtrBase(decl.fun_ptr);
+    decl.Bind(*entry);
+    for (unsigned i = 0; i < callback.argc; i++) {
+      auto *name = StrNew(args[i], heap);
+      auto *arg = name ? MemberAdd(signature.cls, name, *types[i], 16 + 8 * i)
+                       : nullptr;
+      if (!arg) {
+        Free(name);
+        return false;
+      }
+      ++signature.arg_cnt;
+    }
+  }
+
   auto *wm = CmpKernelClass(table, "CWinMgrGlbls", sizeof(CWinMgrGlbls));
   if (!wm)
     return false;
@@ -802,6 +833,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Print", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
       {"MStrPrint", U8Ptr, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
       {"Free", U0, FF_RET1, {{"addr", U8Ptr}}, "_FREE"},
+      {"MemCpy", U8Ptr, FF_RET1,
+       {{"dst", U8Ptr}, {"src", U8Ptr}, {"cnt", I64}}, "_MEMCPY"},
       {"PutHex", U0, FF_RET1, {{"num", U64}, {"width", I64}}},
       {"PutChars", U0, FF_RET1, {{"ch", U64}}},
       {"PutS", U0, FF_RET1, {{"st", U8Ptr}}},

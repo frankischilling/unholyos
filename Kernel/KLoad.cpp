@@ -505,6 +505,7 @@ bool LoadKernel(CTask &task)
       {"_CLAMP_I64", reinterpret_cast<uintptr_t>(_CLAMP_I64)},
       {"ClampI64", reinterpret_cast<uintptr_t>(_CLAMP_I64)},
       {"_MEMCPY", reinterpret_cast<uintptr_t>(_MEMCPY)},
+      {"MemCpy", reinterpret_cast<uintptr_t>(_MEMCPY)},
       {"_MEMSET", reinterpret_cast<uintptr_t>(_MEMSET)},
       {"_MEMSET_I64", reinterpret_cast<uintptr_t>(_MEMSET_I64)},
       {"_MALLOC", reinterpret_cast<uintptr_t>(_MALLOC)},

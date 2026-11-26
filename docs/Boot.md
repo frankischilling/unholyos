@@ -455,6 +455,23 @@ on the two desktops' backgrounds. The bootstrap tests grab-cursor
 dispatch by setting the grab flags directly. TempleOS resets those
 flags in its interactive window loop.
 
+## HolyC function pointers and Grid
+
+`make -j4 test BUILD=build/fptr` runs `FunctionPtrProbe.HC` from
+source and as a guest-compiled `.BIN.Z`. The probe checks local, global,
+member and parameter declarations, default arguments, pointer arrays,
+nested calls, and both stack cleanup conventions. The pinned guest
+faulted while running this stress probe.
+
+`Linux/Fixtures/Grid.HC` contains the original 672 bytes of Terry A.
+Davis's [Grid demo](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Graphics/Grid.HC).
+QEMU sends PS/2 motion to move the 5×5 cursor to a new grid cell. A
+left click ends the demo, and the test checks that the prior callback
+and grid settings are restored. The first and moved cursor patches
+matched pinned TempleOS across 162 RGB pixels with the same VM settings
+and black background. The boot driver runs the probes again from the
+guest-built ISO.
+
 ## PC speaker and recorded sound events
 
 `make -j4 test BUILD=build/pc-speaker` builds

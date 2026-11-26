@@ -130,6 +130,7 @@ private:
     CS_NORMAL,
     CS_PRINT,
     CS_PUT_CHARS,
+    CS_INDIRECT,
   };
 
   uint32_t Add(const CIntermediateCode &entry)
@@ -162,7 +163,7 @@ private:
   }
 
   uint32_t PrsFunCall(const CHashFun &callee, unsigned depth,
-                      CCallSyntax syntax = CS_NORMAL)
+                      CCallSyntax syntax = CS_NORMAL, uint32_t target = NO_IC)
   {
     if (callee.cls.flags & FF_INTERNAL) {
       auto opcode = reinterpret_cast<uintptr_t>(callee.exe_addr);
@@ -180,7 +181,7 @@ private:
     }
     bool variadic = callee.cls.flags & FF_DOT_DOT_DOT;
     if ((variadic && FunPopsArgs(callee)) ||
-        (!callee.exe_addr && &callee != fun &&
+        (target == NO_IC && !callee.exe_addr && &callee != fun &&
          !(cc.aot && (cc.flags & CCF_AOT_COMPILE) &&
            (callee.cls.flags & CF_EXTERN))) ||
         !callee.return_class ||
@@ -196,7 +197,7 @@ private:
     auto *member = callee.cls.member_lst_and_root;
     for (uint32_t i = 0; i < callee.arg_cnt; ++i) {
       if (!member || !member->member_class || member->dim.next ||
-          (member->flags & (MLF_LASTCLASS | MLF_FUN | MLF_DOT_DOT_DOT)))
+          (member->flags & (MLF_LASTCLASS | MLF_DOT_DOT_DOT)))
         return NO_IC;
       auto *cls = member->member_class;
       if (!TypeSize(ClassRawType(*cls)))
@@ -262,9 +263,10 @@ private:
         return NO_IC;
       Lex(cc);
     }
-    return Add({reinterpret_cast<uintptr_t>(&callee), args, slots, IC_CALL,
+    auto op = target == NO_IC ? IC_CALL : IC_CALL_INDIRECT;
+    return Add({reinterpret_cast<uintptr_t>(&callee), args, slots, op,
                 ClassRawType(*callee.return_class), false, false, true, NO_IC,
-                callee.return_class});
+                callee.return_class, nullptr, nullptr, target});
   }
 
   bool IsLValue(uint32_t value) const
@@ -302,13 +304,27 @@ private:
                 false, coc.code[value].runtime, NO_IC, &cls});
   }
 
+  const CHashFun *Callable(uint32_t value) const
+  {
+    const auto &node = coc.code[value];
+    return !node.dim && (!node.cls || node.cls->ptr_stars_cnt == 1)
+               ? node.fun_ptr
+               : nullptr;
+  }
+
   uint32_t Deref(uint32_t value)
   {
-    auto *cls = value == NO_IC ? nullptr : coc.code[value].cls;
+    if (value == NO_IC)
+      return NO_IC;
+    const auto &node = coc.code[value];
+    if (auto *signature = Callable(value))
+      return Add({0, value, NO_IC, IC_HOLYC_TYPECAST, RT_I64, false, false,
+                  true, NO_IC, node.cls, nullptr, signature});
+    auto *cls = node.cls;
     if (!cls || !cls->ptr_stars_cnt || !ClassComplete(*(cls - 1)))
       return NO_IC;
-    auto *dim = coc.code[value].dim;
-    return coc.LValue(value, *(cls - 1), dim ? dim->next : nullptr);
+    return coc.LValue(value, *(cls - 1), node.dim ? node.dim->next : nullptr,
+                      node.fun_ptr);
   }
 
   uint32_t Index(uint32_t base, unsigned depth)
@@ -328,7 +344,8 @@ private:
     auto offset =
         Add({0, index, Int(size), IC_MUL, RT_I64, false, false, true});
     auto address = Add({0, base, offset, IC_ADD, RT_I64, false, false, true});
-    return coc.LValue(address, *(cls - 1), node.dim ? node.dim->next : nullptr);
+    return coc.LValue(address, *(cls - 1), node.dim ? node.dim->next : nullptr,
+                      node.fun_ptr);
   }
 
   uint32_t Member(uint32_t value)
@@ -346,7 +363,8 @@ private:
     if (member->offset)
       address = Add({0, address, Int(member->offset), IC_ADD, RT_I64, false,
                      false, true});
-    return coc.LValue(address, *member->member_class, member->dim.next);
+    return coc.LValue(address, *member->member_class, member->dim.next,
+                      FunPtrBase(member->fun_ptr));
   }
 
   uint32_t Cast(uint32_t value)
@@ -430,9 +448,12 @@ private:
                               cc.token == '.' || cc.token == TK_DEREFERENCE)) {
       if (cc.token == '[')
         value = Index(value, depth);
-      else if (cc.token == '(')
-        value = Cast(value);
-      else
+      else if (cc.token == '(') {
+        if (auto *signature = Callable(value))
+          value = PrsFunCall(*signature, depth, CS_INDIRECT, value);
+        else
+          value = Cast(value);
+      } else
         value = Member(value);
     }
     if (value != NO_IC &&
@@ -464,7 +485,8 @@ private:
           return NO_IC;
         Lex(cc);
         return Add({reinterpret_cast<uintptr_t>(callee), NO_IC, NO_IC, IC_ADDR,
-                    RT_I64, false, false, true});
+                    RT_I64, false, false, true, NO_IC, nullptr, nullptr,
+                    callee});
       }
       auto value = Term(depth + 1);
       if (token == '*')
@@ -474,7 +496,10 @@ private:
       const auto node = coc.code[value];
       if (!node.cls || node.cls->ptr_stars_cnt == PTR_STARS_NUM)
         return NO_IC;
-      return TypeCast(node.left, *(node.cls + 1));
+      auto address = TypeCast(node.left, *(node.cls + 1));
+      if (address != NO_IC)
+        coc.code[address].fun_ptr = node.fun_ptr;
+      return address;
     }
     if (token == '(') {
       Lex(cc);
@@ -535,7 +560,8 @@ private:
                                 NO_IC, IC_DATA_ADDR, RT_I64, false, false, true})
                          : Add({static_cast<uint64_t>(member->offset), NO_IC,
                                 NO_IC, IC_RBP, RT_I64, false, false, true});
-      return coc.LValue(address, *member->member_class, member->dim.next);
+      return coc.LValue(address, *member->member_class, member->dim.next,
+                        FunPtrBase(member->fun_ptr));
     }
     if (token == TK_IDENT && cc.hash_entry) {
       auto *hash = cc.hash_entry;
@@ -569,7 +595,8 @@ private:
           Lex(cc);
           auto address = Add({reinterpret_cast<uintptr_t>(var), NO_IC, NO_IC,
                               IC_GLBL_ADDR, RT_I64, false, false, true});
-          return coc.LValue(address, *cls, var->dim.next);
+          return coc.LValue(address, *cls, var->dim.next,
+                            FunPtrBase(var->fun_ptr));
         }
       }
     }

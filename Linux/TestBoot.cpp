@@ -1464,6 +1464,51 @@ constexpr std::string_view cursor_output =
     "3FF0000000000000 -171 -144 -2\n"
     "cursor done\n";
 
+static void DriveGrid(CMonitor &vm, const fs::path &serial)
+{
+  vm.WaitSerial(serial, "UnholyOS: executing /Grid.HC\r\n");
+  auto wait_square = [&](size_t x0, size_t y0, bool moved) {
+    auto path = serial.parent_path() / "grid.ppm";
+    for (unsigned i = 0; i < 35; i++) {
+      vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
+                 path.string() + R"("}})");
+      const auto image = ReadVGA(path);
+      bool match = true;
+      for (size_t y = 0; y < 9; ++y)
+        for (size_t x = 0; x < 9; ++x) {
+          auto pixel = ((y0 + y) * 640 + x0 + x) * 3;
+          uint8_t color = x < 5 && y < 5 ? 255 : 0;
+          match &= image[pixel] == color && image[pixel + 1] == color &&
+                   image[pixel + 2] == color;
+        }
+      if (moved)
+        match &= image[(160 * 640 + 160) * 3] == 0;
+      if (match)
+        return;
+      std::this_thread::sleep_for(45ms);
+    }
+    throw std::runtime_error("The Grid.HC cursor did not snap to its new cell");
+  };
+
+  wait_square(160, 160, false);
+  vm.Command(
+      R"({"execute":"input-send-event","arguments":{"events":[{"type":"rel","data":{"axis":"x","value":24}},{"type":"rel","data":{"axis":"y","value":24}}]}})");
+  wait_square(170, 170, true);
+  vm.Command(
+      R"({"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"button":"left","down":true}}]}})");
+  auto done = vm.WaitSerial(
+      serial, "UnholyOS: Grid restored the cursor and mouse grid");
+  vm.Command(
+      R"({"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"button":"left","down":false}}]}})");
+  CheckProgramOutput(done, "/Grid.HC", "", '1');
+}
+
+constexpr std::string_view function_ptr_output =
+    "function pointers 42 13 35 29 213 7 9\n"
+    "function pointer float 7 24\n"
+    "function pointer target 27\n"
+    "function pointer rebound 207\n";
+
 static void DriveScreen(CMonitor &vm, const fs::path &serial)
 {
   constexpr std::array<std::array<uint8_t, 3>, 16> colors{{
@@ -1600,12 +1645,16 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     DriveMouse(rebuilt, serial);
     DriveLines(rebuilt, serial);
     DriveCursor(rebuilt, serial);
+    DriveGrid(rebuilt, serial);
     DriveScreen(rebuilt, serial);
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
     CheckProgramOutput(boot, "/RasterProbe.HC", raster_output, '1');
     CheckProgramOutput(boot, "/CursorProbe.HC", cursor_output, '1');
     CheckProgramOutput(boot, "/CursorExcept.HC", "cursor exception 1\n", '1');
+    CheckProgramOutput(boot, "/FunctionPtrProbe.HC", function_ptr_output, '1');
+    CheckProgramOutput(boot, "/FunctionPtrProbe.BIN.Z", function_ptr_output,
+                       '1');
     CheckProgramOutput(boot, "/ScreenProbe.HC", screen_output, '1');
     auto registers = StopAtIdle(rebuilt);
     VerifyHandoff(boot, media, registers);
@@ -1634,6 +1683,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       DriveMouse(vm, serial);
       DriveLines(vm, serial);
       DriveCursor(vm, serial);
+      DriveGrid(vm, serial);
       DriveScreen(vm, serial);
     }
     std::string output = vm.Boot(serial);
@@ -1653,6 +1703,10 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/RasterProbe.HC", raster_output, '1');
       CheckProgramOutput(output, "/CursorProbe.HC", cursor_output, '1');
       CheckProgramOutput(output, "/CursorExcept.HC", "cursor exception 1\n",
+                         '1');
+      CheckProgramOutput(output, "/FunctionPtrProbe.HC", function_ptr_output,
+                         '1');
+      CheckProgramOutput(output, "/FunctionPtrProbe.BIN.Z", function_ptr_output,
                          '1');
       CheckProgramOutput(output, "/ScreenProbe.HC", screen_output, '1');
       CheckProgramOutput(output, "/PaletteProbe.HC",
