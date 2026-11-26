@@ -541,6 +541,24 @@ and 512 MiB. The boot suite checks the default axis, a user-drawn axis,
 the single stroke after disabling reflection, and cleanup on Escape
 on the standard ISO and the one built in the guest.
 
+## Arrows, raster text, and the common ancestor demo
+
+Both boot discs include Terry A. Davis's unchanged
+`Demo/Graphics/CommonAncestor.HC`. Run
+`ExeFile("::/Demo/Graphics/CommonAncestor.HC");` in the HolyC terminal.
+The demo draws the tree with arrowheads and numeric labels while it
+builds the tree. Press a key to return to the terminal. Ctrl-left
+grab scrolling remains pending.
+
+`ArrowProbe.HC` produced seven matching traces on pinned TempleOS
+and UnholyOS with QEMU 9.2.0, PC, `qemu64`, and 512 MiB. It checks
+arrow and glyph pixels, depth, transforms, reflection, the packed
+arrow element, cursor clipping, and glyph raster operations. Both guests
+also ran the original tree demo with seed 12345 and drew the same
+tree pixels. The comparison excludes the terminal caret cell. The boot
+suite checks the probe on the startup-test and guest-built discs and
+runs the demo on the standard and guest-built discs.
+
 ## Depth-buffered spans and polygons
 
 `DepthSpansProbe.HC` checks span counts, depth interpolation, window

@@ -1414,8 +1414,9 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   auto path = dir / "terminal-text.bin";
   auto wait_text = [&](std::string_view wanted, bool right_pane = false,
                        size_t count = 1, size_t row = 60,
-                       size_t column = std::string_view::npos) {
-    for (unsigned attempt = 0; attempt < 60; ++attempt) {
+                       size_t column = std::string_view::npos,
+                       unsigned attempts = 60) {
+    for (unsigned attempt = 0; attempt < attempts; ++attempt) {
       vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
                  std::to_string(addr) + R"(,"size":19200,"filename":")" +
                  path.string() + R"("}})");
@@ -1647,6 +1648,24 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   type_cmd("ms.show=TRUE;");
   std::cout
       << "Symmetry.HC drew both reflections, disabled symmetry, and exited\n";
+
+  vm.ResetDeadline(30s);
+  type_cmd("Seed(12345);");
+  type_cmd(R"(ExeFile("::/Demo/Graphics/CommonAncestor.HC");)");
+  wait_text("PRESS A KEY", false, 1, 60, std::string_view::npos, 500);
+  Bytes tree(640 * 480);
+  Check(shape_pixels(tree) > 800, "CommonAncestor.HC did not draw the tree");
+  key("q");
+  wait_text("T:/Home>");
+  for (unsigned i = 0; i < 60; i++) {
+    if (!shape_pixels(tree)) {
+      std::cout
+          << "CommonAncestor.HC drew the tree and returned to the prompt\n";
+      return;
+    }
+    std::this_thread::sleep_for(26ms);
+  }
+  throw std::runtime_error("CommonAncestor.HC left the tree on VGA");
 }
 
 static fs::path CaptureGuestFile(CMonitor &vm, const fs::path &dir,
@@ -2294,6 +2313,15 @@ constexpr std::string_view matrix_output =
     "matrix symmetry 1 0 2130900514 -3729075900 -2 17 6\n"
     "matrix refresh 1 1 1 1 1\n";
 
+constexpr std::string_view arrow_output =
+    "arrow flat 1 1 1 0A93575B785BA51A\n"
+    "arrow depth 1 1 700 FDC1D53C433F3886 968F230D7FAD8636\n"
+    "arrow sprite 25 7 69A4CCBD98FA89F1 1E1F00CEB29E84E5\n"
+    "arrow cursor 1 0 DE0EEB3809B0F38D 937BA7BBBD57D70D\n"
+    "arrow text 1 4 1 0 2 95 68 10\n"
+    "arrow glyphs 89E961B07EC7F577 0F40B14DF3F0EAC5\n"
+    "arrow glyphrop 1 1 1 6 9B053996C61C5E16\n";
+
 constexpr std::string_view task_settings_output =
     "settings layout 392 48 104 388\n"
     "settings push 1 1 1 1 1\n"
@@ -2401,6 +2429,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/DepthSpansProbe.HC", depth_spans_output, '1');
     CheckProgramOutput(boot, "/MatrixProbe.HC", matrix_output, '1');
     CheckProgramOutput(boot, "/PenProbe.HC", pen_output, '1');
+    CheckProgramOutput(boot, "/ArrowProbe.HC", arrow_output, '1');
     CheckProgramOutput(boot, "/TaskSettingsProbe.HC", task_settings_output,
                        '1');
     CheckProgramOutput(boot, "/CursorProbe.HC", cursor_output, '1');
@@ -2477,6 +2506,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/DepthSpansProbe.HC", depth_spans_output, '1');
       CheckProgramOutput(output, "/MatrixProbe.HC", matrix_output, '1');
       CheckProgramOutput(output, "/PenProbe.HC", pen_output, '1');
+      CheckProgramOutput(output, "/ArrowProbe.HC", arrow_output, '1');
       CheckProgramOutput(output, "/TaskSettingsProbe.HC", task_settings_output,
                          '1');
       CheckProgramOutput(output, "/CursorProbe.HC", cursor_output, '1');

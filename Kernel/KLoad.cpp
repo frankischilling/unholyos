@@ -79,6 +79,7 @@ void GrFillCircleHC(),GrPlot3BHC(),GrPlot3HC(),GrLine3HC(),DCThickScaleHC();
 void SpriteSizeHC(),Sprite3HC(),Sprite3BHC(),DocSpriteHC(),SpriteHC();
 void GrBlot3HC(),DCSymmetry3SetHC(),DCReflectHC();
 void GrHLineHC(),GrVLineHC(),GrFillTri0HC(),GrFillPoly3HC(),GrRect3HC();
+void GrBorderHC(),GrArrow3HC(),GrPutCharHC(),GrPrintHC(),PressAKeyHC();
 void Mat4x4MulXYZHC(),DCTransformHC(),Mat4x4IdentEquHC(),Mat4x4IdentNewHC();
 void Mat4x4NormSqr65536HC(),DCMat4x4SetHC(),DCLightingHC(),DCFillHC();
 void DCClearHC(),DCRstHC(),DCExtentsInitHC(),DCAliasHC();
@@ -696,6 +697,11 @@ bool LoadKernel(CTask &task)
       {"GrFillTri0", reinterpret_cast<uintptr_t>(GrFillTri0HC)},
       {"GrFillPoly3", reinterpret_cast<uintptr_t>(GrFillPoly3HC)},
       {"GrRect3", reinterpret_cast<uintptr_t>(GrRect3HC)},
+      {"GrBorder", reinterpret_cast<uintptr_t>(GrBorderHC)},
+      {"GrArrow3", reinterpret_cast<uintptr_t>(GrArrow3HC)},
+      {"GrPutChar", reinterpret_cast<uintptr_t>(GrPutCharHC)},
+      {"GrPrint", reinterpret_cast<uintptr_t>(GrPrintHC)},
+      {"PressAKey", reinterpret_cast<uintptr_t>(PressAKeyHC)},
       {"DCSymmetry3Set", reinterpret_cast<uintptr_t>(DCSymmetry3SetHC)},
       {"DCReflect", reinterpret_cast<uintptr_t>(DCReflectHC)},
       {"DocSprite", reinterpret_cast<uintptr_t>(DocSpriteHC)},

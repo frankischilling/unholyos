@@ -1,4 +1,5 @@
 #include "../Kernel/KernelB.hpp"
+#include "../Adam/Gr/GrExt.hpp"
 #include "../Adam/Gr/GrGlbls.hpp"
 #include "CompilerA.hpp"
 
@@ -1222,6 +1223,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Print", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
       {"MStrPrint", U8Ptr, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
       {"StrPrint", U8Ptr, FF_DOT_DOT_DOT, {{"dst", U8Ptr}, {"fmt", U8Ptr}}},
+      {"CAlloc", U8Ptr, FF_RET1, {{"size", I64}, {"mem_task", TaskPtr, true}}},
       {"MAlloc", U8Ptr, FF_RET1, {{"size", I64}, {"mem_task", TaskPtr, true}}, "_MALLOC"},
       {"Now", Date, FF_RET1, {}},
       {"Cd", Bool, FF_RET1, {{"dirname", U8Ptr, true}, {"make_dirs", Bool, true}}},
@@ -1403,6 +1405,18 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"GrRect3", I64, FF_RET1,
        {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}, {"z", I64}, {"w", I64},
         {"h", I64}}},
+      {"GrBorder", U0, FF_RET1,
+       {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"x2", I64},
+        {"y2", I64}, {"step", I64, true, 1}, {"start", I64, true}}},
+      {"GrArrow3", Bool, FF_RET1,
+       {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"z1", I64},
+        {"x2", I64}, {"y2", I64}, {"z2", I64}, {"w", F64, true, GR_ARROW_WIDTH},
+        {"step", I64, true, 1}, {"start", I64, true}}},
+      {"GrPutChar", I64, FF_RET1,
+       {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}, {"ch", U8}}},
+      {"GrPrint", I64, FF_DOT_DOT_DOT,
+       {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}, {"fmt", U8Ptr}}},
+      {"PressAKey", I64, FF_RET1, {}},
       {"DCSymmetrySet", Bool, FF_RET1,
        {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"x2", I64},
         {"y2", I64}}},
@@ -1728,7 +1742,7 @@ static bool CmpFillHash(CHashTable *table)
       {"SPT_THICK","3"}, {"SPT_PLANAR_SYMMETRY","4"}, {"SPT_TRANSFORM_ON","5"},
       {"SPT_TRANSFORM_OFF","6"}, {"SPT_SHIFT","7"}, {"SPT_PT","8"},
       {"SPT_POLYPT","9"}, {"SPT_LINE","10"}, {"SPT_POLYLINE","11"},
-      {"SPT_RECT","12"}, {"SPT_BITMAP","23"},
+      {"SPT_RECT","12"}, {"SPT_BITMAP","23"}, {"SPT_ARROW","26"},
       {"TEXT_COLS","80"}, {"TEXT_ROWS","60"}, {"TASKf_NONTIMER_RAND","14"},
       {"DCF_COMPRESSED","1"}, {"DCF_PALETTE","2"}, {"DCF_NO_TRANSPARENTS","4"},
       {"DCF_TRANSFORMATION","0x100"}, {"DCF_SYMMETRY","0x200"},

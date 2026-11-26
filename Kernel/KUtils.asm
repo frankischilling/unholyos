@@ -54,6 +54,7 @@ GLOBAL GrFillCircleHC,GrPlot3BHC,GrPlot3HC,GrLine3HC,DCThickScaleHC
 GLOBAL SpriteSizeHC,Sprite3HC,Sprite3BHC,DocSpriteHC,SpriteHC
 GLOBAL GrBlot3HC,DCSymmetry3SetHC,DCReflectHC
 GLOBAL GrHLineHC,GrVLineHC,GrFillTri0HC,GrFillPoly3HC,GrRect3HC
+GLOBAL GrBorderHC,GrArrow3HC,GrPutCharHC,GrPrintHC,PressAKeyHC
 GLOBAL Mat4x4MulXYZHC,DCTransformHC,Mat4x4IdentEquHC,Mat4x4IdentNewHC
 GLOBAL Mat4x4NormSqr65536HC,DCMat4x4SetHC,DCLightingHC,DCFillHC
 GLOBAL DCClearHC,DCRstHC,DCExtentsInitHC,DCAliasHC
@@ -87,6 +88,7 @@ EXTERN GrFillCircleCpp,GrPlot3BCpp,GrPlot3Cpp,GrLine3Cpp,DCThickScaleCpp
 EXTERN SpriteSizeCpp,Sprite3Cpp,Sprite3BCpp,DocSpriteCpp,SpriteCpp
 EXTERN GrBlot3Cpp,DCSymmetry3SetCpp,DCReflectCpp
 EXTERN GrHLineCpp,GrVLineCpp,GrFillTri0Cpp,GrFillPoly3Cpp,GrRect3Cpp
+EXTERN GrBorderCpp,GrArrow3Cpp,GrPutCharCpp,GrPrintCpp,PressAKeyCpp
 EXTERN Mat4x4MulXYZCpp,DCTransformCpp,Mat4x4IdentEquCpp,Mat4x4IdentNewCpp
 EXTERN Mat4x4NormSqr65536Cpp,DCMat4x4SetCpp,DCLightingCpp,DCFillCpp
 EXTERN DCClearCpp,DCRstCpp,DCExtentsInitCpp,DCAliasCpp
@@ -293,6 +295,20 @@ HOLYC_CPP GrVLineHC,GrVLineCpp,6
 HOLYC_CPP GrFillTri0HC,GrFillTri0Cpp,4
 HOLYC_CPP GrFillPoly3HC,GrFillPoly3Cpp,3
 HOLYC_CPP GrRect3HC,GrRect3Cpp,6
+HOLYC_CPP GrBorderHC,GrBorderCpp,7
+HOLYC_CPP GrArrow3HC,GrArrow3Cpp,10,1
+HOLYC_CPP GrPutCharHC,GrPutCharCpp,4
+
+GrPrintHC:
+	HC_FRAME_ENTER
+	MOV	RDI,[RBP+16]
+	MOV	RSI,[RBP+24]
+	MOV	RDX,[RBP+32]
+	MOV	RCX,[RBP+40]
+	MOV	R8,[RBP+48]
+	LEA	R9,[RBP+56]
+	HC_FRAME_CALL GrPrintCpp
+	RET
 HOLYC_CPP DCSymmetry3SetHC,DCSymmetry3SetCpp,10
 HOLYC_CPP DCReflectHC,DCReflectCpp,4
 HOLYC_CPP DocSpriteHC,DocSpriteCpp,3
@@ -343,6 +359,7 @@ HOLYC_CPP ScanCharHC,ScanCharCpp,0
 HOLYC_CPP ScanKeyHC,ScanKeyCpp,3
 HOLYC_CPP GetKeyHC,GetKeyCpp,3
 HOLYC_CPP GetCharHC,GetCharCpp,3
+HOLYC_CPP PressAKeyHC,PressAKeyCpp,0
 
 SpawnHC:
 	HC_FRAME_ENTER

@@ -204,6 +204,107 @@ extern "C" int64_t GrBlotCpp(CDC *dc, int64_t x, int64_t y, CDC *img)
   return 1;
 }
 
+extern "C" int64_t GrPutCharCpp(CDC *dc, int64_t x, int64_t y, uint8_t ch)
+{
+  if (!dc)
+    dc = gr.dc;
+  constexpr int64_t FONT_WIDTH = 8, FONT_HEIGHT = 8;
+  CGrClip c;
+  if (!GrClipArea(dc, x, y, FONT_WIDTH, FONT_HEIGHT, false, c))
+    return 0;
+  if ((dc->flags & DCF_DONT_DRAW) || !dc->body)
+    return 1;
+
+  auto color = dc->color.c0;
+  const auto *font = reinterpret_cast<const uint8_t *>(sys_font_std);
+  const auto glyph = FONT_HEIGHT * ch;
+  if (color.rop == ROPB_COLLISION) {
+    for (auto j = c.h1; j < c.h2; j++) {
+      auto *dst = dc->body + (c.y + j) * dc->width_internal + c.x + c.w1;
+      auto row = font[glyph + j];
+      for (auto i = c.w1; i < c.w2; i++, dst++)
+        if (row & (1U << i))
+          GrWritePixel(*dc, *dst, color);
+    }
+    return 1;
+  }
+  if (color.rop == ROPB_XOR) {
+    if (!color.color)
+      return 1;
+    color.color = COLOR_MONO;
+  }
+
+  const auto left = c.x + c.w1;
+  const auto shift = (-uint64_t(c.x)) & 7;
+  const auto leading_pixels = 8 - (left & 7);
+  auto trailing_pixels = (c.x + c.w2) & 7;
+  uint8_t leading_mask = 0xFF >> leading_pixels;
+  const uint8_t trailing_mask = 0xFF << trailing_pixels;
+  if (leading_pixels + trailing_pixels > c.w2 - c.w1) {
+    leading_mask |= trailing_mask;
+    trailing_pixels = 0;
+  }
+  // The leading cell reads from the preceding font byte when the glyph
+  // is unaligned, even when left clipping has advanced into the next cell.
+  const int64_t src = glyph - bool(shift);
+  auto font_byte = [&](int64_t i) {
+    return uint64_t(i) < sizeof(sys_font_std) ? font[i] : uint8_t{0};
+  };
+  auto draw_cell = [&](int64_t cell, int64_t y1, int64_t row, uint8_t mask) {
+    if (!GrPixelVisible(dc, cell, y1, false))
+      return;
+    auto bits = (uint16_t(font_byte(row + 1)) << 8 | font_byte(row)) >> shift;
+    bits &= uint8_t(~mask);
+    auto *dst = dc->body + y1 * dc->width_internal + (cell & ~7LL);
+    for (int i = 0; i < 8; i++)
+      if (bits & (1U << i))
+        GrWritePixel(*dc, dst[i], color);
+  };
+  for (auto j = c.h1; j < c.h2; j++) {
+    draw_cell(left, c.y + j, src + j, leading_mask);
+    if (trailing_pixels)
+      draw_cell(left + 8, c.y + j, src + j + 1, trailing_mask);
+  }
+  return 1;
+}
+
+static int64_t GrPutS(CDC *dc, int64_t x, int64_t y, const char *s)
+{
+  constexpr int64_t FONT_WIDTH = 8, FONT_HEIGHT = 8;
+  int64_t x0 = x, sx = 0, sy = 0, res = 0;
+  while (s && *s) {
+    if (*s == '\n') {
+      x = x0;
+      y = uint64_t(y) + FONT_HEIGHT;
+      s++;
+    } else if (*s == '\t') {
+      constexpr uint64_t tab = 8 * FONT_WIDTH;
+      x = uint64_t(x0) +
+          ((uint64_t(x) - x0 + FONT_WIDTH + tab - 1) & ~(tab - 1));
+      s++;
+    } else if (s[0] == '$' && s[1] == 'S' && (s[2] == 'X' || s[2] == 'Y') &&
+               s[3] == ',' && s[4] && s[5] && (s[4] != '-' || s[6])) {
+      auto &offset = s[2] == 'X' ? sx : sy;
+      bool negative = s[4] == '-';
+      offset = negative ? '0' - uint8_t(s[5]) : uint8_t(s[4]) - '0';
+      s += 6 + negative;
+    } else {
+      res += GrPutCharCpp(dc, uint64_t(x) + sx, uint64_t(y) + sy, *s++);
+      x = uint64_t(x) + FONT_WIDTH;
+    }
+  }
+  return res;
+}
+
+extern "C" int64_t GrPrintCpp(CDC *dc, int64_t x, int64_t y, const char *fmt,
+                              int64_t argc, const uint64_t *argv)
+{
+  auto *buf = StrPrintJoin(nullptr, fmt, argc, argv);
+  auto res = GrPutS(dc, x, y, buf);
+  Free(buf);
+  return res;
+}
+
 extern "C" int64_t GrRectCpp(CDC *dc, int64_t x, int64_t y, int64_t w,
                              int64_t h)
 {

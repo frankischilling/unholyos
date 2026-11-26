@@ -46,7 +46,8 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, int64_t z0, const uint8_t *elems,
       (1u << SPT_THICK) | (1u << SPT_SHIFT) | (1u << SPT_PT) |
       (1u << SPT_POLYPT) | (1u << SPT_LINE) | (1u << SPT_POLYLINE) |
       (1u << SPT_RECT) | (1u << SPT_BITMAP) | (1u << SPT_TRANSFORM_ON) |
-      (1u << SPT_TRANSFORM_OFF) | (1u << SPT_PLANAR_SYMMETRY);
+      (1u << SPT_TRANSFORM_OFF) | (1u << SPT_PLANAR_SYMMETRY) |
+      (1u << SPT_ARROW);
   constexpr uint32_t flags_3d = DCF_TRANSFORMATION | DCF_SYMMETRY;
   if (!elems || !available)
     return false;
@@ -135,12 +136,15 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, int64_t z0, const uint8_t *elems,
       break;
     }
     case SPT_LINE:
+    case SPT_ARROW:
     case SPT_RECT: {
       CSpritePtPt pp;
       MemCpy(&pp, elem, sizeof(pp));
       if (type == SPT_LINE)
         GrLine3Cpp(&dc, pp.p.x1 + x, pp.p.y1 + y, z, pp.x2 + x, pp.y2 + y, z, 1,
                    0);
+      else if (type == SPT_ARROW)
+        GrArrow3Cpp(&dc, pp.p.x1 + x, pp.p.y1 + y, z, pp.x2 + x, pp.y2 + y, z);
       else
         GrRect3Cpp(&dc, pp.p.x1 + x, pp.p.y1 + y, z, int64_t(pp.x2) - pp.p.x1,
                    int64_t(pp.y2) - pp.p.y1);
