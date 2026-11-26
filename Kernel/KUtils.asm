@@ -2,7 +2,8 @@ GLOBAL CPUStructInit,TaskInit,SET_GS_BASE,SET_FS_BASE,CallModuleMain,CallHolyC0,
 GLOBAL _MEMCPY,_MEMSET,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_CLAMP_I64
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
-GLOBAL Str2I64HC
+GLOBAL Str2I64HC,Str2DateHC
+GLOBAL GetI64HC,GetF64HC,GetDateHC
 GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
 GLOBAL HashTableNewHC,HashTypeNumHC,CeilU64HC,Pow10I64HC
@@ -133,7 +134,8 @@ EXTERN QSortCpp,QSortI64Cpp,LstMatchCpp
 EXTERN FileReadCpp,FileNameAbsCpp,DirNameAbsCpp,DirCurCpp,DirFileCpp,ExtChgCpp,ExtDftCpp
 EXTERN CdCpp,IsDirCpp,DirCpp,PutDirLinkCpp,FilesFindCpp,FileFindCpp,FilesFindMatchCpp
 EXTERN DirEntryDelCpp,DirEntryDel2Cpp,DirTreeDelCpp,DirTreeDel2Cpp
-EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp
+EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp,Str2DateCpp
+EXTERN GetI64Cpp,GetF64Cpp,GetDateCpp
 EXTERN FileWriteCpp,BlkDevNextFreeSlotCpp,BlkDevAddCpp,Let2DrvCpp,BlkReadCpp,BlkWriteCpp
 EXTERN FSizeCpp,FOpenCpp,FCloseCpp,FBlkReadCpp,FBlkWriteCpp
 EXTERN RedSeaISOCpp
@@ -484,6 +486,7 @@ HOLYC_CPP DirTreeDel2HC,DirTreeDel2Cpp,1
 HOLYC_CPP DirContextNewHC,DirContextNewCpp,4
 HOLYC_CPP DirContextDelHC,DirContextDelCpp,2
 HOLYC_CPP Str2I64HC,Str2I64Cpp,3
+HOLYC_CPP Str2DateHC,Str2DateCpp,1
 HOLYC_CPP FileWriteHC,FileWriteCpp,5
 HOLYC_CPP FSizeHC,FSizeCpp,1
 HOLYC_CPP FOpenHC,FOpenCpp,3
@@ -579,6 +582,9 @@ HOLYC_CPP DocTermNewHC,DocTermNewCpp,0
 HOLYC_CPP DocGetKeyHC,DocGetKeyCpp,1
 HOLYC_CPP DocScanLineHC,DocScanLineCpp,4
 HOLYC_CPP GetStrHC,GetStrCpp,3
+HOLYC_CPP GetI64HC,GetI64Cpp,4
+HOLYC_CPP GetF64HC,GetF64Cpp,4
+HOLYC_CPP GetDateHC,GetDateCpp,4
 HOLYC_CPP GetSHC,GetSCpp,3
 HOLYC_CPP DocLockHC,DocLockCpp,1
 HOLYC_CPP DocUnlockHC,DocUnlockCpp,1

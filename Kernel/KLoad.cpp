@@ -45,6 +45,7 @@ void FileReadHC(), FileNameAbsHC(), DirNameAbsHC(), DirCurHC(), DirFileHC();
 void CdHC(), IsDirHC(), DirHC(), PutDirLinkHC(), FilesFindHC(), FileFindHC(),
     FilesFindMatchHC(), DirEntryDelHC(), DirEntryDel2HC(), DirTreeDelHC(), DirTreeDel2HC();
 void DirContextNewHC(), DirContextDelHC(), Str2I64HC();
+void Str2DateHC(), GetI64HC(), GetF64HC(), GetDateHC();
 void ExtChgHC(), ExtDftHC();
 void RedSeaISOHC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
@@ -608,6 +609,7 @@ bool LoadKernel(CTask &task)
       {"DirContextNew", reinterpret_cast<uintptr_t>(DirContextNewHC)},
       {"DirContextDel", reinterpret_cast<uintptr_t>(DirContextDelHC)},
       {"Str2I64", reinterpret_cast<uintptr_t>(Str2I64HC)},
+      {"Str2Date", reinterpret_cast<uintptr_t>(Str2DateHC)},
       {"FileWrite", reinterpret_cast<uintptr_t>(FileWriteHC)},
       {"FSize", reinterpret_cast<uintptr_t>(FSizeHC)},
       {"FOpen", reinterpret_cast<uintptr_t>(FOpenHC)},
@@ -773,6 +775,9 @@ bool LoadKernel(CTask &task)
       {"ScanKey", reinterpret_cast<uintptr_t>(ScanKeyHC)},
       {"GetKey", reinterpret_cast<uintptr_t>(GetKeyHC)},
       {"GetStr", reinterpret_cast<uintptr_t>(GetStrHC)},
+      {"GetI64", reinterpret_cast<uintptr_t>(GetI64HC)},
+      {"GetF64", reinterpret_cast<uintptr_t>(GetF64HC)},
+      {"GetDate", reinterpret_cast<uintptr_t>(GetDateHC)},
       {"GetS", reinterpret_cast<uintptr_t>(GetSHC)},
       {"GetChar", reinterpret_cast<uintptr_t>(GetCharHC)},
       {"Ona2Freq", reinterpret_cast<uintptr_t>(Ona2FreqHC)},

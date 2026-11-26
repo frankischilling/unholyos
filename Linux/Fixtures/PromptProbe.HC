@@ -1,0 +1,11 @@
+I64 pi64;
+F64 pf64;
+CDate pdate;
+"prompt conversion %d %f %d\n",ToI64(-3.75),ToF64(17),ToI64(42);
+"prompt dates %D %D %D %D %D\n",Str2Date("2/29/24"),Str2Date("SM(2/23/24)+3"),Str2Date("EM(2/1/24)"),Str2Date("SY(9/12/2025)"),Str2Date("EY(9/12/2025)");
+pi64=GetI64("probe int(%d):",42,-10,50);
+"\nprobe int result %d\n",pi64;
+pf64=GetF64("probe float(%g):",1.25,-10.0,10.0);
+"\nprobe float result %f\n",pf64;
+pdate=GetDate("probe date(%D):",Str2Date("1/2/24"),Str2Date("1/1/24"),Str2Date("12/31/24"));
+"\nprobe date result %D\n",pdate;

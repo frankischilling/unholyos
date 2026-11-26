@@ -1489,6 +1489,8 @@ void BootProbe()
       text.font[255]=glyph;
     }
     BootSoundReport(*adam_task->cur_dv, *adam_task);
+    if (BootFileProgramReport(*adam_task->cur_dv,"/PromptProbe.HC").okay)
+      BootFileProgramReport(*adam_task->cur_dv,"/Demo/Prompt.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/AsmListingScope.HC");
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);
     BootSwitchReport(*adam_task->cur_dv, *adam_task);

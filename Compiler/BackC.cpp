@@ -608,8 +608,8 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
       out.Extend(node.type, 0xC0);
     return true;
   }
-  if (op == IC_TO_I64) {
-    out.Convert(left, RT_I64);
+  if (op == IC_TO_I64 || op == IC_TO_F64) {
+    out.Convert(left, op == IC_TO_I64 ? RT_I64 : RT_F64);
     return true;
   }
   if (op == IC_NOT) {
