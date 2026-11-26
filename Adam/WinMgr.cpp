@@ -1,5 +1,6 @@
 #include "DolDoc/DolDoc.hpp"
 #include "Gr/GrGlbls.hpp"
+#include "Menu.hpp"
 
 static int64_t *WinMgrUpdates()
 {
@@ -95,11 +96,29 @@ static int64_t WinQueButton(CTask *task, bool que, bool left, uint64_t time,
   return msg_code;
 }
 
+static struct
+{
+  CTask *focus;
+  CMenu *menu;
+  CD3I64 pos;
+  int64_t key_cnt;
+  bool keyboard;
+  uint8_t arrow;
+} win_menu;
+
+void WinMenuPointer(int64_t &x, int64_t &y)
+{
+  if (win_menu.menu && win_menu.keyboard) {
+    x = win_menu.pos.x;
+    y = win_menu.pos.y;
+  }
+}
+
 int64_t WinQueIPMsgs(bool que)
 {
   static CD3I64 single_ms;
   auto *task = sys_focus_task;
-  if (winmgr.grab_scroll || !TaskValidateCpp(task))
+  if (winmgr.grab_scroll || win_menu.menu || !TaskValidateCpp(task))
     return MSG_NULL;
   bool moved = old_ms.presnap.x != ms.presnap.x || old_ms.presnap.y != ms.presnap.y;
   if (!moved && ms.lb == ms_last.lb && ms.rb == ms_last.rb &&
@@ -139,6 +158,107 @@ static CTask *WinTaskAt(int64_t x, int64_t y)
       return task;
   }
   return nullptr;
+}
+
+static bool WinMenuBar()
+{
+  return ms_hard.installed && 0 <= ms.pos.y && ms.pos.y < FONT_HEIGHT &&
+         !WinTaskAt(ms.pos.x, ms.pos.y);
+}
+
+static bool WinMenuKey(uint8_t key)
+{
+  return kbd.down_bitmap[key / 32] & (1U << (key % 32));
+}
+
+static CMenu *WinMenuCurrent()
+{
+  auto *focus = sys_focus_task;
+  if (!TaskValidateCpp(focus) || (focus->win_inhibit & WIF_FOCUS_TASK_MENU))
+    return nullptr;
+  auto *owner = MenuTask();
+  return owner ? owner->cur_menu : nullptr;
+}
+
+bool WinMenuInput()
+{
+  if (win_menu.menu)
+    return true;
+  if (winmgr.grab_scroll || !sys_winmgr_task)
+    return false;
+  bool keyboard = WinMenuKey(SC_GUI);
+  if (!keyboard && !(ms.lb && !ms_last.lb && WinMenuBar()))
+    return false;
+  auto *menu = WinMenuCurrent();
+  if (!menu)
+    return false;
+  win_menu = {sys_focus_task, menu, {}, kbd.cnt, keyboard, 0};
+  sys_cur_submenu_entry = nullptr;
+  return true;
+}
+
+static uint8_t WinMenuArrow()
+{
+  constexpr uint8_t keys[]{SC_CURSOR_LEFT, SC_CURSOR_RIGHT, SC_CURSOR_UP,
+                           SC_CURSOR_DOWN};
+  for (auto key : keys)
+    if (WinMenuKey(key))
+      return key;
+  return 0;
+}
+
+static void WinKeyNavMenu(bool held)
+{
+  auto key = win_menu.arrow;
+  if (key && WinMenuKey(key) && win_menu.key_cnt == kbd.cnt)
+    return;
+  win_menu.arrow = held ? WinMenuArrow() : 0;
+  win_menu.key_cnt = kbd.cnt;
+  auto &pos = win_menu.pos;
+  if (key == SC_CURSOR_LEFT || key == SC_CURSOR_RIGHT) {
+    int64_t x = 0, prev = 0;
+    for (auto *entry = win_menu.menu->sub; entry; entry = entry->next) {
+      int64_t next = x + FONT_WIDTH * MenuEntryWidth(entry);
+      if (x == pos.x) {
+        if (key == SC_CURSOR_LEFT)
+          pos.x = prev;
+        else if (entry->next)
+          pos.x = next < GR_WIDTH ? next : GR_WIDTH - 1;
+        break;
+      }
+      prev = x;
+      x = next;
+    }
+    pos.y = 0;
+  } else if (key == SC_CURSOR_UP) {
+    if (pos.y >= FONT_HEIGHT)
+      pos.y -= FONT_HEIGHT;
+  } else if (key == SC_CURSOR_DOWN) {
+    if (pos.y + FONT_HEIGHT < GR_HEIGHT)
+      pos.y += FONT_HEIGHT;
+  }
+}
+
+static void WinMenuUpdate()
+{
+  auto *menu = WinMenuCurrent();
+  if (win_menu.menu) {
+    bool valid = win_menu.menu == menu && win_menu.focus == sys_focus_task;
+    if (valid) {
+      bool held = win_menu.keyboard ? WinMenuKey(SC_GUI) : ms.lb;
+      if (held || win_menu.arrow) {
+        if (win_menu.keyboard)
+          WinKeyNavMenu(held);
+        winmgr.show_menu = true;
+        return;
+      }
+    }
+    if (valid)
+      MenuSend(win_menu.focus, menu);
+    win_menu = {};
+    sys_cur_submenu_entry = nullptr;
+  }
+  winmgr.show_menu = menu && WinMenuBar() && !winmgr.grab_scroll;
 }
 
 static CTask *grab_task;
@@ -287,7 +407,8 @@ static uint64_t WinMgrSleep(uint64_t ideal)
   static CWinDocMouse left, right;
   WinRefocusCpp(sys_focus_task);
   WinMsUpdate();
-  if (!WinGrabScroll()) {
+  WinMenuUpdate();
+  if (!WinGrabScroll() && !win_menu.menu && !winmgr.show_menu) {
     WinDocMouse(true, left);
     WinDocMouse(false, right);
   }
@@ -302,6 +423,8 @@ static uint64_t WinMgrSleep(uint64_t ideal)
   auto &refresh = sys_semas[SEMA_REFRESH_IN_PROGRESS].flags;
   __atomic_fetch_or(&refresh, 1, __ATOMIC_RELAXED);
   GrUpdateScrn();
+  if (win_menu.menu && win_menu.keyboard && !sys_cur_submenu_entry)
+    win_menu.pos.y = 0;
   __atomic_fetch_and(&refresh, ~uint64_t{1}, __ATOMIC_RELAXED);
   __atomic_fetch_add(WinMgrUpdates(), 1, __ATOMIC_RELAXED);
   SleepUntilCpp(ideal / 30);

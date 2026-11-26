@@ -541,6 +541,21 @@ and 512 MiB. The boot suite checks the default axis, a user-drawn axis,
 the single stroke after disabling reflection, and cleanup on Escape
 on the standard ISO and the one built in the guest.
 
+## Pulldown menus
+
+Run `ExeFile("::/Demo/PullDownMenu.HC");` to open Terry A. Davis's
+original demo. Move the pointer to the top of the screen, hold the
+left button, then drag to a menu item and release. For keyboard
+selection, hold the Windows key, use the arrow keys, and release
+the Windows key on the highlighted item.
+
+The boot suite selects two commands and exits the demo on the
+standard and guest-built discs. `MenuProbe.HC` loads a menu from a
+file and checks the public records, nested lookup, command arguments,
+and stack restoration. Pinned TempleOS and UnholyOS drew the same
+menu bar, selected and checked entries, and shortcut callout under
+QEMU 9.2.0 with PC, `qemu64`, and 512 MiB.
+
 ## Arrows, raster text, and the common ancestor demo
 
 Both boot discs include Terry A. Davis's unchanged

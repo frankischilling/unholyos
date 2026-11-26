@@ -405,8 +405,22 @@ all three offsets on Ctrl-right. The PS/2 input pump captures the grab
 before queuing task messages. The window manager applies the offsets
 before drawing the next frame. `WinScrollNull` and `WinScrollRestore`
 in `Adam/Win.cpp` expose the reference HolyC ABI and keep the border
-document in place during a pan. Menus and the autocomplete pane
-exception remain pending.
+document in place during a pan. The autocomplete pane exception remains pending.
+
+`Adam/Menu.cpp` follows the menu records, parser, allocation, and drawing
+code in `Adam/Menu.HC`. Menu arguments use the HolyC lexer and expression
+evaluator, including lexical includes for menu files. `CMenu` and
+`CMenuEntry` keep the reference record layouts and `CTask.cur_menu`
+points to the top of the menu stack. Menu parse failures throw the
+`Compiler` exception. The source-position report in
+`Compiler/CExcept.HC`'s `LexExcept` remains pending.
+
+`Adam/WinMgr.cpp` follows `WinKeyNavMenu` and the mouse menu loop in
+`Adam/WinMgr.HC`. Mouse selection starts at the screen's top edge.
+The GUI key opens keyboard selection, the arrow keys position the
+highlight, and releasing the GUI key sends the highlighted command
+to the focused task. UnholyOS tracks that virtual cursor during
+drawing so the input pump can keep sampling the physical mouse.
 
 ## DolDoc windows
 

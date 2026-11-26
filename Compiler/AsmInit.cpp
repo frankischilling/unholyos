@@ -1,6 +1,7 @@
 #include "../Kernel/KernelB.hpp"
 #include "../Adam/Gr/GrExt.hpp"
 #include "../Adam/Gr/GrGlbls.hpp"
+#include "../Adam/Menu.hpp"
 #include "CompilerA.hpp"
 
 extern "C" const char CompilerOpCodes[];
@@ -1051,6 +1052,7 @@ static bool CmpDCData(CHashTable *table)
     CHashClass *type;
   } options[]{
       {"updates", offsetof(CWinMgrGlbls, updates), i64},
+      {"show_menu", offsetof(CWinMgrGlbls, show_menu), boolean},
       {"grab_scroll", offsetof(CWinMgrGlbls, grab_scroll), boolean},
       {"grab_scroll_closed", offsetof(CWinMgrGlbls, grab_scroll_closed), boolean},
   };
@@ -1150,6 +1152,63 @@ static bool CmpTaskSettingsData(CHashTable *table)
                            nullptr, nullptr);
 }
 
+static bool CmpMenuData(CHashTable *table, CHashClass *task)
+{
+  auto *entry = CmpKernelClass(table, "CMenuEntry", sizeof(CMenuEntry));
+  auto *menu = CmpKernelClass(table, "CMenu", sizeof(CMenu));
+  if (!entry || !menu)
+    return false;
+  auto *i64 = FindType("I64", table);
+  auto *u8 = FindType("U8", table);
+  auto *boolean = FindType("Bool", table);
+  auto *heap = CurrentTask()->data_heap;
+  struct
+  {
+    const char *name;
+    CHashClass *cls, *type;
+    size_t offset, count = 0;
+  } members[]{
+      {"next", entry, entry + 1, offsetof(CMenuEntry, next)},
+      {"sub", entry, entry + 1, offsetof(CMenuEntry, sub)},
+      {"name", entry, u8, offsetof(CMenuEntry, name), sizeof(CMenuEntry::name)},
+      {"msg_code", entry, i64, offsetof(CMenuEntry, msg_code)},
+      {"arg1", entry, i64, offsetof(CMenuEntry, arg1)},
+      {"arg2", entry, i64, offsetof(CMenuEntry, arg2)},
+      {"checked", entry, boolean, offsetof(CMenuEntry, checked)},
+      {"dir", entry, boolean, offsetof(CMenuEntry, dir)},
+      {"pad", entry, boolean, offsetof(CMenuEntry, pad), 6},
+      {"next", menu, menu + 1, offsetof(CMenu, next)},
+      {"sub", menu, entry + 1, offsetof(CMenu, sub)},
+      {"task", menu, task + 1, offsetof(CMenu, task)},
+      {"flags", menu, i64, offsetof(CMenu, flags)},
+      {"attr", menu, u8, offsetof(CMenu, attr)},
+      {"pad", menu, u8, offsetof(CMenu, pad), 7},
+      {"cur_menu", task, menu + 1, offsetof(CTask, cur_menu)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    auto *field = name ? MemberAdd(*member.cls, name, *member.type, member.offset)
+                       : nullptr;
+    if (!field) {
+      Free(name);
+      return false;
+    }
+    if (member.count) {
+      auto *axis =
+          reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return false;
+      axis->cnt = member.count;
+      axis->total_cnt = 1;
+      field->dim.next = axis;
+      field->dim.total_cnt = member.count;
+      field->size = member.type->size * member.count;
+    }
+  }
+  return CmpKernelGlobal(table, "sys_cur_submenu_entry", entry + 1,
+                          &sys_cur_submenu_entry);
+}
+
 static bool CmpRuntimeHeaders(CHashTable *table)
 {
   enum : uint8_t
@@ -1184,6 +1243,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     U8PtrPtr,
     TaskSettingsPtr,
     D3I64Ptr,
+    MenuPtr,
+    MenuEntryPtr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1204,6 +1265,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("U8", table) + 2,
       FindType("CTaskSettings", table) + 1,
       FindType("CD3I64", table) + 1,
+      FindType("CMenu", table) + 1,
+      FindType("CMenuEntry", table) + 1,
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -1309,6 +1372,15 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"WinBorder", Bool, FF_RET1, {{"val", Bool, true}, {"task", TaskPtr, true}}},
       {"WinScrollNull", U0, FF_RET1, {{"task", TaskPtr}, {"s", D3I64Ptr}}},
       {"WinScrollRestore", U0, FF_RET1, {{"task", TaskPtr}, {"s", D3I64Ptr}}},
+      {"MenuSubEntryFind", MenuEntryPtr, FF_RET1, {{"haystack_first", MenuEntryPtr}, {"needle_entry_name", U8Ptr}}},
+      {"MenuEntryFind", MenuEntryPtr, FF_RET1, {{"haystack_menu", MenuPtr}, {"needle_full_name", U8Ptr}}},
+      {"MenuNew", MenuPtr, FF_RET1, {{"st", U8Ptr}, {"flags", I64, true}, {"task", TaskPtr, true}}},
+      {"MenuFile", MenuPtr, FF_RET1, {{"filename", U8Ptr}, {"flags", I64, true}, {"task", TaskPtr, true}}},
+      {"MenuDel", U0, FF_RET1, {{"m", MenuPtr}}},
+      {"MenuPush", MenuPtr, FF_RET1, {{"st", U8Ptr}}},
+      {"MenuFilePush", MenuPtr, FF_RET1, {{"filename", U8Ptr}}},
+      {"MenuPop", U0, FF_RET1, {}},
+      {"ScanCode2KeyName", U8Ptr, FF_RET1, {{"sc", I64}}},
       {"SettingsPush", TaskSettingsPtr, FF_RET1,
        {{"task", TaskPtr, true}, {"flags", I64, true}}},
       {"SettingsPop", U0, FF_RET1, {{"task", TaskPtr, true}, {"flags", I64, true}}},
@@ -1828,6 +1900,15 @@ static bool CmpFillHash(CHashTable *table)
       {"WIf_FOCUS_TASK_MS_WHEEL", "23"},
       {"WIf_FOCUS_TASK_BORDER", "24"},
       {"WIf_FOCUS_TASK_GRAB_SCROLL", "25"},
+      {"SC_F1", "0x3B"},
+      {"SC_CURSOR_UP", "0x48"},
+      {"SC_CURSOR_LEFT", "0x4B"},
+      {"SC_CURSOR_RIGHT", "0x4D"},
+      {"SC_CURSOR_DOWN", "0x50"},
+      {"SC_INS", "0x52"},
+      {"SC_DELETE", "0x53"},
+      {"SC_GUI", "0xDB"},
+      {"SCF_NO_SHIFT", "(1<<30)"},
       {"SCF_MS_L_DOWN", "(1<<16)"},
       {"SCF_MS_R_DOWN", "(1<<17)"},
       {"SCF_E0_PREFIX", "(1<<7)"},
@@ -1893,7 +1974,7 @@ static bool CmpFillHash(CHashTable *table)
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
-         CmpTaskSettingsData(table) && CmpRuntimeHeaders(table);
+         CmpTaskSettingsData(table) && CmpMenuData(table, task) && CmpRuntimeHeaders(table);
 }
 
 CHashTable *CmpAsmHashNew()

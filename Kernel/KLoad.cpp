@@ -1,5 +1,6 @@
 #include "KernelB.hpp"
 #include "../Adam/Gr/GrGlbls.hpp"
+#include "../Adam/Menu.hpp"
 
 struct CLoadImport
 {
@@ -102,6 +103,15 @@ void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
     TextRectHC(), TextBorderHC(), WinZBufUpdateHC();
 void WinRefocusHC(), WinToTopHC(), WinFocusHC(), WinTileHorzHC(), WinTileVertHC(), WinMaxHC();
 void WinScrollNullHC(), WinScrollRestoreHC();
+void MenuSubEntryFindHC();
+void MenuEntryFindHC();
+void MenuNewHC();
+void MenuFileHC();
+void MenuDelHC();
+void MenuPushHC();
+void MenuFilePushHC();
+void MenuPopHC();
+void ScanCode2KeyNameHC();
 void WinBorderHC(), SettingsPushHC(), SettingsPopHC();
 void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
 void RawHC(), DbgModeHC(), IsDbgModeHC();
@@ -790,6 +800,16 @@ bool LoadKernel(CTask &task)
       {"WinBorder", reinterpret_cast<uintptr_t>(WinBorderHC)},
       {"WinScrollNull", reinterpret_cast<uintptr_t>(WinScrollNullHC)},
       {"WinScrollRestore", reinterpret_cast<uintptr_t>(WinScrollRestoreHC)},
+      {"MenuSubEntryFind", reinterpret_cast<uintptr_t>(MenuSubEntryFindHC)},
+      {"MenuEntryFind", reinterpret_cast<uintptr_t>(MenuEntryFindHC)},
+      {"MenuNew", reinterpret_cast<uintptr_t>(MenuNewHC)},
+      {"MenuFile", reinterpret_cast<uintptr_t>(MenuFileHC)},
+      {"MenuDel", reinterpret_cast<uintptr_t>(MenuDelHC)},
+      {"MenuPush", reinterpret_cast<uintptr_t>(MenuPushHC)},
+      {"MenuFilePush", reinterpret_cast<uintptr_t>(MenuFilePushHC)},
+      {"MenuPop", reinterpret_cast<uintptr_t>(MenuPopHC)},
+      {"ScanCode2KeyName", reinterpret_cast<uintptr_t>(ScanCode2KeyNameHC)},
+      {"sys_cur_submenu_entry", reinterpret_cast<uintptr_t>(&sys_cur_submenu_entry)},
       {"SettingsPush", reinterpret_cast<uintptr_t>(SettingsPushHC)},
       {"SettingsPop", reinterpret_cast<uintptr_t>(SettingsPopHC)},
       {"WinZBufUpdate", reinterpret_cast<uintptr_t>(WinZBufUpdateHC)},

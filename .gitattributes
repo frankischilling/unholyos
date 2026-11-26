@@ -4,6 +4,7 @@ Demo/Graphics/SpritePutExt.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Graphics/3DPoly.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Graphics/Box.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Graphics/Symmetry.HC -text whitespace=cr-at-eol,-blank-at-eol
+Demo/PullDownMenu.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Graphics/CommonAncestor.HC -text whitespace=cr-at-eol,-blank-at-eol
 Linux/Fixtures/DirContextProbe.HC text eol=lf
 Linux/Fixtures/DocBinLink.DD text eol=lf
