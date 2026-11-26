@@ -1,6 +1,6 @@
 GLOBAL CPUStructInit,TaskInit,SET_GS_BASE,SET_FS_BASE,CallModuleMain,CallHolyC0,CallHolyC2
 GLOBAL _MEMCPY,_MEMSET,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_CLAMP_I64
-GLOBAL memcpy
+GLOBAL memcpy,memset
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
 GLOBAL Str2I64HC,Str2DateHC
@@ -734,6 +734,17 @@ memcpy:
 	MOV	RCX,RDX
 	CLD
 	REP MOVSB
+	RET
+
+; System V memset takes a byte value in ESI and returns the original pointer.
+; Keep the HolyC _MEMSET entry and its advanced-pointer return unchanged.
+memset:
+	MOV	R8,RDI
+	MOV	EAX,ESI
+	MOV	RCX,RDX
+	CLD
+	REP STOSB
+	MOV	RAX,R8
 	RET
 
 _MEMCPY:
