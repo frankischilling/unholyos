@@ -20,6 +20,9 @@ loader relocates to physical address `0x96600`, as in the pinned TempleOS
 loader. The kernel and BSS must fit below that address. On GCC 13.3.0 the
 file-stream baseline's kernel shrank from 522,512 to 407,568 bytes without
 changing the loader layout. All nine local QEMU cases passed with `-Os`.
+Clang may emit a System V `memcpy` call for aggregate copies. Its assembly
+entry returns the original destination; the HolyC `_MEMCPY` entry retains
+the reference calling convention and return value.
 
 ## HolyC terminal
 

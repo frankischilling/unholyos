@@ -1,5 +1,6 @@
 GLOBAL CPUStructInit,TaskInit,SET_GS_BASE,SET_FS_BASE,CallModuleMain,CallHolyC0,CallHolyC2
 GLOBAL _MEMCPY,_MEMSET,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_CLAMP_I64
+GLOBAL memcpy
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
 GLOBAL Str2I64HC
@@ -687,6 +688,16 @@ CallHolyC0:
 	POP	R12
 	POP	RBX
 	POP	RBP
+	RET
+
+; System V entry used by the freestanding C++ compiler for aggregate copies.
+; Unlike _MEMCPY, return the original destination and leave argument cleanup
+; to the caller.
+memcpy:
+	MOV	RAX,RDI
+	MOV	RCX,RDX
+	CLD
+	REP MOVSB
 	RET
 
 _MEMCPY:
