@@ -3187,6 +3187,8 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/DirContextProbe.HC", "Dir context FF\n", '1');
     CheckProgramOutput(boot, "/FileStreamProbe.HC", "File stream probe 3FF\n", '1');
     CheckProgramOutput(boot, "/FileCopyProbe.HC", file_copy_output, '1');
+    CheckProgramOutput(boot, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
+    CheckProgramOutput(boot, "/QueueProbe.BIN.Z", "Queue probe FF\n", '1');
     CheckProgramOutput(boot, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
     CheckProgramOutput(boot, "/ClassMeta.HC", class_meta_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.HC", last_class_output, '1');
@@ -3293,6 +3295,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/FileStreamProbe.HC", "File stream probe 3FF\n",
                          '1');
       CheckProgramOutput(output, "/FileCopyProbe.HC", file_copy_output, '1');
+      CheckProgramOutput(output, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
+      CheckProgramOutput(output, "/QueueProbe.BIN.Z", "Queue probe FF\n", '1');
       CheckProgramOutput(output, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
       CheckProgramOutput(output, "/ClassMeta.HC", class_meta_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.HC", last_class_output, '1');

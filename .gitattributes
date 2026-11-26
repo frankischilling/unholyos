@@ -10,6 +10,7 @@ Demo/Graphics/Shading.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Games/Digits.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/ExtChars.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Prompt.HC -text whitespace=cr-at-eol,-blank-at-eol
+Apps/TimeClock/*.HC -text whitespace=cr-at-eol,-blank-at-eol
 Linux/Fixtures/PromptProbe.HC text eol=lf
 Linux/Fixtures/DateOffsetProbe.HC text eol=lf
 Demo/ClassMeta.HC -text whitespace=cr-at-eol,-blank-at-eol
@@ -81,6 +82,8 @@ Linux/Fixtures/Lines.HC -text
 Linux/Fixtures/Grid.HC -text
 Linux/Fixtures/FunctionPtrProbe.HC text eol=lf
 Linux/Fixtures/FileCopyProbe.HC text eol=lf
+Linux/Fixtures/QueueProbe.HC text eol=lf
+Linux/Fixtures/TimeClockProbe.HC text eol=lf
 Linux/Fixtures/DocFrame.HC text eol=lf
 Linux/Fixtures/DocButton.HC text eol=lf
 Linux/Fixtures/DocCallback.HC text eol=lf

@@ -23,7 +23,7 @@ GLOBAL RedSeaISOHC
 GLOBAL SysUntryHC,PutExceptHC,YorNHC
 GLOBAL StrPrintJoinHC,StrPrintHC,CatPrintHC,MStrPrintHC,PrintHC,PrintErrHC,PrintWarnHC
 GLOBAL PutSHC,PutHexHC
-GLOBAL ExePutSHC,ExeFileHC,StreamPrintHC,StreamExePrintHC
+GLOBAL ExePutSHC,ExeFileHC,StreamPrintHC,StreamExePrintHC,StreamDirHC
 GLOBAL PutCharsHC,IsRawHC,DefineLstLoadHC,DefineSubHC,DefineMatchHC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
 GLOBAL DocReadHC,DocTypeHC,TypeHC
@@ -149,7 +149,7 @@ EXTERN RedSeaISOCpp
 EXTERN SysUntryCpp,PutExceptCpp,YorNCpp
 EXTERN StrPrintJoin,CatPrintCpp,MStrPrintCpp,PrintCpp,PrintErrCpp,PrintWarnCpp
 GLOBAL CmpHC
-EXTERN CmpCpp,ExePutSCpp,ExeFileCpp,StreamPrintCpp,StreamExePrintCpp
+EXTERN CmpCpp,ExePutSCpp,ExeFileCpp,StreamPrintCpp,StreamExePrintCpp,StreamDirCpp
 EXTERN PutCharsCpp,PutS,PutHexCpp,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineMatchCpp
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocReadCpp,DocTypeCpp,TypeCpp
@@ -530,6 +530,7 @@ HOLYC_CPP ExePutSHC,ExePutSCpp,4
 HOLYC_CPP CmpHC,CmpCpp,4
 HOLYC_CPP ExeFileHC,ExeFileCpp,2
 HOLYC_PRINT StreamPrintHC,StreamPrintCpp,1,1
+HOLYC_CPP StreamDirHC,StreamDirCpp,0
 HOLYC_PRINT StreamExePrintHC,StreamExePrintCpp,1,1
 HOLYC_CPP IsRawHC,IsRawCpp,0
 HOLYC_CPP DefineSubHC,DefineSubCpp,2

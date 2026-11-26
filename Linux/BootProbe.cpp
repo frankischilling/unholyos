@@ -495,6 +495,27 @@ static CExeResult BootFileProgramReport(const CDrv &dv, const char *path)
   return run;
 }
 
+static void BootTimeClockReport(const CDrv &dvd)
+{
+  CRedSeaDirEntry entry;
+  size_t prefix;
+  if (!MountedDrive('B') ||
+      !RedSeaFileLookup(dvd,"/TimeClockProbe.HC",false,false,entry,prefix))
+    return;
+  auto *task=CurrentTask();
+  auto *saved_dir=DirCurCpp(task,task);
+  auto *home=StrNew("B:/",task->data_heap);
+  if (saved_dir && home) {
+    auto *saved_home=blkdev.home_dir;
+    blkdev.home_dir=home;
+    BootFileProgramReport(dvd,"/TimeClockProbe.HC");
+    blkdev.home_dir=saved_home;
+    CdCpp(saved_dir,false);
+  }
+  Free(home);
+  Free(saved_dir);
+}
+
 static void BootGuestFileReport(const CDrv &ram, const char *path)
 {
   CRedSeaDirEntry entry;
@@ -1467,6 +1488,10 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/DirContextProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FileStreamProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FileCopyProbe.HC");
+    BootVariadicReport(*adam_task->cur_dv, *adam_task, "/Doc/QueueProbe.HC",
+                       "/QueueProbe.BIN.Z",
+                       "Cmp(\"::/Doc/QueueProbe.HC\",,\"B:/QueueProbe.BIN.Z\");");
+    BootTimeClockReport(*adam_task->cur_dv);
     {
       auto run_level = SYS_RUN_LEVEL;
       SYS_RUN_LEVEL |= RLF_DOC;

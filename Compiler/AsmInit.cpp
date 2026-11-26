@@ -613,6 +613,24 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
                            *FindType("Bool", table), 4, key_args, key_types);
 }
 
+static bool CmpQueData(CHashTable *table)
+{
+  auto *que=CmpKernelClass(table,"CQue",sizeof(CQue));
+  if (!que)
+    return false;
+  auto *heap=CurrentTask()->data_heap;
+  const char *fields[]{"next","last"};
+  for (const char *field : fields) {
+    auto *name=StrNew(field,heap);
+    size_t offset=*field=='n' ? offsetof(CQue,next) : offsetof(CQue,last);
+    if (!name || !MemberAdd(*que,name,*(que+1),offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool CmpDateData(CHashTable *table)
 {
   auto *date = CmpKernelClass(table, "CDate", sizeof(CDate));
@@ -1540,6 +1558,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     MemberPtr,
     MemberMetaPtr,
     DateStructPtr,
+    QuePtr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1571,6 +1590,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CMemberLst", table) + 1,
       FindType("CMemberLstMeta", table) + 1,
       FindType("CDateStruct", table) + 1,
+      FindType("CQue", table) + 1,
   };
   auto *task = CurrentTask();
   struct [[gnu::packed]] CHeaderArg
@@ -1667,6 +1687,12 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"needle_str", U8Ptr}, {"haystack_member_lst", MemberPtr}}},
       {"StrNew", U8Ptr, FF_RET1,
        {{"buf", U8Ptr}, {"mem_task", TaskPtr, true}}},
+      {"StrCpy", U0, FF_RET1, {{"dst", U8Ptr}, {"src", U8Ptr}}, "_STRCPY"},
+      {"StrLen", I64, FF_INTERNAL, {{"st", U8Ptr}}, nullptr, IC_STRLEN},
+      {"QueInit", U0, FF_INTERNAL, {{"head", QuePtr}}, nullptr, IC_QUE_INIT},
+      {"QueIns", U0, FF_INTERNAL, {{"entry", QuePtr}, {"pred", QuePtr}}, nullptr, IC_QUE_INS},
+      {"QueInsRev", U0, FF_INTERNAL, {{"entry", QuePtr}, {"succ", QuePtr}}, nullptr, IC_QUE_INS_REV},
+      {"QueRem", U0, FF_INTERNAL, {{"entry", QuePtr}}, nullptr, IC_QUE_REM},
       {"StrCmp", I64, FF_RET1, {{"st1", U8Ptr}, {"st2", U8Ptr}}, "_STRCMP"},
       {"MemCmp", I64, FF_RET1, {{"ptr1", U8Ptr}, {"ptr2", U8Ptr}, {"cnt", I64}},
        "_MEMCMP"},
@@ -1984,6 +2010,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"IsMute", Bool, FF_RET1, {}},
       {"Call", I64, FF_RET1, {{"addr", U64}}},
       {"StreamPrint", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
+      {"StreamDir", U0, FF_RET1, {}},
       {"StreamExePrint", I64, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
       {"RedSeaISO",
        I64,
@@ -2183,6 +2210,7 @@ static bool CmpFillHash(CHashTable *table)
     const char *name, *data;
   } defines[]{
       {"NULL", "0"}, {"TRUE", "1"}, {"FALSE", "0"}, {"ON", "1"}, {"OFF", "0"},
+      {"__DIR__", "#exe{StreamDir;}"},
       {"I64_MAX", "0x7FFFFFFFFFFFFFFF"},
       {"I64_MIN", "(-0x8000000000000000)"},
       {"F64_MIN", "(0xFFEFFFFFFFFFFFFF(F64))"},
@@ -2220,6 +2248,8 @@ static bool CmpFillHash(CHashTable *table)
       {"ROPF_PROBABILITY_DITHER","0x80000000"},
       {"CH_ESC", "0x1B"},
       {"CH_SHIFT_ESC", "0x1C"},
+      {"GSF_SHIFT_ESC_EXIT", "1"},
+      {"GSF_WITH_NEW_LINE", "2"},
       {"DOCF_BORDER_DOC", "0x100"},
       {"DOCF_HIDE_CURSOR", "0x800"},
       {"DOCF_NO_SCROLL_BARS", "0x2000"}, {"TSF_SAME_SONG", "1"},
@@ -2373,7 +2403,7 @@ static bool CmpFillHash(CHashTable *table)
     HashAdd(&entry->sym.hash,table);
   }
   auto *task = CmpKernelClass(table, "CTask", sizeof(CTask));
-  return task && CmpMemberData(table) && CmpRuntimeData(table) && CmpDateData(table) && CmpDirData(table) &&
+  return task && CmpMemberData(table) && CmpRuntimeData(table) && CmpQueData(table) && CmpDateData(table) && CmpDirData(table) &&
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) && CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&

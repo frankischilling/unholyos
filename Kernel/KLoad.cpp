@@ -59,6 +59,7 @@ void PutSHC(), PutHexHC();
 void PUT_HEX_U64(), PUT_HEX_U32(), PUT_HEX_U16(), PUT_HEX_U8(), PUT_CHARS(),
     PUT_STR();
 void CmpHC(), ExePutSHC(), ExeFileHC(), StreamPrintHC(), StreamExePrintHC();
+void StreamDirHC();
 void DefineSubHC(), DefineMatchHC();
 void HashValHC(), HashDelHC(), HashTableDelHC(), HashSrcFileSetHC();
 void MemberMetaDataHC(), MemberMetaFindHC(), MemberFindHC();
@@ -567,6 +568,7 @@ bool LoadKernel(CTask &task)
       {"_STRCMP", reinterpret_cast<uintptr_t>(_STRCMP)},
       {"StrCmp", reinterpret_cast<uintptr_t>(_STRCMP)},
       {"_STRCPY", reinterpret_cast<uintptr_t>(_STRCPY)},
+      {"StrCpy", reinterpret_cast<uintptr_t>(_STRCPY)},
       {"_STRIMATCH", reinterpret_cast<uintptr_t>(_STRIMATCH)},
       {"StrOcc", reinterpret_cast<uintptr_t>(StrOccHC)},
       {"_HASH_ADD", reinterpret_cast<uintptr_t>(_HASH_ADD)},
@@ -805,6 +807,7 @@ bool LoadKernel(CTask &task)
       {"Cmp", reinterpret_cast<uintptr_t>(CmpHC)},
       {"ExeFile", reinterpret_cast<uintptr_t>(ExeFileHC)},
       {"StreamPrint", reinterpret_cast<uintptr_t>(StreamPrintHC)},
+      {"StreamDir", reinterpret_cast<uintptr_t>(StreamDirHC)},
       {"StreamExePrint", reinterpret_cast<uintptr_t>(StreamExePrintHC)},
       {"IsRaw", reinterpret_cast<uintptr_t>(IsRawHC)},
       {"Raw", reinterpret_cast<uintptr_t>(RawHC)},
