@@ -344,6 +344,14 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
   if (full_refresh)
     doc.min_x = doc.max_x = doc.min_y = doc.max_y = 0;
   for (auto *entry = head.next; entry != &head;) {
+    if (entry->de_flags & (DOCEF_SKIP | DOCEF_FILTER_SKIP)) {
+      if (doc.cur_entry == entry) {
+        doc.cur_entry = entry->next;
+        doc.cur_col = doc.cur_entry->min_col;
+      }
+      entry = entry->next;
+      continue;
+    }
     if (entry->Type() == DOCT_CURSOR) {
       if (!find_cursor && !(doc.flags & DOCF_NO_CURSOR)) {
         doc.cur_entry = entry->next;
@@ -363,6 +371,32 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     if ((entry->de_flags & (DOCEF_TAG_CB | DOCEF_DEFINE)) &&
         !(entry->de_flags & (DOCEF_LST | DOCEF_SKIP | DOCEF_FILTER_SKIP)))
       DocRefreshTag(doc, *entry);
+    if ((type == DOCT_DATA || type == DOCT_CHECK_BOX || type == DOCT_LST) &&
+        (entry->de_flags & DOCEF_REFRESH_DATA))
+      DocDataFmt(doc, *reinterpret_cast<CDocEntry *>(entry));
+    if (type == DOCT_CHECK_BOX && entry->tag && StrLen(entry->tag) >= 3)
+      entry->tag[1] = entry->de_flags & DOCEF_CHECKED_COLLAPSED ? 'X' : ' ';
+    if (type == DOCT_TREE && entry->tag && StrLen(entry->tag) >= 2) {
+      entry->tag[0] = entry->de_flags & DOCEF_CHECKED_COLLAPSED ? '+' : '-';
+      auto *child = entry->next;
+      while (child != &head && child->Type() != DOCT_INDENT &&
+             !(child->de_flags & DOCEF_TREE))
+        child = child->next;
+      if (child != &head && child->Type() == DOCT_INDENT) {
+        int64_t level = settings.indent;
+        do {
+          if (entry->de_flags & DOCEF_CHECKED_COLLAPSED)
+            child->de_flags |= DOCEF_SKIP;
+          else
+            child->de_flags &= ~DOCEF_SKIP;
+          if (child->Type() == DOCT_INDENT) {
+            auto &indent = *reinterpret_cast<CDocEntry *>(child);
+            level = child->de_flags & DOCEF_LEFT_X ? indent.attr : level + indent.attr;
+          }
+          child = child->next;
+        } while (child != &head && level > settings.indent);
+      }
+    }
     uint32_t len = entry->tag ? StrLen(entry->tag) : 0;
     constexpr auto position = DOCEF_LEFT_X | DOCEF_CENTER_X | DOCEF_RIGHT_X |
                               DOCEF_TOP_Y | DOCEF_CENTER_Y | DOCEF_BOTTOM_Y;
@@ -393,12 +427,13 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
         (entry->type & 0xFFFFFF00u) | format |
         ((uint32_t(settings.shifted_x) & 31) << 16) |
         ((uint32_t(settings.shifted_y) & 31) << 21);
-    entry->max_col = type == DOCT_TEXT ? len
+    entry->max_col = type == DOCT_TEXT || type == DOCT_DATA ? len
                      : entry->tag      ? entry->min_col + 1
                                        : 0;
     const bool newline = type == DOCT_NEW_LINE || type == DOCT_SOFT_NEW_LINE;
     auto tab_width = ((x + 8) & ~7) - x;
     if (find_cursor && !(entry->de_flags & DOCEF_NO_CLICK_ON) &&
+        (!(doc.flags & DOCF_FORM) || DocFormEntry(*entry)) &&
         ((entry->de_flags & DOCEF_TAG) || newline || type == DOCT_TAB)) {
       int64_t width = type == DOCT_TAB ? tab_width : len;
       // The screen pass draws visible entries as a range. Its cursor search
@@ -409,12 +444,14 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
         col = 0;
       if (col >= width)
         col = width ? width - 1 : 0;
+      if (col < int64_t(entry->min_col))
+        col = entry->min_col;
       __int128 dx = int64_t(doc.x) - x - col, dy = int64_t(doc.y) - y;
       unsigned __int128 distance = (dx * dx + dy * dy) * 64;
       if (distance <= best_d) {
         best_entry = entry;
         best_d = distance;
-        best_col = type == DOCT_TEXT ? col : entry->min_col;
+        best_col = type == DOCT_TEXT || type == DOCT_DATA ? col : entry->min_col;
       }
     }
     if (screen && !(entry->de_flags & DOCEF_DONT_DRAW)) {

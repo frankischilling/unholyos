@@ -1090,6 +1090,71 @@ and port `0xE9` for output. The startup and guest-built ISO test driver
 also checks all four program outputs. The focused kernel ended its BSS
 at `0x9300b`, below the relocated DVD loader limit of `0x96600`.
 
+## Class reports
+
+The original 627-byte [LastClass.HC by Terry A. Davis](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/LastClass.HC)
+is stored unchanged at `Demo/LastClass.HC`, SHA-256
+`15bc1334d6cb2bde4703551c1ec821577e08fd3e1c09eff6640fd123f3f3a1d0`.
+
+`ClassReportProbe.HC` checks inherited and nested reports, static scalar
+formatting, bound scalar entries, refresh and write-back, keyboard editing,
+tree expansion, failed lookups, depth limits, and the `CCPU` ABI. Both
+guests produced the same static report, including the field offsets and
+signed hexadecimal values, followed by `Class report 7FF data 20`.
+
+The pinned guest ran the exact source bytes with `ExePutS`, using the
+same PC, qemu64 CPU, and 512 MiB configuration as the native focused ISO.
+The original LastClass demo ran to completion after two actual keypresses
+in both guests. The inferred names were `CTask`, `Student`, `School`, and
+`I64i`. The native interactive driver executes `LastClassRun.HC`, which
+loads the original file and checks the CPU and task report headings and
+live data entries. It observes `LastClass reports 7` before returning to
+the prompt. Report counts and pointer addresses are not expected to match
+because native task reflection and runtime records are still partial.
+
+## Document forms and database
+
+The original demos by Terry A. Davis are copied without changes from the
+pinned TempleOS checkout:
+
+- [Demo/Dsk/DataBase.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Dsk/DataBase.HC), SHA-256
+  `06f38c093a9a3bae9ef5f8a2b00ab8919e251b2eab35034f8bb80c877854985f`.
+- [Demo/DolDoc/Form.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/DolDoc/Form.HC), SHA-256
+  `d12fba94ec869f2becd9580f166e8fce1aa55068320450d93dddd6fec45fecbf`.
+
+The interactive regression mounts a temporary 2,048-block RedSea RAM drive
+as `B:`, sets the home directory to `B:/`, and runs the original database
+from the boot DVD. It enters two accounts, saves an edit to account 7,
+cancels a second overwrite, reads account 7 through the demo, then opens
+the resulting `DataBaseDemo.BIN` using `FOpen` and verifies its 51,200-byte
+size and both records with `FBlkRead`. It checks `Ada / 13 Pine` and
+`Bob / 45 Elm`, including backspace editing of the input fields. No host
+disk is attached to the VM. The database persists in the guest RAM drive
+for this session, not across a reboot.
+
+The original form demo displays four numeric values, a list, a fixed-length
+name, two allocated address strings, a date and a checkbox. The test
+selects Adult, changes the name to Jane, enters `Unit 2` in the empty
+address field, unchecks Check and saves. It compares the reported values
+with the pinned guest, including the unchanged numeric defaults and the
+first address. The list chooser and field content are tested with QEMU
+keyboard events and text-layer captures; full editor chrome and mouse
+behavior are not compared.
+
+Run the native regression with QEMU 8.2.2, `pc`, `qemu64`, 512 MiB:
+
+```sh
+make -j4 BUILD=build/docform
+make BUILD=build/docform build/docform/Linux/TestBoot
+build/docform/Linux/TestBoot --database qemu-system-x86_64 \
+  build/docform/unholyos.iso build/docform/database-native
+```
+
+For the reference replay, use the same driver with `--database-reference`
+and the pinned `TOS_Distro.ISO`. It obtains the reference text-layer address
+from the guest through the QEMU debug port. `make test` runs the native
+regression after the normal boot suite.
+
 ## Numeric and date prompts
 
 `Demo/Prompt.HC` retains Terry A. Davis's original bytes. The prompt
@@ -1244,6 +1309,51 @@ Serial output reported the mounted RedSea DVD, root cluster `0x5a`, kernel
 cluster `0x5d`, and `UnholyOS: kernel entered in 64-bit mode`. QMP reported
 the VM running. The screenshot and serial log were captured under `build/`.
 This verifies the clean boot to the current kernel; the desktop is pending.
+
+## TimeClock and queue operations
+
+The original `Apps/TimeClock/Load.HC`, `Install.HC`, and `TimeClk.HC`
+are shipped at their original paths without edits. Their SHA-256 hashes
+match the pinned source: respectively
+`277bbe03345250dcdf1cfc377bbadbad8da437d1b2991596b86acc0bfa137ca8`,
+`302dfcb63c56d2431564876bc8021fd9229809e5024f14d2ef6a82bfb9a5a868`, and
+`ee45adaa0429b22b7484948d081265561e7551acf7eed7cad46f172c185f61dd`.
+
+`QueueProbe.HC` returned `FF` in both guests and in the native guest's
+compiled `.BIN.Z`. It checks the 16-byte queue layout, forward and reverse
+insertion, removal, string copy and length, and `__DIR__` inside a nested
+source file. The reference ran the exact probe through `ExePutS` with its
+source name set to `::/Doc/QueueProbe.HC`.
+
+`TimeClockProbe.HC` loads the original application through `Load.HC`,
+using a fresh writable RedSea RAM drive as the home directory. It checks
+the 33-byte entry layout, exact expanded record bytes and timestamps,
+reloading the queue, and a complete 90-minute session's report. Both
+guests returned `1F` and reported `Week Total:01:30:00` and
+`Already Punched-Out`. The reference reports a missing-file diagnostic on
+the first read of the absent data file; UnholyOS currently returns null
+silently. The native setup also prints its directory creation message.
+These initial setup traces are not identical.
+
+`TimeClockInputProbe.HC` then exercises the original `PunchIn` and
+`PunchOut`. Actual PS/2 keyboard input enters `start`, Enter, `work`,
+Escape, followed by `done`, Escape. Both guests reload four records,
+verify that the last two are an ordered punch-in/punch-out pair with
+timestamps between the before/after readings, and recover the exact
+multiline and single-line descriptions. Both report `TimeClock input 07`.
+The full boot suite checks the deterministic report in the startup
+cases and the rebooted guest-built ISO; the latter also drives the
+interactive prompts. The clock times themselves are not fixed.
+
+For focused verification, build with `make -j4 BUILD=build/time-clock all`.
+Use `Linux/MakeISO` with the built loader and kernel, `--dir Home`,
+`--file Linux/Fixtures/FileWriteProbe.BIN`, both TimeClock fixtures, and
+`--file-at` for each original TimeClock source. The focused image was
+`build/time-clock/app-input-focused.iso`. Both guests ran under QEMU
+8.2.2, PC, `qemu64`, 512 MiB. The native boot log, reference debugcon
+trace, and before/after keyboard screenshots were captured in
+`build/time-clock/`. Persistent hard-disk writes and the complete
+reference file-error diagnostics remain pending.
 
 ## Subsystem map
 

@@ -68,6 +68,23 @@ bool DocDelToNum(CDoc &doc, int64_t count);
 CDocEntryBase *DocPutS(CDoc &doc, const char *src, size_t size,
                        const CDocReadContext *context = nullptr);
 void DocDump(CDoc &doc, int64_t us_delay);
+extern "C" CDocEntryBase *DocPrintCpp(CDoc *doc, const char *fmt, int64_t argc,
+                                      const uint64_t *argv);
+void DocDataFmt(CDoc &doc, CDocEntry &entry, int64_t d = DOCM_CANCEL);
+bool DocDataScan(CDoc &doc, CDocEntry &entry);
+bool DocFormEntry(const CDocEntryBase &entry);
+void DocFormFwd(CDoc &doc, bool giveup = false);
+void DocFormBwd(CDoc &doc, bool giveup = false);
+bool DocFormKey(CDoc &doc, int64_t ch, int64_t sc);
+extern "C" uint64_t DocEdCpp(CDoc *doc, int64_t dof_flags);
+extern "C" uint64_t DocFormCpp(uint8_t *d, const char *class_name,
+                                int64_t dof_flags, const char *header,
+                                const char *footer);
+extern "C" void DocFormFwdCpp(CDoc *doc, uint64_t giveup);
+extern "C" void DocFormBwdCpp(CDoc *doc, uint64_t giveup);
+extern "C" void DocDataFmtCpp(CDoc *doc, CDocEntry *entry, int64_t d);
+extern "C" void DocDataScanCpp(CDoc *doc, CDocEntry *entry);
+extern "C" int64_t DocMaxCpp(int64_t entries);
 CDocEntry *PrsDollarCmd(CDoc &doc, const char *text, const char *end,
                         const CDocReadContext *context);
 CDocBin *DocBinCopy(CDoc &doc, const CDocBin &source, const char *tag);

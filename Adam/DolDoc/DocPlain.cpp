@@ -321,6 +321,13 @@ static bool ParseArg(CDollarCmd &cmd, CDocEntry &entry, unsigned index,
     *string = cmd.String(hc, prefix);
     if (!*string)
       return false;
+    if (index == 2 && base.Type() == DOCT_DATA) {
+      for (auto *p = *string; *p; p++)
+        if (*p == ':') {
+          base.min_col = p - *string + 1;
+          break;
+        }
+    }
     if ((index == 6 || index == 8) && base.Type() == DOCT_MACRO && !base.tag)
       base.tag = StrNew(*string, hc);
     if (index == 3 && (base.de_flags & DOCEF_LST) && !base.tag)
@@ -409,7 +416,8 @@ static bool ParseCommand(CDollarCmd &cmd, CDocEntry &entry, CHeapCtrl *heap)
     if (!cmd.Number(entry.hex_ed_width))
       return false;
   }
-  uint64_t processed = 0;
+  // Data entries get their tag from the format, not a tag argument.
+  uint64_t processed = type == DOCT_DATA ? DOCEF_TAG : 0;
   for (;;) {
     cmd.Commas();
     int idx = cmd.Match(flag_names);

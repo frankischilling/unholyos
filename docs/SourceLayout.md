@@ -752,9 +752,38 @@ that require executing or relocating unfinished AOT code remain pending.
 `AsmInit.cpp` exposes the compiler's member and class records for HolyC
 reflection, including `Fs->hash_table`, `HashFind`, and `MemberFind`.
 The records retain their ABI sizes; debugger and external-usage pointers
-are exposed as opaque addresses. The original `Demo/ClassMeta.HC` now runs
-unchanged. `ClassRep`, `ClassRepD`, and `DocForm` remain pending, so the
-original database demo and the complete `LastClass.HC` are not yet runnable.
+are exposed as opaque addresses. The original `Demo/ClassMeta.HC` runs
+unchanged.
+
+`Adam/ADbg.cpp` follows `Adam/ADbg.HC` for `ClassRep2`, `ClassRep`,
+and `ClassRepD`, using the compiler's actual class and member records.
+It reports base classes, nested records, bounded arrays, scalar values,
+and strings. The dynamic report uses bound DolDoc data entries; scalar
+entries refresh from and write back to the reported memory. `Kernel/KDbg.cpp`
+provides pointer validation, including the native fixed boot records for
+the CPU and Adam task. `Gs` and the native `CCPU` member declarations
+allow the original `Demo/LastClass.HC` to run unchanged. `CTask` reflection
+still covers only the implemented member declarations; native reports
+therefore need not have the reference's number of nested records.
+
+`Adam/DolDoc/DocForm.cpp` follows `DocForm.HC` for metadata-driven form
+construction, navigation, bound data formatting and scanning, list fields,
+checkboxes, and reallocated string fields. `DocEd.cpp` handles modal editing
+and restores the caller's document and window state. `DocPlain`, `DocPutKey`,
+and `DocRecalc` connect the entries to parsing, input, and rendering.
+The original `Demo/Dsk/DataBase.HC` and `Demo/DolDoc/Form.HC` run unchanged.
+The scan implementation supports the field formats exercised by the demos
+and class reports; general `StrScan` and the full editor status bar, menu,
+undo, and task-end handling remain incomplete. List selection uses a modal
+document in the current task rather than a separate popup task.
+
+`Kernel/BlkDev/DskDirB.cpp` exposes `HomeSet`, and the compiler headers expose
+the existing RAM-drive creation and lookup APIs so the database can write
+to a writable home directory. `Compiler/PrsExp.cpp` accepts address-of on
+array expressions used by the original form's `StrCpy(&fds.name, ...)`.
+`Kernel/KLoad.cpp` exposes the existing `_STRCPY` adapter under its HolyC
+name; the `ToUpper` adapter in `Kernel/StrA.cpp` supplies the reference
+character conversion without the reference compiler's intrinsic lowering.
 
 The kernel header table stores numeric and string defaults in a tagged
 union. This saves space in the boot image while preserving the same
@@ -783,6 +812,27 @@ return zero instead of reading outside the month tables. The pinned
 reproduced explicitly for common and leap years without an out-of-bounds
 read. CPU fault recovery, full compiler diagnostics, and unordered
 floating-point comparisons remain outside this prompt implementation.
+
+## Queue primitives and source paths
+
+`Compiler/BackC.cpp` emits the queue operations from `BackC.HC` and
+the string-length operation from `Templates.HC`. The compiler keeps the
+reference opcodes for `QueInit`, `QueIns`, `QueInsRev`, `QueRem`, and
+`StrLen`. `CQue` exposes its two actual pointers. `StrCpy` uses the
+existing native `_STRCPY` entry point and HolyC calling convention.
+
+`StreamDir` in `Compiler/CMisc.cpp` obtains the active source directory
+and writes its quoted name to the compile-time stream, as in `CMisc.HC`.
+It skips define-expansion frames to reach the source file. The `__DIR__`
+define invokes it through `#exe`. This is needed by the unchanged
+application loaders rather than a fixed path for any particular app.
+
+`Compiler/AsmInit.cpp` describes the implemented block-device globals
+using the actual `CBlkDevGlbls` fields and array offsets, including
+`home_dir`. Cache pointers remain outside the exposed record members
+until the cache subsystem is implemented. The original `Apps/TimeClock`
+sources use the native queue, date, prompt, and file APIs directly.
+The probes set a temporary RAM home directory and restore it afterward.
 
 ## HolyC exception statements
 

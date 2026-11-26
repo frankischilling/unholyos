@@ -421,9 +421,31 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     out.Bytes(0x9C, 0x58); // PUSHFQ; POP RAX
     return true;
   }
-  if (op == IC_FS) {
-    out.Bytes(0x64, 0x48, 0x8B, 0x04, 0x25); // MOV RAX,[FS:0]
+  if (op == IC_FS || op == IC_GS) {
+    out.Bytes(op == IC_FS ? 0x64 : 0x65, 0x48, 0x8B, 0x04, 0x25);
     out.Immediate(0, 4);
+    return true;
+  }
+  if (op == IC_QUE_INS || op == IC_QUE_INS_REV) {
+    if (!Emit(out, code, node.right, depth + 1, stack_slots))
+      return false;
+    out.Bytes(0x50); // PUSH predecessor or successor
+    if (!Emit(out, code, node.left, depth + 1, stack_slots + 1))
+      return false;
+    out.Bytes(0x59); // POP RCX
+    if (op == IC_QUE_INS) {
+      out.Bytes(0x48,0x8B,0x11);      // MOV RDX,[RCX]
+      out.Bytes(0x48,0x89,0x01);      // MOV [RCX],RAX
+      out.Bytes(0x48,0x89,0x10);      // MOV [RAX],RDX
+      out.Bytes(0x48,0x89,0x48,0x08); // MOV [RAX+8],RCX
+      out.Bytes(0x48,0x89,0x42,0x08); // MOV [RDX+8],RAX
+    } else {
+      out.Bytes(0x48,0x8B,0x51,0x08); // MOV RDX,[RCX+8]
+      out.Bytes(0x48,0x89,0x02);      // MOV [RDX],RAX
+      out.Bytes(0x48,0x89,0x08);      // MOV [RAX],RCX
+      out.Bytes(0x48,0x89,0x50,0x08); // MOV [RAX+8],RDX
+      out.Bytes(0x48,0x89,0x41,0x08); // MOV [RCX+8],RAX
+    }
     return true;
   }
   if (op == IC_MIN_I64 || op == IC_MAX_I64) {
@@ -581,6 +603,27 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
   if (!Emit(out, code, node.left, depth + 1, stack_slots))
     return false;
   auto left = code[node.left].type;
+  if (op == IC_QUE_INIT) {
+    out.Bytes(0x48,0x89,0x00);      // MOV [RAX],RAX
+    out.Bytes(0x48,0x89,0x40,0x08); // MOV [RAX+8],RAX
+    return true;
+  }
+  if (op == IC_QUE_REM) {
+    out.Bytes(0x48,0x8B,0x08);      // MOV RCX,[RAX]
+    out.Bytes(0x48,0x8B,0x50,0x08); // MOV RDX,[RAX+8]
+    out.Bytes(0x48,0x89,0x0A);      // MOV [RDX],RCX
+    out.Bytes(0x48,0x89,0x51,0x08); // MOV [RCX+8],RDX
+    return true;
+  }
+  if (op == IC_STRLEN) {
+    out.Bytes(0x31,0xC9);           // XOR ECX,ECX
+    out.Bytes(0x80,0x3C,0x08,0);    // CMP BYTE [RAX+RCX],0
+    out.Bytes(0x74,5);              // JE done
+    out.Bytes(0x48,0xFF,0xC1);      // INC RCX
+    out.Bytes(0xEB,0xF5);           // JMP CMP
+    out.Bytes(0x48,0x89,0xC8);      // MOV RAX,RCX
+    return true;
+  }
   if (op == IC_SQR_I64) {
     out.Convert(left, RT_I64);
     out.Bytes(0x48, 0x0F, 0xAF, 0xC0); // IMUL RAX,RAX

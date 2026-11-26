@@ -13,8 +13,9 @@ void EdCursorLeft(CDoc &doc, int64_t sc)
         ((sc & SCF_CTRL) && prev->Type() == DOCT_NEW_LINE))
       return;
     entry = prev;
-    if (entry->Type() == DOCT_TEXT || entry->Type() == DOCT_NEW_LINE ||
-        entry->Type() == DOCT_TAB || (entry->de_flags & DOCEF_TAG)) {
+    if (!(entry->de_flags & (DOCEF_SKIP | DOCEF_FILTER_SKIP)) &&
+        (entry->Type() == DOCT_TEXT || entry->Type() == DOCT_NEW_LINE ||
+         entry->Type() == DOCT_TAB || (entry->de_flags & DOCEF_TAG))) {
       doc.cur_entry = entry;
       doc.cur_col = entry->min_col;
       if (!(sc & SCF_CTRL)) {
@@ -35,6 +36,8 @@ void EdCursorRight(CDoc &doc, int64_t sc)
   }
   while (entry != &doc.head) {
     entry = entry->next;
+    if (entry->de_flags & (DOCEF_SKIP | DOCEF_FILTER_SKIP))
+      continue;
     if (entry == &doc.head || entry->Type() == DOCT_NEW_LINE ||
         (!(sc & SCF_CTRL) && ((entry->de_flags & DOCEF_TAG) ||
                               entry->Type() == DOCT_TAB))) {
@@ -51,6 +54,18 @@ void EdCharDel(CDoc &doc)
   if (entry == &doc.head || entry->Type() == DOCT_PMT ||
       (entry->de_flags & DOCEF_FILTER_SKIP))
     return;
+  if (entry->Type() == DOCT_DATA && entry->tag &&
+      (entry->de_flags & DOCEF_UPDATE_DATA)) {
+    size_t len = StrLen(entry->tag);
+    if (doc.cur_col >= int64_t(entry->min_col) &&
+        size_t(doc.cur_col) < len) {
+      for (size_t i = doc.cur_col; i < len; i++)
+        entry->tag[i] = entry->tag[i + 1];
+      entry->max_col = len - 1;
+      DocDataScan(doc, *reinterpret_cast<CDocEntry *>(entry));
+    }
+    return;
+  }
   if (entry->Type() == DOCT_TEXT && entry->tag &&
       !(entry->de_flags & ~DOCG_PLAIN_ENTRY)) {
     size_t len = StrLen(entry->tag);
@@ -92,6 +107,24 @@ static bool ChkDollarBufSize(CDoc &doc)
 
 bool EdCharIns(CDoc &doc, int64_t ch, int64_t sc)
 {
+  if (!(doc.flags & DOCF_IN_DOLLAR) && doc.cur_entry != &doc.head &&
+      doc.cur_entry->Type() == DOCT_DATA && ch >= ' ' &&
+      !(sc & (SCF_ALT | SCF_CTRL | SCF_KEY_DESC))) {
+    auto &entry = *reinterpret_cast<CDocEntry *>(doc.cur_entry);
+    auto &base = entry.base;
+    if (base.tag && (base.de_flags & DOCEF_UPDATE_DATA)) {
+      size_t len = StrLen(base.tag);
+      if (doc.cur_col >= int64_t(base.min_col) && size_t(doc.cur_col) <= len &&
+          len < size_t(entry.len) + base.min_col && len + 2 <= MSize(base.tag)) {
+        for (size_t i = len + 1; i > size_t(doc.cur_col); i--)
+          base.tag[i] = base.tag[i - 1];
+        base.tag[doc.cur_col++] = ch;
+        base.max_col = len + 1;
+        DocDataScan(doc, entry);
+      }
+    }
+    return true;
+  }
   if ((doc.flags & DOCF_IN_DOLLAR) ||
       (ch == '$' && !(doc.flags & DOCG_PLAIN))) {
     if (ch < ' ' || !ChkDollarBufSize(doc))
@@ -110,7 +143,7 @@ bool EdCharIns(CDoc &doc, int64_t ch, int64_t sc)
     return false;
   auto *entry = doc.cur_entry;
   constexpr auto actions = DOCEF_LEFT_EXP | DOCEF_RIGHT_EXP | DOCEF_LEFT_CB |
-                           DOCEF_RIGHT_CB | DOCEF_LINK;
+                           DOCEF_RIGHT_CB | DOCEF_LINK | DOCEF_CHECK_COLLAPSABLE;
   if (entry == &doc.head || !(entry->de_flags & actions))
     return false;
   doc.cmd_U8 = ch;
