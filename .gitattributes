@@ -4,6 +4,7 @@ Demo/Graphics/SpritePutExt.HC -text whitespace=cr-at-eol,-blank-at-eol
 Linux/Fixtures/DirContextProbe.HC text eol=lf
 Linux/Fixtures/DocBinLink.DD text eol=lf
 Linux/Fixtures/DocBinLinkProbe.HC text eol=lf
+Linux/Fixtures/SpriteProbe.HC text eol=lf
 Linux/Fixtures/DirectoryProbe.HC text eol=lf
 Linux/Fixtures/LexProbe.HC text eol=lf
 Linux/Fixtures/LexDirectives.HC text eol=lf

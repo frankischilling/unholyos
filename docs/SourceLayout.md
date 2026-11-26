@@ -330,8 +330,8 @@ task. Entry callbacks run with the document unlocked. Live tags in
 `DocRecalc.cpp` receive the locked document, entry, and owning memory
 task. A tag callback that throws falls back to an empty tag during
 that refresh. `DocRecalcLib.cpp` supplies `DocBottom` and the hold-aware
-`DocClear` pass. Macro dispatch, wrapping, data widgets, sprites, the full
-editor, and per-task drawing remain pending.
+`DocClear` pass. Macro dispatch, wrapping, data widgets, the full editor,
+and per-task drawing remain pending.
 
 `Adam/DolDoc/DocTerm.cpp` creates the put, display, and border documents
 from `DocTermNew` in `Adam/DolDoc/DocTerm.HC`.
@@ -362,8 +362,21 @@ directory afterward. `DocPlain.cpp` and `DocBin.cpp` resolve
 `DOCEF_BIN_PTR_LINK` by attachment number or tag. A cyclic link produces
 an error entry. Saving preserves the `BP` reference and omits the
 external binary from the appended data. Graphics-file dispatch through
-`DocGR`, sprite drawing, word wrapping, and file-link navigation remain
-pending.
+`DocGR`, word wrapping, and file-link navigation remain pending.
+
+`Compiler/PrsExp.cpp` handles `TK_INS_BIN` as in `PrsExp.HC`. It retains
+the attachment's exact byte length in the generated image and gives
+HolyC a `U8 *` to the bytes. `Adam/Gr/Gr.hpp` maps the packed element
+records from `Gr.HH`. `SpriteNew.cpp` follows `SpriteElemSize` and
+`SpriteSize` in `SpriteNew.HC`. It bounds reads when the caller supplies
+the attachment length. `GrSpritePlot.cpp` follows `DocSprite` and
+`Sprite` from `GrSpritePlot.HC` and gives the document its own copy of
+the sprite data. The initial `Sprite3` path draws untransformed bitmaps,
+points, packed point paths, thin lines, polylines, and rectangles.
+`DocRecalc.cpp` draws these entries through a task alias of `gr.dc2`
+during screen refresh. Transformed and depth-buffered sprites, the
+remaining drawing elements, sprite hit testing, and the sprite editor
+remain pending.
 
 ## Directory listing
 

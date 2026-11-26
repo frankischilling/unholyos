@@ -30,6 +30,8 @@ extern "C" void GrUpdateLine64FlushCache(volatile uint8_t **vga,
                                          uint8_t **cache);
 extern "C" void DCBlotColor4(uint8_t *dst, const uint8_t *src, uint8_t *cache,
                              size_t groups);
+extern "C" uint64_t GrLineCpp(CDC *dc, int64_t x1, int64_t y1, int64_t x2,
+                              int64_t y2, int64_t step, int64_t start);
 using GrLinePlotFn = bool (*)(CDC *dc, int64_t x, int64_t y, int64_t z);
 bool Line(CDC *dc, int64_t x1, int64_t y1, int64_t z1, int64_t x2, int64_t y2,
           int64_t z2, GrLinePlotFn fp_plot, int64_t step, int64_t start);

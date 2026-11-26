@@ -1,6 +1,9 @@
 #include "DolDoc.hpp"
+#include "../Gr/Gr.hpp"
 #include "../Gr/GrExt.hpp"
 #include "../Gr/GrGlbls.hpp"
+
+extern "C" void DCRstCpp(CDC *dc);
 
 static bool SameText(const CDocEntryBase &a, const CDocEntryBase &b)
 {
@@ -202,6 +205,7 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
         border_doc ? task->border_attr : task->text_attr;
   }
   const int64_t x0 = doc.line_start_col, y0 = doc.top_line_num;
+  CDC *sprite_dc = nullptr;
   uint32_t format = 0;
   auto &head = doc.head;
   auto *best_entry = &head;
@@ -279,6 +283,21 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
       if (doc.cur_entry == entry && type != DOCT_TEXT &&
           !(doc.flags & DOCF_DONT_HIGHLIGHT_CURSOR))
         attr ^= 0xFF00;
+      if (type == DOCT_SPRITE && full->bin_data && gr.dc2 &&
+          !(entry->de_flags & DOCEF_DONT_DRAW) && (SYS_RUN_LEVEL & RLF_VGA)) {
+        if (!sprite_dc)
+          sprite_dc = DCAliasCpp(gr.dc2, task);
+        if (sprite_dc) {
+          DCRstCpp(sprite_dc);
+          sprite_dc->color.c0.color =
+              ((attr >> 12) & 15) ^ (task->text_attr >> 4);
+          sprite_dc->bkcolor = sprite_dc->color;
+          auto sprite_x =
+              col - ((entry->de_flags & DOCEF_FROM_START) ? len : 0);
+          Sprite3(*sprite_dc, sprite_x * 8, row * 8, full->bin_data->data,
+                  full->bin_data->size);
+        }
+      }
       if (newline) {
         TextLenAttrCpp(task, col, row, task->win_width - col,
                        uint32_t(settings.cur_text_attr) << 8);
@@ -357,6 +376,8 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
       doc.min_y = y;
     entry = entry->next;
   }
+  if (sprite_dc)
+    DCDelCpp(sprite_dc);
   if (clear_entry) {
     DocDelToEntry(doc, clear_entry, (clear_entry->de_flags & DOCEF_HOLD) != 0);
     return DocRecalc(doc, recalc_flags);

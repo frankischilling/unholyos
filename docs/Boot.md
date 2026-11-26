@@ -48,8 +48,17 @@ size in a native HolyC expression.
 
 `Demo/Graphics/SpritePut.HC` and `SpritePutExt.HC` are Terry A. Davis's
 public-domain programs. The test disc includes both byte for byte at
-their original paths. The probe reads the original documents and
-checks the attachment without running their sprite drawing routines.
+their original paths. `SpriteProbe.HC` compiles the external map as a
+native `$IB` literal and checks its 12,546-byte size. It compares every
+pixel against the packed bitmap after drawing onto a filled canvas and
+after clipping the bitmap to a smaller canvas. The suite repeats the
+probe on the ISO built in the guest.
+
+With QEMU 9.2.0, PC, `qemu64`, and 512 MiB, both UnholyOS and the
+pinned TempleOS disc ran `ExeFile("::/Demo/Graphics/SpritePutExt.HC");`
+from a maximized terminal after `DocClear(,1);`. Three map regions of
+142×87 pixels each matched, including the background through transparent
+pixels. The terminal frames and the printed `ExeFile` result differ.
 [Pinned TempleOS graphics demos](https://github.com/cia-foundation/TempleOS/tree/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Graphics)
 
 [`Doc/Start.DD`](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Doc/Start.DD)
