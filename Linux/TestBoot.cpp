@@ -3549,6 +3549,22 @@ constexpr std::string_view arrow_output =
     "arrow glyphs 89E961B07EC7F577 0F40B14DF3F0EAC5\n"
     "arrow glyphrop 1 1 1 6 9B053996C61C5E16\n";
 
+constexpr std::string_view spline_output =
+    "spline distance 1445 404301AF155173F2 74\n"
+    "spline line 1 8 9122E7FDCDF6497D\n"
+    "spline polygon 1 29 F0BF680BAC1EE2F4\n"
+    "spline polygon full 1 80 BB71644E7B4700D6\n"
+    "spline bezier2 1 79 4AE8884E96D20D77\n"
+    "spline bezier3 1 57 AA5957A8880A0609\n"
+    "spline abort 0 7 17EABD74C9B33E62\n"
+    "spline quadratic 1 130 BF1B4281CE53A3A0\n"
+    "spline quadratic closed 1 134 A9792FECFA70F792\n"
+    "spline cubic 1 149 4BBC33DC307F9A01\n"
+    "spline cubic closed 1 162 EF23C90942C514E9\n"
+    "spline empty 0 0 1 0\n"
+    "spline flat 1 1 1 92A18090E54EE00B 60680B7EF106B7D9\n"
+    "spline depth 1 1 1 BA6E79FD3D678B9A 4C9AA40E315F8652\n"
+    "spline transform 1 1 1 100 A96BA031861789C2 A12C8086FE5D8F7F\n";
 constexpr std::string_view arc_output =
     "arc circle 1 83 8522C8530877871E\n"
     "arc callback 0 5 409AA16A15CF98DD\n"
@@ -3705,6 +3721,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/PenProbe.HC", pen_output, '1');
     CheckProgramOutput(boot, "/ArrowProbe.HC", arrow_output, '1');
     CheckProgramOutput(boot, "/ArcProbe.HC", arc_output, '1');
+    CheckProgramOutput(boot, "/SplineProbe.HC", spline_output, '1');
     CheckProgramOutput(boot, "/TaskSettingsProbe.HC", task_settings_output,
                        '1');
     CheckProgramOutput(boot, "/WinScrollProbe.HC", win_scroll_output, '1');
@@ -3815,6 +3832,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/PenProbe.HC", pen_output, '1');
       CheckProgramOutput(output, "/ArrowProbe.HC", arrow_output, '1');
       CheckProgramOutput(output, "/ArcProbe.HC", arc_output, '1');
+      CheckProgramOutput(output, "/SplineProbe.HC", spline_output, '1');
       CheckProgramOutput(output, "/TaskSettingsProbe.HC", task_settings_output,
                          '1');
       CheckProgramOutput(output, "/WinScrollProbe.HC", win_scroll_output, '1');
@@ -4520,6 +4538,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--break-reference" ||
        std::string_view(argv[1]) == "--screen-capture" ||
        std::string_view(argv[1]) == "--screen-capture-reference" ||
+       std::string_view(argv[1]) == "--spline" ||
+       std::string_view(argv[1]) == "--spline-reference" ||
        std::string_view(argv[1]) == "--database" ||
        std::string_view(argv[1]) == "--database-reference" ||
        std::string_view(argv[1]) == "--form")) {
@@ -4527,6 +4547,7 @@ int main(int argc, char **argv)
     bool tic = std::string_view(argv[1]).starts_with("--tic-tac-toe");
     bool breaks = std::string_view(argv[1]).starts_with("--break");
     bool screen_capture = std::string_view(argv[1]).starts_with("--screen-capture");
+    bool spline = std::string_view(argv[1]).starts_with("--spline");
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -4536,8 +4557,8 @@ int main(int argc, char **argv)
       fs::create_directories(dir);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
-      if (character || tic || breaks || screen_capture)
-        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference, tic, breaks, screen_capture);
+      if (character || tic || breaks || screen_capture || spline)
+        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference, tic, breaks, screen_capture, spline);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");

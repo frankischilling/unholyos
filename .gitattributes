@@ -97,6 +97,8 @@ Linux/Fixtures/MatrixProbe.HC text eol=lf
 Linux/Fixtures/PenProbe.HC text eol=lf
 Linux/Fixtures/ArrowProbe.HC text eol=lf
 Linux/Fixtures/ArcProbe.HC text eol=lf
+Linux/Fixtures/SplineProbe.HC text eol=lf
+Demo/Graphics/BSpline.HC -text whitespace=cr-at-eol,-blank-at-eol
 Linux/Fixtures/BreakProbe.HC text eol=lf
 Linux/Fixtures/TaskSettingsProbe.HC text eol=lf
 Linux/Fixtures/Lines.HC -text

@@ -4,7 +4,7 @@
 static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
                                    const std::string &boot, bool reference,
                                    bool tic = false, bool breaks = false,
-                                   bool screen_capture = false)
+                                   bool screen_capture = false, bool spline = false)
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -238,6 +238,123 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
     Check(FileRead(uploaded) == expected, "Reference probe transfer changed source bytes");
     cmd("ExePutS(cgprobe);Free(cgprobe);");
   };
+  if (spline) {
+    cmd(R"("SP1 %X %X %X\n",gr.dc->body,&ms.pos.x,&winmgr.updates;)");
+    auto [pixels, mouse, updates] = addresses("SP1 ");
+    cmd(R"("SP2 %X %X %X\n",&Fs->pix_left,&Fs->pix_top,&Fs->win_inhibit;)");
+    auto [left, top, inhibit] = addresses("SP2 ");
+    cmd(R"("SP3 %X %X %X\n",&ms.lb,&ms.rb,&Fs->scroll_x;)");
+    auto [lb, rb, scroll] = addresses("SP3 ");
+    auto old_inhibit = ReadPhysical<1>(vm, inhibit, 'w')[0];
+    auto old_scroll = ReadPhysical<3>(vm, scroll);
+    cmd("DocClear(,1);MsSet(32,32);");
+    cmd(R"(ExeFile("::/Demo/Graphics/BSpline.HC");)");
+    wait_text("Sel ctrl points with left mouse.");
+    auto x0 = int(ReadPhysical<1>(vm, left)[0]);
+    auto y0 = int(ReadPhysical<1>(vm, top)[0]);
+    Check(x0 >= 0 && x0 + 410 < 640 && y0 >= 0 && y0 + 330 < 480,
+          "BSpline points outside the window");
+    auto frames = [&](uint64_t n) {
+      auto start = ReadPhysical<1>(vm, updates)[0];
+      for (unsigned i = 0; i < 300; i++) {
+        if (ReadPhysical<1>(vm, updates)[0] - start >= n)
+          return;
+        std::this_thread::sleep_for(30ms);
+      }
+      throw std::runtime_error("Spline window did not refresh");
+    };
+    auto move = [&](int x, int y) {
+      for (unsigned i = 0; i < 50; i++) {
+        auto pos = ReadPhysical<2>(vm, mouse);
+        auto dx = x - int64_t(pos[0]), dy = y - int64_t(pos[1]);
+        if (!dx && !dy)
+          return;
+        MouseMove(vm, std::clamp(dx, int64_t(-40), int64_t(40)) * 2,
+                  std::clamp(dy, int64_t(-40), int64_t(40)) * 2);
+        std::this_thread::sleep_for(60ms);
+      }
+      throw std::runtime_error("Spline mouse did not reach target");
+    };
+    auto bitmap = [&](std::string name) {
+      auto file = dir / (name + ".raw");
+      vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+                 std::to_string(pixels) + R"(,"size":307200,"filename":")" +
+                 file.string() + R"("}})");
+      auto bytes = FileRead(file);
+      Check(bytes.size() == 640 * 480, "Incomplete spline drawing");
+      return bytes;
+    };
+    auto fingerprint = [](const auto &bytes) {
+      uint64_t hash = 0xCBF29CE484222325;
+      for (auto pixel : bytes)
+        hash = (hash ^ pixel) * 0x100000001B3;
+      return hash;
+    };
+    auto click = [&](const char *name, uint64_t addr, int x, int y) {
+      move(x0 + x, y0 + y);
+      frames(4);
+      for (bool down : {true, false}) {
+        MouseButton(vm, name, down);
+        unsigned tries = 0;
+        while (bool(ReadPhysical<1>(vm, addr, 'b')[0]) != down && tries++ < 100)
+          std::this_thread::sleep_for(30ms);
+        Check(tries < 100, "Spline mouse button was not consumed");
+        frames(4);
+      }
+    };
+    // These complete drawing buffers were captured on the pinned guest.
+    constexpr uint64_t initial = 0x24CDA718D8961325;
+    constexpr uint64_t point_hashes[] = {
+        0xF989890895D2A096, 0xDCF117DDEBC20395, 0x924113F1B3D82546,
+        0xE7FD6E2559370945, 0x6324DC5288E4889E};
+    auto before = bitmap("spline-initial");
+    Check(fingerprint(before) == initial, "BSpline initial drawing differs");
+    unsigned i = 0;
+    for (auto [x,y] : {std::pair{130,130}, std::pair{360,100},
+                       std::pair{400,290}, std::pair{200,320},
+                       std::pair{110,230}}) {
+      click("left", lb, x, y);
+      auto after = bitmap("spline-point" + std::to_string(++i));
+      Check(std::count(after.begin(), after.end(), uint8_t(2)) >
+                std::count(before.begin(), before.end(), uint8_t(2)),
+            "BSpline did not mark a clicked control point");
+      Check(fingerprint(after) == point_hashes[i - 1],
+            "BSpline control points differ from the pinned guest");
+      before = std::move(after);
+    }
+    click("right", rb, 300, 380);
+    wait_text("PRESS A KEY");
+    frames(4);
+    auto drawn = bitmap("spline-drawn");
+    Check(std::count(drawn.begin(), drawn.end(), uint8_t(4)) > 100 &&
+              std::count(drawn.begin(), drawn.end(), uint8_t(1)) > 100,
+          "BSpline did not draw both closed curves");
+    auto hash = fingerprint(drawn);
+    std::cout << "BSpline drawing " << std::hex << hash << std::dec << '\n';
+    Check(hash == 0xFE26C3D4972FD4F0,
+          "BSpline closed curves differ from the pinned guest");
+    snapshot("spline-drawn");
+    key("ret");
+    wait_text("T:/Home>");
+    cmd(R"("Done Spline exit %d\n",7*9;)");
+    wait_text("Spline exit 63");
+    auto restored_inhibit = ReadPhysical<1>(vm, inhibit, 'w')[0];
+    auto restored_scroll = ReadPhysical<3>(vm, scroll);
+    std::cout << "BSpline settings " << std::hex << old_inhibit << ' '
+              << restored_inhibit << std::dec << " scroll";
+    for (auto v : old_scroll) std::cout << ' ' << int64_t(v);
+    for (auto v : restored_scroll) std::cout << ' ' << int64_t(v);
+    std::cout << '\n';
+    Check(restored_inhibit == old_inhibit && restored_scroll == old_scroll,
+          "BSpline did not restore task settings");
+    auto cleared = bitmap("spline-cleared");
+    Check(fingerprint(cleared) == initial &&
+              std::all_of(cleared.begin(), cleared.end(),
+                          [](uint8_t p) { return p == 0xFF; }),
+          "BSpline did not clear the screen");
+    snapshot("spline-exit");
+    return;
+  }
   if (breaks) {
     cmd(R"("BR %X %X %X\n",&Fs->task_flags,&Fs->except_ch,&Fs->last_except;)");
     auto [flags, exception, last] = addresses("BR ");
