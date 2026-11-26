@@ -1552,6 +1552,13 @@ extern "C" void KMainCpp()
     BootFileProgramReport(*adam_task->cur_dv, "/DocFrame.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/DocButton.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/DirectoryProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/DirContextProbe.HC");
+    {
+      auto run_level = SYS_RUN_LEVEL;
+      SYS_RUN_LEVEL |= RLF_DOC;
+      BootFileProgramReport(*adam_task->cur_dv, "/DocBinLinkProbe.HC");
+      SYS_RUN_LEVEL = run_level;
+    }
     if (BootFileProgramReport(*adam_task->cur_dv, "/DocCallback.HC").okay) {
       auto thrown = ExePutS("DocCBThrowTest;", nullptr, 0);
       auto cleanup = ExePutS("DocCBThrowCheck;", nullptr, 0);

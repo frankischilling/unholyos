@@ -276,6 +276,22 @@ bool IsDotExt(const char *name, char ext)
   return false;
 }
 
+bool FileNameChk(const char *name)
+{
+  if (!name)
+    return false;
+  if (name[0] == '.' && (!name[1] || (name[1] == '.' && !name[2])))
+    return true;
+  for (size_t i = 0; i < CDIR_FILENAME_LEN; i++) {
+    uint8_t ch = name[i];
+    if (!ch)
+      return i != 0;
+    if (!(char_bmp_filename[ch / 32] & (uint32_t{1} << (ch % 32))))
+      return false;
+  }
+  return false;
+}
+
 char *ToggleZorNotZ(const char *name, CHeapCtrl *hc)
 {
   if (!IsDotExt(name, 'Z'))

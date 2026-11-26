@@ -1,0 +1,3 @@
+$IB,"Relative number",BI=7,BP="SpritePut.HC,0x2"$
+$IB,"Relative tag",BI=8,BP="SpritePutExt.HC,<1>"$
+$IB,"Cycle",BI=9,BP="DocBinLink.DD,1"$

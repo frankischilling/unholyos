@@ -427,13 +427,16 @@ static bool ParseCommand(CDollarCmd &cmd, CDocEntry &entry, CHeapCtrl *heap)
   }
 }
 
-CDocEntry *PrsDollarCmd(CDoc &doc, const char *text, const char *end)
+CDocEntry *PrsDollarCmd(CDoc &doc, const char *text, const char *end,
+                        const CDocReadContext *context)
 {
   auto *heap = MemTaskHeap(doc.mem_task);
   auto *entry = reinterpret_cast<CDocEntry *>(CAlloc(sizeof(CDocEntry), heap));
   if (entry) {
     CDollarCmd cmd(text, end);
-    if (!ParseCommand(cmd, *entry, heap))
+    if (!ParseCommand(cmd, *entry, heap) ||
+        ((entry->base.de_flags & DOCEF_BIN_PTR_LINK) &&
+         !DocBinPtrRst(doc, *entry, context)))
       DocEntryError(*entry);
   }
   return entry;

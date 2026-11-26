@@ -2158,6 +2158,8 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/DocButton.HC", doc_button_output, '1');
     CheckProgramOutput(boot, "/DirectoryProbe.HC", "Directory probe 1FF\n",
                        '1');
+    CheckProgramOutput(boot, "/DirContextProbe.HC", "Dir context FF\n", '1');
+    CheckProgramOutput(boot, "/DocBinLinkProbe.HC", "Doc bin links 1F\n", '1');
     CheckProgramOutput(boot, "/DocCallback.HC", doc_callback_output, '1');
     CheckTry(boot);
     if (boot.find("UnholyOS: document callback propagation 0x0000000000000001") ==
@@ -2225,6 +2227,10 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/DocFrame.HC", doc_frame_output, '1');
       CheckProgramOutput(output, "/DocButton.HC", doc_button_output, '1');
       CheckProgramOutput(output, "/DirectoryProbe.HC", "Directory probe 1FF\n",
+                         '1');
+      CheckProgramOutput(output, "/DirContextProbe.HC", "Dir context FF\n",
+                         '1');
+      CheckProgramOutput(output, "/DocBinLinkProbe.HC", "Doc bin links 1F\n",
                          '1');
       CheckProgramOutput(output, "/DocCallback.HC", doc_callback_output, '1');
       CheckTry(output);

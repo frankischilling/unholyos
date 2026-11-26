@@ -21,6 +21,8 @@ inline size_t StrLen(const char *str)
 }
 
 extern "C" int64_t StrCmpCpp(const uint8_t *a, const uint8_t *b);
+extern "C" int64_t Str2I64Cpp(const char *text, int64_t radix,
+                              const char **end);
 
 inline CTask *CurrentTask()
 {
@@ -347,6 +349,7 @@ bool ATAPIReadBytes(const CBlkDev &bd, uint8_t *buf, uint64_t pos,
 CDrv *BlkDevsInitAll();
 bool BlkDevGlblsInit();
 CDrv *MountedDrive(char letter);
+extern "C" CDrv *Let2DrvCpp(uint8_t letter, uint8_t except);
 bool BlkDevReadBytes(const CBlkDev &bd, uint8_t *buf, uint64_t pos,
                      size_t bytes);
 uint64_t Now();
@@ -370,6 +373,10 @@ uint64_t RedSeaFileWrite(CDrv &dv, const char *path, const uint8_t *data,
 char *FileNameAbs(const char *name, const CTask &task, uint64_t flags = 0);
 char *DirNameAbs(const char *name, const CTask &task);
 char *PathTrim(const char *name, CHeapCtrl *hc);
+bool FileNameChk(const char *name);
+extern "C" CDirContext *DirContextNewCpp(const char *mask, uint8_t make_mask,
+                                         uint8_t make_dirs, uint8_t no_mask);
+extern "C" void DirContextDelCpp(CDirContext *dirc, uint8_t restore);
 bool FilesFindMatch(const char *name, const char *mask, uint64_t flags = 0);
 extern "C" uint64_t FilesFindMatchCpp(const char *name, const char *mask,
                                       uint64_t flags);

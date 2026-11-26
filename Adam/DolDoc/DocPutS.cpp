@@ -33,7 +33,8 @@ static bool PutBase(CDoc &doc, uint8_t type, const char *text = nullptr,
   return true;
 }
 
-CDocEntryBase *DocPutS(CDoc &doc, const char *src, size_t size)
+CDocEntryBase *DocPutS(CDoc &doc, const char *src, size_t size,
+                       const CDocReadContext *context)
 {
   if (!src)
     return nullptr;
@@ -89,7 +90,7 @@ CDocEntryBase *DocPutS(CDoc &doc, const char *src, size_t size)
         body = clean;
         closing = write;
       }
-      auto *entry = PrsDollarCmd(doc, body, closing);
+      auto *entry = PrsDollarCmd(doc, body, closing, context);
       Free(clean);
       if (!entry)
         break;

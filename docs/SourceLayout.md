@@ -356,9 +356,14 @@ after showing each terminal. `XTalk` input and autocomplete remain pending.
 and `Type`. It reads through the task's file path and inserts copies
 of the parsed entries at the cursor. `DocNew.cpp` duplicates the
 entry-owned strings and attachments. In raw mode `DocPutS.cpp` scans
-the source document into lines for output. Relative resource lookup
-through `DirContextNew`, graphics-file dispatch through `DocGR`,
-word wrapping, and file-link navigation remain pending.
+the source document into lines for output. `DocRead` enters the
+document's directory while it parses the file and restores the caller's
+directory afterward. `DocPlain.cpp` and `DocBin.cpp` resolve
+`DOCEF_BIN_PTR_LINK` by attachment number or tag. A cyclic link produces
+an error entry. Saving preserves the `BP` reference and omits the
+external binary from the appended data. Graphics-file dispatch through
+`DocGR`, sprite drawing, word wrapping, and file-link navigation remain
+pending.
 
 ## Directory listing
 
@@ -373,11 +378,13 @@ when the corresponding parent records are freed.
 
 `Kernel/BlkDev/DskDirB.cpp` follows `Dir`, `Cd`, and `IsDir` in
 `DskDirB.HC`. `KDate.cpp` supplies the `Date2Struct` conversion used
-by the short listing. Searches resolve RedSea DVD and RAM paths through
-the existing absolute path helpers and preserve the working directory.
-`Cd` visits each path component and retains the valid prefix when a
-component fails. FAT32, public directory contexts, `PopUpCd`, and
-the full drive error reporting remain pending.
+by the short listing. `Cd` visits each path component and retains the
+valid prefix when a component fails. `DskDirContext.cpp` ports
+`DirContextNew` and `DirContextDel`, using the native `CDirContext`
+record to save the task's drive, directory, and mask. `FilesFind`,
+`FileFind`, and `IsDir` use those contexts to resolve RedSea DVD and
+RAM paths and restore the caller's working directory. FAT32,
+`PopUpCd`, and full drive error reporting remain pending.
 
 ## HolyC function pointers
 

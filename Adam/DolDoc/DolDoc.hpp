@@ -7,6 +7,12 @@ constexpr uint64_t DOCG_PLAIN_ENTRY =
     DOCEF_TAG | DOCG_BL_IV_UL | DOCEF_HIGHLIGHT | DOCEF_WORD_WRAP |
     DOCEF_SKIP | DOCEF_FILTER_SKIP;
 
+struct CDocReadContext
+{
+  const char *name;
+  const CDocReadContext *parent;
+};
+
 class CDocLock
 {
 public:
@@ -31,6 +37,8 @@ extern "C" CDoc *DocNewCpp(const char *filename, CTask *task);
 extern "C" void DocDelCpp(CDoc *doc);
 extern "C" void DocLoadCpp(CDoc *doc, const uint8_t *src, int64_t size);
 extern "C" CDoc *DocReadCpp(const char *name, int64_t flags);
+CDoc *DocRead(const char *name, int64_t flags, const CDocReadContext *parent);
+extern "C" uint8_t *DocSaveCpp(CDoc *doc, size_t *size);
 extern "C" uint64_t DocTypeCpp(CDoc *doc, const char *name,
                                int64_t trailing_new_lines);
 extern "C" uint64_t TypeCpp(const char *name, int64_t trailing_new_lines);
@@ -57,9 +65,13 @@ extern "C" int64_t DocEntryRunCpp(CDoc *doc, CDocEntryBase *entry, uint8_t exite
 extern "C" void DocBottomCpp(CDoc *doc);
 void DocDelToEntry(CDoc &doc, CDocEntryBase *clear_entry, bool clear_holds);
 bool DocDelToNum(CDoc &doc, int64_t count);
-CDocEntryBase *DocPutS(CDoc &doc, const char *src, size_t size);
+CDocEntryBase *DocPutS(CDoc &doc, const char *src, size_t size,
+                       const CDocReadContext *context = nullptr);
 void DocDump(CDoc &doc, int64_t us_delay);
-CDocEntry *PrsDollarCmd(CDoc &doc, const char *text, const char *end);
+CDocEntry *PrsDollarCmd(CDoc &doc, const char *text, const char *end,
+                        const CDocReadContext *context);
+CDocBin *DocBinCopy(CDoc &doc, const CDocBin &source, const char *tag);
+bool DocBinPtrRst(CDoc &doc, CDocEntry &entry, const CDocReadContext *context);
 void DocBinsValidate(CDoc &doc);
 void DocBinDel(CDoc &doc, CDocBin *bin);
 void DocBinFree(CDocBin &bin);
