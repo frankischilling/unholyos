@@ -1492,6 +1492,7 @@ void BootProbe()
                        "/QueueProbe.BIN.Z",
                        "Cmp(\"::/Doc/QueueProbe.HC\",,\"B:/QueueProbe.BIN.Z\");");
     BootTimeClockReport(*adam_task->cur_dv);
+    BootFileProgramReport(*adam_task->cur_dv, "/FileOperationsProbe.HC");
     {
       auto run_level = SYS_RUN_LEVEL;
       SYS_RUN_LEVEL |= RLF_DOC;

@@ -209,6 +209,7 @@ extern "C" void PaletteSetStdCpp();
 extern "C" CHashDefineStr *DefineLstLoadCpp(const char *name, const char *list,
                                             const uintptr_t *frame);
 bool DefineInitColors();
+bool DefineInitFileFlags();
 bool LoadDocDefines();
 extern "C" void PutS(const char *text);
 extern "C" void StrCpyCpp(char *dst, const char *src);
@@ -423,6 +424,15 @@ const char *FileExtDot(const char *name);
 bool IsDotExt(const char *name, char ext);
 extern "C" uint64_t FileAttrCpp(const char *name,uint64_t attr);
 extern "C" uint64_t CopySingleCpp(const char *f1,const char *f2);
+extern "C" int64_t DelCpp(const char *mask, uint8_t make_mask,
+                           uint8_t del_dir, uint8_t print_msg);
+extern "C" uint64_t CopyCpp(const char *src, const char *dst);
+extern "C" uint64_t MoveCpp(const char *f1, const char *f2);
+extern "C" int64_t CopyTreeCpp(const char *src, const char *dst,
+                                uint8_t no_mask);
+extern "C" int64_t DelTreeCpp(const char *mask, const char *fu_flags);
+extern "C" void ScanFlagsCpp(uint8_t *dst, const uint8_t *list,
+                             const char *src);
 int64_t DirEntryCompareName(const CRedSeaDirEntry &a, const CRedSeaDirEntry &b);
 bool DirFilesSort(CDirEntry *&first, bool by_cluster);
 void DirFilesFlatten(CDirEntry *&first, uint64_t flags);
@@ -437,6 +447,7 @@ extern "C" uint64_t FileFindCpp(const char *name, CDirEntry *entry,
 extern "C" int64_t DirCpp(const char *mask, uint8_t full);
 extern "C" uint64_t CdCpp(const char *name, uint8_t make_dirs);
 extern "C" uint64_t IsDirCpp(const char *name);
+extern "C" uint64_t DirMkCpp(const char *filename, int64_t entry_cnt);
 extern "C" void PutDirLinkCpp(const char *name, const char *full_name);
 extern "C" void PutFileLinkCpp(const char *filename, const char *full_name,
                                int64_t line, uint8_t plain_text);
@@ -444,7 +455,9 @@ extern "C" char *DirCurCpp(const CTask *task, void *mem_task);
 bool RedSeaFilesFind(CDrv &dv, uint64_t clus, uint64_t parent_clus,
                      const char *directory, const char *mask, uint64_t flags,
                      CDirEntry *parent, CDirEntry *&res);
-bool RedSeaMkDir(CDrv &dv, const char *path);
+bool RedSeaMkDir(CDrv &dv, const char *path, int64_t entry_cnt = 0);
+int64_t RedSeaFilesDel(CDrv &dv, const char *cur_dir, const char *mask,
+                      uint64_t flags, bool del_dir, bool print_msg);
 void QSortI64Native(int64_t *base, int64_t count,
                     int64_t (*compare)(int64_t, int64_t));
 char *ToggleZorNotZ(const char *name, CHeapCtrl *hc);

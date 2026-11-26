@@ -160,6 +160,10 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not register color names\r\n");
     return;
   }
+  if (!DefineInitFileFlags()) {
+    SerialPutS("UnholyOS: Could not register file utility flags\r\n");
+    return;
+  }
   if (!LoadDocDefines()) {
     SerialPutS("UnholyOS: Could not register document definitions\r\n");
     return;
