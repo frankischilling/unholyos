@@ -1,6 +1,7 @@
 #include "../KernelB.hpp"
 
 constexpr uint32_t FAT32_EOC=0x0FFFFFF8, FAT32_RESERVED=0x0FFFFFF0;
+extern "C" uint64_t RandU32Cpp();
 
 static uint64_t FAT32ClusLimit(const CDrv &dv)
 {
@@ -76,6 +77,70 @@ bool FAT32Init(CDrv &dv)
     return false;
   dv.fs_type=FSt_FAT32;
   return true;
+}
+
+bool FAT32Fmt(CDrv &dv, bool quick)
+{
+  if (!dv.bd || dv.bd->type!=BDT_ATA || (dv.bd->flags&BDF_READ_ONLY) ||
+      dv.fs_type!=FSt_FAT32 || dv.drv_offset<=0 || dv.size<=0 ||
+      uint64_t(dv.size)>UINT32_MAX || !DrvTypeSet(dv,0x0B,false))
+    return false;
+  CMemLock lock(dv.locked_flags);
+  CFAT32Boot br{};
+  CFAT32FileInfoSect fis{};
+  br.jump_and_nop[0]=0xEB;
+  br.jump_and_nop[1]=offsetof(CFAT32Boot,code)-2;
+  br.jump_and_nop[2]=0x90;
+  MemCpy(br.oem_name,"MSWIN4.1",8);
+  br.bytes_per_sect=BLK_SIZE;
+  if (dv.size<=500000) br.sects_per_clus=1;
+  else if (dv.size<=2000000) br.sects_per_clus=2;
+  else if (dv.size<=6000000) br.sects_per_clus=4;
+  else if (dv.size<=12000000) br.sects_per_clus=8;
+  else if (dv.size<=33000000) br.sects_per_clus=16;
+  else if (dv.size<=67000000) br.sects_per_clus=32;
+  else br.sects_per_clus=64;
+  br.reserved_sects=32;
+  br.copies_of_fat=2;
+  br.media_desc=0xF8;
+  br.sects=dv.size;
+  br.sects_per_fat=(br.sects/br.sects_per_clus)/(BLK_SIZE/4)+1;
+  br.root_clus=2;
+  br.file_system_info_sect=1;
+  br.log_drv_num=0x80;
+  br.ext_signature=0x29;
+  MemCpy(br.vol_name,"NO NAME    ",11);
+  MemCpy(br.fat_name,"FAT32   ",8);
+  br.signature=0xAA55;
+  uint64_t first=br.reserved_sects+2*uint64_t(br.sects_per_fat);
+  uint64_t clear=first+4*br.sects_per_clus;
+  if (clear>br.sects || (br.sects-first)/br.sects_per_clus<65525 ||
+      (br.sects-first)/br.sects_per_clus>=FAT32_RESERVED-2)
+    return false;
+  br.serial_num=RandU32Cpp();
+  fis.signature1=0x41615252;
+  fis.signature2=0x61417272;
+  fis.free_clus=UINT32_MAX;
+  fis.most_recently_alloced=2;
+  fis.signature3=0xAA550000;
+
+  // The pinned formatter allocates reserved cluster 1, then root cluster 2.
+  // Its FAT entry zero remains zero; keep that on-disk convention.
+  uint32_t fat[BLK_SIZE/4]{};
+  fat[1]=fat[2]=0x0FFFFFFF;
+  ResidentDriveClear(dv.drv_let);
+  dv.fs_type=0;
+  uint64_t start=uint64_t(dv.drv_offset)*BLK_SIZE;
+  if (!BlkWriteZero(dv,dv.drv_offset,quick?clear:br.sects) ||
+      !BlkDevWriteBytes(*dv.bd,reinterpret_cast<const uint8_t *>(&fis),start+BLK_SIZE,sizeof(fis)) ||
+      !BlkDevWriteBytes(*dv.bd,reinterpret_cast<const uint8_t *>(fat),
+                        start+uint64_t(br.reserved_sects)*BLK_SIZE,sizeof(fat)) ||
+      !BlkDevWriteBytes(*dv.bd,reinterpret_cast<const uint8_t *>(fat),
+                        start+uint64_t(br.reserved_sects+br.sects_per_fat)*BLK_SIZE,sizeof(fat)) ||
+      !BlkDevWriteBytes(*dv.bd,reinterpret_cast<const uint8_t *>(&br),start,sizeof(br)) ||
+      !DrvTypeSet(dv,0x0B,true))
+    return false;
+  return FAT32Init(dv);
 }
 
 static bool FAT32ChainLength(const CDrv &dv,uint64_t c,uint64_t &count)

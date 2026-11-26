@@ -277,7 +277,7 @@ build/fat-write/Linux/TestBoot --fat32-write qemu-system-x86_64 \
   build/fat-write/fat32-write-test.iso build/fat-write/fat32-writable.img
 ```
 
-FAT32 mounting is still read-only by default. Formatting, general FAT
+FAT32 mounting is still read-only by default. General FAT
 cache behavior, cross-linked chain repair, and crash recovery remain
 pending.
 
@@ -313,6 +313,47 @@ The two systems' allocation order and timestamps need not be identical.
 make -j4 BUILD=build/fat-stream test
 build/fat-stream/Linux/TestBoot --fat32-stream qemu-system-x86_64 \
   build/fat-stream/fat32-stream-test.iso build/fat-stream/fat32-writable.img
+```
+
+## FAT32 formatting
+
+`Fat32FormatProbe.HC` writes a sentinel at the partition's final sector,
+quick-formats the volume, checks its empty root and FATs, and confirms
+that the sentinel survived. It writes a file, full-formats the volume,
+checks that the old file and sentinel are gone, and saves a new file.
+The native and pinned reference guests both report:
+
+```text
+FAT32 format mutation 3F
+FAT32 format probe 0F
+```
+
+After a cold reboot of each guest's own disk:
+
+```text
+FAT32 persisted format
+FAT32 format probe 0F
+```
+
+The probe SHA-256 is
+`fc860a08d86c5732346a442b7a43931b50574303cfbe48725ff1e143e9a362a6`.
+The pinned live DVD ran under QEMU 8.2.2 with `-machine pc -cpu qemu64
+-m 512`, explicit `ATAMount`, and a writable raw IDE index-0 fixture copy.
+The reference disk SHA-256 after formatting and after reboot was
+`149fe048dbe1454a446e707524a9428523bfbdd6429d967ad8b4cd159b409959`.
+The native test checks both complete FAT copies, the boot record,
+preservation of all sectors outside the formatted partition except the
+expected MBR partition type and active flag, zeroes throughout the
+remaining data sectors, and persistence of the complete image on reboot.
+On the second native boot the driver also attempts a read-only format
+and declines the default confirmation on a writable volume using actual
+keyboard input. The image must remain unchanged after both refusals.
+Volume serial numbers and file timestamps need not match the reference.
+
+```sh
+make -j4 BUILD=build/fat-format test
+build/fat-format/Linux/TestBoot --fat32-format qemu-system-x86_64 \
+  build/fat-format/fat32-format-test.iso build/fat-format/fat32-writable.img
 ```
 
 ## Building a RedSea ISO in the guest

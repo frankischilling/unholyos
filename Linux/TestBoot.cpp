@@ -1674,6 +1674,78 @@ static void DriveDigits(CMonitor &vm, const fs::path &dir,
   std::cout << "Digits.HC matched seeded patterns, score, restart and Escape\n";
 }
 
+static void VerifyFormatRefusal(CMonitor &vm, const fs::path &dir,
+                                const std::string &boot)
+{
+  vm.ResetDeadline(45s);
+  std::smatch match;
+  Check(std::regex_search(boot, match, std::regex(R"(text base (0x[0-9a-f]+))")),
+        "Missing format text layer address");
+  auto addr=std::stoull(match[1].str(),nullptr,16);
+  auto path=dir/"format-text.bin";
+  auto wait=[&](std::string_view wanted) {
+    std::string visible;
+    for (unsigned i=0;i<180;i++) {
+      vm.Command(R"({"execute":"pmemsave","arguments":{"val":)"+
+                 std::to_string(addr)+R"(,"size":19200,"filename":")"+
+                 path.string()+R"("}})");
+      auto data=FileRead(path);
+      Check(data.size()==19200,"Incomplete format text layer");
+      visible.clear();
+      for (size_t y=0;y<60;y++) {
+        for (size_t x=0;x<80;x++) {
+          auto c=data[(y*80+x)*4];
+          visible+=c>=32 && c<127?char(c):' ';
+        }
+        visible+='\n';
+      }
+      if (visible.find(wanted)!=std::string::npos) return;
+      std::this_thread::sleep_for(30ms);
+    }
+    throw std::runtime_error("Format missing "+std::string(wanted)+"\n"+visible);
+  };
+  auto key=[&](std::string name) {
+    vm.Hmp("sendkey "+name+" 35");
+    std::this_thread::sleep_for(65ms);
+  };
+  auto cmd=[&](std::string_view command) {
+    for (char c:command) {
+      if (c>='A' && c<='Z') key("shift-"+std::string(1,char(c-'A'+'a')));
+      else switch (c) {
+        case '(': key("shift-9"); break;
+        case ')': key("shift-0"); break;
+        case '\'': key("apostrophe"); break;
+        case '"': key("shift-apostrophe"); break;
+        case ';': key("semicolon"); break;
+        case ':': key("shift-semicolon"); break;
+        case '/': key("slash"); break;
+        case '.': key("dot"); break;
+        case ',': key("comma"); break;
+        case '-': key("minus"); break;
+        case '>': key("shift-dot"); break;
+        case '&': key("shift-7"); break;
+        case '=': key("equal"); break;
+        case '~': key("shift-grave_accent"); break;
+        case '_': key("shift-minus"); break;
+        case ' ': key("spc"); break;
+        default: key(std::string(1,c)); break;
+      }
+    }
+    key("ret");
+  };
+  wait("T:/Home>");
+  cmd("WinMax;DocClear(,1);");
+  cmd("Fmt('C',1,0);");
+  wait("Drive Read Only");
+  cmd("Let2Drv('C',0)->bd->flags&=~BDF_READ_ONLY;");
+  cmd("Fmt('C',1);");
+  wait("ARE YOU SURE (y or n)?");
+  key("n");
+  wait("NO");
+  cmd("FileFind(\"C:/FormatDone.BIN\");");
+  wait("=1");
+}
+
 static void DriveDataBase(CMonitor &vm, const fs::path &dir,
                           const std::string &boot, bool reference = false,
                           bool form_only = false)
@@ -4155,14 +4227,17 @@ static void TestBoot(const char *qemu, const fs::path &iso,
 int main(int argc, char **argv)
 {
   if (argc==5 && (std::string_view(argv[1])=="--fat32-write" ||
-                  std::string_view(argv[1])=="--fat32-stream")) {
+                  std::string_view(argv[1])=="--fat32-stream" ||
+                  std::string_view(argv[1])=="--fat32-format")) {
+    bool format=std::string_view(argv[1])=="--fat32-format";
     bool stream=std::string_view(argv[1])=="--fat32-stream";
     char path[]="/tmp/unholyos-fat32-write-XXXXXX";
     if (!mkdtemp(path)) return 1;
     fs::path dir=path,disk=dir/"owned.img";
     try {
       auto original=FileRead(argv[4]);
-      constexpr size_t fat1=2080*512,fat2=2593*512,fat_bytes=513*512;
+      size_t fat1=2080*512,fat2=(format?3113:2593)*512,
+             fat_bytes=(format?1033:513)*512;
       Check(original.size()==68699136,"Wrong writable FAT32 geometry");
       fs::copy_file(argv[4],disk);
       auto expected=original;
@@ -4171,8 +4246,13 @@ int main(int argc, char **argv)
         fs::create_directory(run);
         CMonitor vm(argv[2],argv[3],run,"pc","512",false,disk,true);
         vm.Connect();
+        if (format) vm.ResetDeadline(180s);
         auto output=vm.Boot(run/"serial.log");
-        if (stream)
+        if (format)
+          CheckProgramOutput(output,"/Fat32FormatProbe.HC",
+            pass?"FAT32 persisted format\nFAT32 format probe 0F\n":
+                 "FAT32 format mutation 3F\nFAT32 format probe 0F\n",'1');
+        else if (stream)
           CheckProgramOutput(output,"/Fat32StreamProbe.HC",
               pass?"FAT32 persisted streams\nFAT32 stream probe 3F\n":
                    "Copying C:/ZIP.BIN.Z to C:/ZIP2.BIN.Z\n"
@@ -4181,13 +4261,30 @@ int main(int argc, char **argv)
             pass?"FAT32 persisted files\nFAT32 file probe FF\n":
                  "Make Directory:C:/Work\nMake Directory:C:/Work/Grow\n"
                  "Make Directory:C:/Work/Empty\nFAT32 mutation 3F\nFAT32 file probe FF\n",'1');
+        if (format && pass) VerifyFormatRefusal(vm,run,output);
         vm.Quit();
         auto actual=FileRead(disk);
         Check(actual.size()==original.size(),"FAT32 image size changed");
         Check(std::equal(actual.begin()+fat1,actual.begin()+fat1+fat_bytes,
                          actual.begin()+fat2),"FAT32 mirrors differ");
-        Check(std::equal(actual.begin(),actual.begin()+2049*512,original.begin()),
-              "FAT32 changed MBR or boot sector");
+        if (format) {
+          auto mbr=original;
+          mbr[446]=0x80;
+          mbr[450]=0x0B;
+          Check(std::equal(actual.begin(),actual.begin()+2048*512,mbr.begin()),
+                "Format changed sectors outside the partition");
+          auto boot=actual.data()+2048*512;
+          Check(boot[0]==0xEB && boot[1]==0x58 && boot[2]==0x90 &&
+                std::string_view(reinterpret_cast<const char *>(boot+3),8)=="MSWIN4.1" &&
+                boot[13]==1 &&
+                boot[16]==2 && boot[510]==0x55 && boot[511]==0xAA,
+                "Incorrect formatted boot sector");
+          // Root and the new file use clusters 2 and 3. Full format zeros
+          // every remaining data sector, not merely the sentinel sector.
+          Check(std::all_of(actual.begin()+4148*512,actual.end(),
+                           [](uint8_t b){return !b;}),"Full format left stale data");
+        } else Check(std::equal(actual.begin(),actual.begin()+2049*512,original.begin()),
+                     "FAT32 changed MBR or boot sector");
         if (pass) Check(actual==expected,"Read-only reboot changed FAT32 bytes");
         else {
           Check(actual!=original,"FAT32 mutations did not reach disk");
@@ -4195,7 +4292,8 @@ int main(int argc, char **argv)
         }
       }
       Check(FileRead(argv[4])==original,"Original FAT32 fixture was modified");
-      std::cout<<(stream?"Verified FAT32 buffered streams, growth, copy and cold reboot\n":
+      std::cout<<(format?"Verified FAT32 quick/full format, partition bounds and cold reboot\n":
+                         stream?"Verified FAT32 buffered streams, growth, copy and cold reboot\n":
                          "Verified FAT32 file and directory mutations, mirrored FATs and cold reboot\n");
       fs::remove_all(dir);
       return 0;
