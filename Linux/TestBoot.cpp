@@ -2837,6 +2837,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/DirectoryProbe.HC", "Directory probe 1FF\n",
                        '1');
     CheckProgramOutput(boot, "/DirContextProbe.HC", "Dir context FF\n", '1');
+    CheckProgramOutput(boot, "/FileStreamProbe.HC", "File stream probe 3FF\n", '1');
     CheckProgramOutput(boot, "/DocBinLinkProbe.HC", "Doc bin links 1F\n", '1');
     CheckProgramOutput(boot, "/SpriteProbe.HC", "sprite bitmap 12546 0 0 4\n",
                        '1');
@@ -2922,6 +2923,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/DirectoryProbe.HC", "Directory probe 1FF\n",
                          '1');
       CheckProgramOutput(output, "/DirContextProbe.HC", "Dir context FF\n",
+                         '1');
+      CheckProgramOutput(output, "/FileStreamProbe.HC", "File stream probe 3FF\n",
                          '1');
       CheckProgramOutput(output, "/DocBinLinkProbe.HC", "Doc bin links 1F\n",
                          '1');

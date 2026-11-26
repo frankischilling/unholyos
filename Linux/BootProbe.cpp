@@ -1425,6 +1425,7 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/DocButton.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/DirectoryProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/DirContextProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/FileStreamProbe.HC");
     {
       auto run_level = SYS_RUN_LEVEL;
       SYS_RUN_LEVEL |= RLF_DOC;

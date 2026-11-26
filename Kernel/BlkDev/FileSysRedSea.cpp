@@ -228,7 +228,8 @@ static CRedSeaDirEntry *RedSeaDirGrow(CDrv &dv, CRedSeaDir &dir,
 }
 
 static uint64_t RedSeaDirNew(CDrv &dv, CRedSeaDir &dir, CRedSeaDirEntry &entry,
-                             const uint8_t *data, bool directory)
+                             const uint8_t *data, bool directory,
+                             bool reserve = false)
 {
   auto *head = RedSeaDirHead(dv, dir);
   if (!head)
@@ -272,13 +273,14 @@ static uint64_t RedSeaDirNew(CDrv &dv, CRedSeaDir &dir, CRedSeaDirEntry &entry,
     }
   }
 
-  entry.clus = cluster;
+  if (blocks || !reserve)
+    entry.clus = cluster;
   if (directory) {
     auto *child = reinterpret_cast<CRedSeaDirEntry *>(RedSeaBlock(dv, cluster));
     MemSet(child, 0, blocks * BLK_SIZE);
     child[0] = entry;
     child[1] = {entry.attr, "..", dir.cluster, 0, entry.datetime};
-  } else if (blocks) {
+  } else if (blocks && !reserve) {
     auto *buf = RedSeaBlock(dv, cluster);
     MemCpy(buf, data, entry.size);
     MemSet(buf + entry.size, 0, blocks * BLK_SIZE - entry.size);
@@ -299,6 +301,82 @@ static CRedSeaDirEntry *RedSeaChild(const CDrv &dv, CRedSeaDir dir,
     if (!(head[i].attr & RS_ATTR_DELETED) && RedSeaNameEq(head[i].name, name))
       return head + i;
   return nullptr;
+}
+
+static bool RedSeaStreamDir(CDrv &dv, const char *path, CRedSeaDir &dir,
+                             char (&name)[CDIR_FILENAME_LEN])
+{
+  if (dv.fs_type != FSt_REDSEA || dv.bd->type != BDT_RAM ||
+      (dv.bd->flags & BDF_READ_ONLY) || *path++ != '/')
+    return false;
+  dir = {uint64_t(dv.root_clus), nullptr};
+  for (;;) {
+    const char *part = path;
+    while (*path && *path != '/')
+      path++;
+    size_t len = path - part;
+    if (!len || len >= sizeof(name))
+      return false;
+    MemCpy(name, part, len);
+    name[len] = 0;
+    if (!FileNameChk(name) || (name[0] == '.' &&
+        (len == 1 || (len == 2 && name[1] == '.'))))
+      return false;
+    if (!*path)
+      return RedSeaDirHead(dv, dir) != nullptr;
+    auto *child = RedSeaChild(dv, dir, name);
+    if (!child || !(child->attr & RS_ATTR_DIR))
+      return false;
+    dir = {child->clus, child};
+    path++;
+  }
+}
+
+bool RedSeaStreamPrepare(CDrv &dv, const char *path, CDirEntry &de, int64_t cnt)
+{
+  CMemLock lock(dv.locked_flags);
+  CRedSeaDir dir;
+  CRedSeaDirEntry entry{};
+  if (!RedSeaStreamDir(dv, path, dir, entry.name) || cnt > dv.size)
+    return false;
+  auto *old = RedSeaChild(dv, dir, entry.name);
+  if (old && (old->attr & RS_ATTR_DIR))
+    return false;
+  if (cnt > 0) {
+    entry.size = uint64_t(cnt) * BLK_SIZE;
+    entry.attr = RS_ATTR_CONTIGUOUS;
+    if (!RedSeaDirNew(dv, dir, entry, nullptr, false, true))
+      return false;
+  } else if (old) {
+    if (old->size && !RedSeaExtent(dv, old->clus, old->size))
+      return false;
+    RedSeaMark(dv, old->clus, RedSeaBlocks(old->size), false);
+    old->attr |= RS_ATTR_DELETED;
+  }
+  MemCpy(&de.attr, &entry, sizeof(entry));
+  return true;
+}
+
+bool RedSeaStreamCommit(CDrv &dv, const char *path, CDirEntry &de, bool new_file)
+{
+  CMemLock lock(dv.locked_flags);
+  CRedSeaDir dir;
+  char name[CDIR_FILENAME_LEN];
+  if (!RedSeaStreamDir(dv, path, dir, name) || !RedSeaNameEq(de.name, name) ||
+      de.size < 0 || (de.attr & (RS_ATTR_DIR | RS_ATTR_DELETED)))
+    return false;
+  CRedSeaDirEntry entry;
+  de.attr |= RS_ATTR_CONTIGUOUS;
+  MemCpy(&entry, &de.attr, sizeof(entry));
+  if (new_file)
+    return !entry.size && !entry.clus &&
+           RedSeaDirNew(dv, dir, entry, nullptr, false, true);
+  auto *old = RedSeaChild(dv, dir, name);
+  if (!old || (old->attr & RS_ATTR_DIR) || old->clus != entry.clus ||
+      RedSeaBlocks(entry.size) > RedSeaBlocks(old->size))
+    return false;
+  *old = entry;
+  return true;
 }
 
 static uint64_t RedSeaWrite(CDrv &dv, const char *path, const uint8_t *data,
