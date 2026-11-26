@@ -3720,7 +3720,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
     CheckProgramOutput(boot, "/BitmapDiffProbe.HC", "bitmap diff 7F E76D01B74919B2D4\n", '1');
-    CheckProgramOutput(boot, "/CaptureProbe.HC", "capture probe 3F\n", '1');
+    CheckProgramOutput(boot, "/CaptureProbe.HC", "capture probe 7F\n", '1');
     CheckProgramOutput(boot, "/RasterProbe.HC", raster_output, '1');
     CheckProgramOutput(boot, "/Blot3Probe.HC", blot3_output, '1');
     CheckProgramOutput(boot, "/DepthSpansProbe.HC", depth_spans_output, '1');
@@ -3838,7 +3838,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
     if (startup) {
       CheckProgramOutput(output, "/DCProbe.HC", dc_output, '1');
       CheckProgramOutput(output, "/BitmapDiffProbe.HC", "bitmap diff 7F E76D01B74919B2D4\n", '1');
-      CheckProgramOutput(output, "/CaptureProbe.HC", "capture probe 3F\n", '1');
+      CheckProgramOutput(output, "/CaptureProbe.HC", "capture probe 7F\n", '1');
       CheckProgramOutput(output, "/RasterProbe.HC", raster_output, '1');
       CheckProgramOutput(output, "/Blot3Probe.HC", blot3_output, '1');
       CheckProgramOutput(output, "/DepthSpansProbe.HC", depth_spans_output, '1');

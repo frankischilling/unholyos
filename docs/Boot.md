@@ -1722,10 +1722,20 @@ The demo is included in the boot and startup-test ISOs.
 colors. It checks dimensions and ownership of the captured bitmap, the
 original pattern, each doubled pixel at 2x zoom, the unzoomed capture
 while zoomed, a GR file with a changed VGA palette, and clipped playback
-into a 32-by-8 device context. Both guests returned `capture probe 3F`.
+into a 32-by-8 device context. It stores the playback return in an `I64`
+and requires exactly TRUE for an existing image and FALSE for a missing
+file. Both guests returned `capture probe 7F`.
 The fixture is also checked by the native startup and guest-built ISO
 tests. Screen content outside the deterministic pattern differs between
 the guests; the full screenshot is not claimed to be byte-identical.
+
+The playback adapter widens the C++ Boolean return before returning to
+HolyC. Without that step, the native GCC build returned
+`capture probe 5F`: the low byte held TRUE, but the upper return bits
+retained the heap lock address from image cleanup. The reference fixture
+returned `7F`.
+The reference interactive test uploads and verifies the fixture bytes
+before running it through `ExePutS`.
 
 The original demo was also driven from the guest terminal in both
 systems. A fresh RedSea RAM drive serves as `Home`. The test places a
