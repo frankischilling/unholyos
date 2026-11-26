@@ -50,6 +50,9 @@ FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
 FAT_TEST_ISO := $(BUILD)/fat32-test.iso
 FAT_PROBES := Linux/Fixtures/Fat32ReadProbe.HC Linux/Fixtures/Fat32RejectProbe.HC
+FAT_WRITE_DISK := $(BUILD)/fat32-writable.img
+FAT_WRITE_ISO := $(BUILD)/fat32-write-test.iso
+FAT_WRITE_PROBE := Linux/Fixtures/Fat32WriteProbe.HC
 ATA_TEST_ISO := $(BUILD)/ata-test.iso
 ATA_PROBES := Linux/Fixtures/AtaWriteProbe.HC Linux/Fixtures/AtaWriteRejectProbe.HC
 STARTUP_FIXTURE := Linux/Fixtures/StartOS.HC.Z
@@ -143,6 +146,12 @@ $(FAT_DISK): $(FAT_TOOL)
 $(FAT_INVALID_DISK): $(FAT_TOOL)
 	$(FAT_TOOL) $@ invalid
 
+$(FAT_WRITE_DISK): $(FAT_TOOL)
+	$(FAT_TOOL) $@ writable
+
+$(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
+
 $(FAT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_PROBES)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(FAT_PROBES))
 
@@ -167,11 +176,12 @@ $(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(STARTU
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO)
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO)
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_DISK) valid
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_INVALID_DISK) invalid
 	$(BOOT_TEST) --ata-write "$(QEMU)" $(ATA_TEST_ISO) $(FAT_DISK)
+	$(BOOT_TEST) --fat32-write "$(QEMU)" $(FAT_WRITE_ISO) $(FAT_WRITE_DISK)
 	$(BOOT_TEST) "$(QEMU)" $< $(KERNEL) $(STARTUP_TEST_ISO)
 	$(BOOT_TEST) --character-graphics "$(QEMU)" $<
 	$(BOOT_TEST) --database "$(QEMU)" $<

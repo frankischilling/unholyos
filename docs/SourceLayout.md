@@ -596,7 +596,7 @@ record to save the task's drive, directory, and mask. `FilesFind`,
 RAM, and mounted read-only FAT32 paths and restore the caller's working
 directory. `PopUpCd` and full drive error reporting remain pending.
 
-## FAT32 reads
+## FAT32 reads and writes
 
 `Kernel/BlkDev/FileSysFAT.cpp` follows `FileSysFAT.HC` for `FAT32Init`,
 `FATFromName`, `FATNameXSum`, `DirLongNameFill`, `FAT32CDirFill`,
@@ -633,6 +633,27 @@ short alias of a valid long name is not an alternate lookup, matching
 the pinned reader. Unicode conversion, longer VFAT names, active FAT
 selection other than FAT 0, and complete error diagnostics remain pending.
 
+`FAT32AllocClus`, `FAT32FreeClus`, `FAT32DirFill`, `FAT32DirNew`,
+`FAT32MkDir`, `FAT32FilesDel`, and `FAT32FileWrite` follow the corresponding
+reference allocation, directory, and whole-file operations. Allocation
+checks the available chain before changing either FAT, retains the
+reserved high bits and updates both copies. Noncontiguous allocation
+starts after the FSInfo recent-allocation hint. Whole-file replacement
+writes a new chain before replacing the directory entry and reclaiming
+the old chain. Directory growth allocates and zeroes a cluster before
+linking it; deletion tracks the short entry and its validated long-name
+records, including names that cross a cluster boundary.
+
+The writer bounds short aliases to eleven bytes and chooses a numbered
+alias for a collision instead of emitting duplicate aliases. Nonempty
+directory deletion is refused to avoid orphaning children. These are
+intentional safety differences from the pinned code. Allocation and
+replacement have best-effort cleanup on write failure, not a transaction
+or general corruption-repair facility. There is no persistent FAT cache,
+full filesystem exception parity, or Unicode support. FAT32 mutations
+require an explicitly writable ATA device; the normal mount policy is
+unchanged.
+
 ## File streams
 
 `Kernel/BlkDev/DskCFile.cpp` follows `DskCFile.HC` for `FOpen`,
@@ -656,8 +677,9 @@ operations. An explicit contiguous read requires the `.C` extension; the
 implementation still checks the actual FAT chain to avoid reading unrelated
 sectors. The current reader revalidates and traverses chains on each call;
 it does not reproduce the reference's `FSetClus` cache fields or dirty
-cluster-buffer behavior. FAT32 mutations and write streams remain pending;
-the ATA block-write path is independently tested across a cold reboot.
+cluster-buffer behavior. FAT32 write streams remain pending; whole-file
+and directory mutations and the ATA block-write path are independently
+tested across cold reboots.
 
 `Kernel/BlkDev/DskCopy.cpp` follows `CopySingleZ` and `CopySingle` in
 `DskCopy.HC`. Equal filename attributes select the raw block-stream path
@@ -689,7 +711,8 @@ the reference does despite its files-only API comment. A same-drive
 destination inside the resolved source directory is rejected. `ScanFlags`
 in `Kernel/StrB.cpp` uses the file utility flag list from `KDefine.cpp`.
 Read-only devices are refused before mutation. Writable RAM RedSea is the
-implemented file destination; FAT32 writes are pending. Error paths,
+fully tested file-tree destination. FAT32 whole-file writes and deletion
+are implemented, while the block-stream copy and tree paths remain pending. Error paths,
 resident-cache deletion behavior, and restoring a deleted current
 directory are not yet fully matched to TempleOS.
 

@@ -178,9 +178,9 @@ build/fat-check/Linux/TestBoot --fat32 qemu-system-x86_64 \
   build/fat-check/fat32-test.iso build/fat-check/fat32-invalid.img invalid
 ```
 
-This is read-side FAT32 support. Formatting, allocation, deletion, and
-other FAT32 writes have not been implemented. No physical drive was
-used for these tests.
+This fixture retains read-only mounts and malformed-image rejection even
+when writable FAT32 is enabled on a different test disk. No physical
+drive was used for these tests.
 
 ## Persistent ATA block writes
 
@@ -227,6 +227,59 @@ The ATA implementation uses LBA28 PIO and flushes the device write cache.
 It does not yet implement the reference's multi-sector mode, LBA48, retry
 and exception behavior, or general disk caching. FAT32 remains read-only
 by default, and the block test does not establish file-write compatibility.
+
+## FAT32 file and directory mutations
+
+The separate `writable` image from `Linux/MakeFAT32.cpp` has valid chains,
+two FATs and the same partition geometry as the read fixture. Its SHA-256 is
+`9e458aed28c8cddcada016e182a64135a07b086bdd351de9ddf91a60bc55568e`.
+The driver copies this image into a private temporary file before starting
+QEMU. `Fat32WriteProbe.HC` explicitly clears the device's read-only flag
+for the duration of the probe and restores it before returning.
+
+Both guests create nested directories, replace a three-cluster long-name
+file with a shorter file, check reclamation in both FATs, round-trip
+compressed and contiguous files, write an empty file, force directory
+growth with 36 entries, and delete a file and an empty directory. They
+verify the exact contents, DOS modification dates, both directory-chain
+links, and the unchanged original fragmented file. Both print:
+
+```text
+Make Directory:C:/Work
+Make Directory:C:/Work/Grow
+Make Directory:C:/Work/Empty
+FAT32 mutation 3F
+FAT32 file probe FF
+```
+
+On a cold reboot with the same disk, both print:
+
+```text
+FAT32 persisted files
+FAT32 file probe FF
+```
+
+The reference uses the pinned live distribution DVD and explicit `ATAMount`
+with QEMU 8.2.2, `-machine pc -cpu qemu64 -m 512`, and a writable raw IDE
+index-0 image. The unchanged source SHA-256 is
+`3525e241f3b43172d0ca349879cac7fdc2fe28be0c433bed5701670e871d370b`.
+The reference disk SHA-256 after the first boot and after the second boot
+is `51bdd22f8a92d8641ab781b9d452aa8b195fc1b482c5d563299ff82214eb9c03`.
+The native driver compares the entire image after reboot to its first-boot
+result, checks both complete FAT copies, verifies the original MBR and boot
+sector, and checks the original input image was not modified. Allocation
+order and directory timestamps can differ; the images are not asserted
+to be byte-identical across the two systems.
+
+```sh
+make -j4 BUILD=build/fat-write test
+build/fat-write/Linux/TestBoot --fat32-write qemu-system-x86_64 \
+  build/fat-write/fat32-write-test.iso build/fat-write/fat32-writable.img
+```
+
+FAT32 mounting is still read-only by default. Formatting, stream writes,
+general FAT cache behavior, cross-linked chain repair, and crash recovery
+remain pending. The test does not establish those behaviors.
 
 ## Building a RedSea ISO in the guest
 
@@ -1330,7 +1383,7 @@ reference file-error diagnostics remain pending.
 | Interrupts and timers | `Kernel/KInts.HC`, `Kernel/KMain.HC`, `Kernel/KMisc.HC` | Both IDT stages, PIC setup, PIT ticks, HPET, the initial TSC calibration sample, and boot fault diagnostics. Debugger recovery is pending. |
 | Memory | `Kernel/Mem/PageTables.HC`, `BlkPool.HC`, `MAllocFree.HC` | Initial identity map, code and data pools, and early heap allocation. Heap allocation and freeing, the 32-bit device range list, and the uncached device alias are active. |
 | Tasking and CPUs | `Kernel/KTask.HC`, `Sched.HC`, `MultiProc.HC` | Core 0 runs Adam, the idle task, and spawned tasks with cooperative switching and PIT wakeups. Starting additional CPUs remains pending. |
-| Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `FileSysFAT.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. Read-only FAT32 on primary ATA partitions. Persistent writes are pending. |
+| Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `FileSysFAT.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. ATA block writes and explicitly enabled FAT32 whole-file and directory mutations persist across cold boots. Formatting and FAT32 write streams remain pending. |
 | Graphics | `Kernel/Display.HC`, `Adam/Gr/GrScrn.HC` | VGA text and graphics composition, 16-color palette, cursor, zoom, and a scheduled refresh task |
 | Input and sound | `Kernel/SerialDev/Keyboard.HC`, `Mouse.HC`, `Message.HC`, `Kernel/KMisc.HC` | PS/2 keyboard and mouse messages, PC speaker tones, and queued sound recording. Desktop input controls and AU output remain pending. |
 | Desktop and system tools | `StartOS.HC`, `Adam/MakeAdam.HC`, `Adam/WinMgr.HC`, `Adam/DolDoc`, `Apps` | The refresh task draws visible DolDoc text and borders. The full editor and interactive desktop remain pending. |

@@ -88,8 +88,9 @@ static void Data(std::ofstream &out,std::initializer_list<uint32_t> chain,
 int main(int argc,char **argv)
 {
   try {
-    if (argc!=2 && (argc!=3 || std::string_view(argv[2])!="invalid")) {
-      std::cerr<<"Usage: MakeFAT32 disk.img [invalid]\n";
+    std::string_view mode=argc==3?argv[2]:"";
+    if (argc!=2 && (argc!=3 || (mode!="invalid" && mode!="writable"))) {
+      std::cerr<<"Usage: MakeFAT32 disk.img [invalid|writable]\n";
       return 2;
     }
     std::ofstream out(argv[1],std::ios::binary|std::ios::trunc);
@@ -107,7 +108,7 @@ int main(int argc,char **argv)
     boot[0]=0xEB;boot[1]=0x58;boot[2]=0x90;
     std::copy_n("MSWIN4.1",8,boot.data()+3);
     Put16(boot.data()+11,sector_size);
-    boot[13]=argc==3?3:spc; // Invalid non-power-of-two cluster size.
+    boot[13]=mode=="invalid"?3:spc;
     Put16(boot.data()+14,reserved);
     boot[16]=2;boot[21]=0xF8;
     Put16(boot.data()+24,63);Put16(boot.data()+26,255);
@@ -122,7 +123,7 @@ int main(int argc,char **argv)
     Write(out,part,boot);Write(out,part+6,boot);
     Sector info{};
     Put32(info.data(),0x41615252);Put32(info.data()+484,0x61417272);
-    Put32(info.data()+488,0xFFFFFFFF);Put32(info.data()+492,0xFFFFFFFF);
+    Put32(info.data()+488,0xFFFFFFFF);Put32(info.data()+492,mode=="writable"?18:0xFFFFFFFF);
     Put32(info.data()+508,0xAA550000);
     Write(out,part+1,info);Write(out,part+7,info);
 
@@ -131,7 +132,7 @@ int main(int argc,char **argv)
     constexpr std::array<uint32_t,19> links{
       0x0FFFFFF8,end,9,end,0,12,0,end,end,end,0,end,7,0,15,end,16,1,end};
     for (size_t i=0;i<links.size();i++)
-      Put32(fat.data()+4*i,links[i]);
+      Put32(fat.data()+4*i,mode=="writable" && i>=16?0:links[i]);
     Write(out,part+reserved,fat);Write(out,part+reserved+fat_sects,fat);
 
     Cluster root{},root2{},sub{};
@@ -147,16 +148,18 @@ int main(int argc,char **argv)
     DirEntry(root2.data()+32,alias,0x20,11,333);
     LongEntry(root2.data()+64,"FILE.BIN.C","FILEBI~1C  ",1,true);
     DirEntry(root2.data()+96,"FILEBI~1C  ",0x20,14,1200);
-    DirEntry(root2.data()+128,"LOOP    BIN",0x20,16,1500);
-    DirEntry(root2.data()+160,"BAD     BIN",0x20,17,100);
-    DirEntry(root2.data()+192,"SHORT   BIN",0x20,18,1500);
+    if (mode!="writable") {
+      DirEntry(root2.data()+128,"LOOP    BIN",0x20,16,1500);
+      DirEntry(root2.data()+160,"BAD     BIN",0x20,17,100);
+      DirEntry(root2.data()+192,"SHORT   BIN",0x20,18,1500);
+    }
     DirEntry(sub.data(),".          ",0x10,3,0);
     DirEntry(sub.data()+32,"..         ",0x10,0,0);
     DirEntry(sub.data()+64,"NEST    TXT",0x20,8,611);
     Write(out,ClusSector(2),root);Write(out,ClusSector(9),root2);
     Write(out,ClusSector(3),sub);
     Data(out,{5,12,7},1);Data(out,{8},2);Data(out,{11},3);Data(out,{14,15},4);
-    Data(out,{16,17,18},5);
+    if (mode!="writable") Data(out,{16,17,18},5);
     out.close();
     if (!out)
       throw std::runtime_error("Cannot close FAT32 fixture");

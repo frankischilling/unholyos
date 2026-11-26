@@ -18,6 +18,7 @@ Linux/Fixtures/PromptProbe.HC text eol=lf
 Linux/Fixtures/FileOperationsProbe.HC text eol=lf
 Linux/Fixtures/Fat32ReadProbe.HC text eol=lf
 Linux/Fixtures/Fat32RejectProbe.HC text eol=lf
+Linux/Fixtures/Fat32WriteProbe.HC text eol=lf
 Linux/Fixtures/AtaWriteProbe.HC text eol=lf
 Linux/Fixtures/AtaWriteRejectProbe.HC text eol=lf
 Linux/Fixtures/DateOffsetProbe.HC text eol=lf

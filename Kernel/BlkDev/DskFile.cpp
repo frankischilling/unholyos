@@ -301,7 +301,7 @@ extern "C" uint64_t FileWriteCpp(const char *filename, const uint8_t *data,
   if (!path)
     return 0;
   auto *dv = *path && path[1] == ':' ? PathDrive(task, path[0]) : nullptr;
-  if (!dv || dv->fs_type!=FSt_REDSEA || dv->bd->type != BDT_RAM || (dv->bd->flags & BDF_READ_ONLY)) {
+  if (!dv || !WritableFS(*dv)) {
     Free(path);
     return 0;
   }
@@ -327,8 +327,9 @@ extern "C" uint64_t FileWriteCpp(const char *filename, const uint8_t *data,
     data = encoded;
   }
 
-  auto cluster =
-      RedSeaFileWrite(*dv, path + 2, data, size, date ? date : Now(), attr);
+  auto cluster = dv->fs_type==FSt_FAT32?
+      FAT32FileWrite(*dv,path+2,data,size,date?date:Now(),attr):
+      RedSeaFileWrite(*dv,path+2,data,size,date?date:Now(),attr);
   if (cluster) {
     auto *table = adam_task->hash_table;
     auto *hash = HashSingleTableFind(path, table, HTT_FILE);
