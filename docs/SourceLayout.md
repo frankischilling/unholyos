@@ -687,9 +687,25 @@ that require executing or relocating unfinished AOT code remain pending.
 `AsmInit.cpp` exposes the compiler's member and class records for HolyC
 reflection, including `Fs->hash_table`, `HashFind`, and `MemberFind`.
 The records retain their ABI sizes; debugger and external-usage pointers
-are exposed as opaque addresses. The original `Demo/ClassMeta.HC` now runs
-unchanged. `ClassRep`, `ClassRepD`, and `DocForm` remain pending, so the
-original database demo and the complete `LastClass.HC` are not yet runnable.
+are exposed as opaque addresses. The original `Demo/ClassMeta.HC` runs
+unchanged.
+
+`Adam/ADbg.cpp` follows `Adam/ADbg.HC` for `ClassRep2`, `ClassRep`,
+and `ClassRepD`, using the compiler's actual class and member records.
+It reports base classes, nested records, bounded arrays, scalar values,
+and strings. The dynamic report uses bound DolDoc data entries; scalar
+entries refresh from and write back to the reported memory. `Kernel/KDbg.cpp`
+provides pointer validation, including the native fixed boot records for
+the CPU and Adam task. `Gs` and the native `CCPU` member declarations
+allow the original `Demo/LastClass.HC` to run unchanged. `CTask` reflection
+still covers only the implemented member declarations; native reports
+therefore need not have the reference's number of nested records.
+
+`Adam/DolDoc/DocForm.cpp` implements `DocDataFmt` and the bound scalar
+formats of `DocDataScan` used by class reports. `DocChar`, `DocRecalc`, and
+`DocRun` connect editing, live refresh, and tree expansion to those entries.
+General form construction, list/checkbox binding, and reallocated data
+remain pending; the original database demo is not claimed runnable.
 
 The kernel header table stores numeric and string defaults in a tagged
 union. This saves space in the boot image while preserving the same

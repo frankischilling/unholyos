@@ -4,6 +4,8 @@ GLOBAL memcpy
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
 GLOBAL Str2I64HC,Str2DateHC
+GLOBAL Str2F64HC,ChkPtrHC,ClassRep2HC,ClassRepHC,ClassRepDHC
+GLOBAL DocMaxHC,DocDataFmtHC,DocDataScanHC
 GLOBAL GetI64HC,GetF64HC,GetDateHC
 GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
@@ -142,6 +144,8 @@ EXTERN FileReadCpp,FileNameAbsCpp,DirNameAbsCpp,DirCurCpp,DirFileCpp,ExtChgCpp,E
 EXTERN CdCpp,IsDirCpp,DirCpp,PutDirLinkCpp,FilesFindCpp,FileFindCpp,FilesFindMatchCpp
 EXTERN DirEntryDelCpp,DirEntryDel2Cpp,DirTreeDelCpp,DirTreeDel2Cpp
 EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp,Str2DateCpp
+EXTERN Str2F64Cpp,ChkPtrCpp,ClassRep2Cpp,ClassRepCpp,ClassRepDCpp
+EXTERN DocMaxCpp,DocDataFmtCpp,DocDataScanCpp
 EXTERN GetI64Cpp,GetF64Cpp,GetDateCpp
 EXTERN FileWriteCpp,BlkDevNextFreeSlotCpp,BlkDevAddCpp,Let2DrvCpp,BlkReadCpp,BlkWriteCpp
 EXTERN FSizeCpp,FOpenCpp,FCloseCpp,FBlkReadCpp,FBlkWriteCpp
@@ -501,6 +505,14 @@ HOLYC_CPP DirContextNewHC,DirContextNewCpp,4
 HOLYC_CPP DirContextDelHC,DirContextDelCpp,2
 HOLYC_CPP Str2I64HC,Str2I64Cpp,3
 HOLYC_CPP Str2DateHC,Str2DateCpp,1
+HOLYC_CPP Str2F64HC,Str2F64Cpp,2
+HOLYC_CPP ChkPtrHC,ChkPtrCpp,1
+HOLYC_CPP ClassRep2HC,ClassRep2Cpp,8
+HOLYC_CPP ClassRepHC,ClassRepCpp,5
+HOLYC_CPP ClassRepDHC,ClassRepDCpp,5
+HOLYC_CPP DocMaxHC,DocMaxCpp,1
+HOLYC_CPP DocDataFmtHC,DocDataFmtCpp,3
+HOLYC_CPP DocDataScanHC,DocDataScanCpp,2
 HOLYC_CPP FileWriteHC,FileWriteCpp,5
 HOLYC_CPP FSizeHC,FSizeCpp,1
 HOLYC_CPP FOpenHC,FOpenCpp,3

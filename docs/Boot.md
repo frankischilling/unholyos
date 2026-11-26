@@ -902,6 +902,28 @@ and port `0xE9` for output. The startup and guest-built ISO test driver
 also checks all four program outputs. The focused kernel ended its BSS
 at `0x9300b`, below the relocated DVD loader limit of `0x96600`.
 
+## Class reports
+
+The original 627-byte [LastClass.HC by Terry A. Davis](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/LastClass.HC)
+is stored unchanged at `Demo/LastClass.HC`, SHA-256
+`15bc1334d6cb2bde4703551c1ec821577e08fd3e1c09eff6640fd123f3f3a1d0`.
+
+`ClassReportProbe.HC` checks inherited and nested reports, static scalar
+formatting, bound scalar entries, refresh and write-back, keyboard editing,
+tree expansion, failed lookups, depth limits, and the `CCPU` ABI. Both
+guests produced the same static report, including the field offsets and
+signed hexadecimal values, followed by `Class report 7FF data 20`.
+
+The pinned guest ran the exact source bytes with `ExePutS`, using the
+same PC, qemu64 CPU, and 512 MiB configuration as the native focused ISO.
+The original LastClass demo ran to completion after two actual keypresses
+in both guests. The inferred names were `CTask`, `Student`, `School`, and
+`I64i`. The native interactive driver executes `LastClassRun.HC`, which
+loads the original file and checks the CPU and task report headings and
+live data entries. It observes `LastClass reports 7` before returning to
+the prompt. Report counts and pointer addresses are not expected to match
+because native task reflection and runtime records are still partial.
+
 ## Numeric and date prompts
 
 `Demo/Prompt.HC` retains Terry A. Davis's original bytes. The prompt

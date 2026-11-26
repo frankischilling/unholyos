@@ -421,8 +421,8 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     out.Bytes(0x9C, 0x58); // PUSHFQ; POP RAX
     return true;
   }
-  if (op == IC_FS) {
-    out.Bytes(0x64, 0x48, 0x8B, 0x04, 0x25); // MOV RAX,[FS:0]
+  if (op == IC_FS || op == IC_GS) {
+    out.Bytes(op == IC_FS ? 0x64 : 0x65, 0x48, 0x8B, 0x04, 0x25);
     out.Immediate(0, 4);
     return true;
   }

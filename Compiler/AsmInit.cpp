@@ -551,6 +551,7 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
       {"owning_task", doc, &task + 1, offsetof(CDoc, owning_task)},
       {"cmd_U8", doc, i64, offsetof(CDoc, cmd_U8)},
       {"updates_cnt", doc, i64, offsetof(CDoc, updates_cnt)},
+      {"max_entries", doc, i64, offsetof(CDoc, max_entries)},
       {"doc_signature", doc, FindType("U32", table),
        offsetof(CDoc, doc_signature)},
       {"user_put_data", doc, u8ptr, offsetof(CDoc, user_put_data)},
@@ -563,6 +564,12 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
        offsetof(CDocEntry, base) + offsetof(CDocEntryBase, last)},
       {"next", entry, entry + 1, offsetof(CDocEntry, base) + offsetof(CDocEntryBase, next)},
       {"type_u8", entry, FindType("U8", table), offsetof(CDocEntry, base) + offsetof(CDocEntryBase, type)},
+      {"min_col", entry, FindType("U32", table), offsetof(CDocEntry, base) + offsetof(CDocEntryBase, min_col)},
+      {"max_col", entry, FindType("U32", table), offsetof(CDocEntry, base) + offsetof(CDocEntryBase, max_col)},
+      {"aux_str", entry, u8ptr, offsetof(CDocEntry, aux_str)},
+      {"raw_type", entry, FindType("U8", table), offsetof(CDocEntry, raw_type)},
+      {"len", entry, i32, offsetof(CDocEntry, len)},
+      {"data", entry, u8ptr, offsetof(CDocEntry, data)},
       {"left_exp", entry, i64, offsetof(CDocEntry, left_exp)},
       {"right_exp", entry, i64, offsetof(CDocEntry, right_exp)},
       {"bin_ptr_link", entry, u8ptr, offsetof(CDocEntry, bin_ptr_link)},
@@ -1540,6 +1547,138 @@ static bool CmpCtrlData(CHashTable *table, CHashClass *task)
                            *u0, 2, wheel_args, wheel_types);
 }
 
+static bool CmpClassReportData(CHashTable *table, CHashClass &task)
+{
+  auto *cpu = CmpKernelClass(table, "CCPU", sizeof(CCPU));
+  auto *dying = CmpKernelClass(table, "CTaskDying", sizeof(CTaskDying));
+  auto *tss = CmpKernelClass(table, "CTSS", 0);
+  if (!cpu || !dying || !tss)
+    return false;
+  tss->flags |= CF_EXTERN;
+  auto *heap = CurrentTask()->data_heap;
+  auto *i64 = FindType("I64", table);
+  auto *f64 = FindType("F64", table);
+  auto *u8 = FindType("U8", table);
+  auto *u16 = FindType("U16", table);
+  auto *boolean = FindType("Bool", table);
+  auto *u0 = FindType("U0", table);
+  const struct {
+    const char *name;
+    CHashClass *cls, *type;
+    size_t offset, count = 0;
+  } fields[]{
+      {"addr", cpu, cpu + 1, offsetof(CCPU, addr)},
+      {"num", cpu, i64, offsetof(CCPU, num)},
+      {"cpu_flags", cpu, i64, offsetof(CCPU, cpu_flags)},
+      {"startup_rip", cpu, i64, offsetof(CCPU, startup_rip)},
+      {"idle_pt_hits", cpu, i64, offsetof(CCPU, idle_pt_hits)},
+      {"idle_factor", cpu, f64, offsetof(CCPU, idle_factor)},
+      {"total_jiffies", cpu, i64, offsetof(CCPU, total_jiffies)},
+      {"seth_task", cpu, &task + 1, offsetof(CCPU, seth_task)},
+      {"idle_task", cpu, &task + 1, offsetof(CCPU, idle_task)},
+      {"tr", cpu, i64, offsetof(CCPU, tr)},
+      {"swap_cnter", cpu, i64, offsetof(CCPU, swap_cnter)},
+      {"next_dying", cpu, dying + 1, offsetof(CCPU, next_dying)},
+      {"last_dying", cpu, dying + 1, offsetof(CCPU, last_dying)},
+      {"kill_jiffy", cpu, i64, offsetof(CCPU, kill_jiffy)},
+      {"tss", cpu, tss + 1, offsetof(CCPU, tss)},
+      {"start_stk", cpu, i64, offsetof(CCPU, start_stk), 16},
+      {"next", dying, &task + 1, offsetof(CTaskDying, next)},
+      {"last", dying, &task + 1, offsetof(CTaskDying, last)},
+      {"wake_jiffy", dying, i64, offsetof(CTaskDying, wake_jiffy)},
+      {"gs", &task, cpu + 1, offsetof(CTask, gs)},
+      {"next_input_filter_task", &task, &task + 1, offsetof(CTask, next_input_filter_task)},
+      {"last_input_filter_task", &task, &task + 1, offsetof(CTask, last_input_filter_task)},
+      {"next_sibling_task", &task, &task + 1, offsetof(CTask, next_sibling_task)},
+      {"last_sibling_task", &task, &task + 1, offsetof(CTask, last_sibling_task)},
+      {"win_width", &task, i64, offsetof(CTask, win_width)},
+      {"win_height", &task, i64, offsetof(CTask, win_height)},
+      {"rip", &task, i64, offsetof(CTask, rip)},
+      {"rflags", &task, i64, offsetof(CTask, rflags)},
+      {"rsp", &task, i64, offsetof(CTask, rsp)},
+      {"rsi", &task, i64, offsetof(CTask, rsi)},
+      {"rax", &task, i64, offsetof(CTask, rax)},
+      {"rcx", &task, i64, offsetof(CTask, rcx)},
+      {"rdx", &task, i64, offsetof(CTask, rdx)},
+      {"rbx", &task, i64, offsetof(CTask, rbx)},
+      {"rbp", &task, i64, offsetof(CTask, rbp)},
+      {"rdi", &task, i64, offsetof(CTask, rdi)},
+      {"r8", &task, i64, offsetof(CTask, r8)},
+      {"r9", &task, i64, offsetof(CTask, r9)},
+      {"r10", &task, i64, offsetof(CTask, r10)},
+      {"r11", &task, i64, offsetof(CTask, r11)},
+      {"r12", &task, i64, offsetof(CTask, r12)},
+      {"r13", &task, i64, offsetof(CTask, r13)},
+      {"r14", &task, i64, offsetof(CTask, r14)},
+      {"r15", &task, i64, offsetof(CTask, r15)},
+      {"task_name", &task, u8, offsetof(CTask, task_name), sizeof(CTask::task_name)},
+      {"wallpaper_data", &task, u8, offsetof(CTask, wallpaper_data), sizeof(CTask::wallpaper_data)},
+      {"pad", &task, u16, offsetof(CTask, pad)},
+      {"new_answer", &task, boolean, offsetof(CTask, new_answer)},
+      {"answer_type", &task, u8, offsetof(CTask, answer_type)},
+      {"answer", &task, i64, offsetof(CTask, answer)},
+      {"answer_time", &task, f64, offsetof(CTask, answer_time)},
+      {"last_fun", &task, FindType("CHashFun", table) + 1, offsetof(CTask, last_fun)},
+      {"last_ode_time", &task, f64, offsetof(CTask, last_ode_time)},
+      {"fault_num", &task, i64, offsetof(CTask, fault_num)},
+      {"fault_err_code", &task, i64, offsetof(CTask, fault_err_code)},
+      {"popup_task", &task, &task + 1, offsetof(CTask, popup_task)},
+      {"dbg_task", &task, &task + 1, offsetof(CTask, dbg_task)},
+  };
+  for (const auto &field : fields) {
+    auto *name = StrNew(field.name, heap);
+    auto *member = name ? MemberAdd(*field.cls, name, *field.type, field.offset) : nullptr;
+    if (!member) {
+      Free(name);
+      return false;
+    }
+    if (field.count) {
+      auto *dim = reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!dim)
+        return false;
+      dim->cnt = field.count;
+      dim->total_cnt = 1;
+      member->dim = {dim, 1, int64_t(field.count)};
+      member->size = field.type->size * field.count;
+    }
+  }
+  const char *names[]{"task"};
+  CHashClass *types[]{&task + 1};
+  if (!CmpKernelCallback(table, *cpu, "profiler_timer_irq",
+                         offsetof(CCPU, profiler_timer_irq), *u0, 1, names, types))
+    return false;
+  // Keep these native records in storage order, including fields added by
+  // the separate kernel header initializers. Rebuild the lookup tree.
+  CHashClass *records[]{&task, cpu};
+  for (auto *cls : records) {
+    CMemberLst *sorted = nullptr;
+    for (auto *m = cls->member_lst_and_root; m;) {
+      auto *next = m->next;
+      auto **link = &sorted;
+      while (*link && (*link)->offset <= m->offset)
+        link = &(*link)->next;
+      m->next = *link;
+      *link = m;
+      m = next;
+    }
+    cls->member_lst_and_root = sorted;
+    for (auto *m = sorted; m; m = m->next) {
+      m->left = m->right = nullptr;
+      if (m != sorted) {
+        auto **link = &cls->member_lst_and_root;
+        while (*link) {
+          auto cmp = StrCmpCpp(reinterpret_cast<const uint8_t *>((*link)->str),
+                               reinterpret_cast<const uint8_t *>(m->str));
+          link = cmp < 0 ? &(*link)->left : &(*link)->right;
+        }
+        *link = m;
+      }
+      cls->last_in_member_lst = m;
+    }
+  }
+  return true;
+}
+
 static bool CmpRuntimeHeaders(CHashTable *table)
 {
   enum : uint8_t
@@ -1586,6 +1725,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     MemberMetaPtr,
     DateStructPtr,
     QuePtr,
+    CpuPtr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1618,13 +1758,16 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CMemberLstMeta", table) + 1,
       FindType("CDateStruct", table) + 1,
       FindType("CQue", table) + 1,
+      FindType("CCPU", table) + 1,
   };
   auto *task = CurrentTask();
+  enum CDefaultKind : uint8_t { Numeric, String, LastClass };
   struct [[gnu::packed]] CHeaderArg
   {
     const char *name = nullptr;
     uint8_t type = 0;
-    bool has_default = false, is_string = false;
+    bool has_default = false;
+    CDefaultKind kind = Numeric;
     union [[gnu::packed]] {
       uint64_t dft_val;
       const char *dft_str;
@@ -1636,8 +1779,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
         : name(name), type(type), has_default(has_default), dft_val(value) {}
     constexpr CHeaderArg(const char *name, uint8_t type, bool has_default,
                           uint64_t, const char *str)
-        : name(name), type(type), has_default(has_default), is_string(true),
+        : name(name), type(type), has_default(has_default), kind(String),
           dft_str(str) {}
+    constexpr CHeaderArg(const char *name, uint8_t type, CDefaultKind kind)
+        : name(name), type(type), has_default(true), kind(kind), dft_val(0) {}
   };
   static_assert(sizeof(CHeaderArg) == 19);
   static constexpr struct
@@ -1702,6 +1847,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"mask", U8Ptr}, {"make_mask", Bool, true}, {"make_dirs", Bool, true}, {"no_mask", Bool, true}}},
       {"DirContextDel", U0, FF_RET1, {{"dirc", DirContextPtr}, {"restore", Bool, true, 1}}},
       {"Str2I64", I64, FF_RET1, {{"st", U8Ptr}, {"radix", I64, true, 10}, {"_end_ptr", U8PtrPtr, true}}},
+      {"Str2F64", F64, FF_RET1, {{"src", U8Ptr}, {"_end_ptr", U8PtrPtr, true}}},
       {"Str2Date", Date, FF_RET1, {{"src", U8Ptr}}},
       {"SysTry", U0, FF_RET1, {{"catch_start", U8Ptr}, {"untry_start", U8Ptr}}},
       {"SysUntry", U0, FF_RET1, {}},
@@ -1742,6 +1888,18 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"SleepUntil", U0, FF_RET1, {{"wake_jiffy", I64}}},
       {"Sleep", U0, FF_RET1, {{"mS", I64}}},
       {"Fs", TaskPtr, FF_INTERNAL, {}, nullptr, IC_FS},
+      {"Gs", CpuPtr, FF_INTERNAL, {}, nullptr, IC_GS},
+      {"ChkPtr", Bool, FF_RET1, {{"ptr", U8Ptr}}},
+      {"ClassRep2", Bool, FF_RET1,
+       {{"doc", DocPtr}, {"_d", U8Ptr}, {"class_name", U8Ptr, LastClass},
+        {"depth", I64}, {"max_depth", I64}, {"dynamic", Bool},
+        {"types", I64, true, HTT_CLASS}, {"offset", I64, true}}},
+      {"ClassRep", U0, FF_RET1,
+       {{"_d", U8Ptr}, {"class_name", U8Ptr, LastClass}, {"max_depth", I64, true, 2},
+        {"fun", Bool, true}, {"offset", I64, true}}},
+      {"ClassRepD", U0, FF_RET1,
+       {{"_d", U8Ptr}, {"class_name", U8Ptr, LastClass}, {"max_depth", I64, true, 2},
+        {"fun", Bool, true}, {"offset", I64, true}}},
       {"GetRFlags", I64, FF_INTERNAL, {}, nullptr, IC_GET_RFLAGS},
       {"Cos", F64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_COS},
       {"MaxI64", I64, FF_INTERNAL, {{"n1", I64}, {"n2", I64}}, nullptr, IC_MAX_I64},
@@ -1837,6 +1995,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"DocBorder", DocPtr, FF_RET1, {{"task", TaskPtr, true}}},
       {"DocDel", U0, FF_RET1, {{"doc", DocPtr}}},
       {"DocRecalc", Bool, FF_RET1, {{"doc", DocPtr}, {"recalc_flags", I64, true}}},
+      {"DocMax", I64, FF_RET1, {{"i", I64, true, INT64_MAX}}},
+      {"DocDataFmt", U0, FF_RET1,
+       {{"doc", DocPtr}, {"doc_e", DocEntryPtr}, {"d", I64, true, UINT64_MAX}}},
+      {"DocDataScan", U0, FF_RET1, {{"doc", DocPtr}, {"doc_e", DocEntryPtr}}},
       {"DocPutKey", U0, FF_RET1, {{"doc", DocPtr}, {"ch", I64, true}, {"sc", I64, true}}},
       {"DocTermNew", U0, FF_RET1, {}},
       {"DocGetKey", I64, FF_RET1, {{"_sc", I64Ptr, true}}},
@@ -2099,10 +2261,12 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       }
       if (arg.has_default) {
         member->flags |= MLF_DFT_AVAILABLE;
-        if (!arg.is_string)
+        if (arg.kind == Numeric)
           member->dft_val = arg.dft_val;
       }
-      if (arg.is_string) {
+      if (arg.kind == LastClass)
+        member->flags |= MLF_LASTCLASS;
+      if (arg.kind == String) {
         auto *str = StrNew(arg.dft_str, task->data_heap);
         if (!str) {
           HashDel(&fun->cls.sym.hash);
@@ -2309,6 +2473,9 @@ static bool CmpFillHash(CHashTable *table)
       {"DOCF_BWD_MOVEMENT", "0x40000"},
       {"DOCF_DO_FULL_REFRESH", "0x200000"}, {"TASKf_IDLE", "3"},
       {"RECALCt_FIND_CURSOR", "1"},
+      {"DOCT_DATA", "30"}, {"DOCT_TREE", "36"},
+      {"DOCEF_REFRESH_DATA", "(1<<45)"}, {"DOCEF_UPDATE_DATA", "(1<<46)"},
+      {"DOCEF_DEREF_DATA", "(1<<47)"}, {"DOCEF_HAS_TERMINATOR", "(1<<49)"},
       {"RECALCt_TO_SCRN", "2"},
       {"RECALCF_HAS_CURSOR", "0x100"},
       {"DISPLAYf_SHOW", "0"},
@@ -2443,7 +2610,8 @@ static bool CmpFillHash(CHashTable *table)
          CmpKbdData(table) && CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
          CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
-         CmpCtrlData(table, task) && CmpRuntimeHeaders(table);
+         CmpCtrlData(table, task) && CmpClassReportData(table, *task) &&
+         CmpRuntimeHeaders(table);
 }
 
 CHashTable *CmpAsmHashNew()

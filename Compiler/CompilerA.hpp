@@ -336,6 +336,7 @@ enum CICode : uint8_t
   IC_GLBL_ADDR = 0x15,
   IC_ASM_ADDR = 0x16,
   IC_FS = 0x17,
+  IC_GS = 0x18,
   IC_TO_I64 = 0x1B,
   IC_TO_F64 = 0x1C,
   IC_HOLYC_TYPECAST = 0x1F,
