@@ -20,6 +20,11 @@ loader relocates to physical address `0x96600`, as in the pinned TempleOS
 loader. The kernel and BSS must fit below that address. On GCC 13.3.0 the
 file-stream baseline's kernel shrank from 522,512 to 407,568 bytes without
 changing the loader layout. All nine local QEMU cases passed with `-Os`.
+`Kernel/SerialDev/Mouse.HC:KbdMsInit` allocates the five PS/2 FIFO records
+and their buffers through `FifoU8New` and `FifoI64New` in `Kernel/KDataTypes.HC`.
+UnholyOS now follows that allocation order before installing the device
+handlers. The buffers take 40,976 bytes out of the boot BSS. The boot
+test checks their heap allocation, capacities and the existing input probes.
 Clang may emit a System V `memcpy` call for aggregate copies. Its assembly
 entry returns the original destination; the HolyC `_MEMCPY` entry retains
 the reference calling convention and return value.
@@ -788,6 +793,15 @@ Pinned TempleOS and UnholyOS produced the same 15-line trace with
 QEMU 9.2.0, the PC machine, `qemu64`, and 512 MiB. The 118-byte
 `DCProbe.GR.Z` file matched byte for byte.
 
+`BitmapDiffProbe.HC` checks equal images, a changed rectangle, reversed
+and clipped extraction, the padded-width difference-scan behavior,
+bitmap sprite bytes, transparent replay, and document insertion through
+`DocGR`. The focused boot in UnholyOS and the identical source executed
+in pinned TempleOS both produced `bitmap diff 7F E76D01B74919B2D4`.
+The comparison used QEMU 8.2.2, PC, `qemu64`, and 512 MiB. The boot
+suite checks the same trace at startup and after the guest-built ISO
+boots. This does not verify the remaining sprite editor or movie APIs.
+
 ## 3D bitmap drawing
 
 `Blot3Probe.HC` checks the bitmap contents and context state after
@@ -1072,6 +1086,90 @@ The same driver accepts `--tic-tac-toe-reference` and
 copies the exact probe into allocated guest memory with GDB and
 checks the uploaded bytes before executing it. Native regression
 runs do not require GDB.
+
+## Flood filling
+
+`FloodFillProbe.HC` compares region fills, boundary-color fills, dither
+and XOR pixels, depth rejection and boundary depth updates, symmetry,
+and transformed coordinates. It checks restoration of the brush,
+secondary color, flags and recorded extents. Both the pinned reference
+and native PC guests report `flood fill 1FF`; all seven printed counts
+and pixel/depth fingerprints agree. The startup and guest-built ISO
+tests require those exact lines. Run the reference fixture with
+`build/Linux/TestBoot --flood-fill-reference qemu-system-x86_64
+<reference.iso> build/flood-reference`. The driver verifies the uploaded
+source bytes before executing it in a 512 MiB QEMU PC guest. Native
+verification uses the regular startup test ISO. Coverage does not yet
+include overlapping windows, probability dithering or the fixed ray
+stack's exhaustion behavior.
+
+The original [Demo/Graphics/Blot.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Graphics/Blot.HC)
+by Terry A. Davis is included without changes. The imported checkout
+contains 735 bytes (SHA-256
+`5a98a574fdb3341816fbc55877f125abfa30229e7e06f68c162bc6de6fc0e35e`).
+The interactive test runs the animated brush and bitmap composition,
+waits for the key prompt, records the graphics layer, and presses Space.
+The two guests' complete drawing buffers match byte for byte (SHA-256
+`897974d37f94c5224c05da2064c18684626a779738c013d8b8125bd14b7f40f4`).
+The cleared buffers also match. Both guests then evaluate another terminal
+expression successfully. The native test is part of `make test`; the
+reference run uses `build/Linux/TestBoot --blot-reference qemu-system-x86_64
+<reference.iso> build/blot-reference`. Both use QEMU 8.2.2, PC,
+`qemu64`, 512 MiB and a private QMP socket.
+
+## Regular polygons, Bezier curves, and B-splines
+
+`SplineProbe.HC` exercises the typed callbacks, distance helpers,
+partial and complete polygons, early callback refusal, open and closed
+splines, short control arrays, and flat, depth-buffered and transformed
+drawing. Its SHA-256 is
+`67317368378ec3a1d943573ab2fa8c1410126f0cd7fb58c6c08b87f443e868b8`.
+All 15 output lines from the pinned guest and the native boot probe
+matched. The reference memory capture contains the exact fixture bytes
+at offset 4096 of the uploaded 16 KiB buffer. The startup and guest-built
+ISO checks require the recorded callback counts, coordinates and bitmap
+and depth fingerprints.
+
+Both native discs include Terry A. Davis's unchanged
+[Demo/Graphics/BSpline.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Graphics/BSpline.HC),
+SHA-256 `6bf2b7033228a506ab300fb5d2e2c4840e7dde7618711a6310e7ecbbdb8f95b1`
+for the byte-identical 733-byte Windows checkout. The pinned Git blob
+has LF line endings (698 bytes); the Windows checkout uses CRLF.
+The `-text` attribute preserves the imported checkout bytes.
+The interactive driver uses five left-button releases at window-relative
+pixels (130,130), (360,100), (400,290), (200,320) and (110,230), followed
+by a right-button release at (300,380). The original program marks the
+control points in green, then draws closed quadratic and cubic curves
+in red and blue. All eight drawing buffers (initial, after each control
+point, after drawing the curves, and after exit) were identical across
+the two guests. The completed 640×480 curve drawing has SHA-256
+`02f9a0f7f46b19ece113744ae9f5cd210e0ad26c3129ff2ae54a31577a2a038f`.
+The regression compares the complete buffer fingerprints at each phase.
+On Enter, both guests clear the drawing to transparent, preserve their
+previous window-inhibit mask and three scroll offsets, and execute
+another terminal expression returning 63.
+
+Run the focused native and reference tests using QEMU 8.2.2:
+
+```sh
+make -j4 BUILD=build/gr-splines
+make BUILD=build/gr-splines build/gr-splines/Linux/TestBoot
+build/gr-splines/Linux/TestBoot --spline qemu-system-x86_64 \
+  build/gr-splines/unholyos.iso build/gr-splines/spline-native
+build/gr-splines/Linux/TestBoot --spline-reference qemu-system-x86_64 \
+  <reference.iso> build/gr-splines/spline-reference
+make -j4 BUILD=build/gr-splines test
+```
+
+Both interactive guests use PC, `qemu64`, 512 MiB, CD boot, no display
+window, a private QMP socket pair and a separate serial log. The reference
+ISO SHA-256 is
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+The native ISO SHA-256 for this run is
+`2b7ad4a7b723c647732efb2612678230042fb56186211b286f6380a8ad58874e`.
+The checks cover the tested curve and input paths; extreme coordinates,
+allocation failure, all mirror modes and full VGA frame parity remain
+outside this comparison.
 
 ## Arrows, raster text, and the common ancestor demo
 
@@ -1535,6 +1633,49 @@ cluster `0x5d`, and `UnholyOS: kernel entered in 64-bit mode`. QMP reported
 the VM running. The screenshot and serial log were captured under `build/`.
 This verifies the clean boot to the current kernel; the desktop is pending.
 
+## Native FIFO operations
+
+`Kernel/KDataTypes.HC` defines the byte and signed 64-bit FIFO operations.
+Both records have a typed buffer pointer followed by `mask`, `in_ptr`,
+and `out_ptr`, at offsets 0, 8, 16, and 24. The ring reserves one slot.
+The native insert, remove, peek, flush and count operations preserve the
+interrupt flag. Flush advances the read pointer to the write pointer.
+Count uses the reference's conditional subtraction, including its
+non-power-of-two mask behavior. Allocation retains UnholyOS's existing
+failure checks and deletion accepts a null record; those cases differ
+from the unchecked reference routines.
+
+The new `Linux/Fixtures/FifoProbe.HC` checks both typed layouts,
+empty operations (including null output pointers), capacity, byte and
+signed I64 values, peek, wraparound, flush, interrupt state and the
+size-six ring quirk. Both guests printed `FIFO probe 1FF`. A second
+direct call returned the same value without changing the task's
+data-heap usage.
+
+The focused native image was built using GCC 13.3.0:
+
+```sh
+make -j4 build/unholyos-startup-test.iso build/Linux/TestBoot
+build/Linux/MakeISO build/Adam/Opt/Boot/BootDVD.BIN \
+  build/0000Boot/0000Kernel.BIN.C build/fifo-focused.iso \
+  --compress-at Doc/Start.DD.Z Doc/Start.DD --dir Home \
+  --file Linux/Fixtures/FifoProbe.HC
+qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d \
+  -cdrom build/fifo-focused.iso -display none \
+  -serial file:build/fifo-focused.log -monitor none -no-reboot -no-shutdown
+```
+
+QEMU 8.2.2 booted the focused image and reported the FIFO result, heap
+cleanup and entry into 64-bit mode. The 512,176-byte kernel's BSS ended
+at `0x88DAB`, below the relocated DVD loader at `0x96600`.
+The pinned distribution DVD ran with the same PC, qemu64 and 512 MiB
+settings. Its kernel matches the 189,760-byte kernel file in the pinned
+checkout at DVD byte offset 52,224. GDB copied the 3,704-byte fixture into
+a zeroed guest buffer and read it back; the SHA-256 of both copies was
+`28e776de0d4d84d99cb1f1c6dbf68cac8bcaaf6f12b7542588c492dadff75f1e`.
+`ExePutS` ran that buffer, and a separate `KeyDevAdd` hook captured the
+output through QEMU's debug console. The reference heap check emitted 1.
+
 ## TimeClock and queue operations
 
 The original `Apps/TimeClock/Load.HC`, `Install.HC`, and `TimeClk.HC`
@@ -1638,6 +1779,46 @@ The separate probe captures are `music-native-final.log` and
 Playback uses the actual PIT speaker and task sleep. It is tested on
 one CPU; waveform fidelity, exact wall-clock durations, SMP music
 semaphores, and the remaining sound and media APIs are not established.
+
+## Screen capture
+
+`Demo/Graphics/ScrnCapture.HC` is the original Terry A. Davis source from
+the pinned TempleOS tree. Its SHA-256 is
+`9d80656342da13734305dd82cc22d24c7f9f05829f5b2cebb87ef5a738f473dd`.
+The demo is included in the boot and startup-test ISOs.
+
+`CaptureProbe.HC` draws a 32-by-8 pattern containing all 16 indexed
+colors. It checks dimensions and ownership of the captured bitmap, the
+original pattern, each doubled pixel at 2x zoom, the unzoomed capture
+while zoomed, a GR file with a changed VGA palette, and clipped playback
+into a 32-by-8 device context. Both guests returned `capture probe 3F`.
+The fixture is also checked by the native startup and guest-built ISO
+tests. Screen content outside the deterministic pattern differs between
+the guests; the full screenshot is not claimed to be byte-identical.
+
+The original demo was also driven from the guest terminal in both
+systems. A fresh RedSea RAM drive serves as `Home`. The test places a
+16-by-8 red rectangle on the screen, presses Space at each of the three
+prompts, checks that the image is replayed into the graphics overlay and
+that the rectangle survived, and verifies that the overlay is entirely
+transparent on exit. Reading `B:/DemoScrnShot.GR.Z` returns a 640-by-480
+image with the expected red pixel. Both interactive runs passed.
+
+From the repository root, the interactive tests can be run with:
+
+```sh
+build/capture-check/Linux/TestBoot --screen-capture qemu-system-x86_64 \
+  build/capture-check/unholyos.iso build/capture-check/demo-native
+build/capture-check/Linux/TestBoot --screen-capture-reference qemu-system-x86_64 \
+  /path/to/TOS_Distro.ISO build/capture-check/demo-reference
+```
+
+The focused native image was built with
+`make -j4 BUILD=build/capture-check all` and `Linux/MakeISO`, adding
+`Linux/Fixtures/CaptureProbe.HC`, `Linux/Fixtures/FileWriteProbe.BIN`,
+the startup document and a `Home` directory. The reference ran the same
+fixture via `ExePutS` after creating a RAM drive. Both ran under QEMU
+8.2.2, PC, `qemu64`, 512 MiB. Logs are in `build/capture-check/`.
 
 ## Subsystem map
 

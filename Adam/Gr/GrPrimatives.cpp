@@ -110,6 +110,102 @@ extern "C" int64_t GrPeekCpp(CDC *dc, int64_t x, int64_t y)
   return GrClipPoint(dc, x, y) ? GrPeek0Cpp(dc, x, y) : -1;
 }
 
+struct CFFRay
+{
+  int64_t state, x, y, j, x1, ray_len, ray_len2;
+};
+
+static int64_t GrFloodFillRay(CDC *dc, int64_t x, int64_t y, int64_t z, int32_t *db)
+{
+  constexpr size_t count = 0x80000;
+  auto *base = reinterpret_cast<CFFRay *>(MAllocCpp(sizeof(CFFRay) * count, nullptr));
+  if (!base)
+    return 0;
+  size_t i = 0;
+  int64_t res = 0;
+  base[0] = {0, x, y, 0, 0, 0, 0};
+  for (;;) {
+    auto &f = base[i];
+    switch (f.state) {
+    case 0:
+      f.state++;
+      res += f.ray_len = GrRayLen(dc, &f.x, f.y, z, db);
+      f.y--;
+      f.j = f.ray_len;
+      f.x1 = f.x;
+      break;
+    case 1:
+    case 4:
+      if (f.j > 0) {
+        f.state++;
+        if ((f.ray_len2 = GrRayLenMinus(dc, f.x1, f.y))) {
+          if (i + 1 == count)
+            goto done;
+          base[i + 1] = {0, f.x1, f.y, 0, 0, 0, 0};
+          i++;
+        }
+      } else
+        f.state += 2;
+      break;
+    case 2:
+    case 5:
+      f.state--;
+      f.j -= f.ray_len2 + 1;
+      f.x1 -= f.ray_len2 + 1;
+      break;
+    case 3:
+      f.state++;
+      f.y += 2;
+      f.j = f.ray_len;
+      f.x1 = f.x;
+      break;
+    case 6:
+      if (!i)
+        goto done;
+      i--;
+      break;
+    }
+  }
+done:
+  Free(base);
+  return res;
+}
+
+extern "C" int64_t GrFloodFillCpp(CDC *dc, int64_t x, int64_t y,
+                                  bool not_color, int64_t z, int32_t *db)
+{
+  if (!dc)
+    dc = gr.dc;
+  if (dc->flags & DCF_DONT_DRAW)
+    return 0;
+  int64_t res = 0;
+  auto old_flags = dc->flags;
+  auto old_color2 = dc->color2;
+  auto *old_brush = dc->brush;
+  dc->brush = nullptr;
+  int64_t j = GrPeekCpp(dc, x, y);
+  if (j >= 0) {
+    if (not_color) {
+      dc->color2 = {{dc->color.c0.color, 0}, {0, 0}};
+      dc->flags |= DCF_FILL_NOT_COLOR;
+      if (j != dc->color2.c0.color)
+        res = GrFloodFillRay(dc, x, y, z, db);
+    } else {
+      dc->color2 = {{uint8_t(j), 0}, {0, 0}};
+      if (j != dc->color.c0.color ||
+          ((dc->color.c1.rop & ROPBF_DITHER) &&
+           dc->color.c0.color != dc->color.c1.color)) {
+        dc->flags &= ~DCF_FILL_NOT_COLOR;
+        res = GrFloodFillRay(dc, x, y, z, db);
+      }
+    }
+  }
+  dc->brush = old_brush;
+  dc->flags = old_flags;
+  dc->color2 = old_color2;
+  return res;
+}
+
 static int64_t GrFillCircleRows(CDC *dc, int64_t cx, int64_t cy, int64_t z,
                                 int64_t diameter, bool vertical, int64_t i,
                                 int64_t end)
@@ -261,7 +357,8 @@ static bool GrLinePlot0(CDC *dc, int64_t x, int64_t y, int64_t z)
 static bool GrLinePlot(CDC *dc, int64_t x, int64_t y, int64_t z)
 {
   dc->db_z = z;
-  return GrPlotCpp(dc, x, y);
+  GrPlot1(dc, x, y);
+  return true;
 }
 
 extern "C" uint64_t GrLineCpp(CDC *dc, int64_t x1, int64_t y1, int64_t x2,
@@ -305,6 +402,40 @@ extern "C" bool GrEllipseCpp(CDC *dc, int64_t cx, int64_t cy, int64_t xr,
                      length);
   dc->depth_buf = db;
   return res;
+}
+
+extern "C" bool GrRegPolyCpp(CDC *dc, int64_t cx, int64_t cy, int64_t xr,
+                             int64_t yr, int64_t sides, uint64_t rotation,
+                             int64_t step, uint64_t start, uint64_t length)
+{
+  if (!dc)
+    dc = gr.dc;
+  auto *db = dc->depth_buf;
+  dc->depth_buf = nullptr;
+  auto res = RegPoly(dc, cx, cy, 0, xr, yr, sides, GrLinePlot, rotation, step,
+                     start, length);
+  dc->depth_buf = db;
+  return res;
+}
+
+extern "C" bool Gr2BezierCpp(CDC *dc, const CD3I32 *ctrl)
+{
+  return Bezier2(dc ? dc : gr.dc, ctrl, GrLinePlot);
+}
+
+extern "C" bool Gr3BezierCpp(CDC *dc, const CD3I32 *ctrl)
+{
+  return Bezier3(dc ? dc : gr.dc, ctrl, GrLinePlot);
+}
+
+extern "C" bool Gr2BSplineCpp(CDC *dc, const CD3I32 *ctrl, int64_t cnt, bool closed)
+{
+  return BSpline2(dc ? dc : gr.dc, ctrl, cnt, GrLinePlot, closed);
+}
+
+extern "C" bool Gr3BSplineCpp(CDC *dc, const CD3I32 *ctrl, int64_t cnt, bool closed)
+{
+  return BSpline3(dc ? dc : gr.dc, ctrl, cnt, GrLinePlot, closed);
 }
 
 static int64_t GrLineFat3(CDC *dc, const CD3I64 &p1, const CD3I64 &p2,
@@ -415,15 +546,14 @@ extern "C" bool GrLine3Cpp(CDC *dc, int64_t x1, int64_t y1, int64_t z1,
   return res;
 }
 
-extern "C" bool GrEllipse3Cpp(CDC *dc, int64_t cx, int64_t cy, int64_t cz,
-                              int64_t xr, int64_t yr, uint64_t rotation,
-                              int64_t step, uint64_t start, uint64_t length)
+template<class Draw>
+static bool GrProjectedCurve(CDC *dc, int64_t cx, int64_t cy, int64_t cz,
+                             int64_t xr, int64_t yr, uint64_t rotation, Draw draw)
 {
   if (!dc)
     dc = gr.dc;
   if (!(dc->flags & DCF_TRANSFORMATION))
-    return Ellipse(dc, cx, cy, cz, xr, yr, GrPlot3Cpp, rotation, step, start,
-                   length);
+    return draw(dc, cx, cy, cz, xr, yr, rotation);
 
   dc->flags &= ~DCF_TRANSFORMATION;
   CD3I64 center{cx, cy, cz}, origin{};
@@ -449,12 +579,35 @@ extern "C" bool GrEllipse3Cpp(CDC *dc, int64_t cx, int64_t cy, int64_t cz,
   constexpr uint64_t sign = 1ULL << 63;
   m2 = F64MulBits(m2, F64SinBits(F64AddBits(arg2, arg1 ^ sign)) & ~sign);
   auto scale = F64FromI64(0x10000);
-  auto res = Ellipse(dc, center.x, center.y, center.z,
+  auto res = draw(dc, center.x, center.y, center.z,
                      F64ToI64(F64DivBits(m1, scale), 0x0C00),
-                     F64ToI64(F64DivBits(m2, scale), 0x0C00), GrPlot3Cpp,
-                     arg1 ^ sign, step, start, length);
+                     F64ToI64(F64DivBits(m2, scale), 0x0C00), arg1 ^ sign);
   dc->flags |= DCF_TRANSFORMATION;
   return res;
+}
+
+extern "C" bool GrEllipse3Cpp(CDC *dc, int64_t cx, int64_t cy, int64_t cz,
+                              int64_t xr, int64_t yr, uint64_t rotation,
+                              int64_t step, uint64_t start, uint64_t length)
+{
+  return GrProjectedCurve(dc, cx, cy, cz, xr, yr, rotation,
+      [=](CDC *d, int64_t x, int64_t y, int64_t z, int64_t rx, int64_t ry,
+          uint64_t angle) {
+        return Ellipse(d, x, y, z, rx, ry, GrPlot3Cpp, angle, step, start, length);
+      });
+}
+
+extern "C" bool GrRegPoly3Cpp(CDC *dc, int64_t cx, int64_t cy, int64_t cz,
+                              int64_t xr, int64_t yr, int64_t sides,
+                              uint64_t rotation, int64_t step, uint64_t start,
+                              uint64_t length)
+{
+  return GrProjectedCurve(dc, cx, cy, cz, xr, yr, rotation,
+      [=](CDC *d, int64_t x, int64_t y, int64_t z, int64_t rx, int64_t ry,
+          uint64_t angle) {
+        return RegPoly(d, x, y, z, rx, ry, sides, GrPlot3Cpp, angle, step,
+                       start, length);
+      });
 }
 
 extern "C" bool GrCircle3Cpp(CDC *dc, int64_t cx, int64_t cy, int64_t cz,
@@ -466,6 +619,81 @@ extern "C" bool GrCircle3Cpp(CDC *dc, int64_t cx, int64_t cy, int64_t cz,
   if (dc->flags & DCF_TRANSFORMATION)
     return GrEllipse3Cpp(dc, cx, cy, cz, radius, radius, 0, step, start, length);
   return Circle(dc, cx, cy, cz, radius, GrPlot3Cpp, step, start, length);
+}
+
+template<class Draw>
+static bool GrCurve3(CDC *dc, const CD3I32 *ctrl, int64_t cnt, Draw draw)
+{
+  if (!dc)
+    dc = gr.dc;
+  if (cnt <= 0 || uint64_t(cnt) > INT64_MAX / sizeof(CD3I32))
+    return false;
+  const auto flags = dc->flags;
+  CD3I32 *transformed = nullptr, *reflected = nullptr;
+  if (flags & DCF_TRANSFORMATION) {
+    transformed = reinterpret_cast<CD3I32 *>(MAllocCpp(cnt * sizeof(CD3I32), nullptr));
+    if (!transformed)
+      return false;
+    for (int64_t i = 0; i < cnt; i++) {
+      CD3I64 p{ctrl[i].x, ctrl[i].y, ctrl[i].z};
+      DCTransformPoint(*dc, p);
+      transformed[i] = {int32_t(p.x), int32_t(p.y), int32_t(p.z)};
+    }
+    ctrl = transformed;
+    dc->flags &= ~DCF_TRANSFORMATION;
+  }
+  bool res = false;
+  if (flags & DCF_SYMMETRY) {
+    reflected = reinterpret_cast<CD3I32 *>(MAllocCpp(cnt * sizeof(CD3I32), nullptr));
+    if (!reflected) {
+      dc->flags = flags;
+      Free(transformed);
+      return false;
+    }
+    for (int64_t i = 0; i < cnt; i++) {
+      CD3I64 p{ctrl[i].x, ctrl[i].y, ctrl[i].z};
+      DCReflectCpp(dc, &p.x, &p.y, &p.z);
+      reflected[i] = {int32_t(p.x), int32_t(p.y), int32_t(p.z)};
+    }
+    dc->flags &= ~DCF_SYMMETRY;
+    res = draw(dc, reflected);
+  }
+  if (!(flags & DCF_SYMMETRY) || !(flags & DCF_JUST_MIRROR))
+    res |= draw(dc, ctrl);
+  dc->flags = flags;
+  Free(reflected);
+  Free(transformed);
+  return res;
+}
+
+extern "C" bool Gr2Bezier3Cpp(CDC *dc, const CD3I32 *ctrl)
+{
+  return GrCurve3(dc, ctrl, 3, [](CDC *d, const CD3I32 *p) {
+    return Bezier2(d, p, GrPlot3Cpp);
+  });
+}
+
+extern "C" bool Gr3Bezier3Cpp(CDC *dc, const CD3I32 *ctrl)
+{
+  return GrCurve3(dc, ctrl, 4, [](CDC *d, const CD3I32 *p) {
+    return Bezier3(d, p, GrPlot3Cpp);
+  });
+}
+
+extern "C" int64_t Gr2BSpline3Cpp(CDC *dc, const CD3I32 *ctrl, int64_t cnt,
+                                  bool closed)
+{
+  return GrCurve3(dc, ctrl, cnt, [=](CDC *d, const CD3I32 *p) {
+    return BSpline2(d, p, cnt, GrPlot3Cpp, closed);
+  });
+}
+
+extern "C" bool Gr3BSpline3Cpp(CDC *dc, const CD3I32 *ctrl, int64_t cnt,
+                               bool closed)
+{
+  return GrCurve3(dc, ctrl, cnt, [=](CDC *d, const CD3I32 *p) {
+    return BSpline3(d, p, cnt, GrPlot3Cpp, closed);
+  });
 }
 
 static int64_t GrBlot3Distance(const CD3I64 &delta)
@@ -541,6 +769,31 @@ static bool GrBlot3Pass(CDC &dc, CDC &img, const CD3I64 &p1, const CD3I64 &p2,
     x += dw;
   }
   return true;
+}
+
+extern "C" int64_t GrFloodFill3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z,
+                                   bool not_color)
+{
+  if (!dc)
+    dc = gr.dc;
+  auto old_flags = dc->flags;
+  CD3I64 p{x, y, z};
+  if (dc->flags & DCF_TRANSFORMATION) {
+    DCTransformPoint(*dc, p);
+    dc->flags &= ~DCF_TRANSFORMATION;
+  }
+  int64_t res = 0;
+  if (dc->flags & DCF_SYMMETRY) {
+    auto reflected = p;
+    DCReflectCpp(dc, &reflected.x, &reflected.y, &reflected.z);
+    dc->flags &= ~DCF_SYMMETRY;
+    res = GrFloodFillCpp(dc, reflected.x, reflected.y, not_color, reflected.z, dc->depth_buf);
+  }
+  // The non-mirrored pass replaces, rather than adds to, the returned count.
+  if (!(old_flags & DCF_SYMMETRY) || !(dc->flags & DCF_JUST_MIRROR))
+    res = GrFloodFillCpp(dc, p.x, p.y, not_color, p.z, dc->depth_buf);
+  dc->flags = old_flags;
+  return res;
 }
 
 extern "C" int64_t GrBlot3Cpp(CDC *dc, int64_t x1, int64_t y1, int64_t z1,

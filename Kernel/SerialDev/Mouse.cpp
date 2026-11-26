@@ -83,10 +83,6 @@ extern "C" void MsSetCpp(int64_t x, int64_t y, int64_t z, int64_t l, int64_t r)
   MsHardSet(x, y, z, l, r);
 }
 
-static uint8_t packet_buf[8], raw_buf[0x1000];
-static CFifoU8 packet_fifo{packet_buf, 7, 0, 0};
-static CFifoU8 raw_fifo{raw_buf, 0xFFF, 0, 0};
-
 void MsInit()
 {
   ms.scale.x = ms.scale.y = ms.scale.z = F64(1.0);
@@ -94,9 +90,32 @@ void MsInit()
   ms.timestamp = GetTSC();
   ms.dbl_time = F64(0.350);
   GridInitCpp();
+}
 
-  ms_hard.fifo = &packet_fifo;
-  ms_hard.fifo2 = &raw_fifo;
+bool KbdMsInit()
+{
+  auto *kbd_fifo = FifoU8New(8);
+  auto *kbd_fifo2 = FifoU8New(0x1000);
+  auto *scan_fifo = FifoI64New(0x1000);
+  auto *ms_fifo = FifoU8New(8);
+  auto *ms_fifo2 = FifoU8New(0x1000);
+  if (!kbd_fifo || !kbd_fifo2 || !scan_fifo || !ms_fifo || !ms_fifo2) {
+    FifoU8Del(kbd_fifo);
+    FifoU8Del(kbd_fifo2);
+    FifoI64Del(scan_fifo);
+    FifoU8Del(ms_fifo);
+    FifoU8Del(ms_fifo2);
+    return false;
+  }
+  auto flags = GetRFlags();
+  asm volatile("cli" : : : "memory");
+  MemSet(&kbd, 0, sizeof(kbd));
+  kbd.fifo = kbd_fifo;
+  kbd.fifo2 = kbd_fifo2;
+  kbd.scan_code_fifo = scan_fifo;
+  MemSet(&ms_hard, 0, sizeof(ms_hard));
+  ms_hard.fifo = ms_fifo;
+  ms_hard.fifo2 = ms_fifo2;
   ms_hard.scale.x = ms_hard.scale.y = F64(0.5);
   ms_hard.scale.z = F64(1.0);
   ms_hard.prescale.x = GR_WIDTH;
@@ -104,6 +123,8 @@ void MsInit()
   ms_hard.pos.x = GR_WIDTH / 2;
   ms_hard.pos.y = GR_HEIGHT / 2;
   MemCpy(&ms_hard_last, &ms_hard, sizeof(ms_hard));
+  SetRFlags(flags);
+  return true;
 }
 
 void MsHardStageByte(uint8_t raw_byte)

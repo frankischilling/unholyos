@@ -1406,8 +1406,23 @@ static void BootATAByteReport(CDrv &dv)
   SerialPutS("\r\n");
 }
 
+template <typename T> static bool BootFifoCheck(const CFifo<T> *f, size_t size)
+{
+  return reinterpret_cast<uintptr_t>(f) >= MEM_HEAP_BASE &&
+         MSize(f) >= sizeof(*f) &&
+         reinterpret_cast<uintptr_t>(f->buf) >= MEM_HEAP_BASE &&
+         MSize(f->buf) >= size * sizeof(T) && f->mask == int64_t(size - 1);
+}
+
 void BootProbe()
 {
+  SerialPutS("UnholyOS: PS/2 heap FIFOs ");
+  SerialPutHex(BootFifoCheck(kbd.fifo, 8) &&
+               BootFifoCheck(kbd.fifo2, 0x1000) &&
+               BootFifoCheck(kbd.scan_code_fifo, 0x1000) &&
+               BootFifoCheck(ms_hard.fifo, 8) &&
+               BootFifoCheck(ms_hard.fifo2, 0x1000));
+  SerialPutS("\r\n");
   SerialPutS("UnholyOS: DVD LBA ");
   SerialPutHex(SYS_BOOT_BLK);
   SerialPutS(", source ");
@@ -1481,6 +1496,8 @@ void BootProbe()
     }
     BootFileProgramReport(*adam_task->cur_dv,"/Fat32RejectProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ArcProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/SplineProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/FloodFillProbe.HC");
     BootStartupReport(*adam_task->cur_dv);
     BootLexReport(*adam_task->cur_dv);
     BootDirectiveReport(*adam_task->cur_dv);
@@ -1537,6 +1554,8 @@ void BootProbe()
     if (BootFileProgramReport(*adam_task->cur_dv, "/DCProbe.HC").okay)
       if (auto *ram = MountedDrive('B'))
         BootGuestFileReport(*ram, "/DCProbe.GR.Z");
+    BootFileProgramReport(*adam_task->cur_dv, "/BitmapDiffProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/CaptureProbe.HC");
     BootRasterReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/CursorProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/CursorExcept.HC");
@@ -1557,6 +1576,19 @@ void BootProbe()
     BootVariadicReport(*adam_task->cur_dv, *adam_task, "/Doc/QueueProbe.HC",
                        "/QueueProbe.BIN.Z",
                        "Cmp(\"::/Doc/QueueProbe.HC\",,\"B:/QueueProbe.BIN.Z\");");
+    if (BootFileProgramReport(*adam_task->cur_dv, "/FifoProbe.HC").okay) {
+      auto *fun = reinterpret_cast<CHashFun *>(
+          HashFind("FifoProbe", adam_task->hash_table, HTT_FUN));
+      auto *heap = adam_task->data_heap;
+      const auto used = heap->used_u8s;
+      uint64_t result = 0;
+      bool okay = fun && CallHolyC0Checked(
+          reinterpret_cast<const uint8_t *>(fun->exe_addr), &result) &&
+          result == 0x1FF && heap->used_u8s == used;
+      SerialPutS("UnholyOS: FIFO heap cleanup ");
+      SerialPutHex(okay);
+      SerialPutS("\r\n");
+    }
     BootTimeClockReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/FileOperationsProbe.HC");
     {

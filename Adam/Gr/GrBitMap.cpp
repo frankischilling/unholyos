@@ -204,6 +204,102 @@ extern "C" int64_t GrBlotCpp(CDC *dc, int64_t x, int64_t y, CDC *img)
   return 1;
 }
 
+uint8_t *GrBitMap4ToBitMap8(uint8_t *dst,const uint8_t *src,int64_t src_size,
+                            int64_t bkcolor)
+{
+  int64_t i=src_size*2,i1=i>>3;
+  for (int64_t k=0;k<i;k++) {
+    int64_t c=0;
+    uint8_t mask=1U<<(k&7);
+    if (src[k>>3]&mask) c|=1;
+    if (src[i1+(k>>3)]&mask) c|=2;
+    if (src[i1*2+(k>>3)]&mask) c|=4;
+    if (src[i1*3+(k>>3)]&mask) c|=8;
+    if (c==bkcolor) c=TRANSPARENT;
+    *dst++=c;
+  }
+  return dst;
+}
+
+extern "C" CDC *DCExtCpp(CDC *dc,int64_t x1,int64_t y1,int64_t x2,int64_t y2,
+                          CTask *task)
+{
+  if (!dc) dc=gr.dc;
+  if (x1>x2) {int64_t i=x1; x1=x2; x2=i;}
+  if (y1>y2) {int64_t i=y1; y1=y2; y2=i;}
+  if (dc->flags&DCF_SCRN_BITMAP) {
+    CTask *win_task=dc->win_task;
+    uint64_t x=uint64_t(win_task->pix_left)+win_task->scroll_x;
+    uint64_t y=uint64_t(win_task->pix_top)+win_task->scroll_y;
+    x1+=x; x2+=x;
+    y1+=y; y2+=y;
+  }
+  CDC *res=DCNewCpp(uint64_t(x2)-x1+1,uint64_t(y2)-y1+1,task,false);
+  if (res) {
+    DCFillCpp(res,TRANSPARENT);
+    GrBlotCpp(res,-uint64_t(x1),-uint64_t(y1),dc);
+  }
+  return res;
+}
+
+static bool GrDiffRow(const uint8_t *base,const uint8_t *update,int64_t width)
+{
+  for (int64_t i=0;i<width;i++)
+    if (base[i]!=update[i])
+      return true;
+  return false;
+}
+
+extern "C" CDC *DCDiffCpp(CDC *base,CDC *update)
+{
+  if (!base || !update || !base->body || !update->body ||
+      base->width!=update->width || base->height!=update->height ||
+      base->width_internal!=update->width_internal ||
+      update->width<=0 || update->height<=0)
+    return nullptr;
+  int64_t x1=0,y1=0,x2=update->width-1,y2=update->height-1;
+  const uint8_t *ptr_base=base->body,*ptr_update=update->body;
+  // The reference's vertical scans advance by the logical width, not stride.
+  while (y1<=y2) {
+    if (GrDiffRow(ptr_base,ptr_update,update->width))
+      break;
+    ptr_base+=update->width;
+    ptr_update+=update->width;
+    y1++;
+  }
+  if (y1>y2)
+    return nullptr;
+  ptr_base=base->body+static_cast<int64_t>(base->width_internal)*base->height;
+  ptr_update=update->body+static_cast<int64_t>(update->width_internal)*update->height;
+  while (y1<y2) {
+    ptr_base-=update->width;
+    ptr_update-=update->width;
+    if (GrDiffRow(ptr_base,ptr_update,update->width))
+      break;
+    y2--;
+  }
+  while (x1<x2) {
+    for (int64_t i=y1;i<=y2;i++)
+      if (GrPeek0Cpp(base,x1,i)!=GrPeek0Cpp(update,x1,i))
+        goto df_x2;
+    x1++;
+  }
+df_x2:
+  while (x1<x2) {
+    for (int64_t i=y1;i<=y2;i++)
+      if (GrPeek0Cpp(base,x2,i)!=GrPeek0Cpp(update,x2,i))
+        goto df_done;
+    x2--;
+  }
+df_done:
+  CDC *res=DCExtCpp(update,x1,y1,x2,y2,nullptr);
+  if (res) {
+    res->x0=x1;
+    res->y0=y1;
+  }
+  return res;
+}
+
 extern "C" int64_t GrPutCharCpp(CDC *dc, int64_t x, int64_t y, uint8_t ch)
 {
   if (!dc)
@@ -353,6 +449,103 @@ extern "C" int64_t GrRectCpp(CDC *dc, int64_t x, int64_t y, int64_t w,
     // The reference consumes a random value even after the last row.
     alternate = probability && RandU16Cpp() < dc->dither_probability_u16;
   }
+  return res;
+}
+
+// Rays use window-local coordinates and recheck coverage at character cells.
+static bool GrRayStart(CDC *dc, int64_t &x, int64_t &y, int64_t &z)
+{
+  int64_t x3 = x, y3 = y;
+  if (dc->flags & DCF_SCRN_BITMAP) {
+    auto *task = dc->win_task;
+    x += uint64_t(task->scroll_x);
+    y += uint64_t(task->scroll_y);
+    z += uint64_t(task->scroll_z);
+    x3 = x;
+    y3 = y;
+    if (x3 < 0 || y3 < 0)
+      return false;
+    x3 += uint64_t(task->pix_left);
+    y3 += uint64_t(task->pix_top);
+    if (x3 < 0 || x3 > task->pix_right || y3 < 0 ||
+        y3 > task->pix_bottom || !GrPixelVisible(dc, x3, y3, false))
+      return false;
+  }
+  y = y3;
+  return dc->body && x3 >= 0 && x3 < dc->width && y3 >= 0 && y3 < dc->height;
+}
+
+static bool GrRayX(CDC *dc, int64_t x, int64_t y, bool boundary, int64_t &x3)
+{
+  x3 = x;
+  if (dc->flags & DCF_SCRN_BITMAP) {
+    auto *task = dc->win_task;
+    if (boundary && x < 0)
+      return false;
+    x3 += uint64_t(task->pix_left);
+    if (boundary && (x3 < 0 || x3 > task->pix_right || x3 >= dc->width ||
+                     !GrPixelVisible(dc, x3, y, false)))
+      return false;
+  } else if (boundary && (x3 < 0 || x3 >= dc->width))
+    return false;
+  return x3 >= 0 && x3 < dc->width_internal;
+}
+
+int64_t GrRayLenMinus(CDC *dc, int64_t x, int64_t y)
+{
+  int64_t z = 0, res = 0, x3;
+  if (!GrRayStart(dc, x, y, z))
+    return 0;
+  const auto *dst = dc->body + y * dc->width_internal;
+  const bool not_color = dc->flags & DCF_FILL_NOT_COLOR;
+  while (GrRayX(dc, x, y, (x & 7) == 7, x3) &&
+         ((dst[x3] != dc->color2.c0.color) == not_color)) {
+    res++;
+    x--;
+  }
+  return res;
+}
+
+int64_t GrRayLen(CDC *dc, int64_t *x1, int64_t y, int64_t z, int32_t *db)
+{
+  int64_t x = *x1, res = 0, x3;
+  if (!GrRayStart(dc, x, y, z))
+    return 0;
+  const int64_t x2 = x, d = y * dc->width_internal;
+  auto *dst = dc->body + d;
+  if (db)
+    db += d;
+  const auto color = dc->color;
+  const bool not_color = dc->flags & DCF_FILL_NOT_COLOR;
+  auto plot = [&](int64_t px) {
+    // TempleOS writes depth before checking the boundary color.
+    if (db) {
+      if (z < 0 || z > db[px])
+        return false;
+      db[px] = z;
+    }
+    if ((dst[px] != dc->color2.c0.color) != not_color)
+      return false;
+    if (dc->flags & DCF_LOCATE_NEAREST)
+      GrNearest(dc, px, y);
+    if (dc->flags & DCF_RECORD_EXTENTS)
+      GrExtents(dc, px, y, px, y);
+    bool alternate = color.c1.rop & ROPBF_PROBABILITY_DITHER
+                         ? RandU16Cpp() < dc->dither_probability_u16
+                         : (color.c1.rop & ROPBF_DITHER) && ((px ^ y) & 1);
+    GrWritePixel(*dc, dst[px],
+                 {alternate ? color.c1.color : color.c0.color, color.c0.rop});
+    res++;
+    return true;
+  };
+  while (GrRayX(dc, x, y, !(x & 7), x3) && plot(x3))
+    x++;
+  *x1 = x - 1;
+  if (dc->flags & DCF_SCRN_BITMAP)
+    *x1 -= uint64_t(dc->win_task->scroll_x);
+  x = x2 - 1;
+  while (GrRayX(dc, x, y, (x & 7) == 7, x3) && plot(x3))
+    x--;
   return res;
 }
 

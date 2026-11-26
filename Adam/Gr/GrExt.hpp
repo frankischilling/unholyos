@@ -27,6 +27,12 @@ extern "C" bool GrPlot3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z);
 extern "C" int64_t GrFillCircleCpp(CDC *dc, int64_t x, int64_t y, int64_t z,
                                    int64_t diameter);
 extern "C" int64_t GrPeekCpp(CDC *dc, int64_t x, int64_t y);
+int64_t GrRayLenMinus(CDC *dc, int64_t x, int64_t y);
+int64_t GrRayLen(CDC *dc, int64_t *x1, int64_t y, int64_t z, int32_t *db);
+extern "C" int64_t GrFloodFillCpp(CDC *dc, int64_t x, int64_t y,
+                                  bool not_color, int64_t z, int32_t *db);
+extern "C" int64_t GrFloodFill3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z,
+                                   bool not_color);
 extern "C" int64_t GrBlot3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z,
                               CDC *img);
 extern "C" int64_t *Mat4x4IdentEquCpp(int64_t *r);
@@ -39,6 +45,11 @@ extern "C" uint64_t DCSymmetry3SetCpp(CDC *dc, int64_t x1, int64_t y1,
                                       int64_t z3);
 extern "C" int64_t GrPeek0Cpp(CDC *dc, int64_t x, int64_t y);
 extern "C" int64_t GrBlotCpp(CDC *dc, int64_t x, int64_t y, CDC *img);
+uint8_t *GrBitMap4ToBitMap8(uint8_t *dst,const uint8_t *src,int64_t src_size,
+                            int64_t bkcolor);
+extern "C" CDC *DCScrnCaptureCpp(uint8_t include_zoom,CTask *task);
+extern "C" CDC *GRReadCpp(const char *filename,CTask *task);
+extern "C" int64_t GRWriteCpp(const char *filename,CDC *dc,int64_t dcsf_flags);
 extern "C" int64_t GrRectCpp(CDC *dc, int64_t x, int64_t y, int64_t w,
                              int64_t h);
 extern "C" int64_t GrHLineCpp(CDC *dc, int64_t x1, int64_t x2, int64_t y,
@@ -92,3 +103,12 @@ bool Circle(CDC *dc, int64_t cx, int64_t cy, int64_t cz, int64_t radius,
 bool Ellipse(CDC *dc, int64_t cx, int64_t cy, int64_t cz, int64_t xr,
              int64_t yr, GrLinePlotFn fp_plot, uint64_t rotation, int64_t step,
              uint64_t start, uint64_t length);
+bool RegPoly(CDC *dc, int64_t cx, int64_t cy, int64_t cz, int64_t xr,
+             int64_t yr, int64_t sides, GrLinePlotFn fp_plot, uint64_t rotation,
+             int64_t step, uint64_t start, uint64_t length);
+bool Bezier2(CDC *dc, const CD3I32 *ctrl, GrLinePlotFn fp_plot, bool first = true);
+bool Bezier3(CDC *dc, const CD3I32 *ctrl, GrLinePlotFn fp_plot, bool first = true);
+bool BSpline2(CDC *dc, const CD3I32 *ctrl, int64_t cnt, GrLinePlotFn fp_plot,
+              bool closed);
+bool BSpline3(CDC *dc, const CD3I32 *ctrl, int64_t cnt, GrLinePlotFn fp_plot,
+              bool closed);

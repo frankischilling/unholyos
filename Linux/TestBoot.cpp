@@ -428,6 +428,9 @@ static uint64_t VerifyHandoff(const std::string &output,
       R"(PML4 (0x[0-9a-f]+), heap base (0x[0-9a-f]+), run level (0x[0-9a-f]+))");
   std::smatch match;
   Check(std::regex_search(output, match, handoff), "Missing BIOS DVD handoff");
+  Check(output.find("UnholyOS: PS/2 heap FIFOs 0x0000000000000001\r\n") !=
+            std::string::npos,
+        "PS/2 FIFO buffers are not allocated in the task heap");
   std::array<uint64_t, 9> fields;
   for (size_t i = 0; i < fields.size(); i++)
     fields[i] = std::stoull(match[i + 1].str(), nullptr, 16);
@@ -1141,9 +1144,13 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   Check(raw && ReadPhysical<2>(vm,raw-16)==
                    std::array<uint64_t,2>{expected_data_hc,raw_used},
         "Invalid raw screen image allocation");
+  // Five 32-byte FIFO records, two 8-byte packet buffers, two 4 KiB
+  // byte buffers, and one 32 KiB scan-code buffer, including heap headers.
+  constexpr uint64_t fifo_used = 5 * (32 + 16) + 2 * (8 + 16) +
+                                 2 * (9 * page - 24) + 65 * page - 24;
   const uint64_t boot_used = range_bytes + late_used + symbol_used +
                              drive_used + allocation[1] + graphics_used +
-                             asm_hash_used + raw_used;
+                             asm_hash_used + raw_used + fifo_used;
   auto code = VerifyHeap(vm, adam_hc, code_pool, adam);
   uint64_t code_used = 0x42840 + fault_used + (pool ? 0x5E8 : boot_used);
   uint64_t data_used = boot_used, data_alloced = 0;
@@ -3594,6 +3601,22 @@ constexpr std::string_view arrow_output =
     "arrow glyphs 89E961B07EC7F577 0F40B14DF3F0EAC5\n"
     "arrow glyphrop 1 1 1 6 9B053996C61C5E16\n";
 
+constexpr std::string_view spline_output =
+    "spline distance 1445 404301AF155173F2 74\n"
+    "spline line 1 8 9122E7FDCDF6497D\n"
+    "spline polygon 1 29 F0BF680BAC1EE2F4\n"
+    "spline polygon full 1 80 BB71644E7B4700D6\n"
+    "spline bezier2 1 79 4AE8884E96D20D77\n"
+    "spline bezier3 1 57 AA5957A8880A0609\n"
+    "spline abort 0 7 17EABD74C9B33E62\n"
+    "spline quadratic 1 130 BF1B4281CE53A3A0\n"
+    "spline quadratic closed 1 134 A9792FECFA70F792\n"
+    "spline cubic 1 149 4BBC33DC307F9A01\n"
+    "spline cubic closed 1 162 EF23C90942C514E9\n"
+    "spline empty 0 0 1 0\n"
+    "spline flat 1 1 1 92A18090E54EE00B 60680B7EF106B7D9\n"
+    "spline depth 1 1 1 BA6E79FD3D678B9A 4C9AA40E315F8652\n"
+    "spline transform 1 1 1 100 A96BA031861789C2 A12C8086FE5D8F7F\n";
 constexpr std::string_view arc_output =
     "arc circle 1 83 8522C8530877871E\n"
     "arc callback 0 5 409AA16A15CF98DD\n"
@@ -3741,6 +3764,8 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     DrivePrompts(rebuilt,serial);
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
+    CheckProgramOutput(boot, "/BitmapDiffProbe.HC", "bitmap diff 7F E76D01B74919B2D4\n", '1');
+    CheckProgramOutput(boot, "/CaptureProbe.HC", "capture probe 3F\n", '1');
     CheckProgramOutput(boot, "/RasterProbe.HC", raster_output, '1');
     CheckProgramOutput(boot, "/Blot3Probe.HC", blot3_output, '1');
     CheckProgramOutput(boot, "/DepthSpansProbe.HC", depth_spans_output, '1');
@@ -3748,6 +3773,8 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/PenProbe.HC", pen_output, '1');
     CheckProgramOutput(boot, "/ArrowProbe.HC", arrow_output, '1');
     CheckProgramOutput(boot, "/ArcProbe.HC", arc_output, '1');
+    CheckProgramOutput(boot, "/SplineProbe.HC", spline_output, '1');
+    CheckProgramOutput(boot, "/FloodFillProbe.HC", flood_fill_output, '1');
     CheckProgramOutput(boot, "/TaskSettingsProbe.HC", task_settings_output,
                        '1');
     CheckProgramOutput(boot, "/WinScrollProbe.HC", win_scroll_output, '1');
@@ -3774,6 +3801,9 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/FileCopyProbe.HC", file_copy_output, '1');
     CheckProgramOutput(boot, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
     CheckProgramOutput(boot, "/QueueProbe.BIN.Z", "Queue probe FF\n", '1');
+    CheckProgramOutput(boot, "/FifoProbe.HC", "FIFO probe 1FF\n", '1');
+    Check(boot.find("UnholyOS: FIFO heap cleanup 0x0000000000000001") !=
+          std::string::npos, "FIFO allocations leaked");
     CheckProgramOutput(boot, "/TimeClockProbe.HC", time_clock_output, '1');
     CheckProgramOutput(boot, "/FileOperationsProbe.HC", file_operations_output, '1');
     CheckProgramOutput(boot, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
@@ -3849,6 +3879,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
 
     if (startup) {
       CheckProgramOutput(output, "/DCProbe.HC", dc_output, '1');
+      CheckProgramOutput(output, "/BitmapDiffProbe.HC", "bitmap diff 7F E76D01B74919B2D4\n", '1');
+      CheckProgramOutput(output, "/CaptureProbe.HC", "capture probe 3F\n", '1');
       CheckProgramOutput(output, "/RasterProbe.HC", raster_output, '1');
       CheckProgramOutput(output, "/Blot3Probe.HC", blot3_output, '1');
       CheckProgramOutput(output, "/DepthSpansProbe.HC", depth_spans_output, '1');
@@ -3856,6 +3888,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/PenProbe.HC", pen_output, '1');
       CheckProgramOutput(output, "/ArrowProbe.HC", arrow_output, '1');
       CheckProgramOutput(output, "/ArcProbe.HC", arc_output, '1');
+      CheckProgramOutput(output, "/SplineProbe.HC", spline_output, '1');
+      CheckProgramOutput(output, "/FloodFillProbe.HC", flood_fill_output, '1');
       CheckProgramOutput(output, "/TaskSettingsProbe.HC", task_settings_output,
                          '1');
       CheckProgramOutput(output, "/WinScrollProbe.HC", win_scroll_output, '1');
@@ -3887,6 +3921,9 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/FileCopyProbe.HC", file_copy_output, '1');
       CheckProgramOutput(output, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
       CheckProgramOutput(output, "/QueueProbe.BIN.Z", "Queue probe FF\n", '1');
+      CheckProgramOutput(output, "/FifoProbe.HC", "FIFO probe 1FF\n", '1');
+      Check(output.find("UnholyOS: FIFO heap cleanup 0x0000000000000001") !=
+            std::string::npos, "FIFO allocations leaked");
       CheckProgramOutput(output, "/TimeClockProbe.HC", time_clock_output, '1');
       CheckProgramOutput(output, "/FileOperationsProbe.HC", file_operations_output, '1');
       CheckProgramOutput(output, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
@@ -4563,6 +4600,13 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--tic-tac-toe-reference" ||
        std::string_view(argv[1]) == "--break" ||
        std::string_view(argv[1]) == "--break-reference" ||
+       std::string_view(argv[1]) == "--screen-capture" ||
+       std::string_view(argv[1]) == "--screen-capture-reference" ||
+       std::string_view(argv[1]) == "--spline" ||
+       std::string_view(argv[1]) == "--spline-reference" ||
+       std::string_view(argv[1]) == "--flood-fill-reference" ||
+       std::string_view(argv[1]) == "--blot" ||
+       std::string_view(argv[1]) == "--blot-reference" ||
        std::string_view(argv[1]) == "--database" ||
        std::string_view(argv[1]) == "--database-reference" ||
        std::string_view(argv[1]) == "--form")) {
@@ -4570,6 +4614,10 @@ int main(int argc, char **argv)
     bool music_demo = std::string_view(argv[1]).starts_with("--music");
     bool tic = std::string_view(argv[1]).starts_with("--tic-tac-toe");
     bool breaks = std::string_view(argv[1]).starts_with("--break");
+    bool screen_capture = std::string_view(argv[1]).starts_with("--screen-capture");
+    bool spline = std::string_view(argv[1]).starts_with("--spline");
+    bool flood_fill = std::string_view(argv[1]).starts_with("--flood-fill");
+    bool blot = std::string_view(argv[1]).starts_with("--blot");
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -4579,9 +4627,10 @@ int main(int argc, char **argv)
       fs::create_directories(dir);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
-      if (character || tic || breaks || music_demo)
+      if (character || tic || breaks || screen_capture || spline || flood_fill || blot || music_demo)
         DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
-                               reference, tic, breaks, music_demo);
+                               reference, tic, breaks, screen_capture, spline,
+                               flood_fill, blot, music_demo);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");
@@ -4697,7 +4746,15 @@ int main(int argc, char **argv)
               << "       " << argv[0]
               << " --tic-tac-toe[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
-              << " --break[-reference] qemu image.iso [capture-dir]\n";
+              << " --break[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --screen-capture[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --spline[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --flood-fill-reference qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --blot[-reference] qemu image.iso [capture-dir]\n";
     return 2;
   }
   try {

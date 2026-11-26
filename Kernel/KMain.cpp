@@ -149,6 +149,10 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not initialize the idle task\r\n");
     return;
   }
+  if (!KbdMsInit()) {
+    SerialPutS("UnholyOS: Could not allocate keyboard and mouse FIFOs\r\n");
+    return;
+  }
   MsInit();
   if (!KbdInit())
     SerialPutS("UnholyOS: Could not initialize the PS/2 keyboard\r\n");

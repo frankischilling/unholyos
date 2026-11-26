@@ -40,6 +40,10 @@ void _HASH_ADD(), _HASH_ADD_AFTER(), _HASH_FIND(), _HASH_SINGLE_TABLE_FIND();
 void HashTableNewHC(), HashTypeNumHC(), CeilU64HC(), Pow10I64HC();
 void LinkedLstDelHC(), LinkedLstSizeHC(), QueDelHC();
 void QueVectU8NewHC(), QueVectU8PutHC(), QueVectU8GetHC(), QueVectU8DelHC();
+void FifoU8NewHC(), FifoU8DelHC(), FifoU8InsHC(), FifoU8RemHC();
+void FifoU8PeekHC(), FifoU8FlushHC(), FifoU8CntHC();
+void FifoI64NewHC(), FifoI64DelHC(), FifoI64InsHC(), FifoI64RemHC();
+void FifoI64PeekHC(), FifoI64FlushHC(), FifoI64CntHC();
 void QSortHC(), QSortI64HC(), LstMatchHC();
 void FileReadHC(), FileNameAbsHC(), DirNameAbsHC(), DirCurHC(), DirFileHC();
 void CdHC(), IsDirHC(), DirHC(), PutDirLinkHC(), FilesFindHC(), FileFindHC(),
@@ -88,9 +92,30 @@ void RandU32HC(),RandI64HC(),RandU64HC(),RandHC();
 void SeedHC(),IsPixCovered0HC(),GrPlot0HC(),GrPeek0HC();
 void GrBlotHC(),GrRectHC(),GrRectBHC(),GrClampHC();
 void GrPlotHC(),GrPeekHC(),GrLineHC(),ClipLineHC();
+void GrFloodFillHC(),GrFloodFill3HC();
 void GrFillCircleHC(),GrPlot3BHC(),GrPlot3HC(),GrLine3HC(),DCThickScaleHC();
 void CircleHC(),EllipseHC(),GrCircleHC(),GrEllipseHC(),GrCircle3HC(),GrEllipse3HC(),ArgHC();
+void LineHC();
+void RegPolyHC();
+void GrRegPolyHC();
+void GrRegPoly3HC();
+void Bezier2HC();
+void BSpline2HC();
+void Gr2BezierHC();
+void Gr2Bezier3HC();
+void Gr2BSplineHC();
+void Gr2BSpline3HC();
+void Bezier3HC();
+void BSpline3HC();
+void Gr3BezierHC();
+void Gr3Bezier3HC();
+void Gr3BSplineHC();
+void Gr3BSpline3HC();
+void D3I32DistHC();
+void D3I32DistSqrHC();
+void D3I32NormSqrHC();
 void SpriteSizeHC(),Sprite3HC(),Sprite3BHC(),DocSpriteHC(),SpriteHC();
+void DC2SpriteHC(),DCExtHC(),DCDiffHC(),DocGRHC();
 void GrBlot3HC(),DCSymmetry3SetHC(),DCReflectHC();
 void GrHLineHC(),GrVLineHC(),GrFillTri0HC(),GrFillPoly3HC(),GrRect3HC();
 void GrBorderHC(),GrArrow3HC(),GrPutCharHC(),GrPrintHC(),PressAKeyHC();
@@ -100,6 +125,7 @@ void DCClearHC(),DCRstHC(),DCExtentsInitHC(),DCAliasHC();
 void DCNewHC(),DCDelHC(),DCSizeHC(),DCDepthBufRstHC();
 void DCDepthBufAllocHC(),DCCopyHC(),DCMonoHC(),DCColorChgHC();
 void DCSaveHC(),DCLoadHC(),GRWriteHC(),GRReadHC();
+void DCScrnCaptureHC(),GRScrnCaptureReadHC(),GRScrnCaptureWriteHC();
 void Mat4x4EquHC(),Mat4x4NewHC(),Mat4x4MulMat4x4EquHC(),Mat4x4MulMat4x4NewHC();
 void Mat4x4RotXHC(),Mat4x4RotYHC(),Mat4x4RotZHC(),Mat4x4ScaleHC();
 void Mat4x4TranslationEquHC(),Mat4x4TranslationAddHC(),DCSymmetrySetHC(),RefreshHC();
@@ -618,6 +644,20 @@ bool LoadKernel(CTask &task)
       {"QueVectU8Put", reinterpret_cast<uintptr_t>(QueVectU8PutHC)},
       {"QueVectU8Get", reinterpret_cast<uintptr_t>(QueVectU8GetHC)},
       {"QueVectU8Del", reinterpret_cast<uintptr_t>(QueVectU8DelHC)},
+      {"FifoU8New", reinterpret_cast<uintptr_t>(FifoU8NewHC)},
+      {"FifoU8Del", reinterpret_cast<uintptr_t>(FifoU8DelHC)},
+      {"FifoU8Ins", reinterpret_cast<uintptr_t>(FifoU8InsHC)},
+      {"FifoU8Rem", reinterpret_cast<uintptr_t>(FifoU8RemHC)},
+      {"FifoU8Peek", reinterpret_cast<uintptr_t>(FifoU8PeekHC)},
+      {"FifoU8Flush", reinterpret_cast<uintptr_t>(FifoU8FlushHC)},
+      {"FifoU8Cnt", reinterpret_cast<uintptr_t>(FifoU8CntHC)},
+      {"FifoI64New", reinterpret_cast<uintptr_t>(FifoI64NewHC)},
+      {"FifoI64Del", reinterpret_cast<uintptr_t>(FifoI64DelHC)},
+      {"FifoI64Ins", reinterpret_cast<uintptr_t>(FifoI64InsHC)},
+      {"FifoI64Rem", reinterpret_cast<uintptr_t>(FifoI64RemHC)},
+      {"FifoI64Peek", reinterpret_cast<uintptr_t>(FifoI64PeekHC)},
+      {"FifoI64Flush", reinterpret_cast<uintptr_t>(FifoI64FlushHC)},
+      {"FifoI64Cnt", reinterpret_cast<uintptr_t>(FifoI64CntHC)},
       {"QSort", reinterpret_cast<uintptr_t>(QSortHC)},
       {"QSortI64", reinterpret_cast<uintptr_t>(QSortI64HC)},
       {"LstMatch", reinterpret_cast<uintptr_t>(LstMatchHC)},
@@ -772,6 +812,10 @@ bool LoadKernel(CTask &task)
       {"GrPlot3B", reinterpret_cast<uintptr_t>(GrPlot3BHC)},
       {"GrPlot3", reinterpret_cast<uintptr_t>(GrPlot3HC)},
       {"SpriteSize", reinterpret_cast<uintptr_t>(SpriteSizeHC)},
+      {"DC2Sprite", reinterpret_cast<uintptr_t>(DC2SpriteHC)},
+      {"DCExt", reinterpret_cast<uintptr_t>(DCExtHC)},
+      {"DCDiff", reinterpret_cast<uintptr_t>(DCDiffHC)},
+      {"DocGR", reinterpret_cast<uintptr_t>(DocGRHC)},
       {"Sprite3", reinterpret_cast<uintptr_t>(Sprite3HC)},
       {"Sprite3B", reinterpret_cast<uintptr_t>(Sprite3BHC)},
       {"GrBlot3", reinterpret_cast<uintptr_t>(GrBlot3HC)},
@@ -790,6 +834,8 @@ bool LoadKernel(CTask &task)
       {"DocSprite", reinterpret_cast<uintptr_t>(DocSpriteHC)},
       {"Sprite", reinterpret_cast<uintptr_t>(SpriteHC)},
       {"GrPeek", reinterpret_cast<uintptr_t>(GrPeekHC)},
+      {"GrFloodFill", reinterpret_cast<uintptr_t>(GrFloodFillHC)},
+      {"GrFloodFill3", reinterpret_cast<uintptr_t>(GrFloodFill3HC)},
       {"GrLine", reinterpret_cast<uintptr_t>(GrLineHC)},
       {"GrLine3", reinterpret_cast<uintptr_t>(GrLine3HC)},
       {"Circle", reinterpret_cast<uintptr_t>(CircleHC)},
@@ -799,6 +845,25 @@ bool LoadKernel(CTask &task)
       {"GrCircle3", reinterpret_cast<uintptr_t>(GrCircle3HC)},
       {"GrEllipse3", reinterpret_cast<uintptr_t>(GrEllipse3HC)},
       {"Arg", reinterpret_cast<uintptr_t>(ArgHC)},
+      {"Line", reinterpret_cast<uintptr_t>(LineHC)},
+      {"RegPoly", reinterpret_cast<uintptr_t>(RegPolyHC)},
+      {"GrRegPoly", reinterpret_cast<uintptr_t>(GrRegPolyHC)},
+      {"GrRegPoly3", reinterpret_cast<uintptr_t>(GrRegPoly3HC)},
+      {"Bezier2", reinterpret_cast<uintptr_t>(Bezier2HC)},
+      {"BSpline2", reinterpret_cast<uintptr_t>(BSpline2HC)},
+      {"Gr2Bezier", reinterpret_cast<uintptr_t>(Gr2BezierHC)},
+      {"Gr2Bezier3", reinterpret_cast<uintptr_t>(Gr2Bezier3HC)},
+      {"Gr2BSpline", reinterpret_cast<uintptr_t>(Gr2BSplineHC)},
+      {"Gr2BSpline3", reinterpret_cast<uintptr_t>(Gr2BSpline3HC)},
+      {"Bezier3", reinterpret_cast<uintptr_t>(Bezier3HC)},
+      {"BSpline3", reinterpret_cast<uintptr_t>(BSpline3HC)},
+      {"Gr3Bezier", reinterpret_cast<uintptr_t>(Gr3BezierHC)},
+      {"Gr3Bezier3", reinterpret_cast<uintptr_t>(Gr3Bezier3HC)},
+      {"Gr3BSpline", reinterpret_cast<uintptr_t>(Gr3BSplineHC)},
+      {"Gr3BSpline3", reinterpret_cast<uintptr_t>(Gr3BSpline3HC)},
+      {"D3I32Dist", reinterpret_cast<uintptr_t>(D3I32DistHC)},
+      {"D3I32DistSqr", reinterpret_cast<uintptr_t>(D3I32DistSqrHC)},
+      {"D3I32NormSqr", reinterpret_cast<uintptr_t>(D3I32NormSqrHC)},
       {"DCThickScale", reinterpret_cast<uintptr_t>(DCThickScaleHC)},
       {"ClipLine", reinterpret_cast<uintptr_t>(ClipLineHC)},
       {"Mat4x4MulXYZ", reinterpret_cast<uintptr_t>(Mat4x4MulXYZHC)},
@@ -826,6 +891,9 @@ bool LoadKernel(CTask &task)
       {"DCLoad", reinterpret_cast<uintptr_t>(DCLoadHC)},
       {"GRWrite", reinterpret_cast<uintptr_t>(GRWriteHC)},
       {"GRRead", reinterpret_cast<uintptr_t>(GRReadHC)},
+      {"DCScrnCapture", reinterpret_cast<uintptr_t>(DCScrnCaptureHC)},
+      {"GRScrnCaptureRead", reinterpret_cast<uintptr_t>(GRScrnCaptureReadHC)},
+      {"GRScrnCaptureWrite", reinterpret_cast<uintptr_t>(GRScrnCaptureWriteHC)},
       {"Mat4x4Equ", reinterpret_cast<uintptr_t>(Mat4x4EquHC)},
       {"Mat4x4MulMat4x4Equ", reinterpret_cast<uintptr_t>(Mat4x4MulMat4x4EquHC)},
       {"Mat4x4MulMat4x4New", reinterpret_cast<uintptr_t>(Mat4x4MulMat4x4NewHC)},

@@ -110,3 +110,117 @@ extern "C" int64_t QueVectU8GetCpp(CQueVectU8 *v, int64_t idx)
   idx = static_cast<int64_t>(uint64_t(idx) - uint64_t(v->min_idx));
   return 0 <= idx && idx < v->total_cnt ? QueVectU8At(v, idx) : 0;
 }
+
+template <typename T> static CFifo<T> *FifoNew(int64_t size, CTask *mem_task)
+{
+  if (size <= 0 || uint64_t(size) > SIZE_MAX / sizeof(T))
+    return nullptr;
+  auto *heap = MemTaskHeap(mem_task);
+  auto *f = reinterpret_cast<CFifo<T> *>(MAlloc(sizeof(CFifo<T>), heap));
+  if (!f)
+    return nullptr;
+  f->buf = reinterpret_cast<T *>(MAlloc(size * sizeof(T), heap));
+  if (!f->buf) {
+    Free(f);
+    return nullptr;
+  }
+  f->mask = size - 1;
+  f->in_ptr = f->out_ptr = 0;
+  return f;
+}
+
+CFifoU8 *FifoU8New(int64_t size, CTask *mem_task)
+{
+  return FifoNew<uint8_t>(size, mem_task);
+}
+
+void FifoU8Del(CFifoU8 *f)
+{
+  if (f) {
+    Free(f->buf);
+    Free(f);
+  }
+}
+
+CFifoI64 *FifoI64New(int64_t size, CTask *mem_task)
+{
+  return FifoNew<int64_t>(size, mem_task);
+}
+
+void FifoI64Del(CFifoI64 *f)
+{
+  if (f) {
+    Free(f->buf);
+    Free(f);
+  }
+}
+
+extern "C" CFifoU8 *FifoU8NewCpp(int64_t size, CTask *mem_task)
+{
+  return FifoU8New(size, mem_task);
+}
+
+extern "C" void FifoU8DelCpp(CFifoU8 *f)
+{
+  FifoU8Del(f);
+}
+
+extern "C" bool FifoU8InsCpp(CFifoU8 *f, uint8_t value)
+{
+  return FifoIns(*f, value);
+}
+
+extern "C" bool FifoU8RemCpp(CFifoU8 *f, uint8_t *value)
+{
+  return FifoRem(*f, value);
+}
+
+extern "C" bool FifoU8PeekCpp(CFifoU8 *f, uint8_t *value)
+{
+  return FifoPeek(*f, value);
+}
+
+extern "C" void FifoU8FlushCpp(CFifoU8 *f)
+{
+  FifoFlush(*f);
+}
+
+extern "C" int64_t FifoU8CntCpp(CFifoU8 *f)
+{
+  return FifoCnt(*f);
+}
+
+extern "C" CFifoI64 *FifoI64NewCpp(int64_t size, CTask *mem_task)
+{
+  return FifoI64New(size, mem_task);
+}
+
+extern "C" void FifoI64DelCpp(CFifoI64 *f)
+{
+  FifoI64Del(f);
+}
+
+extern "C" bool FifoI64InsCpp(CFifoI64 *f, int64_t value)
+{
+  return FifoIns(*f, value);
+}
+
+extern "C" bool FifoI64RemCpp(CFifoI64 *f, int64_t *value)
+{
+  return FifoRem(*f, value);
+}
+
+extern "C" bool FifoI64PeekCpp(CFifoI64 *f, int64_t *value)
+{
+  return FifoPeek(*f, value);
+}
+
+extern "C" void FifoI64FlushCpp(CFifoI64 *f)
+{
+  FifoFlush(*f);
+}
+
+extern "C" int64_t FifoI64CntCpp(CFifoI64 *f)
+{
+  return FifoCnt(*f);
+}

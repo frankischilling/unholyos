@@ -643,6 +643,38 @@ static bool CmpQueData(CHashTable *table)
   return true;
 }
 
+static bool CmpFifoData(CHashTable *table)
+{
+  auto *u8 = CmpKernelClass(table, "CFifoU8", sizeof(CFifoU8));
+  auto *i64 = CmpKernelClass(table, "CFifoI64", sizeof(CFifoI64));
+  if (!u8 || !i64)
+    return false;
+  auto *heap = CurrentTask()->data_heap;
+  auto *integer = FindType("I64", table);
+  const struct {
+    const char *name;
+    CHashClass *record, *type;
+    size_t offset;
+  } members[]{
+      {"buf", u8, FindType("U8", table) + 1, offsetof(CFifoU8, buf)},
+      {"mask", u8, integer, offsetof(CFifoU8, mask)},
+      {"in_ptr", u8, integer, offsetof(CFifoU8, in_ptr)},
+      {"out_ptr", u8, integer, offsetof(CFifoU8, out_ptr)},
+      {"buf", i64, integer + 1, offsetof(CFifoI64, buf)},
+      {"mask", i64, integer, offsetof(CFifoI64, mask)},
+      {"in_ptr", i64, integer, offsetof(CFifoI64, in_ptr)},
+      {"out_ptr", i64, integer, offsetof(CFifoI64, out_ptr)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    if (!name || !MemberAdd(*member.record, name, *member.type, member.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool CmpDateData(CHashTable *table)
 {
   auto *date = CmpKernelClass(table, "CDate", sizeof(CDate));
@@ -948,6 +980,9 @@ static bool CmpKbdData(CHashTable *table)
       {"cnt", i64, offsetof(CKbdStateGlbls, cnt)},
       {"timestamp", i64, offsetof(CKbdStateGlbls, timestamp)},
       {"new_key_timestamp", i64, offsetof(CKbdStateGlbls, new_key_timestamp)},
+      {"fifo", FindType("CFifoU8", table) + 1, offsetof(CKbdStateGlbls, fifo)},
+      {"fifo2", FindType("CFifoU8", table) + 1, offsetof(CKbdStateGlbls, fifo2)},
+      {"scan_code_fifo", FindType("CFifoI64", table) + 1, offsetof(CKbdStateGlbls, scan_code_fifo)},
       {"rst", boolean, offsetof(CKbdStateGlbls, rst)},
       {"irqs_working", boolean, offsetof(CKbdStateGlbls, irqs_working)},
   };
@@ -1057,6 +1092,8 @@ static bool CmpMouseData(CHashTable *table)
       {"timestamp", hard, i64, offsetof(CMsHardStateGlbls, timestamp)},
       {"install_attempts", hard, i64, offsetof(CMsHardStateGlbls, install_attempts)},
       {"pkt_size", hard, i64, offsetof(CMsHardStateGlbls, pkt_size)},
+      {"fifo", hard, FindType("CFifoU8", table) + 1, offsetof(CMsHardStateGlbls, fifo)},
+      {"fifo2", hard, FindType("CFifoU8", table) + 1, offsetof(CMsHardStateGlbls, fifo2)},
       {"has_wheel", hard, boolean, offsetof(CMsHardStateGlbls, has_wheel)},
       {"has_ext_bttns", hard, boolean, offsetof(CMsHardStateGlbls, has_ext_bttns)},
       {"evt", hard, boolean, offsetof(CMsHardStateGlbls, evt)},
@@ -1840,6 +1877,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     DrvPtr,
     SndPtr,
     DatePtr,
+    FifoU8Ptr,
+    FifoI64Ptr,
     PlotFn,
   };
   CHashClass *types[]{
@@ -1881,6 +1920,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CDrv", table) + 1,
       FindType("CSndData", table) + 1,
       FindType("CDate", table) + 1,
+      FindType("CFifoU8", table) + 1,
+      FindType("CFifoI64", table) + 1,
   };
   auto *task = CurrentTask();
   enum CDefaultKind : uint8_t { Numeric, String, LastClass };
@@ -1913,7 +1954,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     uint8_t result;
     uint16_t flags;
     // Private compiler metadata stays in the DVD-loaded boot image.
-    CHeaderArg args[11];
+    CHeaderArg args[12];
     const char *import_name = nullptr;
     uint8_t internal_op = 0;
   } headers[]{
@@ -2007,6 +2048,20 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"QueIns", U0, FF_INTERNAL, {{"entry", QuePtr}, {"pred", QuePtr}}, nullptr, IC_QUE_INS},
       {"QueInsRev", U0, FF_INTERNAL, {{"entry", QuePtr}, {"succ", QuePtr}}, nullptr, IC_QUE_INS_REV},
       {"QueRem", U0, FF_INTERNAL, {{"entry", QuePtr}}, nullptr, IC_QUE_REM},
+      {"FifoU8New", FifoU8Ptr, FF_RET1, {{"size", I64}, {"mem_task", TaskPtr, true}}},
+      {"FifoU8Del", U0, FF_RET1, {{"f", FifoU8Ptr}}},
+      {"FifoU8Ins", Bool, FF_RET1, {{"f", FifoU8Ptr}, {"b", U8}}},
+      {"FifoU8Rem", Bool, FF_RET1, {{"f", FifoU8Ptr}, {"_b", U8Ptr}}},
+      {"FifoU8Peek", Bool, FF_RET1, {{"f", FifoU8Ptr}, {"_b", U8Ptr}}},
+      {"FifoU8Flush", U0, FF_RET1, {{"f", FifoU8Ptr}}},
+      {"FifoU8Cnt", I64, FF_RET1, {{"f", FifoU8Ptr}}},
+      {"FifoI64New", FifoI64Ptr, FF_RET1, {{"size", I64}, {"mem_task", TaskPtr, true}}},
+      {"FifoI64Del", U0, FF_RET1, {{"f", FifoI64Ptr}}},
+      {"FifoI64Ins", Bool, FF_RET1, {{"f", FifoI64Ptr}, {"q", I64}}},
+      {"FifoI64Rem", Bool, FF_RET1, {{"f", FifoI64Ptr}, {"_q", I64Ptr}}},
+      {"FifoI64Peek", Bool, FF_RET1, {{"f", FifoI64Ptr}, {"_q", I64Ptr}}},
+      {"FifoI64Flush", U0, FF_RET1, {{"f", FifoI64Ptr}}},
+      {"FifoI64Cnt", I64, FF_RET1, {{"f", FifoI64Ptr}}},
       {"StrCmp", I64, FF_RET1, {{"st1", U8Ptr}, {"st2", U8Ptr}}, "_STRCMP"},
       {"MemCmp", I64, FF_RET1, {{"ptr1", U8Ptr}, {"ptr2", U8Ptr}, {"cnt", I64}},
        "_MEMCMP"},
@@ -2214,6 +2269,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"GrPlot3", Bool, FF_RET1,
        {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}, {"z", I64}}},
       {"SpriteSize", I64, FF_RET1, {{"elems", U8Ptr}}},
+      {"DC2Sprite", U8Ptr, FF_RET1, {{"tmpb", DCPtr}}},
       {"Sprite3", U0, FF_RET1,
        {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}, {"z", I64},
         {"elems", U8Ptr}, {"just_one_elem", Bool, true}}},
@@ -2262,6 +2318,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"doc", DocPtr, true}, {"elems", U8Ptr}, {"fmt", U8Ptr, true}}},
       {"Sprite", DocEntryPtr, FF_RET1, {{"elems", U8Ptr}, {"fmt", U8Ptr, true}}},
       {"GrPeek", I64, FF_RET1, {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}}},
+      {"GrFloodFill", I64, FF_RET1, {{"dc", DCPtr, true}, {"x", I64}, {"y", I64},
+       {"not_color", Bool, true}, {"z", I64, true}, {"db", I32Ptr, true}}},
+      {"GrFloodFill3", I64, FF_RET1, {{"dc", DCPtr, true}, {"x", I64}, {"y", I64},
+       {"z1", I64}, {"not_color", Bool, true}}},
       {"GrLine", Bool, FF_RET1,
        {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"x2", I64},
         {"y2", I64}, {"step", I64, true, 1}, {"start", I64, true}}},
@@ -2296,6 +2356,115 @@ static bool CmpRuntimeHeaders(CHashTable *table)
         {"step", I64, true, 1}, {"start_radians", F64, true},
         {"len_radians", F64, true, 0x401921FB54442D18}}},
       {"Arg", F64, FF_RET1, {{"x", F64}, {"y", F64}}},
+      {"Line", Bool, FF_RET1,
+       {{"aux_data", U8Ptr},
+        {"x1", I64},
+        {"y1", I64},
+        {"z1", I64},
+        {"x2", I64},
+        {"y2", I64},
+        {"z2", I64},
+        {"fp_plot", PlotFn},
+        {"step", I64, true, 1},
+        {"start", I64, true}}},
+      {"RegPoly", Bool, FF_RET1,
+       {{"aux_data", U8Ptr},
+        {"cx", I64},
+        {"cy", I64},
+        {"cz", I64},
+        {"x_radius", I64},
+        {"y_radius", I64},
+        {"sides", I64},
+        {"fp_plot", PlotFn},
+        {"rot_angle", F64, true},
+        {"step", I64, true, 1},
+        {"start_radians", F64, true},
+        {"len_radians", F64, true, 0x401921FB54442D18}}},
+      {"GrRegPoly", Bool, FF_RET1,
+       {{"dc", DCPtr, true},
+        {"cx", I64},
+        {"cy", I64},
+        {"x_radius", I64},
+        {"y_radius", I64},
+        {"sides", I64},
+        {"rot_angle", F64, true},
+        {"step", I64, true, 1},
+        {"start_radians", F64, true},
+        {"len_radians", F64, true, 0x401921FB54442D18}}},
+      {"GrRegPoly3", Bool, FF_RET1,
+       {{"dc", DCPtr, true},
+        {"cx", I64},
+        {"cy", I64},
+        {"cz", I64},
+        {"x_radius", I64},
+        {"y_radius", I64},
+        {"sides", I64},
+        {"rot_angle", F64, true},
+        {"step", I64, true, 1},
+        {"start_radians", F64, true},
+        {"len_radians", F64, true, 0x401921FB54442D18}}},
+      {"Bezier2", Bool, FF_RET1,
+       {{"aux_data", U8Ptr},
+        {"ctrl", D3I32Ptr},
+        {"fp_plot", PlotFn},
+        {"first", Bool, true, 1}}},
+      {"BSpline2", Bool, FF_RET1,
+       {{"aux_data", U8Ptr},
+        {"ctrl", D3I32Ptr},
+        {"cnt", I64},
+        {"fp_plot", PlotFn},
+        {"closed", Bool, true}}},
+      {"Gr2Bezier", Bool, FF_RET1,
+       {{"dc", DCPtr, true},
+        {"ctrl", D3I32Ptr}}},
+      {"Gr2Bezier3", Bool, FF_RET1,
+       {{"dc", DCPtr, true},
+        {"ctrl", D3I32Ptr}}},
+      {"Gr2BSpline", Bool, FF_RET1,
+       {{"dc", DCPtr, true},
+        {"ctrl", D3I32Ptr},
+        {"cnt", I64},
+        {"closed", Bool, true}}},
+      {"Gr2BSpline3", I64, FF_RET1,
+       {{"dc", DCPtr, true},
+        {"ctrl", D3I32Ptr},
+        {"cnt", I64},
+        {"closed", Bool, true}}},
+      {"Bezier3", Bool, FF_RET1,
+       {{"aux_data", U8Ptr},
+        {"ctrl", D3I32Ptr},
+        {"fp_plot", PlotFn},
+        {"first", Bool, true, 1}}},
+      {"BSpline3", Bool, FF_RET1,
+       {{"aux_data", U8Ptr},
+        {"ctrl", D3I32Ptr},
+        {"cnt", I64},
+        {"fp_plot", PlotFn},
+        {"closed", Bool, true}}},
+      {"Gr3Bezier", Bool, FF_RET1,
+       {{"dc", DCPtr, true},
+        {"ctrl", D3I32Ptr}}},
+      {"Gr3Bezier3", Bool, FF_RET1,
+       {{"dc", DCPtr, true},
+        {"ctrl", D3I32Ptr}}},
+      {"Gr3BSpline", Bool, FF_RET1,
+       {{"dc", DCPtr, true},
+        {"ctrl", D3I32Ptr},
+        {"cnt", I64},
+        {"closed", Bool, true}}},
+      {"Gr3BSpline3", Bool, FF_RET1,
+       {{"dc", DCPtr, true},
+        {"ctrl", D3I32Ptr},
+        {"cnt", I64},
+        {"closed", Bool, true}}},
+      {"D3I32Dist", F64, FF_RET1,
+       {{"p1", D3I32Ptr},
+        {"p2", D3I32Ptr}}},
+      {"D3I32DistSqr", I64, FF_RET1,
+       {{"p1", D3I32Ptr},
+        {"p2", D3I32Ptr}}},
+      {"D3I32NormSqr", I64, FF_RET1,
+       {{"p", D3I32Ptr}}},
       {"DCThickScale", U0, FF_RET1, {{"dc", DCPtr, true}}},
       {"ClipLine", Bool, FF_RET1,
        {{"_x1", I64Ptr}, {"_y1", I64Ptr}, {"_x2", I64Ptr}, {"_y2", I64Ptr},
@@ -2333,6 +2502,18 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"GRWrite", I64, FF_RET1,
        {{"filename", U8Ptr}, {"dc", DCPtr}, {"dcsf_flags", I64, true, DCSF_COMPRESSED}}},
       {"GRRead", DCPtr, FF_RET1, {{"filename", U8Ptr}, {"task", TaskPtr, true}}},
+      {"DCExt", DCPtr, FF_RET1,
+       {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"x2", I64},
+        {"y2", I64}, {"task", TaskPtr, true}}},
+      {"DCDiff", DCPtr, FF_RET1, {{"base", DCPtr}, {"update", DCPtr}}},
+      {"DocGR", U0, FF_RET1, {{"doc", DocPtr, true}, {"filename", U8Ptr}}},
+      {"DCScrnCapture", DCPtr, FF_RET1,
+       {{"include_zoom", Bool, true, 1}, {"task", TaskPtr, true}}},
+      {"GRScrnCaptureRead", Bool, FF_RET1,
+       {{"filename", U8Ptr}, {"dc", DCPtr, true}, {"x", I64, true},
+        {"y", I64, true}}},
+      {"GRScrnCaptureWrite", I64, FF_RET1,
+       {{"filename", U8Ptr}, {"include_zoom", Bool, true, 1}}},
       {"D3I32Norm", F64, FF_RET1, {{"p", D3I32Ptr}}},
       {"Mat4x4MulMat4x4Equ", I64Ptr, FF_RET1,
        {{"dst", I64Ptr}, {"m1", I64Ptr}, {"m2", I64Ptr}}},
@@ -2826,7 +3007,7 @@ static bool CmpFillHash(CHashTable *table)
     HashAdd(&entry->sym.hash,table);
   }
   auto *task = CmpKernelClass(table, "CTask", sizeof(CTask));
-  return task && CmpMemberData(table) && CmpRuntimeData(table) && CmpQueData(table) && CmpDateData(table) && CmpDirData(table) &&
+  return task && CmpMemberData(table) && CmpRuntimeData(table) && CmpQueData(table) && CmpFifoData(table) && CmpDateData(table) && CmpDirData(table) &&
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) && CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&

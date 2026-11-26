@@ -186,7 +186,15 @@ for controller setup, the translated scan tables, and the
 `KbdPktRead`, `KbdHndlr`, and `KbdMsgsQue` stages. `IRQKbd` in
 `Kernel/KInts.asm` acknowledges IRQ1 and buffers bytes. Queue delivery
 runs from the scheduler and message scanner until the window manager
-takes over. The keyboard FIFOs use static storage during bootstrap.
+takes over. `KbdMsInit` allocates the five input FIFOs from the task heap.
+
+`Kernel/KDataTypes.cpp` and the shared ring operations in
+`Kernel/KernelB.hpp` implement both FIFO types from `Kernel/KDataTypes.HC`.
+`Kernel/KernelA.hpp` checks both 32-byte layouts against `KernelA.HH`.
+The compiler registers the classes, their typed buffer and index fields,
+and the declarations from `KernelC.HH`; the HolyC stack adapters in
+`Kernel/KUtils.asm` are published by `Kernel/KLoad.cpp`.
+The keyboard and mouse records expose their FIFO pointers with those types.
 
 `Kernel/SerialDev/Message.cpp` carries the reference `ScanChar`,
 `ScanKey`, `GetKey`, and `GetChar` paths. Echo and the raw cursor use
@@ -247,6 +255,22 @@ serialization. `GrMath.cpp` supplies the matrix copy used by `DCCopy`.
 precedes the pixel body. `DCSave` and `DCLoad` use the kernel's TempleOS
 LZW codec. `GRRead` also checks that the serialized data fits in the file.
 
+`DCExt` and `DCDiff` in `GrBitMap.cpp` follow the reference's inclusive
+rectangle, clipping, and difference bounds. The vertical difference
+scan advances by the logical width even when the bitmap is padded, as
+in `GrBitMap.HC`. `DC2Sprite` in `SpriteNew.cpp` writes the packed
+bitmap element and terminator, and `DocGR` in `GrDC.cpp` inserts that
+sprite into a document. Invalid geometry and failed allocations return
+without dereferencing a missing buffer.
+
+`GrBitMap.cpp` expands the four screen bitplanes into indexed pixels in
+the same order as `GrBitMap4ToBitMap8` in `GrBitMap.HC`. `DCScrnCapture`
+in `GrDC.cpp` copies either the displayed (possibly zoomed) screen or the
+unzoomed composite. `GrComposites.cpp` carries `GRScrnCaptureWrite` and
+`GRScrnCaptureRead`, including the current VGA palette on write and the
+equivalent raster operation on read. Movie capture and playback remain
+pending.
+
 `GrInit2` allocates the six screen contexts. The persistent `gr.dc`
 starts transparent with `DCF_SCRN_BITMAP | DCF_ON_TOP`. The context
 holds HolyC ABI addresses for the transform and lighting callbacks.
@@ -267,8 +291,8 @@ blits read a word's source pixels before writing the corresponding
 destination pixels, including when the two contexts share storage.
 The unclipped plot tests depth. Clipped 2D drawing bypasses that depth
 test. Probability dithering uses the task RNG from `Kernel/KMathB.cpp`.
-The HolyC adapters extend narrow RNG returns through RAX. The public
-`Line` callback interface remains pending.
+The HolyC adapters extend narrow RNG returns through RAX. `Line` shares
+the same walker with the typed HolyC callback adapter.
 
 ## Graphics transforms and refresh
 
@@ -312,6 +336,16 @@ from `GrPrimatives.HC`, including the shared row in opposing sweeps.
 fan in `GrComposites.HC`. They call the device context's transform
 callback and reflect vertices when symmetry is enabled.
 
+`GrRayLenMinus` and `GrRayLen` in `Adam/Gr/GrBitMap.cpp` preserve
+the leftward scan and two-direction drawing pass from `GrBitMap.HC`.
+They check window coverage at character-cell boundaries and update
+explicit depth values before testing the boundary color. `GrFloodFill`
+and `GrFloodFill3` in `GrPrimatives.cpp` follow the reference's
+`CFFRay` state machine and restore the brush, secondary color and flags.
+The mirrored pass in `GrFloodFill3` runs first; the normal pass replaces
+its returned count. The C++ traversal stops at the reference's fixed
+stack allocation limit rather than writing outside it.
+
 ## Round pens and 3D lines
 
 `GrSetUpTables` in `Adam/Gr/GrInitB.cpp` builds the circle spans and
@@ -348,8 +382,30 @@ the four-argument plot callback rather than an untyped address.
 The 2D variants temporarily bypass the depth buffer. The transformed
 3D variants project the two ellipse axes and restore the transform
 flag after plotting. `F64ArgBits` in `Kernel/KMathA.asm` follows
-the reference `_ARG` x87 instruction sequence. Regular polygons,
-splines and additional sprite elements remain pending.
+the reference `_ARG` x87 instruction sequence.
+
+## Regular polygons and splines
+
+`Adam/Gr/GrMath.cpp` follows `RegPoly`, `Bezier2`, `Bezier3`, `BSpline2`
+and `BSpline3` in `GrMath.HC`. The polygon walks each edge with `Line`.
+The curve walkers keep the reference's adaptive step, coefficient
+expressions, duplicate suppression and endpoint rules. Closed splines
+construct the additional control segment before walking the curves.
+`D3I32Dist`, `D3I32DistSqr` and `D3I32NormSqr` expose their native
+return types through the HolyC ABI. The compiler accepts all twelve
+arguments of `RegPoly` and the typed plot callback.
+
+`Adam/Gr/GrPrimatives.cpp` implements the corresponding 2D and 3D
+device-context wrappers from `GrPrimatives.HC`. `GrLinePlot` sets the
+depth and calls `GrPlot1` before returning TRUE. `GrRegPoly` temporarily
+bypasses the depth buffer; the flat Bezier and spline wrappers retain
+it. The 3D wrappers transform and reflect the control points before
+plotting, and restore the context flags. `GrRegPoly3` shares the
+ellipse-axis projection. `BSpline2` and `BSpline3` release their scratch
+allocation on callback refusal in UnholyOS; the reference returns
+before `Free(c)` on that path. Allocation failure and extreme control
+coordinates have not been compared. Additional sprite elements remain
+pending.
 
 ## Arrows and raster text
 
