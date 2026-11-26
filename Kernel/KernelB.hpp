@@ -23,7 +23,11 @@ inline size_t StrLen(const char *str)
 extern "C" int64_t StrCmpCpp(const uint8_t *a, const uint8_t *b);
 extern "C" int64_t Str2I64Cpp(const char *text, int64_t radix,
                               const char **end);
+extern "C" uint64_t Str2F64Cpp(const char *text, const char **end);
 extern "C" uint64_t Str2DateCpp(const char *src);
+bool ChkPtr(const void *ptr);
+bool ChkPtrRange(const void *ptr, size_t size);
+extern "C" uint64_t ChkPtrCpp(const void *ptr);
 
 inline CTask *CurrentTask()
 {

@@ -1421,7 +1421,7 @@ static void DriveSymmetry(CMonitor &vm, const fs::path &screen)
 }
 
 static void DriveUserTask(CMonitor &vm, const fs::path &dir,
-                          const std::string &boot)
+                          const std::string &boot, bool class_report = false)
 {
   vm.ResetDeadline(15s);
   std::smatch match;
@@ -1697,6 +1697,23 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   wait_text("__DATE__ __TIME__ SIZE");
   wait_text("00C8");
   wait_text("Start.DD.Z");
+
+  if (class_report) {
+    vm.ResetDeadline(30s);
+    type_cmd("DocClear(,1);");
+    type_cmd(R"(ExeFile("::/LastClassRun.HC");)");
+    wait_text("is a \"CTask\".");
+    wait_text("is a \"Student\".");
+    wait_text("is a \"School\".");
+    wait_text("is a \"I64i\".");
+    wait_text("PRESS A KEY");
+    key("a");
+    wait_text("Class:\"CCPU\"", false, 1, 60, std::string_view::npos, 180);
+    wait_text("PRESS A KEY", false, 2, 60, std::string_view::npos, 180);
+    key("a");
+    wait_text("LastClass reports 7", false, 1, 60, std::string_view::npos, 180);
+    std::cout << "LastClass.HC rendered both reports and returned to the prompt\n";
+  }
 
   vm.ResetDeadline(14s);
   type_cmd("WinMax;");
@@ -2416,6 +2433,27 @@ constexpr std::string_view last_class_output =
     "Lastclass names I64i I64i I64i F64\n"
     "Lastclass probe 0F\n";
 
+constexpr std::string_view class_report_output =
+    "report static:\n"
+    "Class:\"ReportBase\"\n"
+    "00000000 marker              :1234 \n"
+    "Class:\"ReportRecord\"\n"
+    "00000002 ch                  :A\n"
+    "41 \n"
+    "00000003 name                :                                   Hello\n"
+    "48 65 6C 6C 6F 00 \n"
+    "00000009 caption             :                                   World\n"
+    "\n"
+    "00000011 small               :FFFFFFFFFFFFFFFE \n"
+    "00000013 number              :00001234 \n"
+    "00000017 total               :0123456789ABCDEF \n"
+    "0000001F wide                :123456789 \n"
+    "00000027 real                :1.500000000000e0 \n"
+    "0000002F samples             :0001 0002 0003 \n"
+    "00000035 +] inner\n"
+    "0000003D missing             :0000000000000000\n"
+    "Class report 7FF data 20\n";
+
 static void DriveDocFrame(CMonitor &vm, const fs::path &serial)
 {
   constexpr std::array<uint8_t, 3> black{}, blue{0, 0, 168}, red{168, 0, 0},
@@ -2965,6 +3003,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/FileStreamProbe.HC", "File stream probe 3FF\n", '1');
     CheckProgramOutput(boot, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
     CheckProgramOutput(boot, "/ClassMeta.HC", class_meta_output, '1');
+    CheckProgramOutput(boot, "/ClassReportProbe.HC", class_report_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.HC", last_class_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.BIN.Z", last_class_output, '1');
     CheckProgramOutput(boot, "/DateOffsetProbe.HC",
@@ -2986,7 +3025,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     VerifyHandoff(boot, media, registers);
     VerifyBootDrive(rebuilt, boot, media, true, false);
     rebuilt.Command(R"({"execute":"cont"})");
-    DriveUserTask(rebuilt, reboot, boot);
+    DriveUserTask(rebuilt, reboot, boot, true);
     rebuilt.Command(R"({"execute":"quit"})");
     fs::copy_file(image, source.parent_path() / "unholyos-guest-built.iso",
                   fs::copy_options::overwrite_existing);
@@ -3070,6 +3109,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          '1');
       CheckProgramOutput(output, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
       CheckProgramOutput(output, "/ClassMeta.HC", class_meta_output, '1');
+      CheckProgramOutput(output, "/ClassReportProbe.HC", class_report_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.HC", last_class_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.BIN.Z", last_class_output, '1');
       CheckProgramOutput(output, "/DateOffsetProbe.HC",
