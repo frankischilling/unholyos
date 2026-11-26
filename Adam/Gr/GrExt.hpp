@@ -6,6 +6,8 @@ extern "C" bool TextCharCpp(CTask *task, uint8_t allow_border, int64_t x,
                              int64_t y, uint32_t d);
 extern "C" bool TextLenStrCpp(CTask *task, int64_t x, int64_t y, int64_t len,
                                uint32_t attr, const char *s);
+extern "C" bool TextLenAttrStrCpp(CTask *task,int64_t x,int64_t y,int64_t len,
+                                  const uint32_t *attr);
 extern "C" bool TextLenAttrCpp(CTask *task, int64_t x, int64_t y, int64_t len,
                                 uint32_t attr);
 extern "C" void TextRectCpp(int64_t l, int64_t r, int64_t t, int64_t b, uint32_t d);

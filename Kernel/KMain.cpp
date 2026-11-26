@@ -46,6 +46,33 @@ static bool SysGlblsInit()
   return true;
 }
 
+static bool SysGrInit()
+{
+  text.font=sys_font_std;
+  text.aux_font=sys_font_cyrillic;
+  text.vga_alias=reinterpret_cast<uint8_t *>(dev.uncached_alias+0xA0000);
+  text.vga_text_alias=reinterpret_cast<uint8_t *>(dev.uncached_alias+0xB8000);
+  text.cols=TEXT_COLS;
+  if (!(SYS_RUN_LEVEL & RLF_VGA)) {
+    text.rows=25;
+    MemSet(text.vga_text_alias,0,text.rows*text.cols*2);
+    const uint8_t border[]{0xC4,0xCD,0xB3,0xBA,0xDA,0xC9,0xBF,0xBB,
+                           0xC0,0xC8,0xD9,0xBC};
+    MemCpy(text.border_chars+2,border,sizeof(border));
+  } else {
+    text.rows=TEXT_ROWS;
+    OutU8(0x3C4,2);
+    OutU8(0x3C5,0x0F);
+    MemSet(text.vga_alias,0,GR_WIDTH*GR_HEIGHT/8);
+    text.raw_scrn_image=CAlloc(GR_WIDTH*GR_HEIGHT/8,adam_task->data_heap);
+    if (!text.raw_scrn_image)
+      return false;
+    for (unsigned i=2;i<14;i++)
+      text.border_chars[i]=i;
+  }
+  return true;
+}
+
 static void TimersInit()
 {
   OutU8(0x43, 0x34);
@@ -92,6 +119,10 @@ extern "C" void KMainCpp()
     return;
   }
   UncachedAliasAlloc();
+  if (!SysGrInit()) {
+    SerialPutS("UnholyOS: Could not initialize text globals\r\n");
+    return;
+  }
   if (!IntInit1()) {
     SerialPutS("UnholyOS: Could not initialize the interrupt table\r\n");
     return;

@@ -100,7 +100,7 @@ void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC(), DocPutKeyHC();
 void DocLockHC(), DocUnlockHC(), DocEntryRunHC(), DocBottomHC(), DocClearHC(), NowHC();
 void DocTermNewHC(), DocGetKeyHC(), DocScanLineHC(), GetStrHC(), GetSHC(), UserCmdLineHC();
 void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
-    TextRectHC(), TextBorderHC(), WinZBufUpdateHC();
+    TextLenAttrStrHC(), TextPrintHC(), TextRectHC(), TextBorderHC(), WinZBufUpdateHC();
 void WinRefocusHC(), WinToTopHC(), WinFocusHC(), WinTileHorzHC(), WinTileVertHC(), WinMaxHC();
 void WinScrollNullHC(), WinScrollRestoreHC();
 void CtrlFindUniqueHC(), CtrlInsideHC(), WinScrollsInitHC();
@@ -513,6 +513,7 @@ bool LoadKernel(CTask &task)
       {"SYS_COMPILE_TIME", reinterpret_cast<uintptr_t>(SYS_COMPILE_TIME)},
       {"cnts", reinterpret_cast<uintptr_t>(&cnts)},
       {"kbd", reinterpret_cast<uintptr_t>(&kbd)},
+      {"text", reinterpret_cast<uintptr_t>(&text)},
       {"ms", reinterpret_cast<uintptr_t>(&ms)},
       {"ms_hard", reinterpret_cast<uintptr_t>(&ms_hard)},
       {"ms_grid", reinterpret_cast<uintptr_t>(&ms_grid)},
@@ -826,8 +827,11 @@ bool LoadKernel(CTask &task)
       {"_TEXT_CHAR", reinterpret_cast<uintptr_t>(TextCharHC)},
       {"TextLenStr", reinterpret_cast<uintptr_t>(TextLenStrHC)},
       {"_TEXT_LEN_STR", reinterpret_cast<uintptr_t>(TextLenStrHC)},
+      {"TextLenAttrStr", reinterpret_cast<uintptr_t>(TextLenAttrStrHC)},
+      {"_TEXT_LEN_ATTR_STR", reinterpret_cast<uintptr_t>(TextLenAttrStrHC)},
       {"TextLenAttr", reinterpret_cast<uintptr_t>(TextLenAttrHC)},
       {"_TEXT_LEN_ATTR", reinterpret_cast<uintptr_t>(TextLenAttrHC)},
+      {"TextPrint", reinterpret_cast<uintptr_t>(TextPrintHC)},
       {"TextRect", reinterpret_cast<uintptr_t>(TextRectHC)},
       {"TextBorder", reinterpret_cast<uintptr_t>(TextBorderHC)},
       {"DocPut", reinterpret_cast<uintptr_t>(DocPutHC)},

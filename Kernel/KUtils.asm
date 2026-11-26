@@ -48,7 +48,8 @@ GLOBAL ScanCode2KeyNameHC
 GLOBAL WinBorderHC,SettingsPushHC,SettingsPopHC
 GLOBAL DocLockHC,DocUnlockHC,DocEntryRunHC,DocBottomHC,DocClearHC,NowHC
 GLOBAL DocTermNewHC,DocGetKeyHC,DocScanLineHC,GetStrHC,GetSHC,UserCmdLineHC
-GLOBAL TextCharHC,TextLenStrHC,TextLenAttrHC,TextRectHC,TextBorderHC,WinZBufUpdateHC
+GLOBAL TextCharHC,TextLenStrHC,TextLenAttrStrHC,TextLenAttrHC,TextPrintHC
+GLOBAL TextRectHC,TextBorderHC,WinZBufUpdateHC
 GLOBAL RawHC,DbgModeHC,IsDbgModeHC,PutFileLinkHC,PutSrcLinkHC,FixSetHC,AdamErrHC
 GLOBAL tSHC,BusyHC,SleepUntilHC,SleepHC,Ona2FreqHC,Freq2OnaHC,SndHC
 GLOBAL ScrnCastHC,SndRstHC,BeepHC,MuteHC,IsMuteHC
@@ -167,7 +168,8 @@ EXTERN ScanCode2KeyNameCpp
 EXTERN WinBorderCpp,SettingsPushCpp,SettingsPopCpp
 EXTERN DocLockCpp,DocUnlockCpp,DocEntryRunCpp,DocBottomCpp,DocClearCpp,NowCpp
 EXTERN DocTermNewCpp,DocGetKeyCpp,DocScanLineCpp,GetStrCpp,GetSCpp,UserCmdLineCpp
-EXTERN TextCharCpp,TextLenStrCpp,TextLenAttrCpp,TextRectCpp,TextBorderCpp,WinZBufUpdateCpp
+EXTERN TextCharCpp,TextLenStrCpp,TextLenAttrStrCpp,TextLenAttrCpp,TextPrintCpp
+EXTERN TextRectCpp,TextBorderCpp,WinZBufUpdateCpp
 EXTERN RawCpp,DbgModeCpp,IsDbgModeCpp,PutFileLinkCpp,PutSrcLinkCpp,FixSetCpp,AdamErrCpp
 EXTERN tSCpp,BusyCpp,SleepUntilCpp,SleepCpp,Ona2FreqCpp,Freq2OnaCpp,SndCpp
 EXTERN ScrnCastCpp,SndRstCpp,BeepCpp,MuteCpp,IsMuteCpp
@@ -547,7 +549,18 @@ HOLYC_CPP SettingsPopHC,SettingsPopCpp,2
 HOLYC_CPP WinZBufUpdateHC,WinZBufUpdateCpp,0
 HOLYC_CPP TextCharHC,TextCharCpp,5
 HOLYC_CPP TextLenStrHC,TextLenStrCpp,6
+HOLYC_CPP TextLenAttrStrHC,TextLenAttrStrCpp,5
 HOLYC_CPP TextLenAttrHC,TextLenAttrCpp,5
+TextPrintHC:
+	HC_FRAME_ENTER
+	MOV	RDI,[RBP+16]
+	MOV	RSI,[RBP+24]
+	MOV	RDX,[RBP+32]
+	MOV	RCX,[RBP+40]
+	MOV	R8,[RBP+48]
+	LEA	R9,[RBP+56]
+	HC_FRAME_CALL TextPrintCpp
+	RET
 HOLYC_CPP TextRectHC,TextRectCpp,5
 HOLYC_CPP TextBorderHC,TextBorderCpp,7
 HOLYC_CPP DocPutHC,DocPutCpp,1
