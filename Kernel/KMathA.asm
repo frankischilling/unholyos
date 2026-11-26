@@ -3,6 +3,7 @@ GLOBAL F64MulBits,F64DivBits,F64AddBits,F64Log10Bits,F64Log2Bits,F64ToI64,F64Fro
 GLOBAL I64MulF64Bits,F64SqrtBits,F64SinBits,F64CosBits
 GLOBAL F64PowerBits
 GLOBAL F64ArgBits
+GLOBAL F64CompareBits
 
 SECTION .text
 BITS 64
@@ -73,6 +74,30 @@ F64_BINOP F64AddBits,FADD
 F64_UNOP F64SqrtBits,FSQRT
 F64_UNOP F64SinBits,FSIN
 F64_UNOP F64CosBits,FCOS
+
+; Compare binary64 arguments without changing the x87 stack depth.
+F64CompareBits:
+		PUSH	RDI
+		PUSH	RSI
+		FLD	QWORD [RSP]
+		FLD	QWORD [RSP+8]
+		FCOMIP	ST0,ST1
+		FSTP	ST0
+		LEA	RSP,[RSP+16]
+		JP	.unordered
+		JA	.greater
+		JB	.less
+		XOR	EAX,EAX
+		RET
+.unordered:
+		MOV	EAX,2
+		RET
+.greater:
+		MOV	EAX,1
+		RET
+.less:
+		MOV	RAX,-1
+		RET
 
 F64ArgBits:
 	PUSH	RDI

@@ -10,12 +10,40 @@ constexpr std::string_view flood_fill_output =
     "fill transform 12 DA390E6207FC8CB5 796135481584641D\n"
     "flood fill 1FF\n";
 
+constexpr std::string_view math_helpers_output =
+    "round -21 -20 -30 -20\n"
+    "round -20 -20 -20 -20\n"
+    "round -19 -10 -20 -20\n"
+    "round -10 -10 -10 -10\n"
+    "round -9 0 -10 -10\n"
+    "round -1 0 -10 -10\n"
+    "round 0 0 0 0\n"
+    "round 1 0 0 10\n"
+    "round 9 0 0 10\n"
+    "round 10 10 10 10\n"
+    "round 11 10 10 20\n"
+    "round 19 10 10 20\n"
+    "round 20 20 20 20\n"
+    "math integer 903D605CF130C49A 65978B3FBB23DE21\n"
+    "math floating 023263F76EC7DF9A\n"
+    "math clamp C000000000000000 4008000000000000 3FF4000000000001\n"
+    "math reversed 4020000000000000 4008000000000000 4020000000000000\n"
+    "math zero 8000000000000000 8000000000000000 8000000000000000\n"
+    "math finite C016000000000000 4002000000000001 C008000000000000\n"
+    "math nan1 3FF0000000000000 7FF8000000001234 7FF8000000001234\n"
+    "math nan2 3FF0000000000000 4008000000000000 3FF0000000000000\n"
+    "math infinity 4008000000000000 C008000000000000 4008000000000000\n"
+    "math powers 0000000000000000 4058FFFFFFFFFFFE 7FF0000000000000\n"
+    "math indirect -10 20\n"
+    "Math helpers done\n";
+
 // Uses the same QMP input and physical-memory readers as the boot tests.
 static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
                                    const std::string &boot, bool reference,
                                    bool tic = false, bool breaks = false,
                                    bool screen_capture = false, bool spline = false,
-                                   bool flood_fill = false, bool blot = false)
+                                   bool flood_fill = false, bool blot = false,
+                                   bool math = false)
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -291,6 +319,21 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
     Check(FileRead(uploaded) == expected, "Reference probe transfer changed source bytes");
     cmd("ExePutS(cgprobe);Free(cgprobe);");
   };
+  if (math) {
+    upload(fs::absolute("Linux/Fixtures/MathHelpersProbe.HC"));
+    const auto cells = wait_text("Math helpers done");
+    const auto screen = visible(cells);
+    auto lines = math_helpers_output;
+    while (!lines.empty()) {
+      const auto end = lines.find('\n');
+      Check(screen.find(lines.substr(0, end)) != std::string::npos,
+            "Math helper output differs from the pinned reference");
+      lines.remove_prefix(end + 1);
+    }
+    snapshot("math-helpers");
+    std::cout << math_helpers_output;
+    return;
+  }
   if (flood_fill) {
     upload(fs::absolute("Linux/Fixtures/FloodFillProbe.HC"));
     auto cells = wait_text("flood fill 1FF");

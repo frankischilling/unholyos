@@ -1751,6 +1751,50 @@ the startup document and a `Home` directory. The reference ran the same
 fixture via `ExePutS` after creating a RAM drive. Both ran under QEMU
 8.2.2, PC, `qemu64`, 512 MiB. Logs are in `build/capture-check/`.
 
+## Kernel math helpers
+
+`MathHelpersProbe.HC` compares the native helpers with
+`Kernel/KMathB.HC` from the pinned TempleOS checkout. Its SHA-256 is
+`b6e6d2c0a6a9e23438beb99448123339accc2f0e31fb7e474c0a3b5d43fac41a`.
+The reference driver verifies the complete uploaded source and trailing
+NUL before executing it. The native guest runs the same source, compiles
+it with `Cmp`, and executes the resulting `MathHelpersProbe.BIN.Z`.
+
+All 25 trace lines matched across the reference and native source and
+module runs. The reference fingerprints are:
+
+| Inputs | Helper calls | Fingerprint |
+| --- | ---: | --- |
+| Signed values -47 through 47 and both integer limits, with eight positive and negative divisors | 2,376 | `903D605CF130C49A` |
+| Six unsigned values and five divisors, including the high bit and maximum value | 60 | `65978B3FBB23DE21` |
+| Twelve binary64 inputs, including signed zero, subnormals, infinities, and quiet and signaling NaNs | 2,016 | `023263F76EC7DF9A` |
+
+Additional trace lines check reversed clamp limits, selected NaN payloads,
+decimal-power bounds, and indirect calls to floating and integer helpers.
+The comparison preserves the reference's `CeilI64(-1,10)==-10` result
+and unordered floating-point branches. For example, `Max(NaN,1.0)`
+returns its first operand and `Clamp(NaN,-2.0,3.0)` returns 3.0.
+
+Build and run the focused image from the repository root:
+
+```sh
+make -j6 build/math-test.iso build/Linux/TestBoot
+build/Linux/TestBoot --math-helpers qemu-system-x86_64 \
+  build/math-test.iso build/math-native
+build/Linux/TestBoot --math-helpers-reference qemu-system-x86_64 \
+  /path/to/TOS_Distro.ISO build/math-reference
+```
+
+Both guests use QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512
+-boot d -cdrom <image.iso> -display none -monitor none -serial
+file:<serial.log> -qmp stdio -no-reboot`. The reference also uses
+`-debugcon file:<debugcon.bin> -gdb tcp:127.0.0.1:45362` to transfer
+the fixture. Each guest starts from a clean VM. The native startup and
+guest-built ISO regressions check the same source and module output.
+This evidence covers the listed values and default x87 environment;
+zero-divisor faults, signed division overflow, and unmasked floating-point
+exceptions are not part of the comparison.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

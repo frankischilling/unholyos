@@ -38,6 +38,7 @@ void CAllocHC(), MAllocIdentHC(), StrNewHC(), AStrNewHC();
 void _STRCMP(), _STRCPY(), _STRIMATCH(), StrOccHC();
 void _HASH_ADD(), _HASH_ADD_AFTER(), _HASH_FIND(), _HASH_SINGLE_TABLE_FIND();
 void HashTableNewHC(), HashTypeNumHC(), CeilU64HC(), Pow10I64HC();
+void ClampHC(), MinHC(), MaxHC(), FloorU64HC(), RoundI64HC(), FloorI64HC(), CeilI64HC();
 void LinkedLstDelHC(), LinkedLstSizeHC(), QueDelHC();
 void QueVectU8NewHC(), QueVectU8PutHC(), QueVectU8GetHC(), QueVectU8DelHC();
 void FifoU8NewHC(), FifoU8DelHC(), FifoU8InsHC(), FifoU8RemHC();
@@ -630,8 +631,15 @@ bool LoadKernel(CTask &task)
       {"_HASH_REM_DEL", reinterpret_cast<uintptr_t>(_HASH_REM_DEL)},
       {"SysSymImportsResolve",
        reinterpret_cast<uintptr_t>(SysSymImportsResolveHC)},
-      {"CeilU64", reinterpret_cast<uintptr_t>(CeilU64HC)},
+      {"Clamp", reinterpret_cast<uintptr_t>(ClampHC)},
+      {"Min", reinterpret_cast<uintptr_t>(MinHC)},
+      {"Max", reinterpret_cast<uintptr_t>(MaxHC)},
       {"Pow10I64", reinterpret_cast<uintptr_t>(Pow10I64HC)},
+      {"FloorU64", reinterpret_cast<uintptr_t>(FloorU64HC)},
+      {"CeilU64", reinterpret_cast<uintptr_t>(CeilU64HC)},
+      {"RoundI64", reinterpret_cast<uintptr_t>(RoundI64HC)},
+      {"FloorI64", reinterpret_cast<uintptr_t>(FloorI64HC)},
+      {"CeilI64", reinterpret_cast<uintptr_t>(CeilI64HC)},
       {"LinkedLstDel", reinterpret_cast<uintptr_t>(LinkedLstDelHC)},
       {"LinkedLstSize", reinterpret_cast<uintptr_t>(LinkedLstSizeHC)},
       {"QueDel", reinterpret_cast<uintptr_t>(QueDelHC)},

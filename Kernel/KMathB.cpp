@@ -1,9 +1,28 @@
 #include "KernelB.hpp"
 
-extern "C" uint64_t CeilU64Cpp(uint64_t num, uint64_t to)
+extern "C" uint64_t ClampCpp(uint64_t d, uint64_t lo, uint64_t hi)
 {
-  num += to - 1;
-  return num - num % to;
+  if (F64CompareBits(d, lo) == -1)
+    return lo;
+  if (F64CompareBits(d, hi) > 0)
+    return hi;
+  return d;
+}
+
+extern "C" uint64_t MinCpp(uint64_t n1, uint64_t n2)
+{
+  if (F64CompareBits(n1, n2) <= 0)
+    return n1;
+  else
+    return n2;
+}
+
+extern "C" uint64_t MaxCpp(uint64_t n1, uint64_t n2)
+{
+  if (F64CompareBits(n1, n2) >= 0)
+    return n1;
+  else
+    return n2;
 }
 
 // HolyC returns F64 as binary64 bits in RAX.
@@ -14,6 +33,43 @@ extern "C" uint64_t Pow10I64Cpp(int64_t exponent)
   if (exponent < -308)
     return 0;
   return pow10_I64[exponent + 309];
+}
+
+extern "C" uint64_t FloorU64Cpp(uint64_t num, uint64_t to)
+{
+  return num - num % to;
+}
+
+extern "C" uint64_t CeilU64Cpp(uint64_t num, uint64_t to)
+{
+  num += to - 1;
+  return num - num % to;
+}
+
+extern "C" int64_t RoundI64Cpp(int64_t num, int64_t to)
+{
+  return static_cast<uint64_t>(num) - num % to;
+}
+
+extern "C" int64_t FloorI64Cpp(int64_t num, int64_t to)
+{
+  if (num >= 0)
+    return static_cast<uint64_t>(num) - num % to;
+  else {
+    num++;
+    return static_cast<uint64_t>(num) - num % to - to;
+  }
+}
+
+extern "C" int64_t CeilI64Cpp(int64_t num, int64_t to)
+{
+  if (num >= 0) {
+    num = static_cast<uint64_t>(num) + to - 1;
+    return static_cast<uint64_t>(num) - num % to;
+  } else {
+    num = static_cast<uint64_t>(num) + to - 1;
+    return static_cast<uint64_t>(num) - num % to - to;
+  }
 }
 
 extern "C" int64_t SignI64Cpp(int64_t i)

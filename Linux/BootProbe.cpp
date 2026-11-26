@@ -1570,6 +1570,9 @@ void BootProbe()
     BootVariadicReport(*adam_task->cur_dv, *adam_task, "/Doc/QueueProbe.HC",
                        "/QueueProbe.BIN.Z",
                        "Cmp(\"::/Doc/QueueProbe.HC\",,\"B:/QueueProbe.BIN.Z\");");
+    BootVariadicReport(*adam_task->cur_dv, *adam_task, "/MathHelpersProbe.HC",
+                       "/MathHelpersProbe.BIN.Z",
+                       "Cmp(\"::/MathHelpersProbe.HC\",,\"B:/MathHelpersProbe.BIN.Z\");");
     if (BootFileProgramReport(*adam_task->cur_dv, "/FifoProbe.HC").okay) {
       auto *fun = reinterpret_cast<CHashFun *>(
           HashFind("FifoProbe", adam_task->hash_table, HTT_FUN));

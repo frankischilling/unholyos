@@ -95,6 +95,7 @@ extern "C" uint64_t F64SqrtBits(uint64_t value);
 extern "C" uint64_t F64SinBits(uint64_t value);
 extern "C" uint64_t F64CosBits(uint64_t value);
 extern "C" uint64_t F64ArgBits(uint64_t x, uint64_t y);
+extern "C" int64_t F64CompareBits(uint64_t n1, uint64_t n2);
 void IntEntrySet(unsigned irq, void (*handler)(), uint16_t type = 0xE,
                  uint16_t dpl = 0);
 uint64_t GetTSC();

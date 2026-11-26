@@ -3756,6 +3756,9 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/FileCopyProbe.HC", file_copy_output, '1');
     CheckProgramOutput(boot, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
     CheckProgramOutput(boot, "/QueueProbe.BIN.Z", "Queue probe FF\n", '1');
+    CheckProgramOutput(boot, "/MathHelpersProbe.HC", math_helpers_output, '1');
+    CheckProgramOutput(boot, "/MathHelpersProbe.BIN.Z", math_helpers_output,
+                       '1');
     CheckProgramOutput(boot, "/FifoProbe.HC", "FIFO probe 1FF\n", '1');
     Check(boot.find("UnholyOS: FIFO heap cleanup 0x0000000000000001") !=
           std::string::npos, "FIFO allocations leaked");
@@ -3876,6 +3879,10 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/FileCopyProbe.HC", file_copy_output, '1');
       CheckProgramOutput(output, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
       CheckProgramOutput(output, "/QueueProbe.BIN.Z", "Queue probe FF\n", '1');
+      CheckProgramOutput(output, "/MathHelpersProbe.HC", math_helpers_output,
+                         '1');
+      CheckProgramOutput(output, "/MathHelpersProbe.BIN.Z", math_helpers_output,
+                         '1');
       CheckProgramOutput(output, "/FifoProbe.HC", "FIFO probe 1FF\n", '1');
       Check(output.find("UnholyOS: FIFO heap cleanup 0x0000000000000001") !=
             std::string::npos, "FIFO allocations leaked");
@@ -4556,6 +4563,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--spline" ||
        std::string_view(argv[1]) == "--spline-reference" ||
        std::string_view(argv[1]) == "--flood-fill-reference" ||
+       std::string_view(argv[1]) == "--math-helpers" ||
+       std::string_view(argv[1]) == "--math-helpers-reference" ||
        std::string_view(argv[1]) == "--blot" ||
        std::string_view(argv[1]) == "--blot-reference" ||
        std::string_view(argv[1]) == "--database" ||
@@ -4568,6 +4577,7 @@ int main(int argc, char **argv)
     bool spline = std::string_view(argv[1]).starts_with("--spline");
     bool flood_fill = std::string_view(argv[1]).starts_with("--flood-fill");
     bool blot = std::string_view(argv[1]).starts_with("--blot");
+    bool math = std::string_view(argv[1]).starts_with("--math-helpers");
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -4577,8 +4587,17 @@ int main(int argc, char **argv)
       fs::create_directories(dir);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
-      if (character || tic || breaks || screen_capture || spline || flood_fill || blot)
-        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference, tic, breaks, screen_capture, spline, flood_fill, blot);
+      if (math && !reference) {
+        auto output = vm.Boot(dir / "serial.log");
+        CheckProgramOutput(output, "/MathHelpersProbe.HC", math_helpers_output,
+                           '1');
+        CheckProgramOutput(output, "/MathHelpersProbe.BIN.Z",
+                           math_helpers_output, '1');
+        std::cout << math_helpers_output
+                  << "Math helper source and compiled module matched\n";
+      } else if (character || tic || breaks || screen_capture || spline ||
+                 flood_fill || blot || math)
+        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference, tic, breaks, screen_capture, spline, flood_fill, blot, math);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");
@@ -4700,6 +4719,8 @@ int main(int argc, char **argv)
               << " --spline[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --flood-fill-reference qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --math-helpers[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --blot[-reference] qemu image.iso [capture-dir]\n";
     return 2;

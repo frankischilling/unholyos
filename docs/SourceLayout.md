@@ -959,6 +959,32 @@ do not yield while held. Full drive-lock release, general
 Ctrl-Alt callback registration and preemptive scheduling remain
 pending.
 
+## Kernel math helpers
+
+`Kernel/KMathB.cpp` follows the function order and branches in
+`Kernel/KMathB.HC` for `Clamp`, `Min`, `Max`, `Pow10I64`, `FloorU64`,
+`CeilU64`, `RoundI64`, `FloorI64`, and `CeilI64`. Unsigned intermediate
+addition and subtraction preserve 64-bit wraparound; signed remainders
+retain the reference's negative-divisor behavior. `RoundI64` removes the
+signed remainder. `CeilI64` keeps its separate negative-input branch,
+including the result of -10 for `CeilI64(-1,10)`.
+
+The floating-point C++ entry points pass binary64 bits through integer
+registers. `F64CompareBits` in `Kernel/KMathA.asm` uses `FCOMIP`, as emitted
+by `Compiler/BackFB.HC`, and restores the x87 stack depth. The wrappers
+preserve the pinned runtime's unordered comparisons: `Min` selects the
+second operand, `Max` selects the first, and `Clamp` selects its upper
+bound when the upper comparison is unordered. These choices also retain
+the selected operand's signed-zero and NaN payload bits.
+
+`Compiler/AsmInit.cpp` supplies the signatures from `Kernel/KernelC.HH`.
+`Kernel/KLoad.cpp` and the explicit `KUtils.asm` adapters expose the same
+HolyC names, argument order, return register, and callee stack cleanup.
+The focused fixture runs through both source execution and a guest-built
+TOSB module; the host driver compares them with the pinned runtime trace.
+Fault delivery for zero divisors and signed division overflow, and
+unmasked floating-point exceptions, remain outside this comparison.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. The probes and their serial output belong to `Linux/BootProbe.cpp`; their bodies and execution order are preserved. [Verification evidence](SourceStructureVerification.md) records the source comparison, build, artifact hashes, and QEMU results.

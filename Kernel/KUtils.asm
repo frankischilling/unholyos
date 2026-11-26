@@ -12,6 +12,7 @@ GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
 GLOBAL MemberMetaDataHC,MemberMetaFindHC,MemberFindHC
 GLOBAL HashTableNewHC,HashTypeNumHC,CeilU64HC,Pow10I64HC
+GLOBAL ClampHC,MinHC,MaxHC,FloorU64HC,RoundI64HC,FloorI64HC,CeilI64HC
 GLOBAL LinkedLstDelHC,LinkedLstSizeHC,QueDelHC
 GLOBAL QueVectU8NewHC,QueVectU8PutHC,QueVectU8GetHC,QueVectU8DelHC
 GLOBAL FifoU8NewHC,FifoU8DelHC,FifoU8InsHC,FifoU8RemHC
@@ -192,6 +193,7 @@ EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
 EXTERN HashRemDelCpp,HashValCpp,HashDelCpp,HashTableDelCpp,HashSrcFileSetCpp,SysSymImportsResolveCpp
 EXTERN MemberMetaDataCpp,MemberMetaFindCpp,MemberFindCpp
 EXTERN HashTableNewCpp,HashTypeNumCpp,CeilU64Cpp,Pow10I64Cpp
+EXTERN ClampCpp,MinCpp,MaxCpp,FloorU64Cpp,RoundI64Cpp,FloorI64Cpp,CeilI64Cpp
 EXTERN LinkedLstDelCpp,LinkedLstSizeCpp,QueDelCpp
 EXTERN QueVectU8NewCpp,QueVectU8PutCpp,QueVectU8GetCpp,QueVectU8DelCpp
 EXTERN FifoU8NewCpp,FifoU8DelCpp,FifoU8InsCpp,FifoU8RemCpp
@@ -556,8 +558,15 @@ HOLYC_CPP MemberFindHC,MemberFindCpp,2
 HOLYC_CPP SysSymImportsResolveHC,SysSymImportsResolveCpp,2
 HOLYC_CPP HashTableNewHC,HashTableNewCpp,2
 HOLYC_CPP HashTypeNumHC,HashTypeNumCpp,1
-HOLYC_CPP CeilU64HC,CeilU64Cpp,2
+HOLYC_CPP ClampHC,ClampCpp,3
+HOLYC_CPP MinHC,MinCpp,2
+HOLYC_CPP MaxHC,MaxCpp,2
 HOLYC_CPP Pow10I64HC,Pow10I64Cpp,1
+HOLYC_CPP FloorU64HC,FloorU64Cpp,2
+HOLYC_CPP CeilU64HC,CeilU64Cpp,2
+HOLYC_CPP RoundI64HC,RoundI64Cpp,2
+HOLYC_CPP FloorI64HC,FloorI64Cpp,2
+HOLYC_CPP CeilI64HC,CeilI64Cpp,2
 HOLYC_CPP LinkedLstDelHC,LinkedLstDelCpp,1
 HOLYC_CPP LinkedLstSizeHC,LinkedLstSizeCpp,1
 HOLYC_CPP QueDelHC,QueDelCpp,2

@@ -63,6 +63,8 @@ ATA_TEST_ISO := $(BUILD)/ata-test.iso
 ATA_PROBES := Linux/Fixtures/AtaWriteProbe.HC Linux/Fixtures/AtaWriteRejectProbe.HC
 BREAK_TEST_ISO := $(BUILD)/break-test.iso
 BREAK_PROBE := Linux/Fixtures/BreakProbe.HC
+MATH_TEST_ISO := $(BUILD)/math-test.iso
+MATH_PROBE := Linux/Fixtures/MathHelpersProbe.HC
 STARTUP_FIXTURE := Linux/Fixtures/StartOS.HC.Z
 STARTUP_DOC := Doc/Start.DD
 MODULE_PROBE := Linux/Fixtures/LoadProbe.BIN
@@ -178,6 +180,9 @@ $(ATA_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_PROBES) $(
 $(BREAK_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(BREAK_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(BREAK_PROBE)
 
+$(MATH_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(MATH_PROBE) $(FILE_WRITE_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(MATH_PROBE) --file $(FILE_WRITE_PROBE)
+
 $(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home \
 		$(foreach demo,$(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS),--file-at $(demo) $(demo))
@@ -187,7 +192,7 @@ TEST_MODULES := $(MODULE_PROBE) $(MODULE_CALLER) $(RUNTIME_PROBE) $(FILE_READ_PR
 	$(DOC_PROBE) $(COMPILER_RUNTIME_PROBE)
 
 STARTUP_FILES := $(TEST_MODULES) $(LEX_PROBES) $(DOC_SOURCE_PROBES) $(CLASS_META_DEMO) Linux/Fixtures/ClassReportProbe.HC Linux/Fixtures/LastClassRun.HC \
-	Linux/Fixtures/FloodFillProbe.HC Linux/Fixtures/FifoProbe.HC \
+	Linux/Fixtures/FloodFillProbe.HC Linux/Fixtures/FifoProbe.HC $(MATH_PROBE) \
 	$(PRINT_SOURCE_PROBES) $(STREAM_PROBES) $(ISO_PROBE) $(MEMORY_PROBES) $(CMP_PROBES) $(TIME_CLOCK_PROBE)
 
 $(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(STARTUP_FILES) $(STARTUP_DOC) $(DOC_BIN_DEMOS) $(DOC_BIN_LINK) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(QUEUE_PROBE) $(APP_FILES) $(FORM_DEMOS)
