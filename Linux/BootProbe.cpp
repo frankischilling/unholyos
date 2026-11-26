@@ -1471,6 +1471,7 @@ void BootProbe()
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32WriteProbe.HC");
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32FormatProbe.HC");
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32StreamProbe.HC");
+      BootFileProgramReport(*adam_task->cur_dv,"/Fat32TreeProbe.HC");
     }
     BootFileProgramReport(*adam_task->cur_dv,"/Fat32RejectProbe.HC");
     BootStartupReport(*adam_task->cur_dv);

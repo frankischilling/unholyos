@@ -57,6 +57,8 @@ FAT_FORMAT_ISO := $(BUILD)/fat32-format-test.iso
 FAT_FORMAT_PROBE := Linux/Fixtures/Fat32FormatProbe.HC
 FAT_STREAM_ISO := $(BUILD)/fat32-stream-test.iso
 FAT_STREAM_PROBE := Linux/Fixtures/Fat32StreamProbe.HC
+FAT_TREE_ISO := $(BUILD)/fat32-tree-test.iso
+FAT_TREE_PROBE := Linux/Fixtures/Fat32TreeProbe.HC
 ATA_TEST_ISO := $(BUILD)/ata-test.iso
 ATA_PROBES := Linux/Fixtures/AtaWriteProbe.HC Linux/Fixtures/AtaWriteRejectProbe.HC
 STARTUP_FIXTURE := Linux/Fixtures/StartOS.HC.Z
@@ -162,6 +164,9 @@ $(FAT_FORMAT_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_FORMAT_P
 $(FAT_STREAM_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_STREAM_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_STREAM_PROBE)
 
+$(FAT_TREE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_TREE_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_TREE_PROBE)
+
 $(FAT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_PROBES)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(FAT_PROBES))
 
@@ -186,7 +191,7 @@ $(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(STARTU
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_FORMAT_ISO)
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO)
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_DISK) valid
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_INVALID_DISK) invalid
@@ -194,8 +199,10 @@ test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $
 	$(BOOT_TEST) --fat32-write "$(QEMU)" $(FAT_WRITE_ISO) $(FAT_WRITE_DISK)
 	$(BOOT_TEST) --fat32-format "$(QEMU)" $(FAT_FORMAT_ISO) $(FAT_WRITE_DISK)
 	$(BOOT_TEST) --fat32-stream "$(QEMU)" $(FAT_STREAM_ISO) $(FAT_WRITE_DISK)
+	$(BOOT_TEST) --fat32-tree "$(QEMU)" $(FAT_TREE_ISO) $(FAT_WRITE_DISK)
 	$(BOOT_TEST) "$(QEMU)" $< $(KERNEL) $(STARTUP_TEST_ISO)
 	$(BOOT_TEST) --character-graphics "$(QEMU)" $<
 	$(BOOT_TEST) --database "$(QEMU)" $<
+	$(BOOT_TEST) --database-persistent "$(QEMU)" $< $(FAT_WRITE_DISK)
 
 -include $(CXX_OBJ:.o=.d)

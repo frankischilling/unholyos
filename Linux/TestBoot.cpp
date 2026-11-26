@@ -255,6 +255,14 @@ public:
         _exit(126);
       close(fd[1]);
       close(err);
+      if (debugcon && !disk.empty()) {
+        execlp(qemu, qemu, "-machine", machine, "-cpu", "qemu64", "-m", memory,
+               "-boot", "d", "-cdrom", image.c_str(), "-drive", ata.c_str(),
+               "-display", "none", "-monitor", "none", "-serial", serial.c_str(),
+               "-qmp", "stdio", "-debugcon", debug.c_str(), "-no-reboot",
+               static_cast<char *>(nullptr));
+        _exit(127);
+      }
       if (debugcon)
         execlp(qemu, qemu, "-machine", machine, "-cpu", "qemu64", "-m", memory,
                "-boot", "d", "-cdrom", image.c_str(), "-display", "none",
@@ -1752,7 +1760,8 @@ static void VerifyFormatRefusal(CMonitor &vm, const fs::path &dir,
 
 static void DriveDataBase(CMonitor &vm, const fs::path &dir,
                           const std::string &boot, bool reference = false,
-                          bool form_only = false)
+                          bool form_only = false, bool persistent = false,
+                          bool reboot = false)
 {
   vm.ResetDeadline(150s);
   uint64_t addr = 0;
@@ -1783,6 +1792,8 @@ static void DriveDataBase(CMonitor &vm, const fs::path &dir,
         case ',': key("comma"); break;
         case '=': key("equal"); break;
         case '+': key("shift-equal"); break;
+        case '&': key("shift-7"); break;
+        case '|': key("shift-backslash"); break;
         case '*': key("shift-8"); break;
         case ' ': key("spc"); break;
         case '-': key("minus"); break;
@@ -1859,12 +1870,26 @@ static void DriveDataBase(CMonitor &vm, const fs::path &dir,
   cmd("WinMax;DocClear(,1);");
   std::this_thread::sleep_for(250ms);
   if (!form_only) {
+  if (persistent) {
+    if (reference)
+      cmd("ATAMount('C',BDT_ATA,0x1F0,0x3F4,0);");
+    cmd("Let2Drv('C',0)->drv_let;");
+    wait("=67");
+    if (!reboot)
+      cmd("Let2Drv('C',0)->bd->flags&=~BDF_READ_ONLY;");
+    else
+      cmd("Let2Drv('C',0)->bd->flags|=BDF_READ_ONLY;");
+    cmd(R"(HomeSet("C:/");)");
+  } else {
   cmd("CBlkDev *dbd=BlkDevNextFreeSlot('B',BDT_RAM);");
   cmd("dbd->max_blk=2047;");
   cmd("BlkDevAdd(dbd,,0,1);HomeSet(\"B:/\");");
   cmd("Let2Drv('B',0)->drv_let;");
   wait("=66");
+  }
   wait("T:/Home>");
+  if (persistent)
+    cmd("DocClear(,1);");
   cmd(R"(ExeFile("::/Demo/Dsk/DataBase.HC");)");
   wait("Read acct, Write acct");
   auto write = [&](const char *account, const char *name, const char *address,
@@ -1885,20 +1910,31 @@ static void DriveDataBase(CMonitor &vm, const fs::path &dir,
     wait("Read acct, Write acct");
     std::this_thread::sleep_for(200ms);
   };
-  write("7", "Ada", "12 Pine", true);
-  write("7", "Ada", "13 Pine", true);
-  write("7", "Eve", "99 Oak", false);
-  write("8", "Bob", "45 Elm", true);
+  if (!reboot) {
+    write("7", "Ada", "12 Pine", true);
+    write("7", "Ada", "13 Pine", true);
+    write("7", "Eve", "99 Oak", false);
+    write("8", "Bob", "45 Elm", true);
+  }
   key("r");
   wait("Acct #");
   key("7");
   key("ret");
   wait("Ada", "13 Pine");
   snap("read");
+  if (persistent) {
+    key("r");
+    wait("Acct #");
+    key("8");
+    key("ret");
+    wait("Bob", "45 Elm");
+    snap("read-second");
+  }
   key("shift-esc");
   wait("T:/Home>");
   // Verify complete file size and the two saved records through the native API.
-  cmd(R"(CFile *dbf=FOpen("B:/DataBaseDemo.BIN","r");)");
+  cmd(persistent ? R"(CFile *dbf=FOpen("C:/DataBaseDemo.BIN","r");)" :
+                   R"(CFile *dbf=FOpen("B:/DataBaseDemo.BIN","r");)");
   cmd("FSize(dbf);");
   wait("51200");
   cmd("U8 dbbuf[512];FBlkRead(dbf,dbbuf,7);");
@@ -1910,8 +1946,13 @@ static void DriveDataBase(CMonitor &vm, const fs::path &dir,
   cmd(R"(FClose(dbf);HomeSet("T:/Home");)");
   wait("T:/Home>");
   snap("saved");
-  std::cout << "DataBase.HC saved two records, edited one, cancelled an overwrite and read both records\n";
+  if (reboot)
+    std::cout << "DataBase.HC reopened both records after a cold reboot\n";
+  else
+    std::cout << "DataBase.HC saved two records, edited one, cancelled an overwrite and read both records\n";
   }
+
+  if (persistent) return;
 
   cmd("DocClear(,1);");
   cmd(R"(ExeFile("::/Demo/DolDoc/Form.HC");)");
@@ -4243,13 +4284,110 @@ static void TestBoot(const char *qemu, const fs::path &iso,
   fs::remove_all(dir);
 }
 
+static void VerifyDatabaseRecords(const Bytes &disk)
+{
+  constexpr size_t fat = 2080 * 512, data = 3102 * 512, cluster_bytes = 1024;
+  constexpr uint32_t eoc = 0x0FFFFFF8;
+  constexpr std::string_view alias = "DATABASEDEM";
+  Check(disk.size() == 68699136, "Wrong database disk geometry");
+  auto offset = [](uint32_t cluster) {
+    Check(cluster >= 2 && cluster < 65538, "Invalid database cluster");
+    return data + cluster * cluster_bytes;
+  };
+  auto next = [&](uint32_t cluster) {
+    return uint32_t(ReadLE(disk, fat + cluster * 4, 4)) & 0x0FFFFFFF;
+  };
+  uint32_t first = 0;
+  std::set<uint32_t> visited;
+  for (uint32_t c = 2; c < eoc && !first; c = next(c)) {
+    size_t begin = offset(c);
+    Check(visited.insert(c).second, "Database root chain loops");
+    for (size_t p = begin; p < begin + cluster_bytes; p += 32) {
+      if (!disk[p]) break;
+      if (disk[p] == 0xE5 || (disk[p + 11] & 0x18) ||
+          !std::equal(alias.begin(), alias.end(), disk.begin() + p))
+        continue;
+      Check(ReadLE(disk, p + 28, 4) == 100 * 512,
+            "Wrong on-disk database size");
+      first = uint32_t(ReadLE(disk, p + 20, 2) << 16 |
+                       ReadLE(disk, p + 26, 2));
+      break;
+    }
+  }
+  Check(first != 0, "Missing on-disk database entry");
+  Bytes actual;
+  visited.clear();
+  uint32_t c = first;
+  for (size_t i = 0; i < 50; ++i) {
+    size_t begin = offset(c);
+    Check(visited.insert(c).second, "Database allocation chain loops");
+    actual.insert(actual.end(), disk.begin() + begin,
+                  disk.begin() + begin + cluster_bytes);
+    c = next(c);
+  }
+  Check(c >= eoc, "Database allocation chain has wrong length");
+  Bytes expected(100 * 512, 0);
+  auto record = [&](size_t n, std::string_view name, std::string_view address) {
+    std::copy(name.begin(), name.end(), expected.begin() + n * 512);
+    std::copy(address.begin(), address.end(), expected.begin() + n * 512 + 32);
+  };
+  record(7, "Ada", "13 Pine");
+  record(8, "Bob", "45 Elm");
+  Check(actual == expected, "Database record bytes differ from saved forms");
+}
+
 int main(int argc, char **argv)
 {
+  if ((argc==5 || argc==6) &&
+      (std::string_view(argv[1])=="--database-persistent" ||
+       std::string_view(argv[1])=="--database-persistent-reference")) {
+    const bool reference=std::string_view(argv[1]).ends_with("-reference");
+    char path[]="/tmp/unholyos-database-disk-XXXXXX";
+    if (argc==5 && !mkdtemp(path)) return 1;
+    fs::path dir=argc==6?fs::absolute(argv[5]):fs::path(path),disk=dir/"owned.img";
+    try {
+      fs::create_directories(dir);
+      auto original=FileRead(argv[4]);
+      constexpr size_t fat1=2080*512,fat2=2593*512,fat_bytes=513*512;
+      Check(original.size()==68699136,"Wrong database FAT32 fixture geometry");
+      fs::copy_file(argv[4],disk);
+      auto expected=original;
+      for (unsigned pass=0;pass<2;pass++) {
+        auto run=dir/(pass?"reboot":"write");
+        fs::create_directory(run);
+        CMonitor vm(argv[2],argv[3],run,"pc","512",false,disk,true,reference);
+        vm.Connect();
+        DriveDataBase(vm,run,reference?"":vm.Boot(run/"serial.log"),reference,false,true,pass!=0);
+        vm.Quit();
+        auto actual=FileRead(disk);
+        Check(actual.size()==original.size(),"Database disk size changed");
+        Check(std::equal(actual.begin()+fat1,actual.begin()+fat1+fat_bytes,
+                         actual.begin()+fat2),"Database FAT mirrors differ");
+        Check(std::equal(actual.begin(),actual.begin()+2049*512,original.begin()),
+              "Database changed the MBR or boot sector");
+        VerifyDatabaseRecords(actual);
+        if (pass) Check(actual==expected,"Reading the saved database changed disk bytes");
+        else {
+          Check(actual!=original,"Database did not reach the disk");
+          expected=std::move(actual);
+        }
+      }
+      Check(FileRead(argv[4])==original,"Original database disk was modified");
+      std::cout<<"Verified original DataBase.HC persistent records and cold reboot\n";
+      if (argc==5) fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr<<error.what()<<'\n'<<"Evidence: "<<dir<<'\n';
+      return 1;
+    }
+  }
   if (argc==5 && (std::string_view(argv[1])=="--fat32-write" ||
                   std::string_view(argv[1])=="--fat32-stream" ||
+                  std::string_view(argv[1])=="--fat32-tree" ||
                   std::string_view(argv[1])=="--fat32-format")) {
     bool format=std::string_view(argv[1])=="--fat32-format";
     bool stream=std::string_view(argv[1])=="--fat32-stream";
+    bool tree=std::string_view(argv[1])=="--fat32-tree";
     char path[]="/tmp/unholyos-fat32-write-XXXXXX";
     if (!mkdtemp(path)) return 1;
     fs::path dir=path,disk=dir/"owned.img";
@@ -4267,7 +4405,32 @@ int main(int argc, char **argv)
         vm.Connect();
         if (format) vm.ResetDeadline(180s);
         auto output=vm.Boot(run/"serial.log");
-        if (format)
+        if (tree)
+          CheckProgramOutput(output,"/Fat32TreeProbe.HC",
+              pass?"FAT32 persisted tree\nFAT32 tree probe 3F\n":
+                   "Make Directory:C:/OPS\nMake Directory:C:/OPS/SUB\n"
+                   "Make Directory:C:/OPS/SUB/DEEP\nMake Directory:C:/OPS/EMPTY\n"
+                   "Make Directory:C:/PICK\nCopying C:/OPS/A.TXT to C:/PICK/A.TXT\n"
+                   "Copying C:/PICK/A.TXT to C:/PICK/R.TXT\nDel A.TXT\n"
+                   "Make Directory:C:/CLONE/EMPTY\nMake Directory:C:/CLONE/SUB\n"
+                   "Make Directory:C:/CLONE/SUB/DEEP\n"
+                   "Copying C:/OPS/SUB/DEEP/D.TXT to C:/CLONE/SUB/DEEP/D.TXT\n"
+                   "Copying C:/OPS/SUB/E.BIN.Z to C:/CLONE/SUB/E.BIN.Z\n"
+                   "Copying C:/OPS/SUB/C.TXT to C:/CLONE/SUB/C.TXT\n"
+                   "Copying C:/OPS/B.BIN to C:/CLONE/B.BIN\n"
+                   "Copying C:/OPS/A.TXT to C:/CLONE/A.TXT\n"
+                   "Make Directory:C:/TXT/EMPTY\nMake Directory:C:/TXT/SUB\n"
+                   "Make Directory:C:/TXT/SUB/DEEP\n"
+                   "Copying C:/OPS/SUB/DEEP/D.TXT to C:/TXT/SUB/DEEP/D.TXT\n"
+                   "Copying C:/OPS/SUB/C.TXT to C:/TXT/SUB/C.TXT\n"
+                   "Copying C:/OPS/A.TXT to C:/TXT/A.TXT\n"
+                   "Del D.TXT\nDel C.TXT\nDel DEEP\nDel E.BIN.Z\nDel EMPTY\n"
+                   "Del SUB\nDel B.BIN\nDel CLONE\nDel D.TXT\nDel DEEP\n"
+                   "Del C.TXT\nDel EMPTY\nDel SUB\nDel A.TXT\nDel TXT\n"
+                   "Del R.TXT\nDel PICK\nDel D.TXT\nDel DEEP\nDel C.TXT\n"
+                   "Del E.BIN.Z\nDel SUB\nDel EMPTY\nDel A.TXT\nDel B.BIN\nDel OPS\n"
+                   "FAT32 tree mutation FF\nFAT32 tree probe 3F\n",'1');
+        else if (format)
           CheckProgramOutput(output,"/Fat32FormatProbe.HC",
             pass?"FAT32 persisted format\nFAT32 format probe 0F\n":
                  "FAT32 format mutation 3F\nFAT32 format probe 0F\n",'1');
@@ -4286,6 +4449,16 @@ int main(int argc, char **argv)
         Check(actual.size()==original.size(),"FAT32 image size changed");
         Check(std::equal(actual.begin()+fat1,actual.begin()+fat1+fat_bytes,
                          actual.begin()+fat2),"FAT32 mirrors differ");
+        if (tree) {
+          for (size_t c=0;c<fat_bytes/4;c++) {
+            auto link=ReadLE(original,fat1+c*4,4);
+            if (c==19) link=21;
+            if (c==20 || c==22) link=0x0FFFFFFF;
+            if (c==21) link=22;
+            Check(ReadLE(actual,fat1+c*4,4)==link,
+                  "FAT32 tree leaked clusters or changed existing chains");
+          }
+        }
         if (format) {
           auto mbr=original;
           mbr[446]=0x80;
@@ -4311,7 +4484,8 @@ int main(int argc, char **argv)
         }
       }
       Check(FileRead(argv[4])==original,"Original FAT32 fixture was modified");
-      std::cout<<(format?"Verified FAT32 quick/full format, partition bounds and cold reboot\n":
+      std::cout<<(tree?"Verified FAT32 fragmented stream, recursive file trees and reclamation\n":
+                         format?"Verified FAT32 quick/full format, partition bounds and cold reboot\n":
                          stream?"Verified FAT32 buffered streams, growth, copy and cold reboot\n":
                          "Verified FAT32 file and directory mutations, mirrored FATs and cold reboot\n");
       fs::remove_all(dir);
