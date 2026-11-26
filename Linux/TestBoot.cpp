@@ -2693,6 +2693,28 @@ static fs::path CaptureGuestFile(CMonitor &vm, const fs::path &dir,
   return image;
 }
 
+static void VerifyAU(CMonitor &vm, const fs::path &dir,
+                     const std::string &output)
+{
+  CheckProgramOutput(output, "/AUProbe.HC",
+                     "shift 61 4024000000000001 1 62 4024000000000001 "
+                     "4026400000000000\n"
+                     "back 4024000000000000 4025000000000001 4027400000000000\n"
+                     "AU event FFFFFFFFFFFFCF75 0\n"
+                     "AU event 308B 61\nAU event 308B 62\n"
+                     "AU event 91A2 63\nAU event 10AFF 64\nAU probe 7F\n",
+                     '1');
+  auto file = FileRead(CaptureGuestFile(vm, dir, output, "AUProbe.AU"));
+  constexpr uint64_t dates[]{0x123456786A31, 0x12345678CB47,
+                             0x12345678CB47, 0x123456792C5E,
+                             0x12345679A5BB};
+  constexpr uint8_t notes[]{0, 61, 62, 63, 64};
+  Check(file.size() == 45, "Incorrect packed AU file size");
+  for (size_t i = 0; i < 5; i++)
+    Check(ReadLE(file, i * 9, 8) == dates[i] && file[i * 9 + 8] == notes[i],
+          "AU event differs from pinned TempleOS");
+}
+
 static std::string_view RedSeaName(const Bytes &image, size_t entry)
 {
   const char *name = reinterpret_cast<const char *>(image.data() + entry + 2);
@@ -4166,6 +4188,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
             "UnholyOS: sound event queue and default format matched"})
         Check(output.find(msg) != std::string::npos,
               "The speaker, timing, or sound event recording failed");
+      VerifyAU(vm, dir, output);
       CheckProgramOutput(output, "/FixedAsm.HC", "fixed jit 1 42\n", '1');
       CheckProgramOutput(output, "/FixedImage.BIN", "fixed load 42\n", '1');
       Check(output.find("UnholyOS: invalid ORG left the destination intact") !=

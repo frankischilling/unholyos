@@ -113,6 +113,7 @@ Linux/Fixtures/CursorExcept.HC text eol=lf
 Linux/Fixtures/MsgLoop.HC -text whitespace=cr-at-eol
 Linux/Fixtures/SoundProbe.HC text eol=lf
 Linux/Fixtures/SoundRecord.HC text eol=lf
+Linux/Fixtures/AUProbe.HC text eol=lf
 Linux/Fixtures/BuzzFizz.HC -text whitespace=cr-at-eol,-blank-at-eol
 Linux/Fixtures/MulByHand.HC -text whitespace=cr-at-eol,-blank-at-eof
 Linux/Fixtures/PutDec.HC -text whitespace=cr-at-eol

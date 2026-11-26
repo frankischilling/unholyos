@@ -364,6 +364,9 @@ extern "C" void SndCpp(int8_t ona);
 extern "C" uint64_t ScrnCastCpp(uint8_t val, uint8_t just_audio,
                                 const char *print_fmt);
 extern "C" void SndRstCpp();
+extern "C" void SndShiftCpp(CSndData *head, uint64_t dt);
+extern "C" int64_t AUWriteCpp(const char *filename, CSndData *head,
+                             uint64_t t0_now, uint64_t t0_tS);
 extern "C" void BeepCpp(int8_t ona, uint8_t busy);
 extern "C" uint64_t MuteCpp(uint8_t val);
 extern "C" uint64_t IsMuteCpp();

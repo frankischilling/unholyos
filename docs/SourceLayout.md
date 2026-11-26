@@ -219,8 +219,12 @@ and `CScrnCastGlbls` records in `Kernel/KernelA.hpp` follow
 stack calls to the C++ ABI.
 
 `SleepUntilCpp` sets the idle bit and wake jiffy before yielding to the
-scheduler. The desktop playback in `Adam/ASnd.HC`, the AU writer in
-`Adam/Snd/SndFile.HC`, and video capture remain pending.
+scheduler. `Adam/Gr/ScrnCast.cpp` follows the `SndShift` and `AUWrite`
+functions in `Adam/Gr/ScrnCast.HC`. The compiler exposes the packed
+sound types and the live `scrncast` global. The AU writer includes the
+queue sentinel and stores timestamps as raw CDate values, followed by
+one signed note byte. Desktop playback in `Adam/ASnd.HC` and video
+capture remain pending.
 
 ## VGA palette
 

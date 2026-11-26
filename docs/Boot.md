@@ -1409,8 +1409,18 @@ when HPET is available.
 The suite compiles `SoundRecord.HC` in the guest and saves
 `SoundRecord.BIN.Z` under `BUILD`. Loading that module in both systems
 produced the event sequence `0, 60, 60, 0` and the default path
-`B:/Tmp/%X.GR` in audio-only mode. Video capture and writing the queued
-events to an AU file remain pending.
+`B:/Tmp/%X.GR` in audio-only mode.
+
+`AUProbe.HC` (SHA-256
+`b3e29b6624f09455e3e04a78f720df1b82138ce9ce63f6fdaa403ecf1c875606`)
+checks the packed sound structures, zero and negative shifts, removal
+of expired events, equal timestamps, default and explicit extensions,
+and export of a queue recorded through `Snd` and `ScrnCast`. Both
+guests on QEMU PC with qemu64 and 512 MiB returned `AU probe 7F`.
+The expected timestamps include the one-ULP rounding of the original
+decimal lexer. The host test reads the complete 45-byte deterministic
+AU file and checks each nine-byte record against the pinned output.
+Video capture and desktop playback remain pending.
 
 ## RedSea descriptor verification
 
@@ -1515,6 +1525,6 @@ reference file-error diagnostics remain pending.
 | Tasking and CPUs | `Kernel/KTask.HC`, `Sched.HC`, `MultiProc.HC` | Core 0 runs Adam, the idle task, and spawned tasks with cooperative switching and PIT wakeups. Starting additional CPUs remains pending. |
 | Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `FileSysFAT.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. ATA block writes, explicitly enabled FAT32 file and directory mutations, and buffered streams persist across cold boots. Fragmented streams, recursive file operations, cluster reclamation, and quick and full formatting of mounted FAT32 primary partitions are tested. Unmounted partitions and full cache and error-path parity remain pending. |
 | Graphics | `Kernel/Display.HC`, `Adam/Gr/GrScrn.HC` | VGA text and graphics composition, 16-color palette, cursor, zoom, and a scheduled refresh task |
-| Input and sound | `Kernel/SerialDev/Keyboard.HC`, `Mouse.HC`, `Message.HC`, `Kernel/KMisc.HC` | PS/2 keyboard and mouse messages, PC speaker tones, and queued sound recording. Desktop input controls and AU output remain pending. |
+| Input and sound | `Kernel/SerialDev/Keyboard.HC`, `Mouse.HC`, `Message.HC`, `Kernel/KMisc.HC`, `Adam/Gr/ScrnCast.HC` | PS/2 keyboard and mouse messages, PC speaker tones, queued sound recording, event shifting and packed AU output. Full desktop input and media playback remain pending. |
 | Desktop and system tools | `StartOS.HC`, `Adam/MakeAdam.HC`, `Adam/WinMgr.HC`, `Adam/DolDoc`, `Apps` | The refresh task draws visible DolDoc text and borders. The full editor and interactive desktop remain pending. |
 | HolyC | `Compiler/CMain.HC`, `Lex.HC`, `Prs*.HC`, `Back*.HC`, `Kernel/KLoad.HC` | Source execution with `ExeFile` and `ExePutS`, compile-time streams, plain and DolDoc tokenization, scalar expressions and functions, typed pointers, packed classes, unions, fixed arrays and their initializers, print calls, and TOSB module generation and loading for supported source. Full language support and native kernel compilation remain pending. |

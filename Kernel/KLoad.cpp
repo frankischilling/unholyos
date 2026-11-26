@@ -133,6 +133,7 @@ void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
 void RawHC(), DbgModeHC(), IsDbgModeHC();
 void tSHC(), BusyHC(), SleepUntilHC(), SleepHC(), Ona2FreqHC(), Freq2OnaHC();
 void SndHC(), ScrnCastHC(), SndRstHC(), BeepHC(), MuteHC(), IsMuteHC();
+void SndShiftHC(), AUWriteHC();
 }
 
 static bool IsImport(uint8_t type)
@@ -835,6 +836,8 @@ bool LoadKernel(CTask &task)
       {"Freq2Ona", reinterpret_cast<uintptr_t>(Freq2OnaHC)},
       {"Snd", reinterpret_cast<uintptr_t>(SndHC)},
       {"ScrnCast", reinterpret_cast<uintptr_t>(ScrnCastHC)},
+      {"SndShift", reinterpret_cast<uintptr_t>(SndShiftHC)},
+      {"AUWrite", reinterpret_cast<uintptr_t>(AUWriteHC)},
       {"SndRst", reinterpret_cast<uintptr_t>(SndRstHC)},
       {"Beep", reinterpret_cast<uintptr_t>(BeepHC)},
       {"Mute", reinterpret_cast<uintptr_t>(MuteHC)},

@@ -1316,6 +1316,53 @@ static bool CmpDCData(CHashTable *table)
          CmpKernelGlobal(table, "winmgr", wm, &winmgr);
 }
 
+static bool CmpScrnCastData(CHashTable *table)
+{
+  auto *au = CmpKernelClass(table, "CAUData", sizeof(CAUData));
+  auto *snd = CmpKernelClass(table, "CSndData", sizeof(CSndData));
+  auto *sc = CmpKernelClass(table, "CScrnCastGlbls", sizeof(CScrnCastGlbls));
+  if (!au || !snd || !sc)
+    return false;
+  auto *date = FindType("CDate", table);
+  auto *f64 = FindType("F64", table);
+  auto *i8 = FindType("I8", table);
+  auto *boolean = FindType("Bool", table);
+  auto *dc = FindType("CDC", table);
+  const struct
+  {
+    CHashClass *record;
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+  } fields[]{
+      {au, "cdt", date, offsetof(CAUData, cdt)},
+      {au, "ona", i8, offsetof(CAUData, ona)},
+      {snd, "next", snd + 1, offsetof(CSndData, next)},
+      {snd, "last", snd + 1, offsetof(CSndData, last)},
+      {snd, "tS", f64, offsetof(CSndData, tS)},
+      {snd, "ona", i8, offsetof(CSndData, ona)},
+      {sc, "snd_head", snd, offsetof(CScrnCastGlbls, snd_head)},
+      {sc, "t0_now", date, offsetof(CScrnCastGlbls, t0_now)},
+      {sc, "t0_tS", f64, offsetof(CScrnCastGlbls, t0_tS)},
+      {sc, "print_fmt", FindType("U8", table) + 1,
+       offsetof(CScrnCastGlbls, print_fmt)},
+      {sc, "dc", dc + 1, offsetof(CScrnCastGlbls, dc)},
+      {sc, "dc2_alias", dc + 1, offsetof(CScrnCastGlbls, dc2_alias)},
+      {sc, "record", boolean, offsetof(CScrnCastGlbls, record)},
+      {sc, "just_audio", boolean, offsetof(CScrnCastGlbls, just_audio)},
+      {sc, "ona", i8, offsetof(CScrnCastGlbls, ona)},
+  };
+  auto *heap = CurrentTask()->data_heap;
+  for (const auto &field : fields) {
+    auto *name = StrNew(field.name, heap);
+    if (!name || !MemberAdd(*field.record, name, *field.type, field.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return CmpKernelGlobal(table, "scrncast", sc, &scrncast);
+}
+
 static bool CmpTaskSettingsData(CHashTable *table)
 {
   auto *cls = CmpKernelClass(table, "CTaskSettings", sizeof(CTaskSettings));
@@ -1742,6 +1789,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     DefinePtr,
     BlkDevPtr,
     DrvPtr,
+    SndPtr,
+    DatePtr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1780,6 +1829,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CHashDefineStr", table) + 1,
       FindType("CBlkDev", table) + 1,
       FindType("CDrv", table) + 1,
+      FindType("CSndData", table) + 1,
+      FindType("CDate", table) + 1,
   };
   auto *task = CurrentTask();
   enum CDefaultKind : uint8_t { Numeric, String, LastClass };
@@ -2254,6 +2305,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
         {"just_audio", Bool, true},
         {"print_fmt", U8Ptr, true, 0, "B:/Tmp/%X.GR"}}},
       {"SndRst", U0, FF_RET1, {}},
+      {"SndShift", U0, FF_RET1, {{"head", SndPtr}, {"dt", F64, true}}},
+      {"AUWrite", I64, FF_RET1,
+       {{"filename", U8Ptr}, {"head", SndPtr}, {"t0_now", DatePtr}, {"t0_tS", F64}}},
       {"Beep", U0, FF_RET1, {{"ona", I8, true, 62}, {"busy", Bool, true}}},
       {"Mute", Bool, FF_RET1, {{"val", Bool}}},
       {"IsMute", Bool, FF_RET1, {}},
@@ -2673,7 +2727,7 @@ static bool CmpFillHash(CHashTable *table)
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) && CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
-         CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
+         CmpScrnCastData(table) && CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
          CmpCtrlData(table, task) && CmpClassReportData(table, *task) &&
          CmpRuntimeHeaders(table);
 }

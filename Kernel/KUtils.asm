@@ -66,6 +66,7 @@ GLOBAL TextRectHC,TextBorderHC,WinZBufUpdateHC
 GLOBAL RawHC,DbgModeHC,IsDbgModeHC,PutFileLinkHC,PutSrcLinkHC,FixSetHC,AdamErrHC
 GLOBAL tSHC,BusyHC,SleepUntilHC,SleepHC,Ona2FreqHC,Freq2OnaHC,SndHC
 GLOBAL ScrnCastHC,SndRstHC,BeepHC,MuteHC,IsMuteHC
+GLOBAL SndShiftHC,AUWriteHC
 GLOBAL SpawnHC,TaskValidateHC,SuspendHC,IsSuspendedHC,TaskQueInsHC,TaskQueRemHC
 GLOBAL SingleUserHC,IsSingleUserHC
 GLOBAL JobDelHC,TaskRstAwaitingMsgHC,TaskExeHC,TaskTextHC
@@ -198,6 +199,7 @@ EXTERN TextRectCpp,TextBorderCpp,WinZBufUpdateCpp
 EXTERN RawCpp,DbgModeCpp,IsDbgModeCpp,PutFileLinkCpp,PutSrcLinkCpp,FixSetCpp,AdamErrCpp
 EXTERN tSCpp,BusyCpp,SleepUntilCpp,SleepCpp,Ona2FreqCpp,Freq2OnaCpp,SndCpp
 EXTERN ScrnCastCpp,SndRstCpp,BeepCpp,MuteCpp,IsMuteCpp
+EXTERN SndShiftCpp,AUWriteCpp
 
 SECTION .text
 BITS 64
@@ -677,6 +679,8 @@ HOLYC_CPP Ona2FreqHC,Ona2FreqCpp,1
 HOLYC_CPP Freq2OnaHC,Freq2OnaCpp,1
 HOLYC_CPP SndHC,SndCpp,1
 HOLYC_CPP ScrnCastHC,ScrnCastCpp,3
+HOLYC_CPP SndShiftHC,SndShiftCpp,2
+HOLYC_CPP AUWriteHC,AUWriteCpp,4
 HOLYC_CPP SndRstHC,SndRstCpp,0
 HOLYC_CPP BeepHC,BeepCpp,2
 HOLYC_CPP MuteHC,MuteCpp,1
