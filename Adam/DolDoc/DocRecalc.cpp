@@ -188,7 +188,7 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     return false;
   const auto mode = recalc_flags & RECALCG_MASK;
   const bool screen = mode == RECALCt_TO_SCRN;
-  const bool find_cursor = mode == RECALCt_FIND_CURSOR;
+  bool find_cursor = mode == RECALCt_FIND_CURSOR;
   if (screen && (!gr.text_base || !doc.win_task))
     return false;
   // The refresh task retries a document held by another task next frame.
@@ -197,6 +197,23 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
   CDocLock lock(doc);
   auto *task = doc.win_task;
   const bool border_doc = doc.flags & DOCF_BORDER_DOC;
+  const bool scroll_bars = screen && !border_doc &&
+                           (recalc_flags & RECALCF_HAS_CURSOR) &&
+                           !(doc.flags & DOCF_NO_SCROLL_BARS);
+  if (scroll_bars &&
+      ((task->horz_scroll.flags | task->vert_scroll.flags) & WSSF_SET_TO_POS)) {
+    if (task->horz_scroll.flags & WSSF_SET_TO_POS) {
+      doc.line_start_col = task->horz_scroll.pos;
+      task->horz_scroll.flags &= ~WSSF_SET_TO_POS;
+    }
+    if (task->vert_scroll.flags & WSSF_SET_TO_POS) {
+      doc.top_line_num = task->vert_scroll.pos;
+      task->vert_scroll.flags &= ~WSSF_SET_TO_POS;
+    }
+    doc.x = doc.line_start_col + task->win_width / 2;
+    doc.y = doc.top_line_num + task->win_height / 2;
+    find_cursor = true;
+  }
   if (screen) {
     ++doc.updates_cnt;
     if (border_doc)
@@ -262,7 +279,10 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     if (find_cursor && !(entry->de_flags & DOCEF_NO_CLICK_ON) &&
         ((entry->de_flags & DOCEF_TAG) || newline || type == DOCT_TAB)) {
       int64_t width = type == DOCT_TAB ? tab_width : len;
-      int64_t col = int64_t(doc.x) - x;
+      // The screen pass draws visible entries as a range. Its cursor search
+      // sees their starting cell, while the explicit find pass sees each cell.
+      bool draw_range = screen && !(entry->de_flags & DOCEF_DONT_DRAW);
+      int64_t col = draw_range ? 0 : int64_t(doc.x) - x;
       if (col < 0)
         col = 0;
       if (col >= width)
@@ -401,6 +421,19 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     doc.col = int64_t(doc.x) + 1;
     if (!border_doc && (recalc_flags & RECALCF_HAS_CURSOR))
       DocScreenCursor(doc, *task);
+    if (scroll_bars) {
+      auto range = [](CWinScroll &s, int64_t min, int64_t max, int64_t pos) {
+        if (!(s.flags & WSSF_SET_TO_POS)) {
+          s.min = min;
+          s.max = max < min ? min : max;
+          s.pos = pos;
+        }
+      };
+      range(task->horz_scroll, doc.min_x, doc.max_x - task->win_width + 1,
+            doc.line_start_col);
+      range(task->vert_scroll, doc.min_y, doc.max_y - task->win_height + 1,
+            doc.top_line_num);
+    }
   }
   return true;
 }

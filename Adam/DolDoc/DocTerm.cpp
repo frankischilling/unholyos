@@ -1,4 +1,5 @@
 #include "DolDoc.hpp"
+#include "../Ctrls/CtrlsA.hpp"
 
 static CDoc *DocBorderNew(CTask *task)
 {
@@ -28,5 +29,6 @@ extern "C" void DocTermNewCpp()
   task->border_src = 1;    // BDS_CUR_DRV
   task->put_doc = task->display_doc = pdoc;
   task->border_doc = bdoc;
+  WinScrollsInitCpp(task);
   RawCpp(false);
 }

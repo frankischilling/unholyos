@@ -2,6 +2,7 @@
 #include "GrExt.hpp"
 #include "../DolDoc/DolDoc.hpp"
 #include "GrGlbls.hpp"
+#include "../Ctrls/CtrlsA.hpp"
 
 constexpr int64_t FONT_WIDTH = 8, FONT_HEIGHT = 8;
 
@@ -250,23 +251,32 @@ static void GrUpdateTaskWin(CTask *task)
   if (!(task->win_inhibit & WIF_SELF_DOC))
     DocUpdateTaskDocs(task);
 
+  bool drawn = true;
   if (TaskValidateCpp(task) && task->draw_it) {
     if (auto *dc = DCAliasCpp(gr.dc2, task)) {
       uint64_t result;
-      bool drawn = CallHolyC2Checked(reinterpret_cast<uintptr_t>(task->draw_it),
-                                     reinterpret_cast<uintptr_t>(task),
-                                     reinterpret_cast<uintptr_t>(dc), &result);
+      drawn = CallHolyC2Checked(reinterpret_cast<uintptr_t>(task->draw_it),
+                                reinterpret_cast<uintptr_t>(task),
+                                reinterpret_cast<uintptr_t>(dc), &result);
       DCDelCpp(dc);
-      if (!drawn && task != CurrentTask() && TaskValidateCpp(task)) {
-        task->display_flags &= ~DISPLAYF_SHOW;
-        __atomic_fetch_or(&sys_semas[SEMA_UPDATE_WIN_Z_BUF].flags, 1,
-                          __ATOMIC_RELAXED);
-        PutS("Exception in WinMgr: Update Task Win\n");
-        PutExceptCpp(true);
-        SleepCpp(3000);
-        VGAFlush();
-      }
     }
+  }
+  if (drawn && TaskValidateCpp(task)) {
+    if (!WinCtrlsCaptured())
+      CtrlsUpdate(task);
+    CD3I64 saved_scroll;
+    WinScrollNullCpp(task, &saved_scroll);
+    drawn = DrawCtrls(task);
+    WinScrollRestoreCpp(task, &saved_scroll);
+  }
+  if (!drawn && task != CurrentTask() && TaskValidateCpp(task)) {
+    task->display_flags &= ~DISPLAYF_SHOW;
+    __atomic_fetch_or(&sys_semas[SEMA_UPDATE_WIN_Z_BUF].flags, 1,
+                      __ATOMIC_RELAXED);
+    PutS("Exception in WinMgr: Update Task Win\n");
+    PutExceptCpp(true);
+    SleepCpp(3000);
+    VGAFlush();
   }
   sys_task_being_scrn_updated = nullptr;
 }

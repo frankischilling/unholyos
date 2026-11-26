@@ -103,6 +103,7 @@ void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
     TextRectHC(), TextBorderHC(), WinZBufUpdateHC();
 void WinRefocusHC(), WinToTopHC(), WinFocusHC(), WinTileHorzHC(), WinTileVertHC(), WinMaxHC();
 void WinScrollNullHC(), WinScrollRestoreHC();
+void CtrlFindUniqueHC(), CtrlInsideHC(), WinScrollsInitHC();
 void MenuSubEntryFindHC();
 void MenuEntryFindHC();
 void MenuNewHC();
@@ -800,6 +801,9 @@ bool LoadKernel(CTask &task)
       {"WinBorder", reinterpret_cast<uintptr_t>(WinBorderHC)},
       {"WinScrollNull", reinterpret_cast<uintptr_t>(WinScrollNullHC)},
       {"WinScrollRestore", reinterpret_cast<uintptr_t>(WinScrollRestoreHC)},
+      {"CtrlFindUnique", reinterpret_cast<uintptr_t>(CtrlFindUniqueHC)},
+      {"CtrlInside", reinterpret_cast<uintptr_t>(CtrlInsideHC)},
+      {"WinScrollsInit", reinterpret_cast<uintptr_t>(WinScrollsInitHC)},
       {"MenuSubEntryFind", reinterpret_cast<uintptr_t>(MenuSubEntryFindHC)},
       {"MenuEntryFind", reinterpret_cast<uintptr_t>(MenuEntryFindHC)},
       {"MenuNew", reinterpret_cast<uintptr_t>(MenuNewHC)},

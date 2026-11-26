@@ -1,6 +1,7 @@
 #include "../Kernel/KernelB.hpp"
 #include "Gr/GrGlbls.hpp"
 #include "Menu.hpp"
+#include "Ctrls/CtrlsA.hpp"
 
 #include <bit>
 
@@ -54,6 +55,7 @@ extern "C" int64_t WinToTopCpp(CTask *task, uint8_t update_z_buf)
   if (!TaskValidateCpp(task) || task->gs->num)
     return 0;
   WinDerivedValsUpdate(task);
+  CtrlsUpdate(task);
   if (!sys_winmgr_task || task == sys_winmgr_task)
     return 0;
   auto flags = GetRFlags();
@@ -135,6 +137,8 @@ extern "C" bool WinHorzCpp(int64_t left, int64_t right, CTask *task)
                         __ATOMIC_RELAXED);
   }
   SetRFlags(flags);
+  if (changed)
+    CtrlsUpdate(task);
   return changed;
 }
 
@@ -173,6 +177,8 @@ extern "C" bool WinVertCpp(int64_t top, int64_t bottom, CTask *task)
                         __ATOMIC_RELAXED);
   }
   SetRFlags(flags);
+  if (changed)
+    CtrlsUpdate(task);
   return changed;
 }
 
@@ -271,6 +277,8 @@ extern "C" bool WinBorderCpp(uint8_t val, CTask *task)
     WinDerivedValsUpdate(task);
   }
   SetRFlags(flags);
+  if (bool(val) != old_has_border)
+    CtrlsUpdate(task);
   return old_has_border;
 }
 
