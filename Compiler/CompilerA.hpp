@@ -325,6 +325,7 @@ enum CICode : uint8_t
   IC_IMM_I64 = 0x0A,
   IC_IMM_F64,
   IC_STR_CONST,
+  IC_GET_LABEL = 0x12,
   IC_RBP = 0x13,
   IC_DATA_ADDR = 0x14,
   IC_GLBL_ADDR = 0x15,
@@ -385,6 +386,8 @@ enum CICode : uint8_t
   IC_BR_ZERO = 0x85,
   IC_BR_NOT_ZERO,
   IC_SUB_ENTRY = 0xF0,
+  IC_CALL_TRY,
+  IC_CATCH_ENTRY,
 };
 
 constexpr bool ICIsComparison(CICode code)

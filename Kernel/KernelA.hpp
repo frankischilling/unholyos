@@ -1326,6 +1326,12 @@ static_assert(offsetof(CTask, rcx) == 0x140 && offsetof(CTask, r15) == 0x1A0);
 static_assert(offsetof(CTask, fpu_mmx) == 0x1B0 &&
               offsetof(CTask, swap_cnter) == 0x1B8);
 static_assert(offsetof(CTask, win_z_num) == 0x30C);
+static_assert(offsetof(CTask, next_except) == 0x318 &&
+              offsetof(CTask, last_except) == 0x320 &&
+              offsetof(CTask, except_rbp) == 0x328 &&
+              offsetof(CTask, except_ch) == 0x330 &&
+              offsetof(CTask, except_callers) == 0x338 &&
+              offsetof(CTask, catch_except) == 0x378);
 static_assert(offsetof(CTask, win_left) == 0x48 &&
               offsetof(CTask, win_right) == 0x50 &&
               offsetof(CTask, win_top) == 0x58 &&

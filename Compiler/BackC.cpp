@@ -434,11 +434,19 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
       out.Load(RT_I64);
     return true;
   }
-  if (op == IC_CALL || op == IC_CALL_INDIRECT) {
+  if (op == IC_GET_LABEL) {
+    out.Bytes(0x48, 0x8D, 0x05); // LEA RAX,[RIP+label]
+    out.Immediate(0, 4);
+    out.PatchBranch(out.size, code[node.right].data);
+    return true;
+  }
+  if (op == IC_CALL || op == IC_CALL_INDIRECT || op == IC_CALL_TRY) {
     auto *fun = reinterpret_cast<const CHashFun *>(node.data);
     uint32_t slots = node.right, arg = node.left;
     bool indirect_call = op == IC_CALL_INDIRECT;
-    bool pad = !((stack_slots + slots + indirect_call) & 1);
+    // SysTryHC aligns its own C++ call and saves the unpadded guest stack.
+    bool pad =
+        op != IC_CALL_TRY && !((stack_slots + slots + indirect_call) & 1);
     if (pad)
       out.StackAdjust(-8);
     if (indirect_call) {
@@ -640,8 +648,15 @@ static bool EmitBody(CCodeOut &out, CCodeCtrl &coc, CRawType type,
     case IC_SUB_ENTRY:
       ++stack_slots;
       break;
+    case IC_CATCH_ENTRY:
+      node.data = stack_slots;
+      stack_slots = 1; // TestExcept enters the handler on its aligned stack.
+      break;
     case IC_RET:
-      --stack_slots;
+      if (node.right == NO_IC)
+        --stack_slots;
+      else
+        stack_slots = code[node.right].data;
       out.Bytes(0xC3);
       break;
     case IC_SWITCH:

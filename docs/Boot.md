@@ -511,6 +511,18 @@ Terry A. Davis's original `Demo/DolDoc/CallBack.HC` runs in a separate
 test window with the DolDoc lexer enabled. Both live clock tags update,
 and the demo's `UndoIt` clears the lower clock.
 
+## HolyC exception statements
+
+`make -j4 test BUILD=build/try-gcc` compiles and runs `TryProbe.HC`
+from source and as a guest-built `.BIN.Z`. The probe checks normal and
+early returns, accepting or declining an exception, throwing again in a
+handler, top-level handlers, and restoration of the task's exception
+queue and interrupt flag. The suite rejects a `try` without a `catch`.
+
+Terry A. Davis's original `Demo/Exceptions.HC` is included unchanged.
+The boot driver answers `n` and `y` to produce `Point2`. The inner handler
+reports the tag, then the outer handler accepts it.
+
 ## PC speaker and recorded sound events
 
 `make -j4 test BUILD=build/pc-speaker` builds

@@ -45,7 +45,7 @@ void ExtChgHC(), ExtDftHC();
 void RedSeaISOHC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
 void BlkReadHC(), BlkWriteHC();
-void SysTryHC(), SysUntryHC(), ThrowHC(), CallerHC(), PutExceptHC();
+void SysTryHC(), SysUntryHC(), ThrowHC(), CallerHC(), PutExceptHC(), YorNHC();
 void StrPrintJoinHC(), StrPrintHC(), CatPrintHC(), MStrPrintHC(), PrintHC();
 void PrintErrHC(), PrintWarnHC(), PutCharsHC(), IsRawHC(), DefineLstLoadHC();
 void PutSHC(), PutHexHC();
@@ -572,6 +572,7 @@ bool LoadKernel(CTask &task)
       {"throw", reinterpret_cast<uintptr_t>(ThrowHC)},
       {"Caller", reinterpret_cast<uintptr_t>(CallerHC)},
       {"PutExcept", reinterpret_cast<uintptr_t>(PutExceptHC)},
+      {"YorN", reinterpret_cast<uintptr_t>(YorNHC)},
       {"StrPrintJoin", reinterpret_cast<uintptr_t>(StrPrintJoinHC)},
       {"StrPrint", reinterpret_cast<uintptr_t>(StrPrintHC)},
       {"CatPrint", reinterpret_cast<uintptr_t>(CatPrintHC)},

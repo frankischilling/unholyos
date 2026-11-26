@@ -182,6 +182,9 @@ public:
       if (auto *cls = PrsClass(cc))
         return cc.htc.fun && PrsLocal(*cc.htc.fun, *cls, true);
       return false;
+    case KW_TRY:
+      Lex(cc);
+      return PrsTryBlk(depth);
     case KW_IF:
       Lex(cc);
       return PrsIf(depth, brk);
@@ -201,7 +204,7 @@ public:
     case KW_GOTO:
       return cc.htc.fun && PrsGoTo();
     case KW_RETURN:
-      if (leave == NO_IC)
+      if (leave == NO_IC || !PrsUntry(try_cnt))
         return false;
       if (Lex(cc) == ';')
         coc.Append(IC_RETURN_VAL, NO_IC, leave);
@@ -239,6 +242,70 @@ private:
       if (!Statement(depth + 1, brk))
         return false;
     return true;
+  }
+
+  const CHashFun *PrsExceptFun(const char *name)
+  {
+    auto *fun = reinterpret_cast<const CHashFun *>(
+        HashFind(name, cc.htc.hash_table_lst, HTT_FUN));
+    if (!fun || (!fun->exe_addr && !(cc.aot && (cc.flags & CCF_AOT_COMPILE) &&
+                                     (fun->cls.flags & CF_EXTERN))))
+      return nullptr;
+    return fun;
+  }
+
+  bool PrsUntry(unsigned count)
+  {
+    if (!count)
+      return true;
+    auto *fun = PrsExceptFun("SysUntry");
+    if (!fun)
+      return false;
+    auto call = coc.Add({reinterpret_cast<uintptr_t>(fun), NO_IC, 0, IC_CALL,
+                         RT_U0, false, false, true});
+    while (count--)
+      coc.Append(IC_END_EXP, call);
+    return !coc.failed;
+  }
+
+  bool PrsTryBlk(unsigned depth)
+  {
+    auto *fun = PrsExceptFun("SysTry");
+    if (!fun || !FunPopsArgs(*fun))
+      return false;
+    auto lb_catch = coc.LabelNew(), lb_untry = coc.LabelNew();
+    auto lb_done = coc.LabelNew();
+    auto catch_start =
+        coc.Add({0, NO_IC, lb_catch, IC_GET_LABEL, RT_I64, false, false, true});
+    auto untry_start =
+        coc.Add({0, NO_IC, lb_untry, IC_GET_LABEL, RT_I64, false, false, true});
+    auto catch_arg =
+        coc.Add({0, catch_start, NO_IC, IC_PUSH, RT_I64, false, false, false});
+    auto args = coc.Add(
+        {0, untry_start, catch_arg, IC_PUSH, RT_I64, false, false, false});
+    auto setup = coc.Add({reinterpret_cast<uintptr_t>(fun), args, 2,
+                          IC_CALL_TRY, RT_U0, false, false, true});
+    coc.Append(IC_END_EXP, setup);
+
+    ++try_cnt;
+    if (!Statement(depth + 1, NO_IC) || Keyword(cc) != KW_CATCH)
+      return false;
+    coc.Append(lb_untry);
+    if (!PrsUntry(1))
+      return false;
+    coc.Append(IC_JMP, NO_IC, lb_done);
+
+    Lex(cc);
+    coc.Append(lb_catch);
+    auto entry =
+        coc.Add({0, NO_IC, NO_IC, IC_CATCH_ENTRY, RT_U0, false, false, false});
+    coc.Append(entry);
+    if (!Statement(depth + 1, NO_IC))
+      return false;
+    coc.Append(IC_RET, NO_IC, entry);
+    coc.Append(lb_done);
+    --try_cnt;
+    return !coc.failed;
   }
 
   bool PrsGoTo()
@@ -593,6 +660,7 @@ private:
   CCmpCtrl &cc;
   CCodeCtrl &coc;
   uint32_t leave = NO_IC;
+  unsigned try_cnt = 0;
 };
 
 extern "C" void UndefinedExternHC();
@@ -966,7 +1034,7 @@ bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
     return false;
   if (cc.token == '{' || cc.token == TK_STR || cc.token == TK_CHAR_CONST ||
       keyword == KW_IF || keyword == KW_FOR || keyword == KW_WHILE ||
-      keyword == KW_DO) {
+      keyword == KW_DO || keyword == KW_TRY) {
     CCodeCtrl coc;
     CPrsStmt ps(cc, coc);
     if (!ps.Statement(0, NO_IC))

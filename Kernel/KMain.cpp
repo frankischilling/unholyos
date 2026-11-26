@@ -631,6 +631,30 @@ static void BootFunctionPtrReport(const CDrv &dvd, CTask &task)
   BootGuestFileReport(*ram, path);
 }
 
+static void BootTryReport(const CDrv &dvd, CTask &task)
+{
+  if (!BootFileProgramReport(dvd, "/TryProbe.HC").okay)
+    return;
+  auto invalid = ExePutS("try { 1; }", nullptr, 0);
+  if (!invalid.okay && !invalid.exception)
+    SerialPutS("UnholyOS: try rejected missing catch\r\n");
+  auto *ram = MountedDrive('B');
+  if (!ram)
+    return;
+  auto compiled =
+      ExePutS("Cmp(\"::/TryProbe.HC\",,\"B:/TryProbe.BIN.Z\");", nullptr, 0);
+  if (!compiled.okay || compiled.value)
+    return;
+  constexpr const char *path = "/TryProbe.BIN.Z";
+  SerialPutS("UnholyOS: executing /TryProbe.BIN.Z\r\n");
+  auto *mod = Load(*ram, path, task, LDF_JUST_LOAD);
+  if (!mod || !LoadPass2(*mod))
+    return;
+  SerialPutS("UnholyOS: finished /TryProbe.BIN.Z, checks "
+             "0x0000000000000001\r\n");
+  BootGuestFileReport(*ram, path);
+}
+
 static void BootISOReport(const CDrv &dv)
 {
   auto run = BootFileProgramReport(dv, "/RedSeaISOProbe.HC");
@@ -1529,6 +1553,8 @@ extern "C" void KMainCpp()
                    cleanup.okay && cleanup.value == 1);
       SerialPutS("\r\n");
     }
+    BootTryReport(*adam_task->cur_dv, *adam_task);
+    BootFileProgramReport(*adam_task->cur_dv, "/Exceptions.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ScreenProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/PaletteProbe.HC");
     BootSoundReport(*adam_task->cur_dv, *adam_task);

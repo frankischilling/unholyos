@@ -1683,6 +1683,32 @@ constexpr std::string_view doc_callback_output = "doc callback ready 51\n"
                                                  "doc callback right 10 202\n"
                                                  "doc callback checks 63\n";
 
+static void DriveExceptions(CMonitor &vm, const fs::path &serial)
+{
+  vm.WaitSerial(serial, "D2\nD1\n1 (y or n)? ");
+  vm.Hmp("sendkey n 65");
+  vm.WaitSerial(serial, "2 (y or n)? ");
+  vm.Hmp("sendkey y 65");
+  auto done = vm.WaitSerial(
+      serial, "UnholyOS: finished /Exceptions.HC, checks 0x0000000000000001");
+  auto start = done.find("UnholyOS: executing /Exceptions.HC\r\n");
+  auto inner = done.find("D2 hndlr\nCh:Point2:", start);
+  auto outer = done.find("Demo hndlr\nCh:Point2:", start);
+  if (inner == std::string::npos || outer == std::string::npos ||
+      inner >= outer)
+    throw std::runtime_error("Exceptions demo did not reach both handlers");
+}
+
+constexpr std::string_view try_output = "try 42 41 73 123 123 5 1\n";
+
+static void CheckTry(const std::string &boot)
+{
+  CheckProgramOutput(boot, "/TryProbe.HC", try_output, '1');
+  CheckProgramOutput(boot, "/TryProbe.BIN.Z", try_output, '1');
+  if (boot.find("UnholyOS: try rejected missing catch") == std::string::npos)
+    throw std::runtime_error("HolyC try parsed without a catch");
+}
+
 static void DriveScreen(CMonitor &vm, const fs::path &serial)
 {
   constexpr std::array<std::array<uint8_t, 3>, 16> colors{{
@@ -1823,6 +1849,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     DriveDocFrame(rebuilt, serial);
     DriveDocButton(rebuilt, serial);
     DriveDocCallback(rebuilt, serial);
+    DriveExceptions(rebuilt, serial);
     DriveScreen(rebuilt, serial);
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
@@ -1835,6 +1862,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/DocFrame.HC", doc_frame_output, '1');
     CheckProgramOutput(boot, "/DocButton.HC", doc_button_output, '1');
     CheckProgramOutput(boot, "/DocCallback.HC", doc_callback_output, '1');
+    CheckTry(boot);
     if (boot.find("UnholyOS: document callback propagation 0x0000000000000001") ==
         std::string::npos)
       throw std::runtime_error("DolDoc callback exception did not propagate");
@@ -1870,6 +1898,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       DriveDocFrame(vm, serial);
       DriveDocButton(vm, serial);
       DriveDocCallback(vm, serial);
+      DriveExceptions(vm, serial);
       DriveScreen(vm, serial);
     }
     std::string output = vm.Boot(serial);
@@ -1897,6 +1926,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/DocFrame.HC", doc_frame_output, '1');
       CheckProgramOutput(output, "/DocButton.HC", doc_button_output, '1');
       CheckProgramOutput(output, "/DocCallback.HC", doc_callback_output, '1');
+      CheckTry(output);
       if (output.find("UnholyOS: document callback propagation 0x0000000000000001") ==
           std::string::npos)
         throw std::runtime_error("DolDoc callback exception did not propagate");
