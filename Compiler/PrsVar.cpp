@@ -166,14 +166,30 @@ bool PrsFunArgs(CCmpCtrl &cc, CHashFun &fun, unsigned depth)
     ++fun.arg_cnt;
     if (cc.token == '=') {
       Lex(cc);
-      auto *machine = LexTypedExpression2Bin(cc, ClassRawType(*decl.cls));
-      if (!machine || (cc.token != ')' && cc.token != ',')) {
+      if (cc.token == TK_IDENT && cc.hash_entry &&
+          (cc.hash_entry->type & HTT_KEYWORD) &&
+          reinterpret_cast<CHashGeneric *>(cc.hash_entry)->user_data0 == KW_LASTCLASS) {
+        member->flags |= MLF_LASTCLASS;
+        Lex(cc);
+      } else if (cc.token == TK_STR && decl.cls->ptr_stars_cnt) {
+        size_t size;
+        auto *str = LexExtStr(cc, size);
+        if (!str)
+          return false;
+        member->dft_val = reinterpret_cast<uintptr_t>(str);
+        member->flags |= MLF_STR_DFT_AVAILABLE;
+      } else {
+        auto *machine = LexTypedExpression2Bin(cc, ClassRawType(*decl.cls));
+        if (!machine || (cc.token != ')' && cc.token != ',')) {
+          Free(machine);
+          return false;
+        }
+        auto okay = CmpCall(cc, machine, member->dft_val);
         Free(machine);
-        return false;
+        if (!okay)
+          return false;
       }
-      auto okay = CmpCall(cc, machine, member->dft_val);
-      Free(machine);
-      if (!okay)
+      if (cc.token != ')' && cc.token != ',')
         return false;
       member->flags |= MLF_DFT_AVAILABLE;
     }
@@ -183,6 +199,30 @@ bool PrsFunArgs(CCmpCtrl &cc, CHashFun &fun, unsigned depth)
       return false;
     Lex(cc);
   } while (true);
+}
+
+bool PrsMemberMeta(CCmpCtrl &cc, CMemberLst &member)
+{
+  while (cc.token == TK_IDENT) {
+    auto *meta = reinterpret_cast<CMemberLstMeta *>(
+        CAlloc(sizeof(CMemberLstMeta), CurrentTask()->data_heap));
+    if (!meta)
+      return false;
+    meta->next = member.meta;
+    member.meta = meta;
+    meta->str = cc.cur_str;
+    cc.cur_str = nullptr;
+    if (Lex(cc) == TK_STR) {
+      size_t size;
+      auto *str = LexExtStr(cc, size);
+      if (!str)
+        return false;
+      meta->flags = MLMF_IS_STR;
+      meta->user_data = reinterpret_cast<uintptr_t>(str);
+    } else if (!LexExpression(cc, meta->user_data))
+      return false;
+  }
+  return cc.token != TK_ERROR;
 }
 
 bool PrsArrayDims(CCmpCtrl &cc, CArrayDim &dim, size_t item_size)

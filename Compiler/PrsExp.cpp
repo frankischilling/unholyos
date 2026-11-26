@@ -205,9 +205,10 @@ private:
       Lex(cc);
     uint32_t args = NO_IC;
     auto *member = callee.cls.member_lst_and_root;
+    uint32_t last_arg = NO_IC;
     for (uint32_t i = 0; i < callee.arg_cnt; ++i) {
       if (!member || !member->member_class || member->dim.next ||
-          (member->flags & (MLF_LASTCLASS | MLF_DOT_DOT_DOT)))
+          (member->flags & MLF_DOT_DOT_DOT))
         return NO_IC;
       auto *cls = member->member_class;
       if (!TypeSize(ClassRawType(*cls)))
@@ -221,17 +222,23 @@ private:
       uint32_t arg;
       if ((member->flags & MLF_DFT_AVAILABLE) &&
           (!paren || cc.token == ',' || cc.token == ')')) {
-        if ((member->flags & MLF_STR_DFT_AVAILABLE) &&
+        auto value = member->dft_val;
+        if ((member->flags & MLF_LASTCLASS) && last_arg != NO_IC)
+          if (auto *name = LastClass(coc.code[last_arg]))
+            value = reinterpret_cast<uintptr_t>(name);
+        if (value && (member->flags & (MLF_STR_DFT_AVAILABLE | MLF_LASTCLASS)) &&
             (cc.flags & CCF_AOT_COMPILE)) {
-          auto *str = reinterpret_cast<const char *>(member->dft_val);
+          auto *str = reinterpret_cast<const char *>(value);
           arg = StringConst(StrNew(str, CurrentTask()->data_heap),
                             StrLen(str) + 1, cls);
         } else
-          arg = Add({member->dft_val, NO_IC, NO_IC,
+          arg = Add({value, NO_IC, NO_IC,
                      type == RT_F64 ? IC_IMM_F64 : IC_IMM_I64, type, false,
                      false, false});
-      } else
+      } else {
         arg = Expression(PREC_ASSIGN + 1, depth + 1);
+        last_arg = arg;
+      }
       if (arg == NO_IC || !TypeSize(coc.code[arg].type))
         return NO_IC;
       args = PushArg(arg, args, type);
@@ -282,6 +289,35 @@ private:
   bool IsLValue(uint32_t value) const
   {
     return value != NO_IC && coc.code[value].code == IC_DEREF;
+  }
+
+  const char *LastClass(const CIntermediateCode &node)
+  {
+    auto *cls = node.cls;
+    if (cls) {
+      while (cls->fwd_class)
+        cls = cls->fwd_class;
+      cls -= cls->ptr_stars_cnt;
+      while (cls->fwd_class)
+        cls = cls->fwd_class;
+      return cls->sym.hash.str;
+    }
+    // Arithmetic and literal nodes carry their raw result type.
+    const char *name;
+    switch (node.type) {
+    case RT_I8: name = "Bool"; break;
+    case RT_U8: name = "U8"; break;
+    case RT_I16: name = "I16i"; break;
+    case RT_U16: name = "U16i"; break;
+    case RT_I32: name = "I32i"; break;
+    case RT_U32: name = "U32i"; break;
+    case RT_I64: name = "I64i"; break;
+    case RT_U64: name = "U64i"; break;
+    case RT_F64: name = "F64"; break;
+    default: return nullptr;
+    }
+    auto *type = HashFind(name, cc.htc.hash_table_lst, HTT_INTERNAL_TYPE);
+    return type ? type->str : nullptr;
   }
 
   uint32_t Int(uint64_t bits)
