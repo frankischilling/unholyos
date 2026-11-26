@@ -396,8 +396,17 @@ attribute stays stable between refreshes.
 `GrScaleZoom` updates the mouse scale and offset on all three axes.
 `CtrlAltZ` in `Adam/Gr/GrEnd.cpp` doubles the scale, or halves it with
 Shift. The keyboard decoder dispatches this shortcut while the rest of
-the reference callback table is pending. Menus and grab-scroll
-interaction remain pending.
+the reference callback table is pending.
+
+`Adam/WinMgr.cpp` implements Ctrl grab scrolling from `WinMgrTask` in
+`Adam/WinMgr.HC`. It captures the eligible window at the pointer,
+snaps horizontal and vertical drag offsets to eight pixels, and resets
+all three offsets on Ctrl-right. The PS/2 input pump captures the grab
+before queuing task messages. The window manager applies the offsets
+before drawing the next frame. `WinScrollNull` and `WinScrollRestore`
+in `Adam/Win.cpp` expose the reference HolyC ABI and keep the border
+document in place during a pan. Menus and the autocomplete pane
+exception remain pending.
 
 ## DolDoc windows
 

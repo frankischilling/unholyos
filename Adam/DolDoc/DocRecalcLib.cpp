@@ -70,11 +70,9 @@ void DocUpdateTaskDocs(CTask *task)
   if (auto *doc = DocDisplayCpp(task); doc && !(doc->flags & DOCF_DONT_SHOW))
     DocRecalc(*doc, RECALCt_TO_SCRN | RECALCF_HAS_CURSOR);
   if (auto *doc = DocBorderCpp(task); doc && !(doc->flags & DOCF_DONT_SHOW)) {
-    auto x = task->scroll_x, y = task->scroll_y, z = task->scroll_z;
-    task->scroll_x = task->scroll_y = task->scroll_z = 0;
+    CD3I64 saved_scroll;
+    WinScrollNullCpp(task, &saved_scroll);
     DocRecalc(*doc, RECALCt_TO_SCRN);
-    task->scroll_x = x;
-    task->scroll_y = y;
-    task->scroll_z = z;
+    WinScrollRestoreCpp(task, &saved_scroll);
   }
 }

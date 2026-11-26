@@ -273,6 +273,23 @@ extern "C" bool WinBorderCpp(uint8_t val, CTask *task)
   return old_has_border;
 }
 
+extern "C" void WinScrollNullCpp(CTask *task, CD3I64 *s)
+{
+  s->x = task->scroll_x;
+  s->y = task->scroll_y;
+  s->z = task->scroll_z;
+  task->scroll_x = 0;
+  task->scroll_y = 0;
+  task->scroll_z = 0;
+}
+
+extern "C" void WinScrollRestoreCpp(CTask *task, CD3I64 *s)
+{
+  task->scroll_x = s->x;
+  task->scroll_y = s->y;
+  task->scroll_z = s->z;
+}
+
 bool WinMsCursorVisible()
 {
   return ms.show && ms_hard.installed;

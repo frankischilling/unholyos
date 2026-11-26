@@ -1441,7 +1441,8 @@ static_assert(offsetof(CTask, win_left) == 0x48 &&
               offsetof(CTask, win_top) == 0x58 &&
               offsetof(CTask, win_bottom) == 0x60 &&
               offsetof(CTask, scroll_x) == 0x100 &&
-              offsetof(CTask, scroll_y) == 0x108);
+              offsetof(CTask, scroll_y) == 0x108 &&
+              offsetof(CTask, scroll_z) == 0x110);
 static_assert(offsetof(CTask, fault_num) == 0x440 &&
               offsetof(CTask, fault_err_code) == 0x448);
 static_assert(offsetof(CCPU, cpu_flags) == 0x10 &&

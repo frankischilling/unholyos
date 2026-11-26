@@ -355,9 +355,13 @@ extern "C" void KbdMsService()
   asm volatile("cli" : : : "memory");
   while (FifoCnt(*kbd.fifo2))
     KbdHndlr();
-  KbdMsgsQue();
   MsHardHndlr();
   WinMsInput();
+  // Capture the grab before either input queue can see the button press.
+  if (WinGrabScrollInput())
+    kbd.scan_code_fifo->out_ptr = kbd.scan_code_fifo->in_ptr;
+  else
+    KbdMsgsQue();
   WinQueIPMsgs(true);
   SetRFlags(flags);
 }

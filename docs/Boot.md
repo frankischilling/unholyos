@@ -547,8 +547,17 @@ Both boot discs include Terry A. Davis's unchanged
 `Demo/Graphics/CommonAncestor.HC`. Run
 `ExeFile("::/Demo/Graphics/CommonAncestor.HC");` in the HolyC terminal.
 The demo draws the tree with arrowheads and numeric labels while it
-builds the tree. Press a key to return to the terminal. Ctrl-left
-grab scrolling remains pending.
+builds the tree. Hold Ctrl and drag with the left mouse button to pan
+the tree. Release the left button to leave it in place. Ctrl-right
+resets the pan. Release Ctrl and press a key to return to the terminal.
+
+With seed 12345, QEMU 9.2.0, PC, `qemu64`, and 512 MiB, both
+guests matched the tree at panned offsets of (48, 32) and (-16, -8),
+and kept it in place after the first button release. The pixel
+comparison excludes the terminal caret cell. The UnholyOS boot suite
+also checks the right-button reset and that the tree clears on exit.
+`WinScrollProbe.HC` checks all three saved, cleared, and restored
+offsets through the native HolyC calls.
 
 `ArrowProbe.HC` produced seven matching traces on pinned TempleOS
 and UnholyOS with QEMU 9.2.0, PC, `qemu64`, and 512 MiB. It checks
