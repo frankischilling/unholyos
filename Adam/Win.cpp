@@ -251,6 +251,28 @@ extern "C" void WinMaxCpp(CTask *task)
   SetRFlags(flags);
 }
 
+extern "C" bool WinBorderCpp(uint8_t val, CTask *task)
+{
+  if (!task)
+    task = CurrentTask();
+  if (!TaskValidateCpp(task))
+    return false;
+  auto flags = GetRFlags();
+  asm volatile("cli" : : : "memory");
+  bool old_has_border = !(task->display_flags & DISPLAYF_NO_BORDER);
+  if (bool(val) != old_has_border) {
+    task->display_flags ^= DISPLAYF_NO_BORDER;
+    uint64_t delta = val ? 1 : -1;
+    task->win_left += delta;
+    task->win_right -= delta;
+    task->win_top += delta;
+    task->win_bottom -= delta;
+    WinDerivedValsUpdate(task);
+  }
+  SetRFlags(flags);
+  return old_has_border;
+}
+
 bool WinMsCursorVisible()
 {
   return ms.show && ms_hard.installed;

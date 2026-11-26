@@ -1455,11 +1455,10 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
 
   vm.ResetDeadline(14s);
   type_cmd("WinMax;");
-  wait_mem(left + win_left + 8, 78, "WinMax did not prepare the polygon demo");
-  type_cmd("DocClear(,1);");
-  type_cmd(R"(ExeFile("::/Demo/Graphics/3DPoly.HC");)");
-  auto screen = dir / "polygon.ppm";
-  auto polygon_pixels = [&](Bytes &shape) {
+  wait_mem(left + win_left + 8, 78,
+           "WinMax did not prepare the graphics demos");
+  auto screen = dir / "graphics-demo.ppm";
+  auto shape_pixels = [&](Bytes &shape) {
     vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
                screen.string() + R"("}})");
     const auto rgb = ReadVGA(screen);
@@ -1474,28 +1473,44 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
     }
     return count;
   };
-  Bytes shape(640 * 480), first_shape;
-  bool moved = false;
-  for (unsigned i = 0; i < 80; i++) {
-    if (polygon_pixels(shape) > 1200) {
-      if (first_shape.empty())
-        first_shape = shape;
-      else if (shape != first_shape) {
-        moved = true;
+  constexpr struct
+  {
+    const char *name;
+    size_t min_pixels, prompts;
+  } demos[]{{"3DPoly.HC", 1200, 2}, {"Box.HC", 350, 1}};
+  for (const auto &[demo, min_pixels, prompts] : demos) {
+    vm.ResetDeadline(14s);
+    type_cmd("DocClear(,1);");
+    type_cmd(std::string("ExeFile(\"::/Demo/Graphics/") + demo + "\");");
+    Bytes shape(640 * 480), first_shape;
+    bool moved = false;
+    for (unsigned i = 0; i < 100; i++) {
+      if (shape_pixels(shape) > min_pixels) {
+        if (first_shape.empty())
+          first_shape = shape;
+        else if (shape != first_shape) {
+          moved = true;
+          break;
+        }
+      }
+      std::this_thread::sleep_for(26ms);
+    }
+    if (!moved)
+      throw std::runtime_error(std::string(demo) + " did not animate on VGA");
+    key("q");
+    wait_text("T:/Home>", false, prompts);
+    bool cleared = false;
+    for (unsigned i = 0; i < 60; i++) {
+      if (!shape_pixels(shape)) {
+        cleared = true;
         break;
       }
+      std::this_thread::sleep_for(26ms);
     }
-    std::this_thread::sleep_for(26ms);
+    if (!cleared)
+      throw std::runtime_error(std::string(demo) + " left pixels on VGA");
+    std::cout << demo << " animated and returned to the prompt\n";
   }
-  Check(moved, "3DPoly.HC did not animate on the VGA display");
-  key("q");
-  wait_text("T:/Home>", false, 2);
-  for (unsigned i = 0; i < 60; i++) {
-    if (!polygon_pixels(shape))
-      return;
-    std::this_thread::sleep_for(26ms);
-  }
-  throw std::runtime_error("3DPoly.HC left polygons on the VGA display");
 }
 
 static fs::path CaptureGuestFile(CMonitor &vm, const fs::path &dir,
@@ -2145,6 +2160,14 @@ constexpr std::string_view matrix_output =
     "matrix symmetry 1 0 2130900514 -3729075900 -2 17 6\n"
     "matrix refresh 1 1 1 1 1\n";
 
+constexpr std::string_view task_settings_output =
+    "settings layout 392 48 104 388\n"
+    "settings push 1 1 1 1 1\n"
+    "settings border 1 1\n"
+    "settings restore 1 1 1 1 1 1\n"
+    "settings children 1 1 1\n"
+    "settings nested 1 1 1 1 1\n";
+
 constexpr std::string_view pen_output =
     "pen tables 6B9F06DB42815298 29C67144FDAE53A0\n"
     "pen flat 230CA4FC4A9D5ED8 400E0001\n"
@@ -2244,6 +2267,8 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/DepthSpansProbe.HC", depth_spans_output, '1');
     CheckProgramOutput(boot, "/MatrixProbe.HC", matrix_output, '1');
     CheckProgramOutput(boot, "/PenProbe.HC", pen_output, '1');
+    CheckProgramOutput(boot, "/TaskSettingsProbe.HC", task_settings_output,
+                       '1');
     CheckProgramOutput(boot, "/CursorProbe.HC", cursor_output, '1');
     CheckProgramOutput(boot, "/CursorExcept.HC", "cursor exception 1\n", '1');
     CheckProgramOutput(boot, "/FunctionPtrProbe.HC", function_ptr_output, '1');
@@ -2318,6 +2343,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/DepthSpansProbe.HC", depth_spans_output, '1');
       CheckProgramOutput(output, "/MatrixProbe.HC", matrix_output, '1');
       CheckProgramOutput(output, "/PenProbe.HC", pen_output, '1');
+      CheckProgramOutput(output, "/TaskSettingsProbe.HC", task_settings_output,
+                         '1');
       CheckProgramOutput(output, "/CursorProbe.HC", cursor_output, '1');
       CheckProgramOutput(output, "/CursorExcept.HC", "cursor exception 1\n",
                          '1');

@@ -1,5 +1,5 @@
 GLOBAL CPUStructInit,TaskInit,SET_GS_BASE,SET_FS_BASE,CallModuleMain,CallHolyC0,CallHolyC2
-GLOBAL _MEMCPY,_MEMSET,_MEMSET_I64,_BEQU,_CALL,_CLAMP_I64
+GLOBAL _MEMCPY,_MEMSET,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_CLAMP_I64
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
 GLOBAL Str2I64HC
@@ -25,6 +25,7 @@ GLOBAL DocReadHC,DocTypeHC,TypeHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC,DocPutKeyHC
 GLOBAL DocPutHC,DocDisplayHC,DocBorderHC,DocRecalcHC,WinHorzHC,WinVertHC
 GLOBAL WinRefocusHC,WinToTopHC,WinFocusHC,WinTileHorzHC,WinTileVertHC,WinMaxHC
+GLOBAL WinBorderHC,SettingsPushHC,SettingsPopHC
 GLOBAL DocLockHC,DocUnlockHC,DocEntryRunHC,DocBottomHC,DocClearHC,NowHC
 GLOBAL DocTermNewHC,DocGetKeyHC,DocScanLineHC,GetStrHC,GetSHC,UserCmdLineHC
 GLOBAL TextCharHC,TextLenStrHC,TextLenAttrHC,TextRectHC,TextBorderHC,WinZBufUpdateHC
@@ -121,6 +122,7 @@ EXTERN DocReadCpp,DocTypeCpp,TypeCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp,DocPutKeyCpp
 EXTERN DocPutCpp,DocDisplayCpp,DocBorderCpp,DocRecalcCpp,WinHorzCpp,WinVertCpp
 EXTERN WinRefocusCpp,WinToTopCpp,WinFocusCpp,WinTileHorzCpp,WinTileVertCpp,WinMaxCpp
+EXTERN WinBorderCpp,SettingsPushCpp,SettingsPopCpp
 EXTERN DocLockCpp,DocUnlockCpp,DocEntryRunCpp,DocBottomCpp,DocClearCpp,NowCpp
 EXTERN DocTermNewCpp,DocGetKeyCpp,DocScanLineCpp,GetStrCpp,GetSCpp,UserCmdLineCpp
 EXTERN TextCharCpp,TextLenStrCpp,TextLenAttrCpp,TextRectCpp,TextBorderCpp,WinZBufUpdateCpp
@@ -456,6 +458,9 @@ HOLYC_CPP WinFocusHC,WinFocusCpp,1
 HOLYC_CPP WinTileHorzHC,WinTileHorzCpp,0
 HOLYC_CPP WinTileVertHC,WinTileVertCpp,0
 HOLYC_CPP WinMaxHC,WinMaxCpp,1
+HOLYC_CPP WinBorderHC,WinBorderCpp,2,1
+HOLYC_CPP SettingsPushHC,SettingsPushCpp,2
+HOLYC_CPP SettingsPopHC,SettingsPopCpp,2
 HOLYC_CPP WinZBufUpdateHC,WinZBufUpdateCpp,0
 HOLYC_CPP TextCharHC,TextCharCpp,5
 HOLYC_CPP TextLenStrHC,TextLenStrCpp,6
@@ -615,6 +620,27 @@ _MEMCPY:
 
 MEMSET _MEMSET,STOSB
 MEMSET _MEMSET_I64,STOSQ
+
+_MEMCMP:
+	PUSH	RBP
+	MOV	RBP,RSP
+	PUSH	RSI
+	PUSH	RDI
+	CLD
+	MOV	RSI,[RBP+16]
+	MOV	RDI,[RBP+24]
+	MOV	RCX,[RBP+32]
+	XOR	RAX,RAX
+	REPE CMPSB
+	JZ	.done
+	MOV	AL,1
+	JA	.done
+	MOV	RAX,-1
+.done:
+	POP	RDI
+	POP	RSI
+	POP	RBP
+	RET	24
 
 _BEQU:
 	PUSH	RBP

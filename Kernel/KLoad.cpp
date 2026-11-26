@@ -31,7 +31,7 @@ struct CLoadedModule
 extern "C" {
 void CallModuleMain(const uint8_t *entry);
 void _BEQU(), _CALL(), _CLAMP_I64();
-void _MEMCPY(), _MEMSET(), _MEMSET_I64();
+void _MEMCPY(), _MEMSET(), _MEMSET_I64(), _MEMCMP();
 void _MALLOC(), _FREE(), _MHEAP_CTRL(), _MSIZE(), _MSIZE2();
 void CAllocHC(), MAllocIdentHC(), StrNewHC(), AStrNewHC();
 void _STRCMP(), _STRCPY(), _STRIMATCH(), StrOccHC();
@@ -100,6 +100,7 @@ void DocTermNewHC(), DocGetKeyHC(), DocScanLineHC(), GetStrHC(), GetSHC(), UserC
 void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
     TextRectHC(), TextBorderHC(), WinZBufUpdateHC();
 void WinRefocusHC(), WinToTopHC(), WinFocusHC(), WinTileHorzHC(), WinTileVertHC(), WinMaxHC();
+void WinBorderHC(), SettingsPushHC(), SettingsPopHC();
 void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
 void RawHC(), DbgModeHC(), IsDbgModeHC();
 void tSHC(), BusyHC(), SleepUntilHC(), SleepHC(), Ona2FreqHC(), Freq2OnaHC();
@@ -525,6 +526,8 @@ bool LoadKernel(CTask &task)
       {"MemCpy", reinterpret_cast<uintptr_t>(_MEMCPY)},
       {"_MEMSET", reinterpret_cast<uintptr_t>(_MEMSET)},
       {"MemSet", reinterpret_cast<uintptr_t>(_MEMSET)},
+      {"_MEMCMP", reinterpret_cast<uintptr_t>(_MEMCMP)},
+      {"MemCmp", reinterpret_cast<uintptr_t>(_MEMCMP)},
       {"_MEMSET_I64", reinterpret_cast<uintptr_t>(_MEMSET_I64)},
       {"_MALLOC", reinterpret_cast<uintptr_t>(_MALLOC)},
       {"MAlloc", reinterpret_cast<uintptr_t>(_MALLOC)},
@@ -538,6 +541,7 @@ bool LoadKernel(CTask &task)
       {"StrNew", reinterpret_cast<uintptr_t>(StrNewHC)},
       {"AStrNew", reinterpret_cast<uintptr_t>(AStrNewHC)},
       {"_STRCMP", reinterpret_cast<uintptr_t>(_STRCMP)},
+      {"StrCmp", reinterpret_cast<uintptr_t>(_STRCMP)},
       {"_STRCPY", reinterpret_cast<uintptr_t>(_STRCPY)},
       {"_STRIMATCH", reinterpret_cast<uintptr_t>(_STRIMATCH)},
       {"StrOcc", reinterpret_cast<uintptr_t>(StrOccHC)},
@@ -776,6 +780,9 @@ bool LoadKernel(CTask &task)
       {"WinTileHorz", reinterpret_cast<uintptr_t>(WinTileHorzHC)},
       {"WinTileVert", reinterpret_cast<uintptr_t>(WinTileVertHC)},
       {"WinMax", reinterpret_cast<uintptr_t>(WinMaxHC)},
+      {"WinBorder", reinterpret_cast<uintptr_t>(WinBorderHC)},
+      {"SettingsPush", reinterpret_cast<uintptr_t>(SettingsPushHC)},
+      {"SettingsPop", reinterpret_cast<uintptr_t>(SettingsPopHC)},
       {"WinZBufUpdate", reinterpret_cast<uintptr_t>(WinZBufUpdateHC)},
       {"TextChar", reinterpret_cast<uintptr_t>(TextCharHC)},
       {"_TEXT_CHAR", reinterpret_cast<uintptr_t>(TextCharHC)},

@@ -188,6 +188,20 @@ extern "C" uint64_t TaskValidateCpp(CTask *task)
          task->task_signature == TASK_SIGNATURE_VAL;
 }
 
+bool KillTask(CTask *task)
+{
+  if (!TaskValidateCpp(task) || task == sys_winmgr_task ||
+      task == task->gs->seth_task)
+    return false;
+  __atomic_fetch_or(&task->task_flags, TASKF_KILL_TASK, __ATOMIC_RELAXED);
+  do {
+    _YIELD();
+  } while (
+      TaskValidateCpp(task) &&
+      (__atomic_load_n(&task->task_flags, __ATOMIC_RELAXED) & TASKF_KILL_TASK));
+  return true;
+}
+
 extern "C" uint64_t SuspendCpp(CTask *task, uint8_t state)
 {
   if (!task)
@@ -273,6 +287,20 @@ extern "C" CTask *TaskEnd()
 {
   auto *task = CurrentTask();
   auto *next = task->next_task;
+  if (task == sys_task_being_scrn_updated) {
+    __atomic_fetch_or(&task->task_flags, TASKF_KILL_TASK, __ATOMIC_RELAXED);
+    return next;
+  }
+  if (task->task_end_cb) {
+    task->wake_jiffy = 0;
+    __atomic_fetch_and(&task->task_flags, ~TASKF_KILL_TASK, __ATOMIC_RELAXED);
+    TaskRstAwaitingMsgCpp(task);
+    SuspendCpp(task, false);
+    task->rip = reinterpret_cast<uintptr_t>(task->task_end_cb);
+    task->task_end_cb = nullptr;
+    return task;
+  }
+
   auto *child_head = reinterpret_cast<CTask *>(
       reinterpret_cast<uintptr_t>(&task->next_child_task) -
       offsetof(CTask, next_sibling_task));
@@ -282,6 +310,12 @@ extern "C" CTask *TaskEnd()
       child->task_flags |= TASKF_KILL_TASK;
     return next;
   }
+
+  if (__atomic_fetch_and(&task->display_flags, ~DISPLAYF_SHOW,
+                         __ATOMIC_RELAXED) &
+      DISPLAYF_SHOW)
+    __atomic_fetch_or(&sys_semas[SEMA_UPDATE_WIN_Z_BUF].flags, 1,
+                      __ATOMIC_RELAXED);
 
   if (sys_focus_task == task) {
     SingleUserCpp(false);

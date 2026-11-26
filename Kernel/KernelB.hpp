@@ -52,6 +52,7 @@ inline void SetRFlags(uint64_t flags)
 
 extern "C" void _YIELD();
 extern "C" uint64_t TaskValidateCpp(CTask *task);
+bool KillTask(CTask *task);
 extern "C" uint64_t SuspendCpp(CTask *task, uint8_t state);
 extern "C" void MsgCpp(int64_t msg_code, int64_t arg1, int64_t arg2, int64_t flags);
 extern "C" CJob *TaskMsgCpp(CTask *srv, CTask *master, int64_t code,
@@ -162,6 +163,8 @@ extern "C" bool WinVertCpp(int64_t top, int64_t bottom, CTask *task);
 extern "C" void WinTileHorzCpp();
 extern "C" void WinTileVertCpp();
 extern "C" void WinMaxCpp(CTask *task);
+extern "C" bool WinBorderCpp(uint8_t val, CTask *task);
+extern "C" void RefreshCpp(int64_t cnt, uint8_t force);
 extern "C" void GrScaleZoomCpp(uint64_t scale);
 void CtrlAltZ(int64_t sc);
 bool WinMgrInit();
@@ -175,6 +178,8 @@ extern "C" CDC *DCAliasCpp(CDC *dc, CTask *task);
 extern "C" void DCDelCpp(CDC *dc);
 extern "C" void DCFillCpp(CDC *dc, uint32_t val);
 extern "C" void GrPaletteGetCpp(CBGR48 *bgr48);
+extern "C" void GrPaletteSetCpp(const CBGR48 *bgr48);
+extern "C" void PutExceptCpp(uint8_t catch_it);
 extern "C" uint8_t *MAllocCpp(size_t size, void *mem_task);
 extern "C" uint8_t *CAllocCpp(size_t size, void *mem_task);
 extern "C" uint8_t *MAllocIdentCpp(const void *src, void *mem_task);
@@ -186,6 +191,7 @@ extern "C" CHashDefineStr *DefineLstLoadCpp(const char *name, const char *list,
 bool DefineInitColors();
 bool LoadDocDefines();
 extern "C" void PutS(const char *text);
+extern "C" void StrCpyCpp(char *dst, const char *src);
 void PutTaskS(CTask &task, const char *text);
 
 template <typename T> inline int64_t FifoCnt(const CFifo<T> &f)
@@ -289,7 +295,8 @@ bool Mem32DevInit(CHeapCtrl *hc);
 
 using CExt = int64_t (*)(...);
 
-extern CTask *adam_task, *sys_focus_task, *sys_winmgr_task;
+extern CTask *adam_task, *sys_focus_task, *sys_winmgr_task,
+    *sys_task_being_scrn_updated;
 extern CBlkDevGlbls blkdev;
 extern CDbgGlbls dbg;
 extern CSema sys_semas[SEMA_SEMAS_NUM];
