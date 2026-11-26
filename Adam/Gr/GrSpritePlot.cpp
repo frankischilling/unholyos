@@ -3,14 +3,14 @@
 #include "GrExt.hpp"
 #include "GrGlbls.hpp"
 
-static void SpritePolyPt(CDC &dc, uint64_t x, uint64_t y,
+static void SpritePolyPt(CDC &dc, uint64_t x, uint64_t y, uint64_t z,
                          const CSpriteNumPtU8s &elem, const uint8_t *points)
 {
   constexpr int8_t gr_x_offsets[]{-1, 0, 1, -1, 1, -1, 0, 1},
       gr_y_offsets[]{-1, -1, -1, 0, 0, 1, 1, 1};
   x += elem.x;
   y += elem.y;
-  GrPlotCpp(&dc, x, y);
+  GrPlot3Cpp(&dc, x, y, z);
   for (int64_t i = 0; i < int64_t(elem.num) * 3; i += 3) {
     uint16_t bits = points[i / 8];
     if (i % 8 > 5)
@@ -18,11 +18,11 @@ static void SpritePolyPt(CDC &dc, uint64_t x, uint64_t y,
     auto j = (bits >> (i % 8)) & 7;
     x += gr_x_offsets[j];
     y += gr_y_offsets[j];
-    GrPlotCpp(&dc, x, y);
+    GrPlot3Cpp(&dc, x, y, z);
   }
 }
 
-static void SpritePolyline(CDC &dc, uint64_t x, uint64_t y,
+static void SpritePolyline(CDC &dc, uint64_t x, uint64_t y, uint64_t z,
                            const uint8_t *points, int32_t count)
 {
   int32_t p[2], previous[2];
@@ -32,7 +32,8 @@ static void SpritePolyline(CDC &dc, uint64_t x, uint64_t y,
   for (int32_t i = 1; i < count; i++) {
     points += sizeof(p);
     MemCpy(p, points, sizeof(p));
-    GrLineCpp(&dc, previous[0] + x, previous[1] + y, p[0] + x, p[1] + y, 1, 0);
+    GrLine3Cpp(&dc, previous[0] + x, previous[1] + y, z, p[0] + x, p[1] + y, z,
+               1, 0);
     MemCpy(previous, p, sizeof(p));
   }
 }
@@ -42,12 +43,10 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, int64_t z0, const uint8_t *elems,
 {
   constexpr uint32_t supported =
       (1u << SPT_END) | (1u << SPT_COLOR) | (1u << SPT_DITHER_COLOR) |
-      (1u << SPT_SHIFT) | (1u << SPT_PT) | (1u << SPT_POLYPT) |
-      (1u << SPT_LINE) | (1u << SPT_POLYLINE) | (1u << SPT_RECT) |
-      (1u << SPT_BITMAP) | (1u << SPT_TRANSFORM_ON) |
+      (1u << SPT_THICK) | (1u << SPT_SHIFT) | (1u << SPT_PT) |
+      (1u << SPT_POLYPT) | (1u << SPT_LINE) | (1u << SPT_POLYLINE) |
+      (1u << SPT_RECT) | (1u << SPT_BITMAP) | (1u << SPT_TRANSFORM_ON) |
       (1u << SPT_TRANSFORM_OFF) | (1u << SPT_PLANAR_SYMMETRY);
-  constexpr uint32_t shapes_2d = (1u << SPT_PT) | (1u << SPT_POLYPT) |
-                                 (1u << SPT_LINE) | (1u << SPT_POLYLINE);
   constexpr uint32_t flags_3d = DCF_TRANSFORMATION | DCF_SYMMETRY;
   if (!elems || !available)
     return false;
@@ -62,14 +61,11 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, int64_t z0, const uint8_t *elems,
   }
   if (!size || (mask & ~supported))
     return false;
-  if ((mask & shapes_2d) &&
-      (dc.depth_buf || (dc.flags & flags_3d) ||
-       (mask & ((1u << SPT_TRANSFORM_ON) | (1u << SPT_PLANAR_SYMMETRY)))))
-    return false;
   uint64_t x = x0, y = y0, z = z0;
   auto old_color = dc.color;
   auto old_flags = dc.flags;
   auto old_sym = dc.sym;
+  auto old_thick = dc.thick;
   if (dc.flags & DCF_LOCATE_NEAREST)
     dc.nearest_dist = INT64_MAX;
   for (size_t pos = 0; pos < size;) {
@@ -88,6 +84,13 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, int64_t z0, const uint8_t *elems,
       dc.color.c1.color = elem[2];
       dc.color.c1.rop |= ROPBF_DITHER;
       break;
+    case SPT_THICK: {
+      CSpriteT t;
+      MemCpy(&t, elem, sizeof(t));
+      dc.thick = t.thick;
+      DCThickScaleCpp(&dc);
+      break;
+    }
     case SPT_TRANSFORM_ON:
       if (!(dc.flags & DCF_TRANSFORMATION)) {
         x -= dc.x;
@@ -122,13 +125,13 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, int64_t z0, const uint8_t *elems,
         x += pt.x1;
         y += pt.y1;
       } else
-        GrPlotCpp(&dc, pt.x1 + x, pt.y1 + y);
+        GrPlot3Cpp(&dc, pt.x1 + x, pt.y1 + y, z);
       break;
     }
     case SPT_POLYPT: {
       CSpriteNumPtU8s points;
       MemCpy(&points, elem, sizeof(points));
-      SpritePolyPt(dc, x, y, points, elem + sizeof(points));
+      SpritePolyPt(dc, x, y, z, points, elem + sizeof(points));
       break;
     }
     case SPT_LINE:
@@ -136,7 +139,8 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, int64_t z0, const uint8_t *elems,
       CSpritePtPt pp;
       MemCpy(&pp, elem, sizeof(pp));
       if (type == SPT_LINE)
-        GrLineCpp(&dc, pp.p.x1 + x, pp.p.y1 + y, pp.x2 + x, pp.y2 + y, 1, 0);
+        GrLine3Cpp(&dc, pp.p.x1 + x, pp.p.y1 + y, z, pp.x2 + x, pp.y2 + y, z, 1,
+                   0);
       else
         GrRect3Cpp(&dc, pp.p.x1 + x, pp.p.y1 + y, z, int64_t(pp.x2) - pp.p.x1,
                    int64_t(pp.y2) - pp.p.y1);
@@ -145,7 +149,7 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, int64_t z0, const uint8_t *elems,
     case SPT_POLYLINE: {
       CSpriteNumU8s line;
       MemCpy(&line, elem, sizeof(line));
-      SpritePolyline(dc, x, y, elem + sizeof(line), line.num);
+      SpritePolyline(dc, x, y, z, elem + sizeof(line), line.num);
       break;
     }
     case SPT_BITMAP: {
@@ -165,6 +169,7 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, int64_t z0, const uint8_t *elems,
     pos += SpriteElemSize(elem, size - pos);
   }
   dc.sym = old_sym;
+  dc.thick = old_thick;
   dc.color = old_color;
   dc.flags = (dc.flags & ~flags_3d) | (old_flags & flags_3d);
   return true;

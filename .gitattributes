@@ -59,6 +59,7 @@ Linux/Fixtures/RasterProbe.HC text eol=lf
 Linux/Fixtures/Blot3Probe.HC text eol=lf
 Linux/Fixtures/DepthSpansProbe.HC text eol=lf
 Linux/Fixtures/MatrixProbe.HC text eol=lf
+Linux/Fixtures/PenProbe.HC text eol=lf
 Linux/Fixtures/Lines.HC -text
 Linux/Fixtures/Grid.HC -text
 Linux/Fixtures/FunctionPtrProbe.HC text eol=lf

@@ -245,8 +245,8 @@ LZW codec. `GRRead` also checks that the serialized data fits in the file.
 starts transparent with `DCF_SCRN_BITMAP | DCF_ON_TOP`. The context
 holds HolyC ABI addresses for the transform and lighting callbacks.
 HolyC can call the two functions by name and assign the typed
-`CDC.transform` callback. Typed access to `CDC.lighting` and the brush
-tables remain pending.
+`CDC.transform` callback. Typed access to `CDC.lighting` remains
+pending.
 
 ## 2D raster drawing
 
@@ -290,7 +290,7 @@ and uses the device context's depth buffer through `GrPlot1`.
 `DCSymmetry3Set` and `DCReflect` follow `Adam/Gr/GrMath.HC`. The former
 passes ten fixed arguments through the HolyC adapter. Transform
 callbacks run through the HolyC stack convention, including callbacks
-assigned by guest programs. Thick pens and 3D lines remain pending.
+assigned by guest programs.
 
 `GrHLine` and `GrVLine` in `GrBitMap.cpp` follow the depth-buffered
 spans in `GrBitMap.HC`. They interpolate 32.32 depth from the original
@@ -301,6 +301,27 @@ from `GrPrimatives.HC`, including the shared row in opposing sweeps.
 `GrFillPoly3` and `GrRect3` in `GrComposites.cpp` follow the triangle
 fan in `GrComposites.HC`. They call the device context's transform
 callback and reflect vertices when symmetry is enabled.
+
+## Round pens and 3D lines
+
+`GrSetUpTables` in `Adam/Gr/GrInitB.cpp` builds the circle spans and
+the solid, collision, even, and odd pen bitmaps in `GrInitB.HC`.
+The original array dimensions are visible to HolyC code through
+`gr`. The bootstrap releases the allocated pens if graphics setup
+runs out of memory.
+
+`GrFillCircle`, `GrPlot3B`, `GrPlot3`, and `GrLine3` in
+`GrPrimatives.cpp` follow `GrPrimatives.HC`. Small pens use the
+precomputed bitmaps and spans. Larger circles compute the edges
+before converting them to integer coordinates. Thick lines use 32.32
+stepping in three axes and draw their body and caps with the
+depth-buffered spans. A custom brush or nonunit step uses the point
+callback, including the original endpoint rules.
+
+`DCThickScale` in `GrMath.cpp` applies the matrix norm in
+`GrMath.HC`. `Sprite3` in `GrSpritePlot.cpp` applies it when reading
+`SPT_THICK` and restores the caller's width. Point and line elements
+use the 3D primitives, including their packed variants.
 
 ## Screen composition and VGA
 
@@ -408,11 +429,12 @@ records from `Gr.HH`. `SpriteNew.cpp` follows `SpriteElemSize` and
 `SpriteSize` in `SpriteNew.HC`. It bounds reads when the caller supplies
 the attachment length. `GrSpritePlot.cpp` follows `DocSprite` and
 `Sprite` from `GrSpritePlot.HC` and gives the document its own copy of
-the sprite data. `Sprite3` draws untransformed points, packed point
-paths, thin lines, and polylines. `DocRecalc.cpp` draws sprite entries
-through a task alias of `gr.dc2` during screen refresh. Bitmap and
-rectangle elements pass through `GrBlot3` and `GrRect3` and support
-depth, transforms, and planar symmetry. `Sprite3B` applies its
+the sprite data. `Sprite3` draws points, packed point paths, lines,
+and polylines with the active pen width. `DocRecalc.cpp` draws sprite
+entries through a task alias of `gr.dc2` during screen refresh.
+Bitmap and rectangle elements pass through `GrBlot3` and `GrRect3`.
+These elements support depth, transforms, and planar symmetry.
+`Sprite3B` applies its
 temporary translation and restores the caller's context. The remaining
 3D drawing elements, sprite hit testing, and the sprite editor remain
 pending.

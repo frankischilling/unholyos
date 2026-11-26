@@ -2,16 +2,6 @@
 #include "GrExt.hpp"
 #include "GrGlbls.hpp"
 
-static uint64_t AbsI64(int64_t n)
-{
-  return n < 0 ? -static_cast<uint64_t>(n) : n;
-}
-
-static int64_t GrFixed32(int64_t n)
-{
-  return static_cast<uint64_t>(n) << 32;
-}
-
 bool Line(CDC *dc, int64_t x1, int64_t y1, int64_t z1, int64_t x2, int64_t y2,
           int64_t z2, GrLinePlotFn fp_plot, int64_t step, int64_t start)
 {
@@ -162,6 +152,18 @@ void DCTransformPoint(CDC &dc, CD3I64 &p)
       reinterpret_cast<uintptr_t>(dc.transform),
       reinterpret_cast<uintptr_t>(&dc), reinterpret_cast<uintptr_t>(&p.x),
       reinterpret_cast<uintptr_t>(&p.y), reinterpret_cast<uintptr_t>(&p.z));
+}
+
+extern "C" void DCThickScaleCpp(CDC *dc)
+{
+  if (!dc)
+    dc = gr.dc;
+  if ((dc->flags & DCF_TRANSFORMATION) && dc->thick) {
+    uint64_t d = uint64_t(dc->thick) * dc->r_norm + 0x80000000;
+    dc->thick = int32_t(d >> 32);
+    if (dc->thick < 1)
+      dc->thick = 1;
+  }
 }
 
 extern "C" uint64_t DCSymmetrySetCpp(CDC *dc, int64_t x1, int64_t y1,
