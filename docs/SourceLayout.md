@@ -244,9 +244,9 @@ LZW codec. `GRRead` also checks that the serialized data fits in the file.
 `GrInit2` allocates the six screen contexts. The persistent `gr.dc`
 starts transparent with `DCF_SCRN_BITMAP | DCF_ON_TOP`. The context
 holds HolyC ABI addresses for the transform and lighting callbacks.
-HolyC can call the two functions by name. The current compiler headers
-still need typed callback member access. Brush tables and window
-composition remain pending.
+HolyC can call the two functions by name and assign the typed
+`CDC.transform` callback. Typed access to `CDC.lighting` and the brush
+tables remain pending.
 
 ## 2D raster drawing
 
@@ -261,9 +261,20 @@ blits read a word's source pixels before writing the corresponding
 destination pixels, including when the two contexts share storage.
 The unclipped plot tests depth. Clipped 2D drawing bypasses that depth
 test. Probability dithering uses the task RNG from `Kernel/KMathB.cpp`.
-The HolyC adapters extend narrow RNG returns through RAX and pass up to
-eight fixed arguments. The public `Line` callback interface, 3D drawing,
-and window composition remain pending.
+The HolyC adapters extend narrow RNG returns through RAX. The public
+`Line` callback interface remains pending.
+
+## 3D bitmap drawing
+
+`GrBlot3` in `Adam/Gr/GrPrimatives.cpp` follows the three-corner
+transformation and 32.32 sampling in `GrPrimatives.HC`. It walks pixels
+in column order, skips consecutive duplicate destination coordinates,
+and uses the device context's depth buffer through `GrPlot1`.
+`DCSymmetry3Set` and `DCReflect` follow `Adam/Gr/GrMath.HC`. The former
+passes ten fixed arguments through the HolyC adapter. Transform
+callbacks run through the HolyC stack convention, including callbacks
+assigned by guest programs. Thick pens, 3D lines, and polygon filling
+remain pending.
 
 ## Screen composition and VGA
 
@@ -374,9 +385,11 @@ the attachment length. `GrSpritePlot.cpp` follows `DocSprite` and
 the sprite data. The initial `Sprite3` path draws untransformed bitmaps,
 points, packed point paths, thin lines, polylines, and rectangles.
 `DocRecalc.cpp` draws these entries through a task alias of `gr.dc2`
-during screen refresh. Transformed and depth-buffered sprites, the
-remaining drawing elements, sprite hit testing, and the sprite editor
-remain pending.
+during screen refresh. Bitmap elements pass through `GrBlot3` and
+support depth, transforms, and planar symmetry. `Sprite3B` applies its
+temporary translation and restores the caller's context. The remaining
+3D drawing elements, sprite hit testing, and the sprite editor remain
+pending.
 
 ## Directory listing
 

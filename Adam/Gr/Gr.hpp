@@ -148,7 +148,7 @@ static_assert(sizeof(CSpritePtWH) == 17 && offsetof(CSpritePtWH, width) == 9 &&
 size_t SpriteElemSize(const uint8_t *elem, size_t available);
 size_t SpriteSize(const uint8_t *elems, size_t available,
                   uint32_t *type_mask = nullptr);
-bool Sprite3(CDC &dc, int64_t x, int64_t y, const uint8_t *elems,
+bool Sprite3(CDC &dc, int64_t x, int64_t y, int64_t z, const uint8_t *elems,
              size_t available, bool just_one_elem = false);
 
 extern "C" int64_t SpriteSizeCpp(const uint8_t *elems);

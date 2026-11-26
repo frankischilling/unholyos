@@ -82,15 +82,24 @@ extern "C" uint64_t GrPlotCpp(CDC *dc, int64_t x, int64_t y)
     dc = gr.dc;
   auto *db = dc->depth_buf;
   dc->depth_buf = nullptr;
+  auto res = GrPlot1(dc, x, y);
+  dc->depth_buf = db;
+  return res;
+}
+
+bool GrPlot1(CDC *dc, int64_t x, int64_t y)
+{
   if (dc->brush) {
     const auto old_color = dc->color;
     if (dc->color.c0.rop != ROPB_COLLISION)
       dc->color.c0.rop = ROPB_MONO;
-    GrBlotCpp(dc, x, y, dc->brush);
+    if (dc->depth_buf)
+      GrBlot3Cpp(dc, x, y, dc->db_z, dc->brush);
+    else
+      GrBlotCpp(dc, x, y, dc->brush);
     dc->color = old_color;
   } else if (GrClipPoint(dc, x, y))
     GrPlot0Cpp(dc, x, y);
-  dc->depth_buf = db;
   return true;
 }
 
@@ -130,5 +139,112 @@ extern "C" uint64_t GrLineCpp(CDC *dc, int64_t x1, int64_t y1, int64_t x2,
   else
     res = Line(dc, x1, y1, 0, x2, y2, 0, GrLinePlot, step, start);
   dc->depth_buf = db;
+  return res;
+}
+
+static int64_t GrBlot3Distance(const CD3I64 &delta)
+{
+  auto abs_i64 = [](int64_t value) {
+    return value < 0 ? -uint64_t(value) : uint64_t(value);
+  };
+  auto x = abs_i64(delta.x), y = abs_i64(delta.y), z = abs_i64(delta.z);
+  auto d = x > y ? x : y;
+  if (d < z)
+    d = z;
+  return d <= INT64_MAX / 2 ? int64_t(d) : 0;
+}
+
+static bool GrBlot3Pass(CDC &dc, CDC &img, const CD3I64 &p1, const CD3I64 &p2,
+                        const CD3I64 &p3, CColorROPU32 old_color)
+{
+  CD3I64 dp1{int64_t(uint64_t(p2.x) - p1.x), int64_t(uint64_t(p2.y) - p1.y),
+             int64_t(uint64_t(p2.z) - p1.z)};
+  CD3I64 dp2{int64_t(uint64_t(p3.x) - p1.x), int64_t(uint64_t(p3.y) - p1.y),
+             int64_t(uint64_t(p3.z) - p1.z)};
+  auto d1 = GrBlot3Distance(dp1), d2 = GrBlot3Distance(dp2);
+  if (!d1 || !d2)
+    return false;
+  // TempleOS doubles both sampling axes when either projected length changes.
+  if (d1 != img.width || d2 != img.height) {
+    d1 *= 2;
+    d2 *= 2;
+  }
+  auto fixed = [](int64_t value) { return int64_t(uint64_t(value) << 32); };
+  dp1 = {fixed(dp1.x) / d1, fixed(dp1.y) / d1, fixed(dp1.z) / d1};
+  dp2 = {fixed(dp2.x) / d2, fixed(dp2.y) / d2, fixed(dp2.z) / d2};
+  auto dw = fixed(img.width) / d1, dh = fixed(img.height) / d2;
+  dc.brush = nullptr;
+  // The previous destination pixel carries across columns.
+  bool first = true;
+  int64_t last_x = 0, last_y = 0;
+  uint64_t x = 0, fx = fixed(p1.x), fy = fixed(p1.y), fz = fixed(p1.z);
+  for (int64_t j = 0; j <= d1; j++) {
+    uint64_t y = 0, x2 = fx, y2 = fy, z2 = fz;
+    for (int64_t i = 0; i <= d2; i++) {
+      int64_t nx = int32_t(x2 >> 32), ny = int32_t(y2 >> 32);
+      if (first || nx != last_x || ny != last_y) {
+        auto color = GrPeekCpp(&img, int32_t(x >> 32), int32_t(y >> 32));
+        const bool mono = dc.color.c0.rop == ROPB_MONO;
+        if (color >= 0 && (mono ? color != 0 : color != TRANSPARENT)) {
+          if (mono) {
+            dc.color = old_color;
+            dc.color.c1.rop &= ~ROPBF_DITHER;
+          } else {
+            dc.color = {};
+            dc.color.c0.rop = old_color.c0.rop;
+            dc.color.c0.color = color;
+          }
+          if (dc.depth_buf) {
+            dc.db_z = int32_t(z2 >> 32);
+            GrPlot1(&dc, nx, ny);
+          } else
+            GrPlotCpp(&dc, nx, ny);
+        }
+      }
+      first = false;
+      last_x = nx;
+      last_y = ny;
+      x2 += dp2.x;
+      y2 += dp2.y;
+      z2 += dp2.z;
+      y += dh;
+    }
+    fx += dp1.x;
+    fy += dp1.y;
+    fz += dp1.z;
+    x += dw;
+  }
+  return true;
+}
+
+extern "C" int64_t GrBlot3Cpp(CDC *dc, int64_t x1, int64_t y1, int64_t z1,
+                              CDC *img)
+{
+  if (!dc)
+    dc = gr.dc;
+  auto old_color = dc->color;
+  auto *old_brush = dc->brush;
+  int64_t res = 0;
+  if (dc->depth_buf || (dc->flags & (DCF_TRANSFORMATION | DCF_SYMMETRY))) {
+    CD3I64 p1{x1, y1, z1}, p2{int64_t(uint64_t(x1) + img->width), y1, z1},
+        p3{x1, int64_t(uint64_t(y1) + img->height), z1};
+    if (dc->flags & DCF_TRANSFORMATION) {
+      DCTransformPoint(*dc, p1);
+      DCTransformPoint(*dc, p2);
+      DCTransformPoint(*dc, p3);
+    }
+    if (dc->flags & DCF_SYMMETRY) {
+      auto a = p1, b = p2, c = p3;
+      DCReflectCpp(dc, &a.x, &a.y, &a.z);
+      DCReflectCpp(dc, &b.x, &b.y, &b.z);
+      DCReflectCpp(dc, &c.x, &c.y, &c.z);
+      res = GrBlot3Pass(*dc, *img, a, b, c, old_color);
+    }
+    if (!(dc->flags & DCF_SYMMETRY) || !(dc->flags & DCF_JUST_MIRROR))
+      res |= GrBlot3Pass(*dc, *img, p1, p2, p3, old_color);
+  } else
+    res = GrBlotCpp(dc, x1, y1, img);
+  dc->color = old_color;
+  dc->brush = old_brush;
   return res;
 }

@@ -75,7 +75,8 @@ void RandU32HC(),RandI64HC(),RandU64HC(),RandHC();
 void SeedHC(),IsPixCovered0HC(),GrPlot0HC(),GrPeek0HC();
 void GrBlotHC(),GrRectHC(),GrRectBHC(),GrClampHC();
 void GrPlotHC(),GrPeekHC(),GrLineHC(),ClipLineHC();
-void SpriteSizeHC(),Sprite3HC(),DocSpriteHC(),SpriteHC();
+void SpriteSizeHC(),Sprite3HC(),Sprite3BHC(),DocSpriteHC(),SpriteHC();
+void GrBlot3HC(),DCSymmetry3SetHC(),DCReflectHC();
 void Mat4x4MulXYZHC(),DCTransformHC(),Mat4x4IdentEquHC(),Mat4x4IdentNewHC();
 void Mat4x4NormSqr65536HC(),DCMat4x4SetHC(),DCLightingHC(),DCFillHC();
 void DCClearHC(),DCRstHC(),DCExtentsInitHC(),DCAliasHC();
@@ -519,6 +520,7 @@ bool LoadKernel(CTask &task)
       {"_MEMCPY", reinterpret_cast<uintptr_t>(_MEMCPY)},
       {"MemCpy", reinterpret_cast<uintptr_t>(_MEMCPY)},
       {"_MEMSET", reinterpret_cast<uintptr_t>(_MEMSET)},
+      {"MemSet", reinterpret_cast<uintptr_t>(_MEMSET)},
       {"_MEMSET_I64", reinterpret_cast<uintptr_t>(_MEMSET_I64)},
       {"_MALLOC", reinterpret_cast<uintptr_t>(_MALLOC)},
       {"MAlloc", reinterpret_cast<uintptr_t>(_MALLOC)},
@@ -676,6 +678,10 @@ bool LoadKernel(CTask &task)
       {"GrPlot", reinterpret_cast<uintptr_t>(GrPlotHC)},
       {"SpriteSize", reinterpret_cast<uintptr_t>(SpriteSizeHC)},
       {"Sprite3", reinterpret_cast<uintptr_t>(Sprite3HC)},
+      {"Sprite3B", reinterpret_cast<uintptr_t>(Sprite3BHC)},
+      {"GrBlot3", reinterpret_cast<uintptr_t>(GrBlot3HC)},
+      {"DCSymmetry3Set", reinterpret_cast<uintptr_t>(DCSymmetry3SetHC)},
+      {"DCReflect", reinterpret_cast<uintptr_t>(DCReflectHC)},
       {"DocSprite", reinterpret_cast<uintptr_t>(DocSpriteHC)},
       {"Sprite", reinterpret_cast<uintptr_t>(SpriteHC)},
       {"GrPeek", reinterpret_cast<uintptr_t>(GrPeekHC)},

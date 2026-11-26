@@ -294,7 +294,7 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
           sprite_dc->bkcolor = sprite_dc->color;
           auto sprite_x =
               col - ((entry->de_flags & DOCEF_FROM_START) ? len : 0);
-          Sprite3(*sprite_dc, sprite_x * 8, row * 8, full->bin_data->data,
+          Sprite3(*sprite_dc, sprite_x * 8, row * 8, 0, full->bin_data->data,
                   full->bin_data->size);
         }
       }
