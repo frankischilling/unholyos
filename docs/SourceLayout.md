@@ -247,7 +247,24 @@ starts transparent with `DCF_SCRN_BITMAP | DCF_ON_TOP`. The context
 holds HolyC ABI addresses for the transform and lighting callbacks.
 HolyC can call the two functions by name. The current compiler headers
 still need typed callback member access. Brush tables, the text layer,
-raster operations, and composition remain pending.
+and composition remain pending.
+
+## 2D raster drawing
+
+`Adam/Gr/GrBitMap.cpp`, `GrPrimatives.cpp`, `GrComposites.cpp`, and
+`GrMath.cpp` follow the reference for points, clipping, stepped lines,
+blits, and filled rectangles. `GrAsm.asm` reads the text-cell window
+depth buffer. The bootstrap gives Adam the full screen and initializes
+the depth buffer to zero until the window manager owns it.
+
+The blit and rectangle loops work on bytes in the padded bitmap. Opaque
+blits read a word's source pixels before writing the corresponding
+destination pixels, including when the two contexts share storage.
+The unclipped plot tests depth. Clipped 2D drawing bypasses that depth
+test. Probability dithering uses the task RNG from `Kernel/KMathB.cpp`.
+The HolyC adapters extend narrow RNG returns through RAX and pass up to
+eight fixed arguments. The public `Line` callback interface, 3D drawing,
+and desktop presentation remain pending.
 
 ## Remaining structural work
 

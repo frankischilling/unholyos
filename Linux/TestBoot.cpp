@@ -830,10 +830,15 @@ static uint64_t VerifyGraphicsContexts(CMonitor &vm, uint64_t graphics,
                                        uint64_t owner)
 {
   const auto contexts = ReadPhysical<8>(vm, graphics);
+  auto z_buf = ReadPhysical<1>(vm, graphics + 72)[0];
+  Check(z_buf >= 16 && ReadPhysical<2>(vm, z_buf - 16) ==
+                          std::array<uint64_t, 2>{owner, 19 * 512 - 24} &&
+            !ReadPhysical<1>(vm, z_buf)[0] && !ReadPhysical<1>(vm, z_buf + 9592)[0],
+        "Invalid initial window depth buffer");
   Check(ReadPhysical<1>(vm, graphics + 10480)[0] == 1,
         "Invalid initial graphics zoom");
   constexpr uint64_t flags[] = {0, 0x24000, 0x4000, 0x4000, 0, 0x4000};
-  uint64_t used = 0;
+  uint64_t used = 19 * 512 - 24;
   for (size_t i = 0; i < std::size(flags); ++i) {
     uint64_t dc = contexts[i + 2];
     Check(dc >= 16 && std::count(contexts.begin(), contexts.end(), dc) == 1,
@@ -1276,6 +1281,50 @@ static void DrivePalette(CMonitor &vm, const fs::path &serial)
         "The VGA palette did not restore the boot text");
 }
 
+static void DriveLines(CMonitor &vm, const fs::path &serial)
+{
+  auto output = vm.WaitSerial(serial, "UnholyOS: executing /Lines.HC\r\n");
+  std::smatch address;
+  Check(std::regex_search(
+            output, address,
+            std::regex(R"(UnholyOS: raster context (0x[0-9a-f]+))")),
+        "Missing the raster bitmap address");
+  auto canvas = std::stoull(address[1].str(), nullptr, 16);
+  bool drew = false;
+  for (unsigned i = 0; i < 80; i++) {
+    if ((ReadPhysical<1>(vm, canvas)[0] & 255) != 255) {
+      drew = true;
+      break;
+    }
+    std::this_thread::sleep_for(15ms);
+  }
+  Check(drew, "The original Lines.HC did not draw into the screen context");
+  vm.Command(
+      R"({"execute":"human-monitor-command","arguments":{"command-line":"sendkey x 65"}})");
+  auto done = vm.WaitSerial(
+      serial, "UnholyOS: finished /Lines.HC, checks 0x0000000000000001");
+  CheckProgramOutput(done, "/Lines.HC", "", '1');
+  Check(ReadPhysical<1>(vm, canvas)[0] == UINT64_MAX,
+        "Lines.HC did not clear its bitmap on exit");
+}
+
+constexpr std::string_view raster_output =
+    "raster rect 20 0 0 4 3 4 255\n"
+    "raster nearest 5 4 -1\n"
+    "raster depth 1 2 4\n"
+    "raster collision 19 19\n"
+    "raster masks 5 2 14 14\n"
+    "raster seed 15582A7B EB16 AC5F36197A54EB16\n"
+    "raster random 1 1 1 1 C5A40ABCD97CCB75\n"
+    "raster blot 1 12 0 10\n"
+    "raster brushmask 4 4 1\n"
+    "raster opaque 4 4 0\n"
+    "raster clip 1 0 0 12 9 -2 -1 14 10\n"
+    "raster line 1 11 255 11 255\n"
+    "raster window -1 5 -1\n"
+    "raster blank 1 2 1\n"
+    "raster file 136\n";
+
 constexpr std::string_view dc_output =
     "dc layout 408 32 384 392 10507 10480\n"
     "dc screen 640 480 24000 4000 1\n"
@@ -1313,8 +1362,10 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     DriveKeyboard(rebuilt, serial);
     DriveMouse(rebuilt, serial);
     DrivePalette(rebuilt, serial);
+    DriveLines(rebuilt, serial);
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
+    CheckProgramOutput(boot, "/RasterProbe.HC", raster_output, '1');
     auto registers = StopAtIdle(rebuilt);
     VerifyHandoff(boot, media, registers);
     VerifyBootDrive(rebuilt, boot, media, true, false);
@@ -1341,6 +1392,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       DriveKeyboard(vm, serial);
       DriveMouse(vm, serial);
       DrivePalette(vm, serial);
+      DriveLines(vm, serial);
     }
     std::string output = vm.Boot(serial);
     std::string registers = StopAtIdle(vm);
@@ -1356,6 +1408,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
 
     if (startup) {
       CheckProgramOutput(output, "/DCProbe.HC", dc_output, '1');
+      CheckProgramOutput(output, "/RasterProbe.HC", raster_output, '1');
       CheckProgramOutput(output, "/PaletteProbe.HC",
                          "palette tables 8 AAAA55550000 777777777777 12 BROWN LTRED\n"
                          "palette start 0 AAAA55550000 FFFFFFFFFFFF\n"
@@ -1726,15 +1779,26 @@ static void TestBoot(const char *qemu, const fs::path &iso,
           fs::copy_file(CaptureGuestFile(vm, dir, output, name),
                         iso.parent_path() / name,
                         fs::copy_options::overwrite_existing);
-        auto path = CaptureGuestFile(vm, dir, output, "DCProbe.GR.Z");
-        const auto archive = FileRead(path);
-        uint64_t hash = 0xCBF29CE484222325;
-        for (uint8_t byte : archive)
-          hash = (hash ^ byte) * 0x100000001B3;
-        Check(archive.size() == 118 && hash == 0x1F9B24E015B471C5,
-              "The GR.Z disk file differs from pinned TempleOS");
-        fs::copy_file(path, iso.parent_path() / "DCProbe.GR.Z",
-                      fs::copy_options::overwrite_existing);
+        constexpr struct
+        {
+          const char *name;
+          size_t size;
+          uint64_t hash;
+        } graphics_files[]{
+            {"DCProbe.GR.Z", 118, 0x1F9B24E015B471C5},
+            {"RasterProbe.GR.Z", 137, 0x707AB6E911CC6482},
+        };
+        for (const auto &expected : graphics_files) {
+          auto path = CaptureGuestFile(vm, dir, output, expected.name);
+          const auto archive = FileRead(path);
+          uint64_t hash = 0xCBF29CE484222325;
+          for (uint8_t byte : archive)
+            hash = (hash ^ byte) * 0x100000001B3;
+          Check(archive.size() == expected.size && hash == expected.hash,
+                "The GR.Z disk file differs from pinned TempleOS");
+          fs::copy_file(path, iso.parent_path() / expected.name,
+                        fs::copy_options::overwrite_existing);
+        }
       }
       VerifyGuestISO(qemu, vm, dir, iso, kernel, memory, output);
       if (std::string_view(memory) == "4608") {

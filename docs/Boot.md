@@ -408,6 +408,21 @@ Pinned TempleOS and UnholyOS produced the same 15-line trace with
 QEMU 9.2.0, the PC machine, `qemu64`, and 512 MiB. The 118-byte
 `DCProbe.GR.Z` file matched byte for byte.
 
+## 2D raster drawing
+
+`make -j4 test BUILD=build/raster` exercises clipping, extents, depth,
+window coverage, masks, seeded dithering, and line stepping.
+`RasterProbe.HC` produced the same 15 output lines and the same 137-byte
+`RasterProbe.GR.Z` file on pinned TempleOS and UnholyOS under QEMU 9.2.0
+with the PC machine, `qemu64`, and 512 MiB.
+
+`Linux/Fixtures/Lines.HC` is Terry A. Davis's unchanged
+`Demo/Graphics/Lines.HC` from the pinned TempleOS tree. The boot test
+checks that it draws into `gr.dc` and clears the bitmap after QEMU
+sends a key. Both programs run again after rebooting the guest-built
+ISO. UnholyOS still needs the desktop compositor to display that
+bitmap.
+
 ## PC speaker and recorded sound events
 
 `make -j4 test BUILD=build/pc-speaker` builds

@@ -1,6 +1,6 @@
 #include "KernelB.hpp"
 
-CTask *adam_task, *sys_focus_task;
+CTask *adam_task, *sys_focus_task, *sys_winmgr_task;
 CBlkDevGlbls blkdev;
 CDbgGlbls dbg;
 CSema sys_semas[SEMA_SEMAS_NUM];

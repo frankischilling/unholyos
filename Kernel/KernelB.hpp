@@ -129,6 +129,8 @@ extern uint8_t gr_rainbow_10[10];
 bool GrPaletteInit();
 void GrPaletteIndicesSet();
 bool GrInit2();
+void WinDerivedValsUpdate(CTask *task);
+extern "C" uint64_t RandU16Cpp();
 extern "C" CDC *DCNewCpp(int64_t width, int64_t height, CTask *task,
                          uint8_t null_bitmap);
 extern "C" void DCDelCpp(CDC *dc);
@@ -247,7 +249,7 @@ bool Mem32DevInit(CHeapCtrl *hc);
 
 using CExt = int64_t (*)(...);
 
-extern CTask *adam_task, *sys_focus_task;
+extern CTask *adam_task, *sys_focus_task, *sys_winmgr_task;
 extern CBlkDevGlbls blkdev;
 extern CDbgGlbls dbg;
 extern CSema sys_semas[SEMA_SEMAS_NUM];

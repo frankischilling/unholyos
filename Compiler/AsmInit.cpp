@@ -421,6 +421,12 @@ static bool CmpTaskData(CHashTable *table)
       {"win_inhibit", u32, offsetof(CTask, win_inhibit)},
       {"pix_left", i64, offsetof(CTask, pix_left)},
       {"pix_top", i64, offsetof(CTask, pix_top)},
+      {"pix_right", i64, offsetof(CTask, pix_right)},
+      {"pix_bottom", i64, offsetof(CTask, pix_bottom)},
+      {"pix_width", i64, offsetof(CTask, pix_width)},
+      {"pix_height", i64, offsetof(CTask, pix_height)},
+      {"rand_seed", i64, offsetof(CTask, rand_seed)},
+      {"win_z_num", FindType("U16",table), offsetof(CTask, win_z_num)},
       {"scroll_x", i64, offsetof(CTask, scroll_x)},
       {"scroll_y", i64, offsetof(CTask, scroll_y)},
       {"wake_jiffy", i64, offsetof(CTask, wake_jiffy)},
@@ -679,6 +685,7 @@ static bool CmpDCData(CHashTable *table)
       {"dc2", glbl, dc + 1, offsetof(CGrGlbls, dc2)},
       {"dc_cache", glbl, dc + 1, offsetof(CGrGlbls, dc_cache)},
       {"zoomed_dc", glbl, dc + 1, offsetof(CGrGlbls, zoomed_dc)},
+      {"win_z_buf", glbl, FindType("U16",table) + 1, offsetof(CGrGlbls, win_z_buf)},
       {"scrn_zoom", glbl, i64, offsetof(CGrGlbls, scrn_zoom)},
       {"sx", glbl, i64, offsetof(CGrGlbls, sx)},
       {"sy", glbl, i64, offsetof(CGrGlbls, sy)},
@@ -732,6 +739,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     I32Ptr,
     ColorROP,
     D3I32Ptr,
+    I16,
+    U16,
+    I32,
+    U32,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -742,6 +753,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CBGR48", table), FindType("CBGR48", table) + 1,
       FindType("CDC", table) + 1, FindType("I32", table) + 1,
       FindType("CColorROPU32", table), FindType("CD3I32", table) + 1,
+      FindType("I16", table), FindType("U16", table),
+      FindType("I32", table), FindType("U32", table),
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -756,7 +769,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       bool has_default = false;
       uint64_t dft_val = 0;
       const char *dft_str = nullptr;
-    } args[7];
+    } args[8];
     const char *import_name = nullptr;
     uint8_t internal_op = 0;
   } headers[]{
@@ -799,6 +812,35 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"GrPaletteGet", U0, FF_RET1, {{"bgr48", BGR48Ptr}}},
       {"GrPaletteSet", U0, FF_RET1, {{"bgr48", BGR48Ptr}}},
       {"PaletteSetStd", U0, FF_RET1, {}},
+      {"ClampI64", I64, FF_RET1, {{"i", I64}, {"lo", I64}, {"hi", I64}}, "_CLAMP_I64"},
+      {"SignI64", I64, FF_RET1, {{"i", I64}}},
+      {"RandI16", I16, FF_RET1, {}},
+      {"RandU16", U16, FF_RET1, {}},
+      {"RandI32", I32, FF_RET1, {}},
+      {"RandU32", U32, FF_RET1, {}},
+      {"RandI64", I64, FF_RET1, {}},
+      {"RandU64", U64, FF_RET1, {}},
+      {"Rand", F64, FF_RET1, {}},
+      {"Seed", I64, FF_RET1, {{"seed", I64, true}, {"task", TaskPtr, true}}},
+      {"IsPixCovered0", Bool, FF_RET1, {{"task", TaskPtr}, {"x", I64}, {"y", I64}}},
+      {"GrPlot0", Bool, FF_RET1, {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}}},
+      {"GrPeek0", I64, FF_RET1, {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}}},
+      {"GrBlot", I64, FF_RET1, {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}, {"img", DCPtr}}},
+      {"GrRect", I64, FF_RET1, {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}, {"w", I64}, {"h", I64}}},
+      {"GrRectB", I64, FF_RET1,
+       {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"x2", I64},
+        {"y2", I64}}},
+      {"GrClamp", Bool, FF_RET1,
+       {{"dc", DCPtr, true}, {"left", I64Ptr}, {"top", I64Ptr}, {"right", I64Ptr},
+        {"bottom", I64Ptr}, {"width", I64, true}, {"height", I64, true}}},
+      {"GrPlot", Bool, FF_RET1, {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}}},
+      {"GrPeek", I64, FF_RET1, {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}}},
+      {"GrLine", Bool, FF_RET1,
+       {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"x2", I64},
+        {"y2", I64}, {"step", I64, true, 1}, {"start", I64, true}}},
+      {"ClipLine", Bool, FF_RET1,
+       {{"_x1", I64Ptr}, {"_y1", I64Ptr}, {"_x2", I64Ptr}, {"_y2", I64Ptr},
+        {"left", I64}, {"top", I64}, {"right", I64}, {"bottom", I64}}},
       {"Mat4x4MulXYZ", U0, FF_RET1,
        {{"r", I64Ptr}, {"_x", I64Ptr}, {"_y", I64Ptr}, {"_z", I64Ptr}}},
       {"DCTransform", U0, FF_RET1,
@@ -1080,6 +1122,7 @@ static bool CmpFillHash(CHashTable *table)
       {"COLORS_NUM","16"},
       {"TRANSPARENT","0xFF"}, {"COLOR_MONO","0xFF"},
       {"GR_WIDTH","640"}, {"GR_HEIGHT","480"}, {"GR_SCALE","(1<<32)"},
+      {"TEXT_COLS","80"}, {"TEXT_ROWS","60"}, {"TASKf_NONTIMER_RAND","14"},
       {"DCF_COMPRESSED","1"}, {"DCF_PALETTE","2"}, {"DCF_NO_TRANSPARENTS","4"},
       {"DCF_TRANSFORMATION","0x100"}, {"DCF_SYMMETRY","0x200"},
       {"DCF_JUST_MIRROR","0x400"}, {"DCF_LOCATE_NEAREST","0x800"},

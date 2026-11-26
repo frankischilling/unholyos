@@ -32,6 +32,11 @@ GLOBAL Char2ScanCodeHC,ScanCode2CharHC,KbdTypeMaticHC,PutKeyHC
 GLOBAL GridInitHC,MsSetHC
 GLOBAL GrPaletteColorSetHC,GrPaletteColorGetHC
 GLOBAL GrPaletteGetHC,GrPaletteSetHC,PaletteSetStdHC
+GLOBAL SignI64HC,RandI16HC,RandU16HC,RandI32HC
+GLOBAL RandU32HC,RandI64HC,RandU64HC,RandHC
+GLOBAL SeedHC,IsPixCovered0HC,GrPlot0HC,GrPeek0HC
+GLOBAL GrBlotHC,GrRectHC,GrRectBHC,GrClampHC
+GLOBAL GrPlotHC,GrPeekHC,GrLineHC,ClipLineHC
 GLOBAL Mat4x4MulXYZHC,DCTransformHC,Mat4x4IdentEquHC,Mat4x4IdentNewHC
 GLOBAL Mat4x4NormSqr65536HC,DCMat4x4SetHC,DCLightingHC,DCFillHC
 GLOBAL DCClearHC,DCRstHC,DCExtentsInitHC,DCAliasHC
@@ -52,6 +57,11 @@ EXTERN Char2ScanCodeCpp,ScanCode2CharCpp,KbdTypeMaticCpp,PutKeyCpp
 EXTERN GridInitCpp,MsSetCpp
 EXTERN GrPaletteColorSetCpp,GrPaletteColorGetCpp
 EXTERN GrPaletteGetCpp,GrPaletteSetCpp,PaletteSetStdCpp
+EXTERN SignI64Cpp,RandI16Cpp,RandU16Cpp,RandI32Cpp
+EXTERN RandU32Cpp,RandI64Cpp,RandU64Cpp,RandCpp
+EXTERN SeedCpp,IsPixCovered0Cpp,GrPlot0Cpp,GrPeek0Cpp
+EXTERN GrBlotCpp,GrRectCpp,GrRectBCpp,GrClampCpp
+EXTERN GrPlotCpp,GrPeekCpp,GrLineCpp,ClipLineCpp
 EXTERN Mat4x4MulXYZCpp,DCTransformCpp,Mat4x4IdentEquCpp,Mat4x4IdentNewCpp
 EXTERN Mat4x4NormSqr65536Cpp,DCMat4x4SetCpp,DCLightingCpp,DCFillCpp
 EXTERN DCClearCpp,DCRstCpp,DCExtentsInitCpp,DCAliasCpp
@@ -95,8 +105,17 @@ BITS 64
 	PUSH	R11
 %endmacro
 
-%macro HC_FRAME_CALL 1
+%macro HC_FRAME_CALL 1-2 0
 	AND	RSP,-16
+%if %2>=7
+	SUB	RSP,16
+	MOV	RAX,[RBP+64]
+	MOV	[RSP],RAX
+%endif
+%if %2>=8
+	MOV	RAX,[RBP+72]
+	MOV	[RSP+8],RAX
+%endif
 	CALL	%1
 	LEA	RSP,[RBP-32]
 	POP	R11
@@ -127,7 +146,7 @@ BITS 64
 %if %3>=6
 	MOV	R9,[RBP+56]
 %endif
-	HC_FRAME_CALL %2
+	HC_FRAME_CALL %2,%3
 	RET	%3*8
 %endmacro
 
@@ -186,6 +205,26 @@ HOLYC_CPP GrPaletteColorGetHC,GrPaletteColorGetCpp,1
 HOLYC_CPP GrPaletteGetHC,GrPaletteGetCpp,1
 HOLYC_CPP GrPaletteSetHC,GrPaletteSetCpp,1
 HOLYC_CPP PaletteSetStdHC,PaletteSetStdCpp,0
+HOLYC_CPP SignI64HC,SignI64Cpp,1
+HOLYC_CPP RandI16HC,RandI16Cpp,0
+HOLYC_CPP RandU16HC,RandU16Cpp,0
+HOLYC_CPP RandI32HC,RandI32Cpp,0
+HOLYC_CPP RandU32HC,RandU32Cpp,0
+HOLYC_CPP RandI64HC,RandI64Cpp,0
+HOLYC_CPP RandU64HC,RandU64Cpp,0
+HOLYC_CPP RandHC,RandCpp,0
+HOLYC_CPP SeedHC,SeedCpp,2
+HOLYC_CPP IsPixCovered0HC,IsPixCovered0Cpp,3
+HOLYC_CPP GrPlot0HC,GrPlot0Cpp,3
+HOLYC_CPP GrPeek0HC,GrPeek0Cpp,3
+HOLYC_CPP GrBlotHC,GrBlotCpp,4
+HOLYC_CPP GrRectHC,GrRectCpp,5
+HOLYC_CPP GrRectBHC,GrRectBCpp,5
+HOLYC_CPP GrClampHC,GrClampCpp,7
+HOLYC_CPP GrPlotHC,GrPlotCpp,3
+HOLYC_CPP GrPeekHC,GrPeekCpp,3
+HOLYC_CPP GrLineHC,GrLineCpp,7
+HOLYC_CPP ClipLineHC,ClipLineCpp,8
 HOLYC_CPP Mat4x4MulXYZHC,Mat4x4MulXYZCpp,4
 HOLYC_CPP DCTransformHC,DCTransformCpp,4
 HOLYC_CPP Mat4x4IdentEquHC,Mat4x4IdentEquCpp,1
