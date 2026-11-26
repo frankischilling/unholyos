@@ -219,7 +219,7 @@ class CMonitor
 public:
   CMonitor(const char *qemu, const fs::path &iso, const fs::path &dir,
            const char *machine, const char *memory, bool secondary_slave,
-           const fs::path &disk={}, bool persistent_disk=false)
+           const fs::path &disk={}, bool persistent_disk=false, bool debugcon=false)
       : deadline(Clock::now() + 30s)
   {
     std::string image = fs::absolute(iso).string();
@@ -241,6 +241,7 @@ public:
     }
     std::string serial = "file:" + (dir / "serial.log").string();
     std::string log = (dir / "qemu.log").string();
+    std::string debug = "file:" + (dir / "debugcon.bin").string();
 
     int fd[2];
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, fd) < 0)
@@ -254,6 +255,11 @@ public:
         _exit(126);
       close(fd[1]);
       close(err);
+      if (debugcon)
+        execlp(qemu, qemu, "-machine", machine, "-cpu", "qemu64", "-m", memory,
+               "-boot", "d", "-cdrom", image.c_str(), "-display", "none",
+               "-monitor", "none", "-serial", serial.c_str(), "-qmp", "stdio",
+               "-debugcon", debug.c_str(), "-no-reboot", static_cast<char *>(nullptr));
       if (!disk.empty()) {
         execlp(qemu,qemu,"-machine",machine,"-cpu","qemu64","-m",memory,
                "-boot","d","-cdrom",image.c_str(),"-drive",ata.c_str(),
@@ -1668,6 +1674,203 @@ static void DriveDigits(CMonitor &vm, const fs::path &dir,
   std::cout << "Digits.HC matched seeded patterns, score, restart and Escape\n";
 }
 
+static void DriveDataBase(CMonitor &vm, const fs::path &dir,
+                          const std::string &boot, bool reference = false,
+                          bool form_only = false)
+{
+  vm.ResetDeadline(150s);
+  uint64_t addr = 0;
+  auto path = dir / "database-text.bin";
+  auto key = [&](std::string name) {
+    vm.Hmp("sendkey " + name + " 35");
+    std::this_thread::sleep_for(65ms);
+  };
+  auto type = [&](std::string_view text) {
+    for (char ch : text) {
+      if (ch >= 'A' && ch <= 'Z')
+        key("shift-" + std::string(1, char(ch + 'a' - 'A')));
+      else {
+        switch (ch) {
+        case '(': key("shift-9"); break;
+        case ')': key("shift-0"); break;
+        case ':': key("shift-semicolon"); break;
+        case ';': key("semicolon"); break;
+        case '"': key("shift-apostrophe"); break;
+        case '\'': key("apostrophe"); break;
+        case '\\': key("backslash"); break;
+        case '%': key("shift-5"); break;
+        case '<': key("shift-comma"); break;
+        case '[': key("bracket_left"); break;
+        case ']': key("bracket_right"); break;
+        case '/': key("slash"); break;
+        case '.': key("dot"); break;
+        case ',': key("comma"); break;
+        case '=': key("equal"); break;
+        case '+': key("shift-equal"); break;
+        case '*': key("shift-8"); break;
+        case ' ': key("spc"); break;
+        case '-': key("minus"); break;
+        case '>': key("shift-dot"); break;
+        case '_': key("shift-minus"); break;
+        case '~': key("shift-grave_accent"); break;
+        default: key(std::string(1, ch)); break;
+        }
+      }
+    }
+  };
+  auto cmd = [&](std::string_view text) { type(text); key("ret"); };
+  if (reference) {
+    std::this_thread::sleep_for(12s);
+    key("n");
+    std::this_thread::sleep_for(2s);
+    key("n");
+    std::this_thread::sleep_for(2s);
+    cmd("I64 dbtext=gr.text_base;");
+    cmd("I64 dbi;for(dbi=0;dbi<8;dbi++)OutU8(0xE9,dbtext.u8[dbi]);");
+    auto debug = dir / "debugcon.bin";
+    for (unsigned i = 0; i < 100; i++) {
+      if (fs::exists(debug) && fs::file_size(debug) >= 8) {
+        auto bytes = FileRead(debug);
+        addr = ReadLE(bytes, bytes.size() - 8, 8);
+        break;
+      }
+      std::this_thread::sleep_for(50ms);
+    }
+    if (!addr || addr > 0x20000000) {
+      vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
+                 (dir / "reference-screen.ppm").string() + R"("}})");
+      throw std::runtime_error("Pinned guest did not report the text layer address");
+    }
+  } else {
+    std::smatch match;
+    Check(std::regex_search(boot, match, std::regex(R"(text base (0x[0-9a-f]+))")),
+          "Missing database text layer address");
+    addr = std::stoull(match[1].str(), nullptr, 16);
+  }
+  auto capture = [&] {
+    vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+               std::to_string(addr) + R"(,"size":19200,"filename":")" +
+               path.string() + R"("}})");
+    auto cells = FileRead(path);
+    Check(cells.size() == 80 * 60 * 4, "Incomplete database text layer");
+    std::string visible;
+    for (size_t y = 0; y < 60; y++) {
+      for (size_t x = 0; x < 80; x++) {
+        auto ch = cells[(y * 80 + x) * 4];
+        visible += ch >= 32 && ch < 127 ? char(ch) : ' ';
+      }
+      visible += '\n';
+    }
+    return visible;
+  };
+  auto wait = [&](std::string_view wanted, std::string_view also = {}) {
+    std::string visible;
+    for (unsigned i = 0; i < 180; i++) {
+      visible = capture();
+      if (visible.find(wanted) != std::string::npos &&
+          (also.empty() || visible.find(also) != std::string::npos))
+        return;
+      std::this_thread::sleep_for(30ms);
+    }
+    throw std::runtime_error("Database missing " + std::string(wanted) +
+                             "\n" + visible);
+  };
+  auto snap = [&](const char *phase) {
+    fs::copy_file(path, dir / (std::string("database-") + phase + ".bin"),
+                  fs::copy_options::overwrite_existing);
+  };
+  wait("T:/Home>");
+  cmd("WinMax;DocClear(,1);");
+  std::this_thread::sleep_for(250ms);
+  if (!form_only) {
+  cmd("CBlkDev *dbd=BlkDevNextFreeSlot('B',BDT_RAM);");
+  cmd("dbd->max_blk=2047;");
+  cmd("BlkDevAdd(dbd,,0,1);HomeSet(\"B:/\");");
+  cmd("Let2Drv('B',0)->drv_let;");
+  wait("=66");
+  wait("T:/Home>");
+  cmd(R"(ExeFile("::/Demo/Dsk/DataBase.HC");)");
+  wait("Read acct, Write acct");
+  auto write = [&](const char *account, const char *name, const char *address,
+                   bool accept) {
+    key("w");
+    wait("Acct #");
+    type(account);
+    key("ret");
+    wait("Name:_", "Addr:_");
+    type(name);
+    key("x");
+    key("backspace");
+    key("tab");
+    type(address);
+    wait(std::string("Name:") + name, std::string("Addr:") + address);
+    snap(accept ? "accept" : "cancel");
+    key(accept ? "esc" : "shift-esc");
+    wait("Read acct, Write acct");
+    std::this_thread::sleep_for(200ms);
+  };
+  write("7", "Ada", "12 Pine", true);
+  write("7", "Ada", "13 Pine", true);
+  write("7", "Eve", "99 Oak", false);
+  write("8", "Bob", "45 Elm", true);
+  key("r");
+  wait("Acct #");
+  key("7");
+  key("ret");
+  wait("Ada", "13 Pine");
+  snap("read");
+  key("shift-esc");
+  wait("T:/Home>");
+  // Verify complete file size and the two saved records through the native API.
+  cmd(R"(CFile *dbf=FOpen("B:/DataBaseDemo.BIN","r");)");
+  cmd("FSize(dbf);");
+  wait("51200");
+  cmd("U8 dbbuf[512];FBlkRead(dbf,dbbuf,7);");
+  cmd(R"("DB7 %s %s\n",dbbuf,dbbuf+32;)");
+  wait("DB7 Ada 13 Pine");
+  cmd("FBlkRead(dbf,dbbuf,8);");
+  cmd(R"("DB8 %s %s\n",dbbuf,dbbuf+32;)");
+  wait("DB8 Bob 45 Elm");
+  cmd(R"(FClose(dbf);HomeSet("T:/Home");)");
+  wait("T:/Home>");
+  snap("saved");
+  std::cout << "DataBase.HC saved two records, edited one, cancelled an overwrite and read both records\n";
+  }
+
+  cmd("DocClear(,1);");
+  cmd(R"(ExeFile("::/Demo/DolDoc/Form.HC");)");
+  wait("Float 1:", "[Teen]");
+  wait("Name   :John", "Address:1234 Pine St.");
+  for (unsigned i = 0; i < 4; i++)
+    key("tab");
+  key("spc");
+  wait("Child", "Adult");
+  key("down");
+  key("down");
+  key("esc");
+  wait("[Adult]");
+  key("tab");
+  type("Jane");
+  key("tab");
+  key("tab");
+  type("Unit 2");
+  key("tab");
+  key("tab");
+  key("spc");
+  wait("Name   :Jane", "Address:Unit 2");
+  wait("[ ] Check");
+  snap("form");
+  key("esc");
+  wait("Address2=Unit 2", "ClassRep Example");
+  wait("Address1=1234 Pine St.", "Adult");
+  wait("Type    =Adult", "Name    =Jane");
+  wait("Check   =0", "#4      =-567");
+  wait("#1      =1.2300000e-3", "#2      =4.50000000e3");
+  wait("#3      =4660");
+  snap("form-saved");
+  std::cout << "Form.HC edited the list, string fields and checkbox\n";
+}
+
 static void DriveUserTask(CMonitor &vm, const fs::path &dir,
                           const std::string &boot, bool extended = false)
 {
@@ -1800,6 +2003,23 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
       std::this_thread::sleep_for(20ms);
     }
     throw std::runtime_error(error);
+  };
+  // QMP acknowledges injection, not delivery through the guest PS/2 driver.
+  // Resolve the exported mouse state and wait for the input to be consumed.
+  auto mouse_state = [&]() {
+    uint64_t e801 = ReadPhysical<1>(vm, 0x7C40, 'h')[0];
+    uint64_t table = 0x100000 + e801 * 1024 - 0x4400 + 0x28;
+    constexpr uint64_t hash = ('m' * 2 + 's') & 1023;
+    auto entry = ReadPhysical<1>(vm, table + hash * 8)[0];
+    for (unsigned i = 0; entry && i < 1024; ++i) {
+      auto header = ReadPhysical<3>(vm, entry);
+      if (static_cast<uint32_t>(header[2]) == 0x08000001 &&
+          ReadPhysical<3>(vm, header[1], 'b') ==
+              std::array<uint64_t, 3>{'m', 's', 0})
+        return ReadPhysical<1>(vm, entry + 64)[0];
+      entry = header[0];
+    }
+    throw std::runtime_error("Missing exported mouse state");
   };
 
   constexpr auto start_body = "Public Domain Operating System";
@@ -2104,11 +2324,21 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   Check(shape_pixels(tree) > 800, "CommonAncestor.HC did not draw the tree");
 
   constexpr uint64_t scroll_x = 0x100, scroll_y = 0x108, scroll_z = 0x110;
+  const auto mouse = mouse_state();
+  constexpr uint64_t mouse_lb = 160;
+  auto wait_button = [&](bool down) {
+    for (unsigned i = 0; i < 100; ++i) {
+      if (ReadPhysical<1>(vm, mouse + mouse_lb, 'b')[0] == uint64_t(down))
+        return;
+      std::this_thread::sleep_for(20ms);
+    }
+    throw std::runtime_error("Guest did not consume the left button transition");
+  };
   vm.ResetDeadline(10s);
   KeyboardKey(vm, "ctrl", true);
   std::this_thread::sleep_for(125ms);
   MouseButton(vm, "left", true);
-  std::this_thread::sleep_for(125ms);
+  wait_button(true);
   MouseMove(vm, 98, 70);
   wait_mem(left + scroll_x, 48, "Ctrl-left drag did not pan horizontally");
   wait_mem(left + scroll_y, 32, "Ctrl-left drag did not pan vertically");
@@ -2127,14 +2357,17 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   };
   Check(wait_tree(48, 32), "The tree did not move with the window pan");
   MouseButton(vm, "left", false);
-  std::this_thread::sleep_for(125ms);
+  wait_button(false);
+  const auto before_move = ReadPhysical<2>(vm, mouse);
   MouseMove(vm, 20, 16);
-  std::this_thread::sleep_for(125ms);
+  wait_mem(mouse, before_move[0] + 10, "Released mouse did not move horizontally");
+  wait_mem(mouse + 8, before_move[1] + 8, "Released mouse did not move vertically");
+  Check(wait_tree(48, 32), "The released mouse moved the tree");
   Check(ReadPhysical<2>(vm, left + scroll_x) == std::array<uint64_t, 2>{48, 32},
         "The pan changed after releasing the left button");
 
   MouseButton(vm, "left", true);
-  std::this_thread::sleep_for(125ms);
+  wait_button(true);
   MouseMove(vm, -114, -80);
   wait_mem(left + scroll_x, uint64_t(-16),
            "Negative horizontal pan was not snapped");
@@ -2142,6 +2375,7 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
            "Negative vertical pan was not snapped");
   Check(wait_tree(-16, -8), "The tree did not move to the negative pan");
   MouseButton(vm, "left", false);
+  wait_button(false);
   MouseButton(vm, "right", true);
   wait_mem(left + scroll_x, 0, "Ctrl-right did not reset the horizontal pan");
   wait_mem(left + scroll_y, 0, "Ctrl-right did not reset the vertical pan");
@@ -3960,6 +4194,30 @@ int main(int argc, char **argv)
     } catch (const std::exception &error) {
       std::cerr<<ReadText(dir/"write/serial.log")<<ReadText(dir/"reboot/serial.log")
                <<error.what()<<'\n'<<"Evidence: "<<dir<<'\n';
+      return 1;
+    }
+  }
+  if ((argc == 4 || argc == 5) &&
+      (std::string_view(argv[1]) == "--database" ||
+       std::string_view(argv[1]) == "--database-reference" ||
+       std::string_view(argv[1]) == "--form")) {
+    bool reference = std::string_view(argv[1]) == "--database-reference";
+    char path[] = "/tmp/unholyos-database-XXXXXX";
+    if (argc == 4 && !mkdtemp(path))
+      return 1;
+    fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
+      vm.Connect();
+      DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
+                    std::string_view(argv[1]) == "--form");
+      vm.Command(R"({"execute":"quit"})");
+      if (argc == 4)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
       return 1;
     }
   }

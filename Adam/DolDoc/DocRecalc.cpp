@@ -371,8 +371,11 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     if ((entry->de_flags & (DOCEF_TAG_CB | DOCEF_DEFINE)) &&
         !(entry->de_flags & (DOCEF_LST | DOCEF_SKIP | DOCEF_FILTER_SKIP)))
       DocRefreshTag(doc, *entry);
-    if (type == DOCT_DATA && (entry->de_flags & DOCEF_REFRESH_DATA))
+    if ((type == DOCT_DATA || type == DOCT_CHECK_BOX || type == DOCT_LST) &&
+        (entry->de_flags & DOCEF_REFRESH_DATA))
       DocDataFmt(doc, *reinterpret_cast<CDocEntry *>(entry));
+    if (type == DOCT_CHECK_BOX && entry->tag && StrLen(entry->tag) >= 3)
+      entry->tag[1] = entry->de_flags & DOCEF_CHECKED_COLLAPSED ? 'X' : ' ';
     if (type == DOCT_TREE && entry->tag && StrLen(entry->tag) >= 2) {
       entry->tag[0] = entry->de_flags & DOCEF_CHECKED_COLLAPSED ? '+' : '-';
       auto *child = entry->next;
@@ -430,6 +433,7 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     const bool newline = type == DOCT_NEW_LINE || type == DOCT_SOFT_NEW_LINE;
     auto tab_width = ((x + 8) & ~7) - x;
     if (find_cursor && !(entry->de_flags & DOCEF_NO_CLICK_ON) &&
+        (!(doc.flags & DOCF_FORM) || DocFormEntry(*entry)) &&
         ((entry->de_flags & DOCEF_TAG) || newline || type == DOCT_TAB)) {
       int64_t width = type == DOCT_TAB ? tab_width : len;
       // The screen pass draws visible entries as a range. Its cursor search
@@ -440,6 +444,8 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
         col = 0;
       if (col >= width)
         col = width ? width - 1 : 0;
+      if (col < int64_t(entry->min_col))
+        col = entry->min_col;
       __int128 dx = int64_t(doc.x) - x - col, dy = int64_t(doc.y) - y;
       unsigned __int128 distance = (dx * dx + dy * dy) * 64;
       if (distance <= best_d) {

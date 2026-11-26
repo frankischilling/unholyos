@@ -2,6 +2,19 @@
 
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 
+extern "C" void HomeSetCpp(const char *dirname)
+{
+  auto *abs = DirNameAbs(dirname, *CurrentTask());
+  if (!abs)
+    return;
+  auto *home = StrNew(abs, adam_task->data_heap);
+  Free(abs);
+  if (home) {
+    Free(blkdev.home_dir);
+    blkdev.home_dir = home;
+  }
+}
+
 extern "C" uint64_t CdCpp(const char *name, uint8_t make_dirs)
 {
   if (!name)
