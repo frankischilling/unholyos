@@ -2,16 +2,24 @@
 #include "GrExt.hpp"
 #include "GrGlbls.hpp"
 
+extern "C" void TextPrintCpp(CTask *task,int64_t x,int64_t y,int64_t attr,
+                              const char *fmt,const uint64_t *args)
+{
+  auto *buf=StrPrintJoin(nullptr,fmt,args[0],args+1);
+  if (buf) {
+    TextLenStrCpp(task,x,y,StrLen(buf),uint32_t(attr)<<8,buf);
+    Free(buf);
+  }
+}
+
 extern "C" void TextBorderCpp(CTask *task, int64_t l, int64_t r, int64_t t,
                               int64_t b, uint32_t attr, uint8_t solid)
 {
-  constexpr uint8_t border_chars[]{0,    0,    0xC4, 0xCD, 0xB3, 0xBA, 0xDA,
-                                   0xC9, 0xBF, 0xBB, 0xC0, 0xC8, 0xD9, 0xBC};
   if (!task)
     task = CurrentTask();
   attr <<= 8;
   auto put = [&](int64_t x, int64_t y, unsigned index) {
-    TextCharCpp(task, false, x, y, attr | border_chars[index + (solid != 0)]);
+    TextCharCpp(task,false,x,y,attr|text.border_chars[index+(solid!=0)]);
   };
   const int64_t left = uint64_t(l) - 1, right = uint64_t(r) + 1;
   const int64_t top = uint64_t(t) - 1, bottom = uint64_t(b) + 1;

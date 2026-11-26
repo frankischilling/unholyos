@@ -340,8 +340,8 @@ the wings, and the shaft alone uses the caller's start offset.
 `GrPutChar` and `GrPrint` in `Adam/Gr/GrBitMap.cpp` follow
 `GrBitMap.HC` for clipping, extent recording, collision, XOR, tab
 stops, and `SX` and `SY` offsets. The leading cell keeps the reference's
-preceding-byte read when a glyph is unaligned. Glyphs use the standard
-font data. Runtime font selection remains pending.
+preceding-byte read when a glyph is unaligned. Both raster and screen
+renderers read glyphs through the writable `text.font` pointer.
 
 `PressAKey` in `Kernel/StrB.cpp` prints the blinking prompt and
 reads a nonzero character without echo, as in `StrB.HC`.
@@ -410,8 +410,17 @@ task and schedules the task's end callback before teardown.
 
 `Adam/Gr/GrScrn.cpp` builds the text background and glyph layer in
 `gr.dc2`, then overlays nontransparent pixels from `gr.dc`.
-`Kernel/FontStd.cpp` preserves Terry A. Davis's standard font from
-`Kernel/FontStd.HC`. The bootstrap puts its first status line in
+`Kernel/FontStd.cpp` and `Kernel/FontCyrillic.cpp` preserve Terry A.
+Davis's two 256-glyph fonts from the corresponding HolyC sources.
+`SysGrInit` in `Kernel/KMain.cpp` initializes `CTextGlbls`, the VGA
+aliases, border characters and raw-screen buffer. `CtrlAltF` in
+`Kernel/KeyDev.cpp` exchanges the active and auxiliary fonts. The
+keyboard handler invokes it directly; the general shortcut callback
+registry and raw console rendering remain pending.
+`TextLenAttrStr` in `Adam/Gr/GrTextBase.asm` clips packed character
+and attribute cells. `TextPrint` in `GrTextBase.cpp` formats through
+the native variadic bridge and uses the clipped text-layer writer.
+The bootstrap puts its first status line in
 `gr.text_base`. `GrUpdateScrn` calls `gr.fp_final_scrn_update` on an
 on-top alias of the composite. `WinFinalUpdate` invokes `DrawMs` before
 packing the frame. Cursor callbacks receive their original HolyC stack

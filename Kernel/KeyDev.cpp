@@ -49,3 +49,10 @@ extern "C" void PutCharsCpp(uint64_t chars)
   *dst = 0;
   PutS(text);
 }
+
+void CtrlAltF(int64_t)
+{
+  auto *font=text.font;
+  text.font=text.aux_font;
+  text.aux_font=font;
+}

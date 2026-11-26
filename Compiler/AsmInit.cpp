@@ -763,6 +763,53 @@ static bool CmpKbdData(CHashTable *table)
   return CmpKernelGlobal(table, "kbd", cls, &kbd);
 }
 
+static bool CmpTextData(CHashTable *table)
+{
+  auto *cls=CmpKernelClass(table,"CTextGlbls",sizeof(CTextGlbls));
+  if (!cls)
+    return false;
+  auto *heap=CurrentTask()->data_heap;
+  auto *i64=FindType("I64",table);
+  auto *u8=FindType("U8",table);
+  auto *u64=FindType("U64",table);
+  const struct {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+    size_t count=0;
+  } members[]{
+    {"raw_col",i64,offsetof(CTextGlbls,raw_col)},
+    {"raw_flags",i64,offsetof(CTextGlbls,raw_flags)},
+    {"raw_scrn_image",u8+1,offsetof(CTextGlbls,raw_scrn_image)},
+    {"rows",i64,offsetof(CTextGlbls,rows)},
+    {"cols",i64,offsetof(CTextGlbls,cols)},
+    {"font",u64+1,offsetof(CTextGlbls,font)},
+    {"aux_font",u64+1,offsetof(CTextGlbls,aux_font)},
+    {"vga_alias",u8+1,offsetof(CTextGlbls,vga_alias)},
+    {"vga_text_alias",u8+1,offsetof(CTextGlbls,vga_text_alias)},
+    {"border_chars",u8,offsetof(CTextGlbls,border_chars),16},
+  };
+  for (const auto &member:members) {
+    auto *name=StrNew(member.name,heap);
+    auto *entry=name ? MemberAdd(*cls,name,*member.type,member.offset) : nullptr;
+    if (!entry) {
+      Free(name);
+      return false;
+    }
+    if (member.count) {
+      auto *axis=reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim),heap));
+      if (!axis)
+        return false;
+      axis->cnt=member.count;
+      axis->total_cnt=1;
+      entry->dim.next=axis;
+      entry->dim.total_cnt=member.count;
+      entry->size=member.count*member.type->size;
+    }
+  }
+  return CmpKernelGlobal(table,"text",cls,&text);
+}
+
 static bool CmpMouseData(CHashTable *table)
 {
   auto *i_pt = CmpKernelClass(table, "CD3I64", sizeof(CD3I64));
@@ -1352,6 +1399,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     MenuPtr,
     MenuEntryPtr,
     CtrlPtr,
+    U32Ptr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1375,6 +1423,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CMenu", table) + 1,
       FindType("CMenuEntry", table) + 1,
       FindType("CCtrl", table) + 1,
+      FindType("U32", table) + 1,
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -1512,9 +1561,14 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"TextLenStr", Bool, FF_RET1,
        {{"task", TaskPtr}, {"x", I64}, {"y", I64}, {"len", I64}, {"attr", I64}, {"s", U8Ptr}},
        "_TEXT_LEN_STR"},
+      {"TextLenAttrStr", Bool, FF_RET1,
+       {{"task", TaskPtr}, {"x", I64}, {"y", I64}, {"len", I64}, {"_attr", U32Ptr}},
+       "_TEXT_LEN_ATTR_STR"},
       {"TextLenAttr", Bool, FF_RET1,
        {{"task", TaskPtr}, {"x", I64}, {"y", I64}, {"len", I64}, {"attr", I64}},
        "_TEXT_LEN_ATTR"},
+      {"TextPrint", U0, FF_DOT_DOT_DOT,
+       {{"task", TaskPtr}, {"x", I64}, {"y", I64}, {"attr", I64}, {"fmt", U8Ptr}}},
       {"TextRect", U0, FF_RET1, {{"l", I64}, {"r", I64}, {"t", I64}, {"b", I64}, {"d", I64}}},
       {"TextBorder", U0, FF_RET1,
        {{"task", TaskPtr, true}, {"l", I64}, {"r", I64}, {"t", I64}, {"b", I64},
@@ -1943,6 +1997,7 @@ static bool CmpFillHash(CHashTable *table)
       {"SPT_POLYPT","9"}, {"SPT_LINE","10"}, {"SPT_POLYLINE","11"},
       {"SPT_RECT","12"}, {"SPT_BITMAP","23"}, {"SPT_ARROW","26"},
       {"TEXT_COLS","80"}, {"TEXT_ROWS","60"}, {"TASKf_NONTIMER_RAND","14"},
+      {"FONT_WIDTH","8"}, {"FONT_HEIGHT","8"},
       {"DCF_COMPRESSED","1"}, {"DCF_PALETTE","2"}, {"DCF_NO_TRANSPARENTS","4"},
       {"DCF_TRANSFORMATION","0x100"}, {"DCF_SYMMETRY","0x200"},
       {"DCF_JUST_MIRROR","0x400"}, {"DCF_LOCATE_NEAREST","0x800"},
@@ -2108,7 +2163,7 @@ static bool CmpFillHash(CHashTable *table)
   auto *task = CmpKernelClass(table, "CTask", sizeof(CTask));
   return task && CmpRuntimeData(table) && CmpDateData(table) && CmpDirData(table) &&
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
-         CmpKbdData(table) &&
+         CmpKbdData(table) && CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
          CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
          CmpCtrlData(table, task) && CmpRuntimeHeaders(table);

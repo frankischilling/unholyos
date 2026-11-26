@@ -216,7 +216,7 @@ extern "C" int64_t GrPutCharCpp(CDC *dc, int64_t x, int64_t y, uint8_t ch)
     return 1;
 
   auto color = dc->color.c0;
-  const auto *font = reinterpret_cast<const uint8_t *>(sys_font_std);
+  const auto *font=reinterpret_cast<const uint8_t *>(text.font);
   const auto glyph = FONT_HEIGHT * ch;
   if (color.rop == ROPB_COLLISION) {
     for (auto j = c.h1; j < c.h2; j++) {
