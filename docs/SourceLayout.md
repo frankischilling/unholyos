@@ -323,9 +323,14 @@ updates the document cursor. `Adam/WinMgr.cpp` finds the top visible
 window at the pointer, selects the entry on mouse-down, and draws a
 double-line border while the button is pressed. Releasing a button with
 a left expression sends Space to the document task. `DocPutKey.cpp`, `DocChar.cpp`,
-and `DocRun.cpp` handle numeric commands and the Escape and Shift-Escape
-flags. Right-click routing, callbacks, macros, wrapping, live data and
-sprites, the full editor, and per-task drawing remain pending.
+and `DocRun.cpp` handle numeric commands, the Escape flags, and entry
+and link callbacks. Right-click selection sends Enter to the document
+task. Entry callbacks run with the document unlocked. Live tags in
+`DocRecalc.cpp` receive the locked document, entry, and owning memory
+task. A tag callback that throws falls back to an empty tag during
+that refresh. `DocRecalcLib.cpp` supplies `DocBottom` and the hold-aware
+`DocClear` pass. Macro dispatch, wrapping, data widgets, sprites, the full
+editor, and per-task drawing remain pending.
 
 ## HolyC function pointers
 

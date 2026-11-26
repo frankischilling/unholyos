@@ -66,7 +66,7 @@ static uint8_t DocColor(const CDocEntryBase &entry, uint8_t text)
     case DOCT_SPRITE:
       if (entry.de_flags & DOCEF_LEFT_EXP)
         break;
-      if (entry.de_flags & (1ull << 36))
+      if (entry.de_flags & DOCEF_LINK)
         ink = 4;
       else if (entry.de_flags & DOCEF_LEFT_MACRO)
         ink = 9;
@@ -113,6 +113,72 @@ static void DocScreenCursor(CDoc &doc, const CTask &task)
   }
 }
 
+static void DocRecalcXY(const CDoc &doc, const CTask &task, uint64_t flags,
+                        int64_t len, int64_t margin_right,
+                        const CDocSettings &settings, int32_t &x, int32_t &y,
+                        int32_t &page_line)
+{
+  const int64_t x0 = doc.line_start_col, y0 = doc.top_line_num;
+  const auto width = task.win_width, height = task.win_height;
+  const auto margin_left = settings.left_margin;
+  if (flags & DOCEF_LEFT_X)
+    x = flags & DOCEF_MARGIN_REL_X ? margin_left : x0;
+  else if (flags & DOCEF_RIGHT_X)
+    x = flags & DOCEF_MARGIN_REL_X ? margin_right - (len - 1)
+                                   : width + x0 - len;
+  else if (flags & DOCEF_CENTER_X)
+    x = flags & DOCEF_MARGIN_REL_X
+            ? ((margin_left + margin_right) >> 1) - (len >> 1)
+            : (width + x0 - len) >> 1;
+
+  auto old_y = y;
+  if (flags & DOCEF_PAGE_REL_Y) {
+    if (flags & DOCEF_TOP_Y)
+      y -= page_line;
+    else if (flags & DOCEF_BOTTOM_Y)
+      y += settings.page_len - page_line;
+    else if (flags & DOCEF_CENTER_Y)
+      y += (settings.page_len >> 1) - page_line;
+  } else if (flags & DOCEF_TOP_Y)
+    y = y0;
+  else if (flags & DOCEF_BOTTOM_Y)
+    y = height - 1 + y0;
+  else if (flags & DOCEF_CENTER_Y)
+    y = (height >> 1) + y0;
+
+  if (y != old_y && settings.page_len) {
+    auto line = (int64_t(page_line) + y - old_y) % settings.page_len;
+    page_line = line < 0 ? line + settings.page_len : line;
+  }
+}
+
+static void DocRefreshTag(CDoc &doc, CDocEntryBase &entry)
+{
+  auto &full = reinterpret_cast<CDocEntry &>(entry);
+  auto *heap = MemTaskHeap(doc.mem_task);
+  Free(entry.tag);
+  entry.tag = nullptr;
+  if (entry.de_flags & DOCEF_TAG_CB) {
+    uint64_t result;
+    if (full.tag_cb &&
+        CallHolyC3Checked(full.tag_cb, reinterpret_cast<uintptr_t>(&doc),
+                          reinterpret_cast<uintptr_t>(&entry),
+                          reinterpret_cast<uintptr_t>(doc.mem_task), &result))
+      entry.tag = reinterpret_cast<char *>(result);
+  } else if (full.define_str && doc.win_task) {
+    if (auto *value =
+            HashFind(full.define_str, doc.win_task->hash_table, HTT_DEFINE_STR))
+      entry.tag = StrNew(reinterpret_cast<CHashDefineStr *>(value)->data, heap);
+  }
+  if (!entry.tag)
+    entry.tag = StrNew("", heap);
+  if (doc.cur_entry == &entry) {
+    int64_t len = entry.tag ? StrLen(entry.tag) : 0;
+    if (doc.cur_col >= len)
+      doc.cur_col = len ? len - 1 : 0;
+  }
+}
+
 bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
 {
   if (doc.doc_signature != DOC_SIGNATURE_VAL)
@@ -139,11 +205,13 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
   uint32_t format = 0;
   auto &head = doc.head;
   auto *best_entry = &head;
+  CDocEntryBase *clear_entry = nullptr;
   uint32_t best_col = 0;
   unsigned __int128 best_d = INT64_MAX;
   CDocSettings settings;
   MemCpy(&settings, &doc.settings_head, sizeof(settings));
   int32_t x = 0, y = 0, page_line = 0;
+  int64_t right_margin = task ? task->win_width - 1 : 0;
   doc.min_x = doc.max_x = doc.min_y = doc.max_y = 0;
   for (auto *entry = head.next; entry != &head;) {
     if (entry->Type() == DOCT_CURSOR) {
@@ -161,6 +229,15 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
         break;
     auto type = entry->Type();
     const auto *full = reinterpret_cast<const CDocEntry *>(entry);
+    if ((entry->de_flags & (DOCEF_TAG_CB | DOCEF_DEFINE)) &&
+        !(entry->de_flags & (DOCEF_LST | DOCEF_SKIP | DOCEF_FILTER_SKIP)))
+      DocRefreshTag(doc, *entry);
+    uint32_t len = entry->tag ? StrLen(entry->tag) : 0;
+    constexpr auto position = DOCEF_LEFT_X | DOCEF_CENTER_X | DOCEF_RIGHT_X |
+                              DOCEF_TOP_Y | DOCEF_CENTER_Y | DOCEF_BOTTOM_Y;
+    if (task && (entry->de_flags & position))
+      DocRecalcXY(doc, *task, entry->de_flags, len, right_margin,
+                  settings, x, y, page_line);
     entry->x = x;
     entry->y = y;
     entry->page_line_num = page_line;
@@ -171,7 +248,6 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
         (entry->type & 0xFFFFFF00u) | format |
         ((uint32_t(settings.shifted_x) & 31) << 16) |
         ((uint32_t(settings.shifted_y) & 31) << 21);
-    uint32_t len = entry->tag ? StrLen(entry->tag) : 0;
     entry->max_col = type == DOCT_TEXT ? len
                      : entry->tag      ? entry->min_col + 1
                                        : 0;
@@ -235,6 +311,9 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
       page_line = 0;
     } else if (type == DOCT_TAB) {
       x = (x + 8) & ~7;
+    } else if (type == DOCT_CLEAR &&
+               !(entry->de_flags & (DOCEF_SKIP | DOCEF_FILTER_SKIP))) {
+      clear_entry = entry;
     } else if (type == DOCT_PAGE_LEN && full->attr > 0 &&
                full->attr <= UINT16_MAX) {
       settings.page_len = full->attr;
@@ -242,10 +321,11 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
       settings.left_margin = full->attr;
       x = settings.left_margin + settings.indent;
     } else if (type == DOCT_RIGHT_MARGIN) {
-      settings.right_margin = full->attr;
+      right_margin = full->attr;
+      settings.right_margin = right_margin;
     } else if (type == DOCT_INDENT) {
       settings.indent =
-          full->attr + ((entry->de_flags & (1ull << 20)) ? 0 : settings.indent);
+          full->attr + ((entry->de_flags & DOCEF_LEFT_X) ? 0 : settings.indent);
       x = settings.left_margin + settings.indent;
     } else if (type >= DOCT_FOREGROUND && type <= DOCT_DFT_BACKGROUND) {
       DocSetColor(settings, full->attr, type);
@@ -272,6 +352,10 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     if (y < doc.min_y)
       doc.min_y = y;
     entry = entry->next;
+  }
+  if (clear_entry) {
+    DocDelToEntry(doc, clear_entry, (clear_entry->de_flags & DOCEF_HOLD) != 0);
+    return DocRecalc(doc, recalc_flags);
   }
   head.x = x;
   head.y = y;

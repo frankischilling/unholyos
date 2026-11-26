@@ -46,7 +46,7 @@ static uint64_t DefaultFlags(unsigned type)
   case DOCT_CURSOR_MOVEMENT:
     return DOCEF_LEFT_EXP | DOCEF_RIGHT_EXP;
   case DOCT_LINK:
-    return DOCEF_TAG | (1ull << 36);
+    return DOCEF_TAG | DOCEF_LINK;
   case DOCT_MACRO:
   case DOCT_MENU_VAL:
     return DOCEF_TAG | DOCEF_ESC;

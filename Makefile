@@ -68,7 +68,7 @@ CMP_PROBES := $(addprefix Linux/Fixtures/,CmpProbeRunner.HC CmpProbe.PRJ CmpProb
 	FixedAsm.HC FixedImage.HC AsmBranchProbe.HC AsmBranchImport.HC BuzzFizz.HC \
 	AsmListingProbe.HC AsmListingScope.HC SchedulerProbe.HC JobProbe.HC SoundProbe.HC SoundRecord.HC \
 	KeyboardProbe.HC MsgLoop.HC MouseProbe.HC PaletteProbe.HC DCProbe.HC RasterProbe.HC Lines.HC \
-	ScreenProbe.HC CursorProbe.HC CursorExcept.HC Grid.HC FunctionPtrProbe.HC DocFrame.HC DocButton.HC)
+	ScreenProbe.HC CursorProbe.HC CursorExcept.HC Grid.HC FunctionPtrProbe.HC DocFrame.HC DocButton.HC DocCallback.HC)
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 
 .PHONY: all run test

@@ -500,6 +500,17 @@ test window with the DolDoc lexer enabled. On QEMU 9.2.0 with PC,
 matched pinned TempleOS, including both button outlines. The capture
 comparison covers the text window interior with the pointer area excluded.
 
+## DolDoc callbacks
+
+`make -j4 test BUILD=build/callbacks-gcc` runs `DocCallback.HC` on
+startup and from the guest-built ISO. It checks both mouse activation
+keys, callback arguments and return values, live tag updates and heap
+ownership, hold-aware clearing, and recovery after a callback throws.
+
+Terry A. Davis's original `Demo/DolDoc/CallBack.HC` runs in a separate
+test window with the DolDoc lexer enabled. Both live clock tags update,
+and the demo's `UndoIt` clears the lower clock.
+
 ## PC speaker and recorded sound events
 
 `make -j4 test BUILD=build/pc-speaker` builds

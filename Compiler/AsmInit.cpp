@@ -394,49 +394,132 @@ static bool CmpJobData(CHashTable *table, CHashClass *task)
   return true;
 }
 
-static bool CmpDocData(CHashTable *table)
+static bool CmpKernelCallback(CHashTable *table, CHashClass &record,
+                              const char *member, size_t offset,
+                              CHashClass &result, unsigned argc,
+                              const char *const *names,
+                              CHashClass *const *types)
+{
+  auto *heap = CurrentTask()->data_heap;
+  CPrsDeclarator decl;
+  decl.name = StrNew(member, heap);
+  decl.fun_ptr = PrsFunPtrNew(result, 1, FF_RET1);
+  if (!decl.name || !decl.fun_ptr)
+    return false;
+  auto *storage = FindType("U0", table) + 1;
+  auto *entry = MemberAdd(record, decl.name, *storage, offset);
+  if (!entry)
+    return false;
+  auto &signature = *FunPtrBase(decl.fun_ptr);
+  decl.Bind(*entry);
+  for (unsigned i = 0; i < argc; i++) {
+    auto *name = StrNew(names[i], heap);
+    if (!name || !MemberAdd(signature.cls, name, *types[i], 16 + 8 * i)) {
+      Free(name);
+      return false;
+    }
+    ++signature.arg_cnt;
+  }
+  return true;
+}
+
+static bool CmpDocData(CHashTable *table, CHashClass &task)
 {
   auto *doc = CmpKernelClass(table, "CDoc", sizeof(CDoc));
   auto *entry = CmpKernelClass(table, "CDocEntry", sizeof(CDocEntry));
   if (!doc || !entry)
     return false;
   auto *i32 = FindType("I32", table);
+  auto *i64 = FindType("I64", table);
   auto *u64 = FindType("U64", table);
+  auto *u8ptr = FindType("U8", table) + 1;
   auto *heap = CurrentTask()->data_heap;
   const struct
   {
     const char *name;
-    CHashClass *type;
+    CHashClass *record, *type;
     size_t offset;
   } members[]{
-      {"flags", u64, offsetof(CDoc, flags)},
-      {"top_line_num", i32, offsetof(CDoc, top_line_num)},
-      {"line_start_col", i32, offsetof(CDoc, line_start_col)},
+      {"flags", doc, u64, offsetof(CDoc, flags)},
+      {"locked_flags", doc, u64, offsetof(CDoc, locked_flags)},
+      {"cur_entry", doc, entry + 1, offsetof(CDoc, cur_entry)},
+      {"cur_col", doc, i32, offsetof(CDoc, cur_col)},
+      {"top_line_num", doc, i32, offsetof(CDoc, top_line_num)},
+      {"line_start_col", doc, i32, offsetof(CDoc, line_start_col)},
+      {"win_task", doc, &task + 1, offsetof(CDoc, win_task)},
+      {"mem_task", doc, &task + 1, offsetof(CDoc, mem_task)},
+      {"owning_task", doc, &task + 1, offsetof(CDoc, owning_task)},
+      {"cmd_U8", doc, i64, offsetof(CDoc, cmd_U8)},
+      {"doc_signature", doc, FindType("U32", table),
+       offsetof(CDoc, doc_signature)},
+      {"user_put_data", doc, u8ptr, offsetof(CDoc, user_put_data)},
+      {"de_flags", entry, u64,
+       offsetof(CDocEntry, base) + offsetof(CDocEntryBase, de_flags)},
+      {"tag", entry, u8ptr,
+       offsetof(CDocEntry, base) + offsetof(CDocEntryBase, tag)},
+      {"last", entry, entry + 1,
+       offsetof(CDocEntry, base) + offsetof(CDocEntryBase, last)},
+      {"left_exp", entry, i64, offsetof(CDocEntry, left_exp)},
+      {"right_exp", entry, i64, offsetof(CDocEntry, right_exp)},
   };
   for (const auto &member : members) {
     auto *name = StrNew(member.name, heap);
-    if (!name || !MemberAdd(*doc, name, *member.type, member.offset)) {
+    if (!name ||
+        !MemberAdd(*member.record, name, *member.type, member.offset)) {
       Free(name);
       return false;
     }
   }
+
+  const char *args[]{"doc", "doc_e", "mem_task"};
+  CHashClass *types[]{doc + 1, entry + 1, &task + 1};
+  const char *key_args[]{"doc", "data", "ch", "sc"};
+  CHashClass *key_types[]{doc + 1, u8ptr, i64, i64};
+  return CmpKernelCallback(table, *entry, "left_cb",
+                           offsetof(CDocEntry, left_cb), *i64, 2, args,
+                           types) &&
+         CmpKernelCallback(table, *entry, "right_cb",
+                           offsetof(CDocEntry, right_cb), *i64, 2, args,
+                           types) &&
+         CmpKernelCallback(table, *entry, "tag_cb", offsetof(CDocEntry, tag_cb),
+                           *u8ptr, 3, args, types) &&
+         CmpKernelCallback(table, *doc, "left_click_link",
+                           offsetof(CDoc, left_click_link), *i64, 2, args,
+                           types) &&
+         CmpKernelCallback(table, *doc, "right_click_link",
+                           offsetof(CDoc, right_click_link), *i64, 2, args,
+                           types) &&
+         CmpKernelCallback(table, *doc, "user_put_key",
+                           offsetof(CDoc, user_put_key),
+                           *FindType("Bool", table), 4, key_args, key_types);
+}
+
+static bool CmpDateData(CHashTable *table)
+{
+  auto *date = CmpKernelClass(table, "CDate", sizeof(CDate));
+  if (!date)
+    return false;
+  date->raw_type = RT_I64;
+  date->fwd_class = FindType("I64i", table);
+  auto *heap = CurrentTask()->data_heap;
+  auto *time = StrNew("time", heap);
+  if (!time ||
+      !MemberAdd(*date, time, *FindType("U32", table), offsetof(CDate, time))) {
+    Free(time);
+    return false;
+  }
+  auto *day = StrNew("date", heap);
+  if (!day ||
+      !MemberAdd(*date, day, *FindType("I32", table), offsetof(CDate, date))) {
+    Free(day);
+    return false;
+  }
   return true;
 }
 
-static bool CmpTaskData(CHashTable *table)
+static bool CmpTaskData(CHashTable *table, CHashClass *cls)
 {
   auto *heap = CurrentTask()->data_heap;
-  auto *cls = PrsClassNew();
-  if (!cls)
-    return false;
-  cls->sym.hash.type |= HTF_PUBLIC;
-  cls->sym.hash.str = StrNew("CTask", heap);
-  cls->size = sizeof(CTask);
-  if (!cls->sym.hash.str) {
-    HashDel(&cls->sym.hash);
-    return false;
-  }
-  HashAdd(&cls->sym.hash, table);
   auto *u32 = FindType("U32", table);
   auto *i64 = FindType("I64", table);
   auto *u8 = FindType("U8", table);
@@ -769,28 +852,10 @@ static bool CmpDCData(CHashTable *table)
   };
   const char *args[]{"dc", "x", "y", "closed"};
   CHashClass *types[]{dc + 1, i64, i64, boolean};
-  for (const auto &callback : callbacks) {
-    CPrsDeclarator decl;
-    decl.name = StrNew(callback.name, heap);
-    decl.fun_ptr = PrsFunPtrNew(*u0, 1, FF_RET1);
-    if (!decl.name || !decl.fun_ptr)
+  for (const auto &callback : callbacks)
+    if (!CmpKernelCallback(table, *glbl, callback.name, callback.offset, *u0,
+                           callback.argc, args, types))
       return false;
-    auto *entry = MemberAdd(*glbl, decl.name, u0[1], callback.offset);
-    if (!entry)
-      return false;
-    auto &signature = *FunPtrBase(decl.fun_ptr);
-    decl.Bind(*entry);
-    for (unsigned i = 0; i < callback.argc; i++) {
-      auto *name = StrNew(args[i], heap);
-      auto *arg = name ? MemberAdd(signature.cls, name, *types[i], 16 + 8 * i)
-                       : nullptr;
-      if (!arg) {
-        Free(name);
-        return false;
-      }
-      ++signature.arg_cnt;
-    }
-  }
 
   auto *wm = CmpKernelClass(table, "CWinMgrGlbls", sizeof(CWinMgrGlbls));
   if (!wm)
@@ -841,6 +906,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     U32,
     DocPtr,
     DocEntryPtr,
+    Date,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -854,6 +920,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("I16", table), FindType("U16", table),
       FindType("I32", table), FindType("U32", table),
       FindType("CDoc", table) + 1, FindType("CDocEntry", table) + 1,
+      FindType("CDate", table),
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -874,6 +941,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
   } headers[]{
       {"Print", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
       {"MStrPrint", U8Ptr, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
+      {"StrPrint", U8Ptr, FF_DOT_DOT_DOT, {{"dst", U8Ptr}, {"fmt", U8Ptr}}},
+      {"MAlloc", U8Ptr, FF_RET1, {{"size", I64}, {"mem_task", TaskPtr, true}}, "_MALLOC"},
+      {"Now", Date, FF_RET1, {}},
+      {"throw", U0, FF_RET1, {{"ch", I64, true}, {"no_log", Bool, true}}},
       {"Free", U0, FF_RET1, {{"addr", U8Ptr}}, "_FREE"},
       {"MemCpy", U8Ptr, FF_RET1,
        {{"dst", U8Ptr}, {"src", U8Ptr}, {"cnt", I64}}, "_MEMCPY"},
@@ -936,6 +1007,12 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"DocDel", U0, FF_RET1, {{"doc", DocPtr}}},
       {"DocRecalc", Bool, FF_RET1, {{"doc", DocPtr}, {"recalc_flags", I64, true}}},
       {"DocPutKey", U0, FF_RET1, {{"doc", DocPtr}, {"ch", I64, true}, {"sc", I64, true}}},
+      {"DocLock", Bool, FF_RET1, {{"doc", DocPtr}}},
+      {"DocUnlock", Bool, FF_RET1, {{"doc", DocPtr}}},
+      {"DocBottom", U0, FF_RET1, {{"doc", DocPtr, true}}},
+      {"DocClear", U0, FF_RET1, {{"doc", DocPtr, true}, {"clear_holds", Bool, true}}},
+      {"DocEntryRun", I64, FF_RET1, {{"doc", DocPtr}, {"doc_e", DocEntryPtr},
+                                    {"exited", Bool}, {"_has_action", I64Ptr, true}}},
       {"DocPrint", DocEntryPtr, FF_DOT_DOT_DOT,
        {{"doc", DocPtr, true}, {"fmt", U8Ptr}}},
       {"DrawStdMs", U0, FF_RET1, {{"dc", DCPtr}, {"x", I64}, {"y", I64}}},
@@ -1267,6 +1344,7 @@ static bool CmpFillHash(CHashTable *table)
       {"CH_SHIFT_ESC", "0x1C"},
       {"DOCF_BORDER_DOC", "0x100"},
       {"DOCF_HIDE_CURSOR", "0x800"},
+      {"CDATE_FREQ", "49710"},
       {"DOCF_DONT_HIGHLIGHT_CURSOR", "0x1000"},
       {"DOCF_DONT_SHOW", "0x8000"},
       {"RECALCt_FIND_CURSOR", "1"},
@@ -1342,7 +1420,9 @@ static bool CmpFillHash(CHashTable *table)
     }
     HashAdd(&entry->sym.hash,table);
   }
-  return CmpRuntimeData(table) && CmpDocData(table) && CmpTaskData(table) &&
+  auto *task = CmpKernelClass(table, "CTask", sizeof(CTask));
+  return task && CmpRuntimeData(table) && CmpDateData(table) &&
+         CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
          CmpRuntimeHeaders(table);
