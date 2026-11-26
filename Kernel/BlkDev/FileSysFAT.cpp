@@ -786,6 +786,151 @@ bool FAT32MkDir(CDrv &dv,const char *path,int64_t entry_cnt)
   return FAT32Write(dv,path,nullptr,0,Now(),0,true,entry_cnt);
 }
 
+static bool FAT32StreamDir(CDrv &dv,const char *path,uint64_t &dir,const char *&name)
+{
+  name=path;
+  if (!path || *path!='/') return false;
+  for (auto *p=path;*p;p++)
+    if (*p=='/') name=p+1;
+  return FAT32NameValid(name) && Name2DirClus(dv,path,name-path,dir);
+}
+
+bool FAT32StreamPrepare(CFile &f,const char *path,int64_t cnt)
+{
+  auto &dv=*f.dv;
+  if (!FAT32Writable(dv) || cnt>int64_t(UINT32_MAX/BLK_SIZE)) return false;
+  CMemLock lock(dv.locked_flags);
+  uint64_t dir;
+  const char *name;
+  if (!FAT32StreamDir(dv,path,dir,name)) return false;
+  CRedSeaDirEntry old{},entry{};
+  CFATDirPos pos;
+  bool exists=FAT32FindPos(dv,dir,name,old,pos);
+  if (exists && ((old.attr&(RS_ATTR_DIR|1)) || !FAT32ChainSafe(dv,old.clus,dir)))
+    return false;
+  MemCpy(entry.name,name,StrLen(name)+1);
+  if (cnt>0) {
+    uint64_t count=(uint64_t(cnt)+dv.spc-1)/dv.spc;
+    uint32_t c=FAT32AllocClus(dv,0,count,f.flags&FF_CONTIGUOUS);
+    if (!c) return false;
+    entry.clus=c;
+    entry.size=uint64_t(cnt)*BLK_SIZE;
+    entry.datetime=Now();
+    bool okay=FAT32WriteChain(dv,c,0,nullptr,count*dv.spc*BLK_SIZE);
+    if (okay && exists) {
+      FAT32DirFields(pos.raw,entry,dv);
+      okay=BlkDevWriteBytes(*dv.bd,reinterpret_cast<const uint8_t *>(&pos.raw),
+                            pos.short_pos,sizeof(pos.raw));
+    } else if (okay) okay=FAT32DirNew(dv,dir,entry);
+    if (!okay) {
+      FAT32FreeClus(dv,c);
+      return false;
+    }
+  } else if (exists && !FAT32RemoveEntry(dv,pos)) return false;
+  if (exists && !FAT32FreeClus(dv,old.clus)) return false;
+  MemCpy(&f.de.attr,&entry,sizeof(entry));
+  return true;
+}
+
+bool FAT32StreamCommit(CFile &f,const char *path)
+{
+  auto &dv=*f.dv;
+  if (!FAT32Writable(dv) || f.de.size<0 || uint64_t(f.de.size)>UINT32_MAX ||
+      (f.de.attr&(RS_ATTR_DIR|RS_ATTR_DELETED))) return false;
+  CMemLock lock(dv.locked_flags);
+  uint64_t dir;
+  const char *name;
+  if (!FAT32StreamDir(dv,path,dir,name) ||
+      StrCmpCpp(reinterpret_cast<const uint8_t *>(name),
+                reinterpret_cast<const uint8_t *>(f.de.name)) ||
+      !FAT32ChainSafe(dv,f.de.clus,dir)) return false;
+  CRedSeaDirEntry entry,old{};
+  MemCpy(&entry,&f.de.attr,sizeof(entry));
+  uint64_t count=0;
+  if (entry.size && (!FAT32ChainLength(dv,entry.clus,count) ||
+                      entry.size>count*dv.spc*BLK_SIZE)) return false;
+  CFATDirPos pos;
+  bool exists=FAT32FindPos(dv,dir,name,old,pos);
+  if (f.flags&FF_NEW_FILE)
+    return !exists && FAT32DirNew(dv,dir,entry);
+  if (!exists || (old.attr&(RS_ATTR_DIR|1)) ||
+      (old.clus!=entry.clus && (old.size || (old.clus && old.clus<FAT32_EOC))))
+    return false;
+  FAT32DirFields(pos.raw,entry,dv);
+  return BlkDevWriteBytes(*dv.bd,reinterpret_cast<const uint8_t *>(&pos.raw),
+                          pos.short_pos,sizeof(pos.raw));
+}
+
+// Validate the chain before accessing it. When extending, allocate and zero
+// the entire new tail before attaching it to an existing file.
+bool FAT32StreamEnsure(CFile &f,uint64_t blocks,bool grow)
+{
+  auto &dv=*f.dv;
+  if (blocks>(uint64_t(UINT32_MAX)+!grow*(BLK_SIZE-1))/BLK_SIZE || f.de.clus<0 ||
+      uint64_t(f.de.clus)>0x0FFFFFFF || f.de.size<0) return false;
+  CMemLock lock(dv.locked_flags);
+  uint64_t parent=dv.root_clus;
+  const char *name;
+  if ((f.flags&FF_WRITE) && (!f.de.full_name ||
+      !FAT32StreamDir(dv,f.de.full_name+2,parent,name))) return false;
+  uint64_t need=(blocks+dv.spc-1)/dv.spc,count=0;
+  uint32_t c=f.de.clus,tail=0;
+  if (c && c<FAT32_EOC) {
+    if (!FAT32ChainLength(dv,c,count)) return false;
+    for (uint64_t i=0;i<count;i++) {
+      if (c==dv.root_clus || c==parent) return false;
+      tail=c;
+      if (!FAT32Next(dv,c,c) ||
+          ((f.flags&FF_CONTIGUOUS) && i+1<count && c!=tail+1)) return false;
+    }
+  } else if (f.de.size) return false;
+  if (uint64_t(f.de.size)>count*dv.spc*BLK_SIZE) return false;
+  if (need<=count) return true;
+  if (!grow || (f.flags&FF_CONTIGUOUS) || !FAT32Writable(dv)) return false;
+  c=FAT32AllocClus(dv,0,need-count,false);
+  if (!c) return false;
+  if (!FAT32WriteChain(dv,c,0,nullptr,(need-count)*dv.spc*BLK_SIZE) ||
+      (tail && !FAT32SetLink(dv,tail,c))) {
+    FAT32FreeClus(dv,c);
+    return false;
+  }
+  if (!tail) f.de.clus=c;
+  return true;
+}
+
+bool FAT32StreamCluster(CFile &f,uint64_t index,uint32_t &clus)
+{
+  auto &dv=*f.dv;
+  if (index>=FAT32ClusLimit(dv)) return false;
+  clus=f.de.clus;
+  if (f.file_clus_num>=0 && uint64_t(f.file_clus_num)<=index &&
+      FAT32ValidClus(dv,f.clus)) {
+    index-=f.file_clus_num;
+    clus=f.clus;
+  }
+  while (index--)
+    if (!FAT32Next(dv,clus,clus)) return false;
+  return FAT32ValidClus(dv,clus);
+}
+
+bool FAT32ClusRead(CDrv &dv,uint32_t clus,uint8_t *buf,uint64_t blocks)
+{
+  return FAT32ValidClus(dv,clus) && blocks<=uint64_t(dv.spc) &&
+         BlkDevReadBytes(*dv.bd,buf,FAT32ClusPos(dv,clus),blocks*BLK_SIZE);
+}
+
+bool FAT32ClusWrite(CDrv &dv,uint32_t clus,const uint8_t *buf,uint64_t blocks)
+{
+  return FAT32Writable(dv) && FAT32ValidClus(dv,clus) && blocks<=uint64_t(dv.spc) &&
+         BlkDevWriteBytes(*dv.bd,buf,FAT32ClusPos(dv,clus),blocks*BLK_SIZE);
+}
+
+bool FAT32WriteBlocks(CFile &f,const uint8_t *buf,uint64_t blk,uint64_t cnt)
+{
+  return FAT32Writable(*f.dv) && FAT32StreamEnsure(f,blk+cnt,false) &&
+         FAT32WriteChain(*f.dv,f.de.clus,blk*BLK_SIZE,buf,cnt*BLK_SIZE);
+}
+
 extern "C" void PrintCpp(const char *fmt,int64_t argc,const uint64_t *argv);
 
 int64_t FAT32FilesDel(CDrv &dv,const char *cur_dir,const char *mask,uint64_t flags,

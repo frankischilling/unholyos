@@ -1469,6 +1469,7 @@ void BootProbe()
         BootATAByteReport(*MountedDrive('C'));
       BootFileProgramReport(*adam_task->cur_dv,"/AtaWriteRejectProbe.HC");
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32WriteProbe.HC");
+      BootFileProgramReport(*adam_task->cur_dv,"/Fat32StreamProbe.HC");
     }
     BootFileProgramReport(*adam_task->cur_dv,"/Fat32RejectProbe.HC");
     BootStartupReport(*adam_task->cur_dv);
