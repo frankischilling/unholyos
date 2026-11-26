@@ -2,8 +2,9 @@
 #include "GrExt.hpp"
 #include "GrGlbls.hpp"
 
-bool Line(CDC *dc, int64_t x1, int64_t y1, int64_t z1, int64_t x2, int64_t y2,
-          int64_t z2, GrLinePlotFn fp_plot, int64_t step, int64_t start)
+template<class Plot>
+static bool LineWalk(int64_t x1, int64_t y1, int64_t z1, int64_t x2, int64_t y2,
+                     int64_t z2, Plot plot, int64_t step, int64_t start)
 {
   int64_t dx = static_cast<uint64_t>(x2) - x1,
           dy = static_cast<uint64_t>(y2) - y1;
@@ -39,7 +40,7 @@ bool Line(CDC *dc, int64_t x1, int64_t y1, int64_t z1, int64_t x2, int64_t y2,
     const auto nx = static_cast<int32_t>(fx >> 32);
     const auto ny = static_cast<int32_t>(fy >> 32);
     const auto nz = static_cast<int32_t>(fz >> 32);
-    if ((first || x != nx || y != ny || z != nz) && !fp_plot(dc, nx, ny, nz))
+    if ((first || x != nx || y != ny || z != nz) && !plot(nx, ny, nz))
       return false;
     x = nx;
     y = ny;
@@ -52,7 +53,26 @@ bool Line(CDC *dc, int64_t x1, int64_t y1, int64_t z1, int64_t x2, int64_t y2,
       break;
   }
   return step != 1 || (!first && x == x2 && y == y2 && z == z2) ||
-         fp_plot(dc, x2, y2, z2);
+         plot(x2, y2, z2);
+}
+
+bool Line(CDC *dc, int64_t x1, int64_t y1, int64_t z1, int64_t x2, int64_t y2,
+          int64_t z2, GrLinePlotFn fp_plot, int64_t step, int64_t start)
+{
+  return LineWalk(x1, y1, z1, x2, y2, z2,
+                  [=](int64_t x, int64_t y, int64_t z) {
+                    return fp_plot(dc, x, y, z);
+                  }, step, start);
+}
+
+extern "C" bool LineCpp(uintptr_t aux, int64_t x1, int64_t y1, int64_t z1,
+                        int64_t x2, int64_t y2, int64_t z2, uintptr_t fp_plot,
+                        int64_t step, int64_t start)
+{
+  return LineWalk(x1, y1, z1, x2, y2, z2,
+                  [=](int64_t x, int64_t y, int64_t z) {
+                    return uint8_t(CallHolyC4(fp_plot, aux, x, y, z)) != 0;
+                  }, step, start);
 }
 
 // The arc walkers use a 24-bit rotation and 8-bit point fraction.
@@ -193,6 +213,263 @@ extern "C" bool EllipseCpp(uintptr_t aux, int64_t cx, int64_t cy, int64_t cz,
                     [=](int64_t x, int64_t y, int64_t z) {
                       return uint8_t(CallHolyC4(fp_plot, aux, x, y, z)) != 0;
                     }, rotation, step, start, length);
+}
+
+template<class Plot>
+static bool RegPolyWalk(int64_t cx, int64_t cy, int64_t cz, int64_t xr,
+                        int64_t yr, int64_t sides, Plot plot, uint64_t rotation,
+                        int64_t step, uint64_t start, uint64_t length)
+{
+  if (sides <= 0 || xr <= 0 || yr <= 0)
+    return true;
+  constexpr uint64_t tau = 0x401921FB54442D18;
+  auto angle_step = F64DivBits(tau, F64FromI64(sides));
+  auto n = F64ToI64(F64DivBits(F64MulBits(length, F64FromI64(sides)), tau), 0x0C00);
+  auto s1 = GrArcMul(1 << GR_SCALE1_BITS, F64SinBits(angle_step));
+  auto c = GrArcMul(1 << GR_SCALE1_BITS, F64CosBits(angle_step));
+  auto s12 = GrArcMul(1 << GR_SCALE1_BITS, F64SinBits(rotation));
+  auto c2 = GrArcMul(1 << GR_SCALE1_BITS, F64CosBits(rotation));
+  int64_t x2 = xr, y2 = 0;
+  if (start & (UINT64_MAX >> 1)) {
+    x2 = GrArcMul(xr, F64CosBits(start));
+    y2 = uint64_t(0) - GrArcMul(xr, F64SinBits(start));
+  }
+  x2 = uint64_t(x2) << GR_SCALE2_BITS;
+  y2 = uint64_t(y2) << GR_SCALE2_BITS;
+  auto project = [&](int64_t &x, int64_t &y) {
+    auto sy = int64_t(uint64_t(y2) * yr) / xr;
+    x = uint64_t(cx) + (GrArcRotate(c2, x2, s12, sy) >> GR_SCALE2_BITS);
+    y = uint64_t(cy) + (GrArcRotate(-s12, x2, c2, sy) >> GR_SCALE2_BITS);
+  };
+  int64_t xx1, yy1, xx2, yy2;
+  project(xx1, yy1);
+  for (int64_t i = 0; i < n; i++) {
+    auto x1 = GrArcRotate(c, x2, s1, y2);
+    y2 = GrArcRotate(-s1, x2, c, y2);
+    x2 = x1;
+    project(xx2, yy2);
+    if (!LineWalk(xx1, yy1, cz, xx2, yy2, cz, plot, step, 0))
+      return false;
+    xx1 = xx2;
+    yy1 = yy2;
+  }
+  return true;
+}
+
+bool RegPoly(CDC *dc, int64_t cx, int64_t cy, int64_t cz, int64_t xr,
+             int64_t yr, int64_t sides, GrLinePlotFn fp_plot, uint64_t rotation,
+             int64_t step, uint64_t start, uint64_t length)
+{
+  return RegPolyWalk(cx, cy, cz, xr, yr, sides,
+                     [=](int64_t x, int64_t y, int64_t z) {
+                       return fp_plot(dc, x, y, z);
+                     }, rotation, step, start, length);
+}
+
+extern "C" bool RegPolyCpp(uintptr_t aux, int64_t cx, int64_t cy, int64_t cz,
+                           int64_t xr, int64_t yr, int64_t sides, uintptr_t fp_plot,
+                           uint64_t rotation, int64_t step, uint64_t start,
+                           uint64_t length)
+{
+  return RegPolyWalk(cx, cy, cz, xr, yr, sides,
+                     [=](int64_t x, int64_t y, int64_t z) {
+                       return uint8_t(CallHolyC4(fp_plot, aux, x, y, z)) != 0;
+                     }, rotation, step, start, length);
+}
+
+extern "C" int64_t D3I32DistSqrCpp(const CD3I32 *p1, const CD3I32 *p2)
+{
+  int64_t x = int64_t(p1->x) - p2->x, y = int64_t(p1->y) - p2->y,
+          z = int64_t(p1->z) - p2->z;
+  return uint64_t(x) * x + uint64_t(y) * y + uint64_t(z) * z;
+}
+
+extern "C" uint64_t D3I32DistCpp(const CD3I32 *p1, const CD3I32 *p2)
+{
+  return F64SqrtBits(F64FromI64(D3I32DistSqrCpp(p1, p2)));
+}
+
+extern "C" int64_t D3I32NormSqrCpp(const CD3I32 *p)
+{
+  const CD3I32 origin{};
+  return D3I32DistSqrCpp(p, &origin);
+}
+
+static uint64_t GrF64Sub(uint64_t a, uint64_t b)
+{
+  return F64AddBits(a, b ^ (uint64_t{1} << 63));
+}
+
+template<size_t order, class Plot>
+static bool BezierWalk(const CD3I32 *ctrl, Plot plot, bool first)
+{
+  constexpr uint64_t one = 0x3FF0000000000000, half = 0x3FE0000000000000;
+  constexpr uint64_t grow = 0x3FF199999999999A, shrink = 0x3FECCCCCCCCCCCCD;
+  uint64_t x[order + 1], y[order + 1], z[order + 1];
+  x[0] = F64FromI64(ctrl[0].x);
+  y[0] = F64FromI64(ctrl[0].y);
+  z[0] = F64FromI64(ctrl[0].z);
+  for (size_t i = 1; i <= order; i++) {
+    x[i] = F64FromI64(int64_t(ctrl[i].x) - ctrl[0].x);
+    y[i] = F64FromI64(int64_t(ctrl[i].y) - ctrl[0].y);
+    z[i] = F64FromI64(int64_t(ctrl[i].z) - ctrl[0].z);
+  }
+  // The source accumulates consecutive edges before the closing edge.
+  uint64_t d = D3I32DistCpp(ctrl, ctrl + 1);
+  for (size_t i = 1; i < order; i++)
+    d = F64AddBits(d, D3I32DistCpp(ctrl + i, ctrl + i + 1));
+  d = F64AddBits(d, D3I32DistCpp(ctrl + order, ctrl));
+  auto s = F64DivBits(half, d);
+  int64_t xx = ctrl[0].x, yy = ctrl[0].y, zz = ctrl[0].z;
+  if (first && !plot(xx, yy, zz))
+    return false;
+  for (uint64_t t = 0; t <= one;) {
+    auto nt = GrF64Sub(one, t), tt = F64MulBits(t, t);
+    uint64_t w[order];
+    w[0] = F64MulBits(t, nt);
+    if constexpr (order == 3) {
+      w[0] = F64MulBits(w[0], nt);
+      w[1] = F64MulBits(tt, nt);
+      w[2] = F64MulBits(tt, t);
+    } else
+      w[1] = tt;
+    auto coord = [&](const uint64_t *a) {
+      uint64_t value = a[0];
+      for (size_t i = 0; i < order; i++)
+        value = F64AddBits(value, F64MulBits(a[i + 1], w[i]));
+      return F64ToI64(value, 0x0C00);
+    };
+    auto nx = coord(x), ny = coord(y), nz = coord(z);
+    if (nx == xx && ny == yy && nz == zz)
+      s = F64MulBits(s, grow);
+    else {
+      s = F64MulBits(s, shrink);
+      if (!plot(nx, ny, nz))
+        return false;
+      xx = nx;
+      yy = ny;
+      zz = nz;
+    }
+    auto next = F64AddBits(t, s);
+    if (next <= t)
+      break;
+    t = next;
+  }
+  return (xx == ctrl[order].x && yy == ctrl[order].y && zz == ctrl[order].z) ||
+         plot(ctrl[order].x, ctrl[order].y, ctrl[order].z);
+}
+
+static CD3I32 GrMidPoint(const CD3I32 &a, const CD3I32 &b)
+{
+  return {int32_t((int64_t(a.x) + b.x) / 2),
+          int32_t((int64_t(a.y) + b.y) / 2),
+          int32_t((int64_t(a.z) + b.z) / 2)};
+}
+
+static CD3I32 GrThirdPoint(const CD3I32 &a, const CD3I32 &b, int64_t numerator)
+{
+  auto coord = [=](int64_t x, int64_t y) {
+    auto d = F64MulBits(F64FromI64(y - x), F64FromI64(numerator));
+    return int32_t(F64ToI64(F64AddBits(F64DivBits(d, F64FromI64(3)),
+                                      F64FromI64(x)), 0x0C00));
+  };
+  return {coord(a.x, b.x), coord(a.y, b.y), coord(a.z, b.z)};
+}
+
+template<size_t order, class Plot>
+static bool BSplineWalk(const CD3I32 *ctrl, int64_t cnt, Plot plot, bool closed)
+{
+  if (cnt < 3 || uint64_t(cnt) > (INT64_MAX / sizeof(CD3I32) - 1) / order)
+    return false;
+  int64_t segments = closed ? cnt : cnt - 1;
+  auto *c = reinterpret_cast<CD3I32 *>(MAllocCpp(sizeof(CD3I32) *
+                                                (segments * order + 1), nullptr));
+  if (!c)
+    return false;
+  for (int64_t i = 0; i < segments; i++) {
+    const auto &a = ctrl[i], &b = ctrl[(i + 1) % cnt];
+    if constexpr (order == 2)
+      c[i * order + 1] = GrMidPoint(a, b);
+    else {
+      c[i * order + 1] = GrThirdPoint(a, b, 1);
+      c[i * order + 2] = GrThirdPoint(a, b, 2);
+    }
+  }
+  for (int64_t i = 1; i < segments; i++)
+    c[i * order] = GrMidPoint(c[i * order - 1], c[i * order + 1]);
+  if (closed) {
+    c[0] = GrMidPoint(c[1], c[segments * order - 1]);
+    c[segments * order] = c[0];
+  } else {
+    c[0] = ctrl[0];
+    c[segments * order] = ctrl[cnt - 1];
+  }
+  bool res = true;
+  for (int64_t i = 0; i < segments; i++)
+    if (!BezierWalk<order>(&c[i * order], plot, !i)) {
+      res = false;
+      break;
+    }
+  Free(c);
+  return res;
+}
+
+bool Bezier2(CDC *dc, const CD3I32 *ctrl, GrLinePlotFn fp_plot, bool first)
+{
+  return BezierWalk<2>(ctrl, [=](int64_t x, int64_t y, int64_t z) {
+    return fp_plot(dc, x, y, z);
+  }, first);
+}
+
+bool Bezier3(CDC *dc, const CD3I32 *ctrl, GrLinePlotFn fp_plot, bool first)
+{
+  return BezierWalk<3>(ctrl, [=](int64_t x, int64_t y, int64_t z) {
+    return fp_plot(dc, x, y, z);
+  }, first);
+}
+
+bool BSpline2(CDC *dc, const CD3I32 *ctrl, int64_t cnt, GrLinePlotFn fp_plot, bool closed)
+{
+  return BSplineWalk<2>(ctrl, cnt, [=](int64_t x, int64_t y, int64_t z) {
+    return fp_plot(dc, x, y, z);
+  }, closed);
+}
+
+bool BSpline3(CDC *dc, const CD3I32 *ctrl, int64_t cnt, GrLinePlotFn fp_plot, bool closed)
+{
+  return BSplineWalk<3>(ctrl, cnt, [=](int64_t x, int64_t y, int64_t z) {
+    return fp_plot(dc, x, y, z);
+  }, closed);
+}
+
+extern "C" bool Bezier2Cpp(uintptr_t aux, const CD3I32 *ctrl, uintptr_t fp_plot, bool first)
+{
+  return BezierWalk<2>(ctrl, [=](int64_t x, int64_t y, int64_t z) {
+    return uint8_t(CallHolyC4(fp_plot, aux, x, y, z)) != 0;
+  }, first);
+}
+
+extern "C" bool Bezier3Cpp(uintptr_t aux, const CD3I32 *ctrl, uintptr_t fp_plot, bool first)
+{
+  return BezierWalk<3>(ctrl, [=](int64_t x, int64_t y, int64_t z) {
+    return uint8_t(CallHolyC4(fp_plot, aux, x, y, z)) != 0;
+  }, first);
+}
+
+extern "C" bool BSpline2Cpp(uintptr_t aux, const CD3I32 *ctrl, int64_t cnt,
+                            uintptr_t fp_plot, bool closed)
+{
+  return BSplineWalk<2>(ctrl, cnt, [=](int64_t x, int64_t y, int64_t z) {
+    return uint8_t(CallHolyC4(fp_plot, aux, x, y, z)) != 0;
+  }, closed);
+}
+
+extern "C" bool BSpline3Cpp(uintptr_t aux, const CD3I32 *ctrl, int64_t cnt,
+                            uintptr_t fp_plot, bool closed)
+{
+  return BSplineWalk<3>(ctrl, cnt, [=](int64_t x, int64_t y, int64_t z) {
+    return uint8_t(CallHolyC4(fp_plot, aux, x, y, z)) != 0;
+  }, closed);
 }
 
 extern "C" int64_t *Mat4x4MulMat4x4EquCpp(int64_t *dst, const int64_t *m1,

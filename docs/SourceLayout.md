@@ -251,6 +251,15 @@ bitmap element and terminator, and `DocGR` in `GrDC.cpp` inserts that
 sprite into a document. Invalid geometry and failed allocations return
 without dereferencing a missing buffer.
 
+`GrBitMap.cpp` expands the four screen bitplanes into indexed pixels in
+the same order as `GrBitMap4ToBitMap8` in `GrBitMap.HC`. `DCScrnCapture`
+in `GrDC.cpp` copies either the displayed (possibly zoomed) screen or the
+unzoomed composite. `GrComposites.cpp` carries `GRScrnCaptureWrite` and
+`GRScrnCaptureRead`, including the current VGA palette on write and the
+equivalent raster operation on read. Its HolyC adapter widens the SysV
+Boolean return to preserve the reference's full-register TRUE and FALSE.
+Movie capture and playback remain pending.
+
 `GrInit2` allocates the six screen contexts. The persistent `gr.dc`
 starts transparent with `DCF_SCRN_BITMAP | DCF_ON_TOP`. The context
 holds HolyC ABI addresses for the transform and lighting callbacks.
@@ -271,8 +280,8 @@ blits read a word's source pixels before writing the corresponding
 destination pixels, including when the two contexts share storage.
 The unclipped plot tests depth. Clipped 2D drawing bypasses that depth
 test. Probability dithering uses the task RNG from `Kernel/KMathB.cpp`.
-The HolyC adapters extend narrow RNG returns through RAX. The public
-`Line` callback interface remains pending.
+The HolyC adapters extend narrow RNG returns through RAX. `Line` shares
+the same walker with the typed HolyC callback adapter.
 
 ## Graphics transforms and refresh
 
@@ -352,8 +361,30 @@ the four-argument plot callback rather than an untyped address.
 The 2D variants temporarily bypass the depth buffer. The transformed
 3D variants project the two ellipse axes and restore the transform
 flag after plotting. `F64ArgBits` in `Kernel/KMathA.asm` follows
-the reference `_ARG` x87 instruction sequence. Regular polygons,
-splines and additional sprite elements remain pending.
+the reference `_ARG` x87 instruction sequence.
+
+## Regular polygons and splines
+
+`Adam/Gr/GrMath.cpp` follows `RegPoly`, `Bezier2`, `Bezier3`, `BSpline2`
+and `BSpline3` in `GrMath.HC`. The polygon walks each edge with `Line`.
+The curve walkers keep the reference's adaptive step, coefficient
+expressions, duplicate suppression and endpoint rules. Closed splines
+construct the additional control segment before walking the curves.
+`D3I32Dist`, `D3I32DistSqr` and `D3I32NormSqr` expose their native
+return types through the HolyC ABI. The compiler accepts all twelve
+arguments of `RegPoly` and the typed plot callback.
+
+`Adam/Gr/GrPrimatives.cpp` implements the corresponding 2D and 3D
+device-context wrappers from `GrPrimatives.HC`. `GrLinePlot` sets the
+depth and calls `GrPlot1` before returning TRUE. `GrRegPoly` temporarily
+bypasses the depth buffer; the flat Bezier and spline wrappers retain
+it. The 3D wrappers transform and reflect the control points before
+plotting, and restore the context flags. `GrRegPoly3` shares the
+ellipse-axis projection. `BSpline2` and `BSpline3` release their scratch
+allocation on callback refusal in UnholyOS; the reference returns
+before `Free(c)` on that path. Allocation failure and extreme control
+coordinates have not been compared. Additional sprite elements remain
+pending.
 
 ## Arrows and raster text
 

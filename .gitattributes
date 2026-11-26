@@ -97,6 +97,8 @@ Linux/Fixtures/MatrixProbe.HC text eol=lf
 Linux/Fixtures/PenProbe.HC text eol=lf
 Linux/Fixtures/ArrowProbe.HC text eol=lf
 Linux/Fixtures/ArcProbe.HC text eol=lf
+Linux/Fixtures/SplineProbe.HC text eol=lf
+Demo/Graphics/BSpline.HC -text whitespace=cr-at-eol,-blank-at-eol
 Linux/Fixtures/BreakProbe.HC text eol=lf
 Linux/Fixtures/TaskSettingsProbe.HC text eol=lf
 Linux/Fixtures/Lines.HC -text
@@ -112,6 +114,8 @@ Linux/Fixtures/DocCallback.HC text eol=lf
 Linux/Fixtures/TryProbe.HC text eol=lf
 Linux/Fixtures/Exceptions.HC text eol=lf
 Linux/Fixtures/ScreenProbe.HC text eol=lf
+Linux/Fixtures/CaptureProbe.HC text eol=lf
+Demo/Graphics/ScrnCapture.HC -text whitespace=cr-at-eol,-blank-at-eol
 Linux/Fixtures/CursorProbe.HC text eol=lf
 Linux/Fixtures/CursorExcept.HC text eol=lf
 Linux/Fixtures/MsgLoop.HC -text whitespace=cr-at-eol

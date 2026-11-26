@@ -131,3 +131,29 @@ extern "C" void DrawStdMsCpp(CDC *dc, int64_t x, int64_t y)
   dc->flags &= ~(DCF_TRANSFORMATION | DCF_SYMMETRY);
   GrArrow3Cpp(dc, uint64_t(x) + 8, uint64_t(y) + 8, 0, x, y, 0);
 }
+
+extern "C" bool GRScrnCaptureReadCpp(const char *filename,CDC *dc,
+                                     int64_t x,int64_t y)
+{
+  if (!dc)
+    dc=gr.dc;
+  CDC *dc2=GRReadCpp(filename,nullptr);
+  if (dc2) {
+    dc->color={};
+    GrBlotCpp(dc,x,y,dc2);
+    DCDelCpp(dc2);
+    return true;
+  }
+  return false;
+}
+
+extern "C" int64_t GRScrnCaptureWriteCpp(const char *filename,
+                                         uint8_t include_zoom)
+{
+  CDC *dc=DCScrnCaptureCpp(include_zoom,nullptr);
+  if (!dc)
+    return 0;
+  int64_t size=GRWriteCpp(filename,dc,DCSF_COMPRESSED|DCSF_PALETTE_GET);
+  DCDelCpp(dc);
+  return size;
+}

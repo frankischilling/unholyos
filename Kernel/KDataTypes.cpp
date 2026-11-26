@@ -110,3 +110,47 @@ extern "C" int64_t QueVectU8GetCpp(CQueVectU8 *v, int64_t idx)
   idx = static_cast<int64_t>(uint64_t(idx) - uint64_t(v->min_idx));
   return 0 <= idx && idx < v->total_cnt ? QueVectU8At(v, idx) : 0;
 }
+
+template <typename T> static CFifo<T> *FifoNew(int64_t size, CTask *mem_task)
+{
+  if (size <= 0 || uint64_t(size) > SIZE_MAX / sizeof(T))
+    return nullptr;
+  auto *heap = MemTaskHeap(mem_task);
+  auto *f = reinterpret_cast<CFifo<T> *>(MAlloc(sizeof(CFifo<T>), heap));
+  if (!f)
+    return nullptr;
+  f->buf = reinterpret_cast<T *>(MAlloc(size * sizeof(T), heap));
+  if (!f->buf) {
+    Free(f);
+    return nullptr;
+  }
+  f->mask = size - 1;
+  f->in_ptr = f->out_ptr = 0;
+  return f;
+}
+
+CFifoU8 *FifoU8New(int64_t size, CTask *mem_task)
+{
+  return FifoNew<uint8_t>(size, mem_task);
+}
+
+void FifoU8Del(CFifoU8 *f)
+{
+  if (f) {
+    Free(f->buf);
+    Free(f);
+  }
+}
+
+CFifoI64 *FifoI64New(int64_t size, CTask *mem_task)
+{
+  return FifoNew<int64_t>(size, mem_task);
+}
+
+void FifoI64Del(CFifoI64 *f)
+{
+  if (f) {
+    Free(f->buf);
+    Free(f);
+  }
+}

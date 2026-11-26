@@ -64,6 +64,7 @@ extern "C" CJob *TaskMsgCpp(CTask *srv, CTask *master, int64_t code,
                            int64_t arg1, int64_t arg2, int64_t flags);
 extern "C" void KbdMsService();
 void KbdPoll();
+bool KbdMsInit();
 bool KbdInit();
 bool KbdCmdSend(uint16_t port, uint8_t value);
 bool KbdCmdRead(uint8_t &value, bool auxiliary = false);
@@ -223,6 +224,11 @@ bool LoadDocDefines();
 extern "C" void PutS(const char *text);
 extern "C" void StrCpyCpp(char *dst, const char *src);
 void PutTaskS(CTask &task, const char *text);
+
+CFifoU8 *FifoU8New(int64_t size, CTask *mem_task = nullptr);
+void FifoU8Del(CFifoU8 *f);
+CFifoI64 *FifoI64New(int64_t size, CTask *mem_task = nullptr);
+void FifoI64Del(CFifoI64 *f);
 
 template <typename T> inline int64_t FifoCnt(const CFifo<T> &f)
 {
