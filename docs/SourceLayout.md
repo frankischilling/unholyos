@@ -332,6 +332,19 @@ that refresh. `DocRecalcLib.cpp` supplies `DocBottom` and the hold-aware
 `DocClear` pass. Macro dispatch, wrapping, data widgets, sprites, the full
 editor, and per-task drawing remain pending.
 
+`Adam/DolDoc/DocTerm.cpp` creates the put, display, and border documents
+from `DocTermNew` in `Adam/DolDoc/DocTerm.HC`.
+`DocGet.cpp` follows `DocScanLine` and `DocGetStr2` to read input from the
+edited document. `Kernel/SerialDev/Message.cpp` dispatches `GetStr` and
+`GetS` through DolDoc or the raw keyboard path.
+`Kernel/KTask.cpp` starts `UserCmdLine` and runs the native compiler using
+the line stream from `Compiler/CMisc.cpp` and `Compiler/Lex.cpp`.
+`CmdLinePmt` adds the trailing semicolon used by the reference's lexer
+lookahead. Input skips the original filter and form actions while those
+editor subsystems are pending. `HomeSys.cpp` starts one user task and
+keeps its top border below the boot banner. The terminal uses the
+generic window frame while the reference's border controls are pending.
+
 ## HolyC function pointers
 
 `Compiler/PrsVar.cpp` follows `PrsType` in `Compiler/PrsVar.HC` for

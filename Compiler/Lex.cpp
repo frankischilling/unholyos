@@ -130,6 +130,8 @@ void LexSourceDel(CCmpCtrl &cc)
   Free(const_cast<char *>(cc.cur_str));
   Free(const_cast<char *>(cc.cur_help_idx));
   Free(const_cast<char *>(cc.dollar_buf));
+  Free(cc.pmt_buf);
+  cc.pmt_buf = nullptr;
   cc.dollar_buf = nullptr;
   cc.cur_help_idx = nullptr;
   cc.cur_str = nullptr;
@@ -240,8 +242,19 @@ int64_t LexGetChar(CCmpCtrl &cc)
         if (doc_char != TK_EOF)
           return cc.last_U16 = doc_char;
       }
-      if (!file->next)
-        return cc.last_U16 = TK_EOF;
+      if (!file->next) {
+        if (!(cc.flags & CCF_PMT))
+          return cc.last_U16 = TK_EOF;
+        Free(cc.pmt_buf);
+        cc.pmt_buf = CmdLinePmt();
+        if (!cc.pmt_buf) {
+          cc.flags &= ~CCF_PMT;
+          cc.cur_buf_ptr = file->buf_ptr = file->buf = file->line_start = nullptr;
+          return cc.last_U16 = TK_EOF;
+        }
+        cc.cur_buf_ptr = file->buf_ptr = file->buf = file->line_start = cc.pmt_buf;
+        continue;
+      }
       LexFilePop(cc);
       file = cc.lex_include_stk;
       cc.cur_buf_ptr = file->buf_ptr;

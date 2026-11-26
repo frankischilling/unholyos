@@ -26,6 +26,7 @@ CDoc *DocPut();
 extern "C" CDoc *DocPutCpp(CTask *task);
 extern "C" CDoc *DocDisplayCpp(CTask *task);
 extern "C" CDoc *DocBorderCpp(CTask *task);
+extern "C" void DocTermNewCpp();
 extern "C" CDoc *DocNewCpp(const char *filename, CTask *task);
 extern "C" void DocDelCpp(CDoc *doc);
 extern "C" void DocLoadCpp(CDoc *doc, const uint8_t *src, int64_t size);
@@ -37,11 +38,19 @@ bool DocInsEntry(CDoc &doc, CDocEntryBase &entry);
 bool DocRecalc(CDoc &doc, uint64_t recalc_flags = RECALCt_NORMAL);
 void DocUpdateTaskDocs(CTask *task);
 extern "C" void DocPutKeyCpp(CDoc *doc, int64_t ch, int64_t sc);
+extern "C" int64_t DocGetKeyCpp(int64_t *sc);
+extern "C" char *DocScanLineCpp(CDoc *doc, CDocEntryBase *entry,
+                                int64_t *cur_col, CDocEntryBase **end);
+char *DocGetStr2(int64_t flags);
+void EdCursorLeft(CDoc &doc, int64_t sc);
+void EdCursorRight(CDoc &doc, int64_t sc);
+void EdCharDel(CDoc &doc);
 bool EdCharIns(CDoc &doc, int64_t ch, int64_t sc);
 extern "C" int64_t DocEntryRunCpp(CDoc *doc, CDocEntryBase *entry, uint8_t exited,
                                    int64_t *has_action);
 extern "C" void DocBottomCpp(CDoc *doc);
 void DocDelToEntry(CDoc &doc, CDocEntryBase *clear_entry, bool clear_holds);
+bool DocDelToNum(CDoc &doc, int64_t count);
 CDocEntryBase *DocPutS(CDoc &doc, const char *src, size_t size);
 CDocEntry *PrsDollarCmd(CDoc &doc, const char *text, const char *end);
 void DocBinsValidate(CDoc &doc);

@@ -8,6 +8,7 @@
 #include <csignal>
 #include <fcntl.h>
 #include <iomanip>
+#include <initializer_list>
 #include <iostream>
 #include <map>
 #include <poll.h>
@@ -511,6 +512,19 @@ static std::string StopAtIdle(CMonitor &vm)
   throw std::runtime_error("Kernel did not halt between timer interrupts");
 }
 
+static void WaitUserPrompt(CMonitor &vm)
+{
+  constexpr uint64_t adam = 0x100300, waiting = 0x218;
+  for (unsigned i = 0; i < 120; ++i) {
+    auto user = ReadPhysical<1>(vm, adam + 0x88)[0];
+    if (user != adam && (ReadPhysical<1>(vm, user + 0x18, 'w')[0] & waiting) ==
+                            waiting)
+      return;
+    std::this_thread::sleep_for(20ms);
+  }
+  throw std::runtime_error("The startup terminal did not read its first line");
+}
+
 static void VerifyInterrupts(CMonitor &vm, const std::string &output,
                              const std::string &registers, bool startup)
 {
@@ -837,9 +851,10 @@ static uint64_t VerifyGraphicsContexts(CMonitor &vm, uint64_t graphics,
   Check(z_buf >= 16 &&
             ReadPhysical<2>(vm, z_buf - 16) ==
                 std::array<uint64_t, 2>{owner, 19 * 512 - 24} &&
-            !ReadPhysical<1>(vm, z_buf)[0] &&
-            !ReadPhysical<1>(vm, z_buf + 9592)[0],
-        "Invalid initial window depth buffer");
+            ReadPhysical<1>(vm, z_buf)[0] == 0x0001000100010001 &&
+            ReadPhysical<1>(vm, z_buf + (2 * 80 + 1) * 2, 'h')[0] == 2 &&
+            ReadPhysical<1>(vm, z_buf + 9592)[0] == 0x0001000100010001,
+        "Invalid startup window depth buffer");
   Check(ReadPhysical<1>(vm, graphics + 10480)[0] == 1,
         "Invalid initial graphics zoom");
   constexpr uint64_t flags[] = {0, 0x24000, 0x4000, 0x4000, 0, 0x4000};
@@ -847,8 +862,8 @@ static uint64_t VerifyGraphicsContexts(CMonitor &vm, uint64_t graphics,
   Check(bitmap >= 16 &&
             ReadPhysical<2>(vm, bitmap - 16) ==
                 std::array<uint64_t, 2>{owner, 17 * 512 - 24} &&
-            !ReadPhysical<1>(vm, bitmap)[0],
-        "Invalid initial window coverage bitmap");
+            ReadPhysical<1>(vm, bitmap)[0] == 6,
+        "Invalid startup window coverage bitmap");
   uint64_t used = (19 + 17) * 512 - 48;
   auto text_base = ReadPhysical<1>(vm, graphics + 64)[0];
   auto vga_text_cache = ReadPhysical<1>(vm, graphics + 104)[0];
@@ -911,7 +926,7 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
                         const std::string &output, uint64_t range_bytes,
                         uint64_t symbol_used,
                         const std::vector<CTestE820> &e820, uint64_t idle,
-                        uint64_t graphics, uint64_t winmgr)
+                        uint64_t graphics, uint64_t winmgr, uint64_t user)
 {
   constexpr uint64_t adam = 0x100300, adam_hc = 0x101188, code_pool = 0x1007A8;
   constexpr uint64_t code_base = 0x1000000, page = 512;
@@ -961,6 +976,13 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
             wm_code_hc[0] == expected_data_hc &&
             (wm_heaps[0] != wm_heaps[1]) == bool(pool),
         "Window manager heap has the wrong owner");
+  auto user_heaps = ReadPhysical<2>(vm, user + 0x20);
+  auto user_allocation = ReadPhysical<2>(vm, user - 16);
+  auto user_code_hc = ReadPhysical<2>(vm, user_heaps[0] - 16);
+  Check(user_allocation == std::array<uint64_t, 2>{adam_hc, 3 * page - 24} &&
+            user_code_hc[0] == expected_data_hc &&
+            (user_heaps[0] != user_heaps[1]) == bool(pool),
+        "User task heap has the wrong owner");
   const uint64_t srv = adam + 0x3D8;
   const auto waiting = ReadPhysical<2>(vm, srv);
   Check(waiting[0] > 16 && waiting[0] != srv && waiting[0] == waiting[1],
@@ -975,20 +997,29 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
         "Invalid mouse message allocation");
   const uint64_t graphics_used =
       VerifyGraphicsContexts(vm, graphics, expected_data_hc);
+  // The first terminal lexer loads the shared assembler table into Adam.
+  constexpr uint64_t asm_hash_used = 0x10518;
   const uint64_t boot_used = range_bytes + late_used + symbol_used +
-                             drive_used + allocation[1] + graphics_used;
+                             drive_used + allocation[1] + graphics_used +
+                             asm_hash_used;
   auto code = VerifyHeap(vm, adam_hc, code_pool, adam);
   auto idle_code = VerifyHeap(vm, idle_heaps[0], code_pool, idle);
   auto wm_code = VerifyHeap(vm, wm_heaps[0], code_pool, winmgr);
-  Check(code.used ==
-            0x42840 + fault_used + idle_task[1] + wm_allocation[1] +
-                (pool ? 0x5E8 : boot_used + idle_code_hc[1] + wm_code_hc[1]),
-        "Invalid Adam code heap usage");
+  auto user_code = VerifyHeap(vm, user_heaps[0], code_pool, user);
+  uint64_t code_used =
+      0x42840 + fault_used + idle_task[1] + wm_allocation[1] +
+      user_allocation[1] +
+      (pool ? 0x5E8 : boot_used + idle_code_hc[1] + wm_code_hc[1] +
+                         user_code_hc[1]);
+  if (code.used != code_used)
+    throw std::runtime_error("Adam code heap used " + std::to_string(code.used) +
+                             " bytes, expected " + std::to_string(code_used));
   uint64_t code_bytes = ram_end - heap + limit - code_base;
   Check(ReadPhysical<4>(vm, code_pool) ==
             std::array<uint64_t, 4>{
                 0, code_bytes,
-                code.alloced + idle_code.alloced + wm_code.alloced, code_base},
+                code.alloced + idle_code.alloced + wm_code.alloced +
+                    user_code.alloced, code_base},
         "Invalid code block pool");
   auto high_free = ReadPhysical<3>(vm, code_base);
   auto low_free = ReadPhysical<3>(vm, heap);
@@ -1000,6 +1031,8 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
                      idle_code.ranges.end());
   code.ranges.insert(code.ranges.end(), wm_code.ranges.begin(),
                      wm_code.ranges.end());
+  code.ranges.insert(code.ranges.end(), user_code.ranges.begin(),
+                     user_code.ranges.end());
   code.ranges.emplace_back(heap, heap + (low_free[2] >> 32) * page);
   code.ranges.emplace_back(code_base, code_base + (high_free[2] >> 32) * page);
   VerifyCoverage(std::move(code.ranges), {{heap, ram_end}, {code_base, limit}});
@@ -1011,16 +1044,22 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
     auto idle_data = VerifyHeap(vm, idle_heaps[1], pool, idle);
     auto wm_data_hc = ReadPhysical<2>(vm, wm_heaps[1] - 16);
     auto wm_data = VerifyHeap(vm, wm_heaps[1], pool, winmgr);
+    auto user_data_hc = ReadPhysical<2>(vm, user_heaps[1] - 16);
+    auto user_data = VerifyHeap(vm, user_heaps[1], pool, user);
     Check(data.used == boot_used + idle_code_hc[1] + idle_data_hc[1] +
-                           wm_code_hc[1] + wm_data_hc[1] &&
-              !idle_code.alloced && !wm_code.alloced &&
+                           wm_code_hc[1] + wm_data_hc[1] + user_code_hc[1] +
+                           user_data_hc[1] &&
+              !idle_code.alloced && !wm_code.alloced && !user_code.alloced &&
               idle_data.alloced > 256 * 1024 &&
-              wm_data_hc[0] == expected_data_hc && wm_data.alloced > 256 * 1024,
+              wm_data_hc[0] == expected_data_hc && wm_data.alloced > 256 * 1024 &&
+              user_data_hc[0] == expected_data_hc && user_data.alloced > 256 * 1024,
           "Invalid data heap usage");
     data.ranges.insert(data.ranges.end(), idle_data.ranges.begin(),
                        idle_data.ranges.end());
     data.ranges.insert(data.ranges.end(), wm_data.ranges.begin(),
                        wm_data.ranges.end());
+    data.ranges.insert(data.ranges.end(), user_data.ranges.begin(),
+                       user_data.ranges.end());
     uint64_t prev = 0;
     for (auto [base, end] : data_ranges) {
       auto block = ReadPhysical<3>(vm, base);
@@ -1034,12 +1073,14 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
     Check(ReadPhysical<4>(vm, pool) ==
               std::array<uint64_t, 4>{
                   0, data_bytes,
-                  data.alloced + idle_data.alloced + wm_data.alloced, prev},
+                  data.alloced + idle_data.alloced + wm_data.alloced +
+                      user_data.alloced, prev},
           "Invalid data block pool");
     VerifyCoverage(std::move(data.ranges), data_ranges);
   } else
-    Check(idle_code.alloced > 256 * 1024 && wm_code.alloced > 256 * 1024,
-          "Idle or window manager stack is missing from the code heap");
+    Check(idle_code.alloced > 256 * 1024 && wm_code.alloced > 256 * 1024 &&
+              user_code.alloced > 256 * 1024,
+          "A startup task stack is missing from the code heap");
 
   const std::regex pools(
       R"(heap limit (0x[0-9a-f]+), data pool (0x[0-9a-f]+))");
@@ -1067,12 +1108,19 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
   uint64_t symbol_used =
       VerifyKernelSymbols(vm, top + 0x28, owner, graphics, winmgr_slot);
   uint64_t winmgr = ReadPhysical<1>(vm, winmgr_slot)[0];
+  uint64_t user = ReadPhysical<1>(vm, adam + 0x88)[0];
   Check(winmgr && winmgr != adam && ReadPhysical<1>(vm, winmgr)[0] == winmgr &&
             ReadPhysical<3>(vm, winmgr + 0x78) ==
-                std::array<uint64_t, 3>{adam, adam, adam} &&
+                std::array<uint64_t, 3>{adam, user, adam} &&
             ReadPhysical<1>(vm, adam + 0x80)[0] == winmgr &&
             ReadPhysical<1>(vm, winmgr + 0x1B8)[0] > 0,
         "Missing window manager task or broken task queue");
+  auto docs = ReadPhysical<3>(vm, user + 0x30);
+  Check(user != adam && user != winmgr && ReadPhysical<1>(vm, user)[0] == user &&
+            ReadPhysical<3>(vm, user + 0x78) ==
+                std::array<uint64_t, 3>{adam, adam, winmgr} &&
+            docs[0] && docs[0] == docs[1] && docs[2] && docs[2] != docs[0],
+        "Missing startup terminal task or documents");
   Check(ReadPhysical<1>(vm, fixed, 'h')[0] == 0x37F,
         "Missing initial FPU image");
   auto cpu = ReadPhysical<14>(vm, boot_cpu);
@@ -1087,7 +1135,8 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
             ReadPhysical<3>(vm, idle + 0x78) == std::array<uint64_t, 3>{adam, idle, idle} &&
             ReadPhysical<1>(vm, idle + 0x1A8)[0] == boot_cpu,
         "Invalid idle task record");
-  VerifyPools(vm, heap, ram_end, output, range_bytes, symbol_used, e820, idle, graphics, winmgr);
+  VerifyPools(vm, heap, ram_end, output, range_bytes, symbol_used, e820, idle,
+              graphics, winmgr, user);
 
   constexpr uint64_t task_alloced = 0x44800;
   uint64_t used_block = ram_end - task_alloced;
@@ -1123,11 +1172,16 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
   auto idle_hash = ReadPhysical<1>(vm, idle + 0x3D0)[0];
   Check(ReadPhysical<1>(vm, idle_hash)[0] == hash,
         "Idle task does not inherit Adam's hash table");
-  uint64_t cached = ReadPhysical<1>(vm, owner + 0x98)[0];
-  if (cached)
+  std::vector<uint64_t> slots;
+  for (auto cached = ReadPhysical<1>(vm, owner + 0x98)[0]; cached;) {
     Check(!(cached & 7) &&
-              ReadPhysical<2>(vm, cached) == std::array<uint64_t, 2>{0, 56},
-          "Invalid cached 56-byte heap slot");
+              std::find(slots.begin(), slots.end(), cached) == slots.end(),
+          "Invalid cached 56-byte heap slot chain");
+    auto slot = ReadPhysical<2>(vm, cached);
+    Check(slot[1] == 56, "Invalid cached 56-byte heap slot size");
+    slots.push_back(cached);
+    cached = slot[0];
+  }
 }
 
 static Bytes ReadVGA(const fs::path &path)
@@ -1149,6 +1203,67 @@ static void VerifyVGA(const fs::path &path)
   const auto rgb = ReadVGA(path);
   Check(std::any_of(rgb.begin(), rgb.end(), [](uint8_t byte) { return byte; }),
         "The VGA screenshot is blank");
+}
+
+static void DriveUserTask(CMonitor &vm, const fs::path &dir,
+                          const std::string &boot)
+{
+  std::smatch match;
+  Check(std::regex_search(boot, match, std::regex(R"(text base (0x[0-9a-f]+))")),
+        "Missing boot text layer address");
+  auto addr = std::stoull(match[1].str(), nullptr, 16);
+  auto path = dir / "terminal-text.bin";
+  auto wait_text = [&](std::string_view wanted) {
+    for (unsigned attempt = 0; attempt < 60; ++attempt) {
+      vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+                 std::to_string(addr) + R"(,"size":19200,"filename":")" +
+                 path.string() + R"("}})");
+      auto data = FileRead(path);
+      Check(data.size() == 80 * 60 * 4, "Incomplete terminal text layer");
+      for (size_t y = 0; y < 60; ++y) {
+        std::string line;
+        for (size_t x = 0; x < 80; ++x)
+          line += char(data[(y * 80 + x) * 4]);
+        if (line.find(wanted) != std::string::npos)
+          return;
+      }
+      std::this_thread::sleep_for(20ms);
+    }
+    throw std::runtime_error("Missing terminal text: " + std::string(wanted));
+  };
+  auto key = [&](const char *name) {
+    vm.Hmp("sendkey " + std::string(name) + " 25");
+    std::this_thread::sleep_for(48ms);
+  };
+  auto keys = [&](std::initializer_list<const char *> line) {
+    for (auto *name : line)
+      key(name);
+  };
+
+  wait_text(">");
+  keys({"3", "5", "shift-equal", "8", "backspace", "7", "semicolon", "ret"});
+  wait_text("ans=0x0000002A=42");
+  keys({"6", "shift-8", "ret", "8", "semicolon", "ret"});
+  wait_text("ans=0x00000030=48");
+  keys({"3", "8", "semicolon", "left", "left", "delete", "2", "right", "ret"});
+  wait_text("ans=0x00000020=32");
+  keys({"x", "semicolon", "ret"});
+  wait_text("Syntax Error");
+  keys({"shift-apostrophe", "shift-2", "equal", "shift-5", "s", "backslash",
+        "n", "shift-apostrophe", "comma", "shift-g", "e", "t", "shift-s", "t",
+        "r", "shift-9", "shift-0", "semicolon", "ret"});
+  keys({"a", "b", "backspace", "c", "ret"});
+  wait_text("@=ac");
+
+  constexpr uint64_t adam_last_task = 0x100388;
+  auto user = ReadPhysical<1>(vm, adam_last_task)[0];
+  vm.Hmp("sendkey shift-esc 100");
+  for (unsigned i = 0; i < 60; ++i) {
+    if (ReadPhysical<1>(vm, adam_last_task)[0] != user)
+      return;
+    std::this_thread::sleep_for(20ms);
+  }
+  throw std::runtime_error("Shift+Escape did not close the terminal task");
 }
 
 static fs::path CaptureGuestFile(CMonitor &vm, const fs::path &dir,
@@ -1867,9 +1982,12 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
         std::string::npos)
       throw std::runtime_error("DolDoc callback exception did not propagate");
     CheckProgramOutput(boot, "/ScreenProbe.HC", screen_output, '1');
+    WaitUserPrompt(rebuilt);
     auto registers = StopAtIdle(rebuilt);
     VerifyHandoff(boot, media, registers);
     VerifyBootDrive(rebuilt, boot, media, true, false);
+    rebuilt.Command(R"({"execute":"cont"})");
+    DriveUserTask(rebuilt, reboot, boot);
     rebuilt.Command(R"({"execute":"quit"})");
     fs::copy_file(image, source.parent_path() / "unholyos-guest-built.iso",
                   fs::copy_options::overwrite_existing);
@@ -1902,6 +2020,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       DriveScreen(vm, serial);
     }
     std::string output = vm.Boot(serial);
+    if (!startup)
+      WaitUserPrompt(vm);
     std::string registers = StopAtIdle(vm);
     uint64_t heap = VerifyHandoff(output, media, registers);
     if (!startup)
@@ -2330,6 +2450,11 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                   std::stoull(address[1].str(), nullptr, 16) >= (1ULL << 32),
               "The module's data allocation did not use RAM above 4 GiB");
       }
+    }
+    if (!startup && std::string_view(machine) == "pc" &&
+        std::string_view(memory) == "512" && !secondary_slave) {
+      vm.Command(R"({"execute":"cont"})");
+      DriveUserTask(vm, dir, output);
     }
     vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
                screen.string() + R"("}})");

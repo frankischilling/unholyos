@@ -1,5 +1,8 @@
-#include "KernelB.hpp"
+#include "../Adam/DolDoc/DolDoc.hpp"
 #include "../Compiler/CompilerA.hpp"
+
+extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
+void UserStartUp();
 
 bool CmpCall(CCmpCtrl &cc, const uint8_t *machine, uint64_t &result)
 {
@@ -25,11 +28,17 @@ bool ExeCmdLine(CCmpCtrl &cc, uint64_t &result)
     if (machine) {
       bool okay = true;
       if (!(cc.flags & CCF_JUST_LOAD)) {
+        const auto start = cc.flags & CCF_CMD_LINE ? GetTSC() : 0;
         okay = CmpCall(cc, machine, result);
         if (okay) {
           auto *task = CurrentTask();
           task->answer = static_cast<int64_t>(result);
           task->answer_type = type;
+          if (start && cnts.time_stamp_freq > 0) {
+            auto elapsed = F64DivBits(F64FromI64(GetTSC() - start),
+                                      F64FromI64(cnts.time_stamp_freq));
+            MemCpy(&task->answer_time, &elapsed, sizeof(elapsed));
+          }
           task->new_answer = true;
         }
       }
@@ -42,6 +51,36 @@ bool ExeCmdLine(CCmpCtrl &cc, uint64_t &result)
   if (cc.flags & CCF_JUST_LOAD)
     result = 1;
   return !cc.jit_exception;
+}
+
+static void UserTaskCont()
+{
+  auto *task = CurrentTask();
+  for (;;) {
+    const auto result = ExePutS(nullptr, nullptr, CCF_CMD_LINE | CCF_PMT);
+    if (result.okay)
+      break;
+    auto *doc = DocPut();
+    if (!doc)
+      break;
+    DocUnlock(*doc);
+    DocBottomCpp(doc);
+    if (result.exception) {
+      uint64_t tag = result.exception;
+      PrintCpp("Except:%c\n", 1, &tag);
+    } else
+      PutS("Syntax Error\n");
+    task->new_answer = false;
+  }
+}
+
+extern "C" void UserCmdLineCpp(int64_t)
+{
+  auto *task = CurrentTask();
+  task->win_inhibit = WIF_SELF_KEY_DESC;
+  UserStartUp();
+  if (DocPut())
+    UserTaskCont();
 }
 
 extern "C" [[noreturn]] void SrvTaskContCpp()

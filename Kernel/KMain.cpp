@@ -1486,6 +1486,8 @@ extern "C" void KMainCpp()
   SerialPutHex(PCIReadU32(0, 0, 0, 0));
   SerialPutS(", HPET read ");
   SerialPutHex(cnts.HPET_freq ? HPET() : 0);
+  SerialPutS(", text base ");
+  SerialPutHex(reinterpret_cast<uintptr_t>(gr.text_base));
   SerialPutS("\r\n");
   if (adam_task->cur_dv) {
     BootDVDReport(*adam_task->cur_dv);
@@ -1566,4 +1568,7 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not mount the boot DVD\r\n");
   }
   SerialPutS("UnholyOS: kernel entered in 64-bit mode\r\n");
+  DbgModeCpp(false);
+  if (!StartUpTasks())
+    SerialPutS("UnholyOS: Could not start the user task\r\n");
 }

@@ -23,7 +23,7 @@ extern "C" void PutS(const char *text)
 extern "C" void PutKeyCpp(int64_t ch, int64_t sc)
 {
   auto &task = *CurrentTask();
-  if (!ch || (task.display_flags & DISPLAYF_SILENT))
+  if (task.display_flags & DISPLAYF_SILENT)
     return;
   while ((kbd.scan_code & SCF_SCROLL) && sys_focus_task == &task)
     _YIELD();
@@ -33,6 +33,8 @@ extern "C" void PutKeyCpp(int64_t ch, int64_t sc)
       return;
     }
   }
+  if (!ch)
+    return;
   const char text[]{static_cast<char>(ch), 0};
   PutTaskS(task, text);
 }

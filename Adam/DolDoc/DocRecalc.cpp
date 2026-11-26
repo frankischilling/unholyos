@@ -211,6 +211,7 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
   CDocSettings settings;
   MemCpy(&settings, &doc.settings_head, sizeof(settings));
   int32_t x = 0, y = 0, page_line = 0;
+  int64_t num_entries = 0;
   int64_t right_margin = task ? task->win_width - 1 : 0;
   doc.min_x = doc.max_x = doc.min_y = doc.max_y = 0;
   for (auto *entry = head.next; entry != &head;) {
@@ -227,6 +228,7 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     while (entry->next != &head && SameText(*entry, *entry->next))
       if (!JoinText(doc, *entry, *entry->next))
         break;
+    ++num_entries;
     auto type = entry->Type();
     const auto *full = reinterpret_cast<const CDocEntry *>(entry);
     if ((entry->de_flags & (DOCEF_TAG_CB | DOCEF_DEFINE)) &&
@@ -311,6 +313,8 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
       page_line = 0;
     } else if (type == DOCT_TAB) {
       x = (x + 8) & ~7;
+    } else if (type == DOCT_PMT) {
+      settings.cur_text_attr = (settings.cur_text_attr & 0xF0) | GREEN;
     } else if (type == DOCT_CLEAR &&
                !(entry->de_flags & (DOCEF_SKIP | DOCEF_FILTER_SKIP))) {
       clear_entry = entry;
@@ -357,6 +361,9 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     DocDelToEntry(doc, clear_entry, (clear_entry->de_flags & DOCEF_HOLD) != 0);
     return DocRecalc(doc, recalc_flags);
   }
+  if (screen && num_entries - doc.max_entries > 1024 &&
+      DocDelToNum(doc, num_entries - doc.max_entries))
+    return DocRecalc(doc, recalc_flags);
   head.x = x;
   head.y = y;
   head.page_line_num = page_line;

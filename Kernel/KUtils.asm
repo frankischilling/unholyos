@@ -20,6 +20,7 @@ GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC,DocPutKeyHC
 GLOBAL DocPutHC,DocDisplayHC,DocBorderHC,DocRecalcHC,WinHorzHC,WinVertHC
 GLOBAL DocLockHC,DocUnlockHC,DocEntryRunHC,DocBottomHC,DocClearHC,NowHC
+GLOBAL DocTermNewHC,DocGetKeyHC,DocScanLineHC,GetStrHC,GetSHC,UserCmdLineHC
 GLOBAL TextCharHC,TextLenStrHC,TextLenAttrHC,TextRectHC,TextBorderHC,WinZBufUpdateHC
 GLOBAL RawHC,DbgModeHC,IsDbgModeHC,PutFileLinkHC,PutSrcLinkHC,FixSetHC,AdamErrHC
 GLOBAL tSHC,BusyHC,SleepUntilHC,SleepHC,Ona2FreqHC,Freq2OnaHC,SndHC
@@ -96,6 +97,7 @@ EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp,DocPutKeyCpp
 EXTERN DocPutCpp,DocDisplayCpp,DocBorderCpp,DocRecalcCpp,WinHorzCpp,WinVertCpp
 EXTERN DocLockCpp,DocUnlockCpp,DocEntryRunCpp,DocBottomCpp,DocClearCpp,NowCpp
+EXTERN DocTermNewCpp,DocGetKeyCpp,DocScanLineCpp,GetStrCpp,GetSCpp,UserCmdLineCpp
 EXTERN TextCharCpp,TextLenStrCpp,TextLenAttrCpp,TextRectCpp,TextBorderCpp,WinZBufUpdateCpp
 EXTERN RawCpp,DbgModeCpp,IsDbgModeCpp,PutFileLinkCpp,PutSrcLinkCpp,FixSetCpp,AdamErrCpp
 EXTERN tSCpp,BusyCpp,SleepUntilCpp,SleepCpp,Ona2FreqCpp,Freq2OnaCpp,SndCpp
@@ -200,6 +202,7 @@ HOLYC_CPP PostMsgWaitHC,PostMsgWaitCpp,5
 HOLYC_CPP MsgHC,MsgCpp,4
 HOLYC_CPP JobsHndlrHC,JobsHndlrCpp,2
 HOLYC_CPP SrvTaskContHC,SrvTaskContCpp,0
+HOLYC_CPP UserCmdLineHC,UserCmdLineCpp,1
 HOLYC_CPP ScanMsgHC,ScanMsgCpp,4
 HOLYC_CPP FlushMsgsHC,FlushMsgsCpp,1
 HOLYC_CPP GetMsgHC,GetMsgCpp,4
@@ -375,6 +378,11 @@ HOLYC_CPP DocDisplayHC,DocDisplayCpp,1
 HOLYC_CPP DocBorderHC,DocBorderCpp,1
 HOLYC_CPP DocRecalcHC,DocRecalcCpp,2
 HOLYC_CPP DocPutKeyHC,DocPutKeyCpp,3
+HOLYC_CPP DocTermNewHC,DocTermNewCpp,0
+HOLYC_CPP DocGetKeyHC,DocGetKeyCpp,1
+HOLYC_CPP DocScanLineHC,DocScanLineCpp,4
+HOLYC_CPP GetStrHC,GetStrCpp,3
+HOLYC_CPP GetSHC,GetSCpp,3
 HOLYC_CPP DocLockHC,DocLockCpp,1
 HOLYC_CPP DocUnlockHC,DocUnlockCpp,1
 HOLYC_CPP DocEntryRunHC,DocEntryRunCpp,4
