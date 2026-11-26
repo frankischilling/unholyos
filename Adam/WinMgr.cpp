@@ -415,7 +415,8 @@ static void WinDocMouse(bool left, CWinDocMouse &button)
         if (left ? ms.left_dbl : ms.right_dbl)
           TaskMsgCpp(task, nullptr, MSG_KEY_DOWN, left ? CH_ESC : CH_SHIFT_ESC,
                      0, 0);
-        else if (entry->de_flags & (actions | DOCEF_LINK))
+        else if (entry->de_flags & (actions | DOCEF_LINK |
+                    DOCEF_LST | DOCEF_CHECK_COLLAPSABLE))
           TaskMsgCpp(task, nullptr, MSG_KEY_DOWN, left ? ' ' : '\n', 0, 0);
       }
       break;
