@@ -179,6 +179,7 @@ extern "C" void PaletteSetStdCpp();
 extern "C" CHashDefineStr *DefineLstLoadCpp(const char *name, const char *list,
                                             const uintptr_t *frame);
 bool DefineInitColors();
+bool LoadDocDefines();
 extern "C" void PutS(const char *text);
 void PutTaskS(CTask &task, const char *text);
 

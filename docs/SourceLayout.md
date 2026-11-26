@@ -17,6 +17,7 @@ Preserve the spelling and case of the reference directories and basenames. Use `
 | `Kernel/BlkDev/*.HC` | Corresponding `.cpp` files under `Kernel/BlkDev/` | Block devices, paths, files, and filesystems as implemented |
 | `Compiler/*.HC` | Corresponding `.cpp` files under `Compiler/` | HolyC scanning, parsing, code generation, and execution as implemented |
 | `Adam/DolDoc/*.HC` | Corresponding `.cpp` files under `Adam/DolDoc/` | Native document records and operations as implemented |
+| `Adam/ADefine.HC` | `Adam/ADefine.cpp` | Startup document name definition |
 | `Adam/Opt/Boot/BootDVD.HC` | `Adam/Opt/Boot/BootDVD.asm` | DVD boot loader |
 | `Adam/Opt/Boot/DskISORedSea.HC` | `Adam/Opt/Boot/DskISORedSea.cpp`, `DskISORedSea.asm` | RedSea ISO construction and the guest's stage-one image |
 
@@ -341,13 +342,23 @@ edited document. `Kernel/SerialDev/Message.cpp` dispatches `GetStr` and
 the line stream from `Compiler/CMisc.cpp` and `Compiler/Lex.cpp`.
 `CmdLinePmt` adds the trailing semicolon used by the reference's lexer
 lookahead. Input skips the original filter and form actions while those
-editor subsystems are pending. `HomeSys.cpp` starts two user tasks and
-waits until each reaches its prompt before raising the first and calling
-`WinTileVert`. `Adam/Win.cpp` follows `WinToTop`, `WinFocus`,
+editor subsystems are pending. `HomeSys.cpp` loads the original
+`::/Doc/Start.DD` in `UserStartUp` and waits until each user task
+reaches its prompt before raising the first and calling `WinTileVert`.
+`Adam/ADefine.cpp` supplies the `DD_OS_NAME_VERSION` title definition
+used by the document. `Adam/Win.cpp` follows `WinToTop`, `WinFocus`,
 `WinRefocus`, and the reference tiling functions. The window manager
 restores focus on a refresh after the focused task exits. The terminals
-use generic frames below the boot banner. Startup document loading,
-`XTalk` startup input, and autocomplete remain pending.
+use generic frames below the boot banner. The startup `Dir` listing,
+`XTalk` input, and autocomplete remain pending.
+
+`Adam/DolDoc/DocFile.cpp` follows `DocRead`, `DocInsDoc`, `DocType`
+and `Type`. It reads through the task's file path and inserts copies
+of the parsed entries at the cursor. `DocNew.cpp` duplicates the
+entry-owned strings and attachments. In raw mode `DocPutS.cpp` scans
+the source document into lines for output. Relative resource lookup
+through `DirContextNew`, graphics-file dispatch through `DocGR`,
+word wrapping, and file-link navigation remain pending.
 
 ## HolyC function pointers
 

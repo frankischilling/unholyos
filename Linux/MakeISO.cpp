@@ -38,33 +38,65 @@ static void RedSeaDirEntry(Bytes &disc, size_t offset, std::string_view name,
   WriteLE(disc, offset + 56, DATE, 8);
 }
 
-struct CRootFile
+struct CImageEntry
 {
   std::string name;
   Bytes data;
-  uint16_t attr;
-  size_t clus;
+  uint16_t attr = 0;
+  size_t clus = 0;
+  std::vector<CImageEntry> children;
+
+  size_t Size() const
+  {
+    return attr & RS_ATTR_DIR
+               ? CeilDiv((3 + children.size()) * 64, BLK_SIZE) * BLK_SIZE
+               : data.size();
+  }
 };
 
-static Bytes RedSeaISO(const Bytes &kernel, std::vector<CRootFile> &files,
+static void AssignExtents(std::vector<CImageEntry> &files, size_t &next)
+{
+  for (auto &file : files) {
+    file.clus = next;
+    next += CeilDiv(file.Size(), BLK_SIZE);
+    if (file.attr & RS_ATTR_DIR)
+      AssignExtents(file.children, next);
+  }
+}
+
+static void WriteEntries(Bytes &disc, size_t entry, size_t parent,
+                         const std::vector<CImageEntry> &files)
+{
+  for (const auto &file : files) {
+    auto size = file.Size(), offset = file.clus * BLK_SIZE;
+    RedSeaDirEntry(disc, entry, file.name, file.clus, size, file.attr);
+    if (file.attr & RS_ATTR_DIR) {
+      RedSeaDirEntry(disc, offset, ".", file.clus, size, RS_ATTR_DIR);
+      RedSeaDirEntry(disc, offset + 64, "..", parent, 0, RS_ATTR_DIR);
+      WriteEntries(disc, offset + 128, file.clus, file.children);
+    } else
+      std::copy(file.data.begin(), file.data.end(), disc.begin() + offset);
+    entry += 64;
+  }
+}
+
+static Bytes RedSeaISO(const Bytes &kernel, std::vector<CImageEntry> &files,
                        size_t &root, CDvdExtent &extent)
 {
   // One reserved data block comes before the root directory.
   size_t root_blocks =
       std::max<size_t>(2, CeilDiv((4 + files.size()) * 64, BLK_SIZE));
-  size_t bitmap_blocks = 1, data_area, boot, kernel_clus, total_blocks;
+  size_t bitmap_blocks = 1, data_area, boot, kernel_clus, used_end,
+         total_blocks;
   for (;;) {
     data_area = DRV_OFFSET + bitmap_blocks;
     root = data_area + 1;
     boot = root + root_blocks;
     kernel_clus = boot + 1;
     extent = DvdExtent(kernel_clus, kernel.size());
-    total_blocks = 4 * (extent.lba + extent.sectors);
-    for (auto &file : files) {
-      file.clus = total_blocks;
-      total_blocks += CeilDiv(file.data.size(), BLK_SIZE);
-    }
-    total_blocks = 4 * CeilDiv(total_blocks, 4);
+    used_end = 4 * (extent.lba + extent.sectors);
+    AssignExtents(files, used_end);
+    total_blocks = 4 * CeilDiv(used_end, 4);
     size_t needed = CeilDiv(total_blocks - DRV_OFFSET, BLK_SIZE * 8);
     if (needed == bitmap_blocks)
       break;
@@ -82,11 +114,9 @@ static Bytes RedSeaISO(const Bytes &kernel, std::vector<CRootFile> &files,
   WriteLE(disc, base + 510, 0xAA55, 2);
 
   size_t bitmap = base + BLK_SIZE;
-  size_t used =
-      (files.empty()
-           ? kernel_clus + CeilDiv(kernel.size(), BLK_SIZE)
-           : files.back().clus + CeilDiv(files.back().data.size(), BLK_SIZE)) -
-      data_area;
+  size_t used = (files.empty() ? kernel_clus + CeilDiv(kernel.size(), BLK_SIZE)
+                               : used_end) -
+                data_area;
   for (size_t bit = 0; bit < used; bit++)
     disc[bitmap + bit / 8] |= 1 << (bit % 8);
 
@@ -95,14 +125,7 @@ static Bytes RedSeaISO(const Bytes &kernel, std::vector<CRootFile> &files,
   RedSeaDirEntry(disc, base, ".", root, root_size, RS_ATTR_DIR);
   RedSeaDirEntry(disc, base + 64, "..", root, 0, RS_ATTR_DIR);
   RedSeaDirEntry(disc, base + 128, "0000Boot", boot, BLK_SIZE, RS_ATTR_DIR);
-  size_t entry = base + 192;
-  for (const auto &file : files) {
-    RedSeaDirEntry(disc, entry, file.name, file.clus, file.data.size(),
-                   file.attr);
-    std::copy(file.data.begin(), file.data.end(),
-              disc.begin() + file.clus * BLK_SIZE);
-    entry += 64;
-  }
+  WriteEntries(disc, base + 192, root, files);
   base = boot * BLK_SIZE;
   RedSeaDirEntry(disc, base, "0000Boot", boot, BLK_SIZE, RS_ATTR_DIR);
   RedSeaDirEntry(disc, base + 64, "..", root, 0, RS_ATTR_DIR);
@@ -143,30 +166,60 @@ static void WriteImage(const fs::path &output, const Bytes &disc)
   }
 }
 
-static void AddRootFile(std::vector<CRootFile> &files, std::string name,
-                        const fs::path &path)
+static bool ValidName(std::string_view name)
 {
-  if (name.empty() || name.size() >= 38 || name == "." || name == ".." ||
-      name == "0000Boot" || name.find_first_of("/\\:") != std::string::npos ||
-      std::any_of(files.begin(), files.end(),
-                  [&name](const auto &file) { return file.name == name; }))
-    throw std::runtime_error("Invalid or duplicate RedSea filename " + name);
-  auto bytes = FileRead(path);
-  uint16_t attr = 0;
-  if (name.ends_with(".Z")) {
-    if (bytes.size() < 17 || ReadLE(bytes, 0, 8) != bytes.size() ||
-        bytes[16] < 1 || bytes[16] > 3)
-      throw std::runtime_error("Invalid archive header in " + path.string());
-    attr = RS_ATTR_COMPRESSED;
+  return !name.empty() && name.size() < 38 && name != "." && name != ".." &&
+         name.find_first_of("\\:") == name.npos;
+}
+
+static void AddFile(std::vector<CImageEntry> &root, std::string_view name,
+                    const fs::path &path)
+{
+  if (name.starts_with('/'))
+    name.remove_prefix(1);
+  auto *files = &root;
+  while (true) {
+    auto slash = name.find('/');
+    auto part = name.substr(0, slash);
+    if (!ValidName(part) || (files == &root && part == "0000Boot"))
+      throw std::runtime_error("Invalid RedSea name " + std::string(part));
+    auto found =
+        std::find_if(files->begin(), files->end(),
+                     [part](const auto &file) { return file.name == part; });
+    if (slash == name.npos) {
+      if (found != files->end())
+        throw std::runtime_error("Duplicate RedSea name " + std::string(part));
+      auto bytes = FileRead(path);
+      uint16_t attr = 0;
+      if (part.ends_with(".Z")) {
+        if (bytes.size() < 17 || ReadLE(bytes, 0, 8) != bytes.size() ||
+            bytes[16] < 1 || bytes[16] > 3)
+          throw std::runtime_error("Invalid archive header in " +
+                                   path.string());
+        attr = RS_ATTR_COMPRESSED;
+      }
+      files->push_back({std::string(part), std::move(bytes), attr, 0, {}});
+      return;
+    }
+    if (found == files->end()) {
+      files->push_back({std::string(part), {}, RS_ATTR_DIR, 0, {}});
+      files = &files->back().children;
+    } else {
+      if (!(found->attr & RS_ATTR_DIR))
+        throw std::runtime_error("RedSea parent is a file: " +
+                                 std::string(part));
+      files = &found->children;
+    }
+    name.remove_prefix(slash + 1);
   }
-  files.push_back({std::move(name), std::move(bytes), attr, 0});
 }
 
 int main(int argc, char **argv)
 {
   if (argc < 4) {
     std::cerr << "Usage: " << argv[0]
-              << " loader kernel output.iso [StartOS.HC.Z] [--file path]...\n";
+              << " loader kernel output.iso [StartOS.HC.Z]"
+                 " [--file path | --file-at guest-path path]...\n";
     return 2;
   }
   try {
@@ -183,15 +236,21 @@ int main(int argc, char **argv)
         patch_table >= kernel.size() || kernel.size() % 16)
       throw std::runtime_error("Invalid CBinFile extent");
 
-    std::vector<CRootFile> files;
+    std::vector<CImageEntry> files;
     int arg = 4;
-    if (arg < argc && std::string_view(argv[arg]) != "--file")
-      AddRootFile(files, "StartOS.HC.Z", argv[arg++]);
+    if (arg < argc && !std::string_view(argv[arg]).starts_with("--"))
+      AddFile(files, "StartOS.HC.Z", argv[arg++]);
     while (arg < argc) {
-      if (std::string_view(argv[arg++]) != "--file" || arg == argc)
-        throw std::runtime_error("Expected --file followed by a path");
-      fs::path path = argv[arg++];
-      AddRootFile(files, path.filename().string(), path);
+      std::string_view option = argv[arg++];
+      if (option == "--file" && arg < argc) {
+        fs::path path = argv[arg++];
+        AddFile(files, path.filename().string(), path);
+      } else if (option == "--file-at" && arg + 1 < argc) {
+        std::string_view name = argv[arg++];
+        AddFile(files, name, argv[arg++]);
+      } else
+        throw std::runtime_error(
+            "Expected --file path or --file-at guest-path path");
     }
     size_t root;
     CDvdExtent extent;
