@@ -1,6 +1,7 @@
 #include "../../Kernel/Compress.hpp"
 #include "../../Kernel/KernelB.hpp"
 #include "GrGlbls.hpp"
+#include "Gr.hpp"
 
 extern "C" void DCTransformHC(CDC *dc, int64_t *x, int64_t *y, int64_t *z);
 extern "C" void DCLightingHC(CDC *dc, CD3I32 *p1, CD3I32 *p2, CD3I32 *p3,
@@ -456,4 +457,16 @@ extern "C" CDC *GRReadCpp(const char *filename, CTask *task)
   Free(src);
   Free(st);
   return dc;
+}
+
+extern "C" void DocGRCpp(CDoc *doc,const char *filename)
+{
+  CDC *dc=GRReadCpp(filename,nullptr);
+  if (dc) {
+    uint8_t *elems=DC2SpriteCpp(dc);
+    if (elems)
+      DocSpriteCpp(doc,elems,nullptr);
+    Free(elems);
+    DCDelCpp(dc);
+  }
 }

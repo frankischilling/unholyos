@@ -89,6 +89,7 @@ GLOBAL GrPlotHC,GrPeekHC,GrLineHC,ClipLineHC
 GLOBAL GrFillCircleHC,GrPlot3BHC,GrPlot3HC,GrLine3HC,DCThickScaleHC
 GLOBAL CircleHC,EllipseHC,GrCircleHC,GrEllipseHC,GrCircle3HC,GrEllipse3HC,ArgHC
 GLOBAL SpriteSizeHC,Sprite3HC,Sprite3BHC,DocSpriteHC,SpriteHC
+GLOBAL DC2SpriteHC,DCExtHC,DCDiffHC,DocGRHC
 GLOBAL GrBlot3HC,DCSymmetry3SetHC,DCReflectHC
 GLOBAL GrHLineHC,GrVLineHC,GrFillTri0HC,GrFillPoly3HC,GrRect3HC
 GLOBAL GrBorderHC,GrArrow3HC,GrPutCharHC,GrPrintHC,PressAKeyHC
@@ -124,6 +125,7 @@ EXTERN GrPlotCpp,GrPeekCpp,GrLineCpp,ClipLineCpp
 EXTERN GrFillCircleCpp,GrPlot3BCpp,GrPlot3Cpp,GrLine3Cpp,DCThickScaleCpp
 EXTERN CircleCpp,EllipseCpp,GrCircleCpp,GrEllipseCpp,GrCircle3Cpp,GrEllipse3Cpp,F64ArgBits
 EXTERN SpriteSizeCpp,Sprite3Cpp,Sprite3BCpp,DocSpriteCpp,SpriteCpp
+EXTERN DC2SpriteCpp,DCExtCpp,DCDiffCpp,DocGRCpp
 EXTERN GrBlot3Cpp,DCSymmetry3SetCpp,DCReflectCpp
 EXTERN GrHLineCpp,GrVLineCpp,GrFillTri0Cpp,GrFillPoly3Cpp,GrRect3Cpp
 EXTERN GrBorderCpp,GrArrow3Cpp,GrPutCharCpp,GrPrintCpp,PressAKeyCpp
@@ -346,6 +348,10 @@ HOLYC_CPP GrFillCircleHC,GrFillCircleCpp,5
 HOLYC_CPP GrPlot3BHC,GrPlot3BCpp,4,1
 HOLYC_CPP GrPlot3HC,GrPlot3Cpp,4,1
 HOLYC_CPP SpriteSizeHC,SpriteSizeCpp,1
+HOLYC_CPP DC2SpriteHC,DC2SpriteCpp,1
+HOLYC_CPP DCExtHC,DCExtCpp,6
+HOLYC_CPP DCDiffHC,DCDiffCpp,2
+HOLYC_CPP DocGRHC,DocGRCpp,2
 HOLYC_CPP Sprite3HC,Sprite3Cpp,6
 HOLYC_CPP Sprite3BHC,Sprite3BCpp,5
 HOLYC_CPP GrBlot3HC,GrBlot3Cpp,5

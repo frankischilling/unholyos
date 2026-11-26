@@ -788,6 +788,15 @@ Pinned TempleOS and UnholyOS produced the same 15-line trace with
 QEMU 9.2.0, the PC machine, `qemu64`, and 512 MiB. The 118-byte
 `DCProbe.GR.Z` file matched byte for byte.
 
+`BitmapDiffProbe.HC` checks equal images, a changed rectangle, reversed
+and clipped extraction, the padded-width difference-scan behavior,
+bitmap sprite bytes, transparent replay, and document insertion through
+`DocGR`. The focused boot in UnholyOS and the identical source executed
+in pinned TempleOS both produced `bitmap diff 7F E76D01B74919B2D4`.
+The comparison used QEMU 8.2.2, PC, `qemu64`, and 512 MiB. The boot
+suite checks the same trace at startup and after the guest-built ISO
+boots. This does not verify the remaining sprite editor or movie APIs.
+
 ## 3D bitmap drawing
 
 `Blot3Probe.HC` checks the bitmap contents and context state after
