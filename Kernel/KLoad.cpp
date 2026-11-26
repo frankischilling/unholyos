@@ -162,6 +162,10 @@ void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
 void RawHC(), DbgModeHC(), IsDbgModeHC();
 void tSHC(), BusyHC(), SleepUntilHC(), SleepHC(), Ona2FreqHC(), Freq2OnaHC();
 void SndHC(), ScrnCastHC(), SndRstHC(), BeepHC(), MuteHC(), IsMuteHC();
+void SndShiftHC(), AUWriteHC();
+void SndTaskEndCBHC(), tMHC(), BeatHC(), MusicSetOctaveHC(), MusicSetMeterHC();
+void MusicSetNoteLenHC(), Note2OnaHC(), Ona2NoteHC(), Ona2OctaveHC();
+void PlayHC(), MusicSettingsRstHC();
 }
 
 static bool IsImport(uint8_t type)
@@ -570,6 +574,7 @@ bool LoadKernel(CTask &task)
       {"sys_winmgr_task", reinterpret_cast<uintptr_t>(&sys_winmgr_task)},
       {"sys_focus_task", reinterpret_cast<uintptr_t>(&sys_focus_task)},
       {"scrncast", reinterpret_cast<uintptr_t>(&scrncast)},
+      {"music", reinterpret_cast<uintptr_t>(&music)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
       {"SYS_RUN_LEVEL", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
       {"SYS_VAR_INIT_FLAG", reinterpret_cast<uintptr_t>(&sys_var_init_flag)},
@@ -923,7 +928,20 @@ bool LoadKernel(CTask &task)
       {"Freq2Ona", reinterpret_cast<uintptr_t>(Freq2OnaHC)},
       {"Snd", reinterpret_cast<uintptr_t>(SndHC)},
       {"ScrnCast", reinterpret_cast<uintptr_t>(ScrnCastHC)},
+      {"SndShift", reinterpret_cast<uintptr_t>(SndShiftHC)},
+      {"AUWrite", reinterpret_cast<uintptr_t>(AUWriteHC)},
       {"SndRst", reinterpret_cast<uintptr_t>(SndRstHC)},
+      {"SndTaskEndCB", reinterpret_cast<uintptr_t>(SndTaskEndCBHC)},
+      {"tM", reinterpret_cast<uintptr_t>(tMHC)},
+      {"Beat", reinterpret_cast<uintptr_t>(BeatHC)},
+      {"MusicSetOctave", reinterpret_cast<uintptr_t>(MusicSetOctaveHC)},
+      {"MusicSetMeter", reinterpret_cast<uintptr_t>(MusicSetMeterHC)},
+      {"MusicSetNoteLen", reinterpret_cast<uintptr_t>(MusicSetNoteLenHC)},
+      {"Note2Ona", reinterpret_cast<uintptr_t>(Note2OnaHC)},
+      {"Ona2Note", reinterpret_cast<uintptr_t>(Ona2NoteHC)},
+      {"Ona2Octave", reinterpret_cast<uintptr_t>(Ona2OctaveHC)},
+      {"Play", reinterpret_cast<uintptr_t>(PlayHC)},
+      {"MusicSettingsRst", reinterpret_cast<uintptr_t>(MusicSettingsRstHC)},
       {"Beep", reinterpret_cast<uintptr_t>(BeepHC)},
       {"Mute", reinterpret_cast<uintptr_t>(MuteHC)},
       {"IsMute", reinterpret_cast<uintptr_t>(IsMuteHC)},

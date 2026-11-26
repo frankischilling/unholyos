@@ -49,7 +49,8 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
                                    bool screen_capture = false, bool spline = false,
                                    bool flood_fill = false, bool blot = false,
                                    bool math = false,
-                                   bool sprite_flood = false)
+                                   bool sprite_flood = false,
+                                   bool music_demo = false)
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -180,6 +181,76 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
   };
   wait_text("T:/Home>");
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
+  if (music_demo) {
+    vm.ResetDeadline(180s);
+    cmd("I64 mu1=&scrncast.snd_head,mu2=&scrncast.ona;");
+    cmd("I64 mu3=&music.play_note_num;");
+    cmd(R"("Sound MU %X %X %X\n",mu1,mu2,mu3;)");
+    auto [head, ona, note_num] = addresses("MU ");
+    cmd("ScrnCast(1,1);DocClear(,1);");
+    cmd(R"(ExeFile("::/Demo/Snd/OhGreat.HC");)");
+    wait([&](const Cells &cells) {
+      return visible(cells).find("is a god of love.") != std::string::npos;
+    }, "OhGreat did not play its first line", 600);
+    snapshot("music-playing");
+    // The original checks ScanChar between complete verses, not each note.
+    key("x");
+    wait([&](const Cells &cells) {
+      auto screen = visible(cells);
+      return std::regex_search(screen, std::regex(":/Home> *\\n")) &&
+             screen.find("world isn't always nice.") != std::string::npos;
+    }, "OhGreat did not finish the song after a real key", 2400);
+    Check(ReadPhysical<1>(vm, ona, 'b')[0] == 0,
+          "OhGreat left the speaker playing");
+    Check(ReadPhysical<1>(vm, note_num)[0] == 4,
+          "OhGreat did not finish its last phrase");
+    auto node = ReadPhysical<1>(vm, head)[0];
+    auto previous = head;
+    auto last_time = ReadPhysical<1>(vm, head + 16)[0];
+    Bytes notes;
+    std::set<uint64_t> visited;
+    while (node != head) {
+      Check(node && node < 0x20000000 && visited.insert(node).second &&
+                notes.size() < 512, "Invalid recorded song queue");
+      auto entry = ReadPhysical<3>(vm, node);
+      Check(entry[1] == previous && entry[2] >= last_time,
+            "Broken song queue or timestamps");
+      notes.push_back(ReadPhysical<1>(vm, node + 24, 'b')[0]);
+      previous = node;
+      last_time = entry[2];
+      node = entry[0];
+    }
+    Check(ReadPhysical<1>(vm, head + 8)[0] == previous && !notes.empty(),
+          "OhGreat did not record a complete sound queue");
+    // One complete verse captured from the pinned TempleOS guest.
+    constexpr uint8_t tones[]{
+      79, 77, 75, 74, 75, 77, 79, 70, 68, 67, 68, 70,
+      79, 77, 75, 74, 75, 77, 79, 70, 68, 67, 68, 70,
+      74, 75, 77, 75, 77, 75, 74, 70, 68, 67, 68, 70,
+      79, 77, 75, 74, 75, 77, 79, 70, 68, 67, 68, 70,
+      79, 77, 75, 74, 75, 77, 79, 70, 68, 67, 68, 70,
+      79, 77, 75, 74, 75, 77, 79, 70, 68, 67, 68, 70,
+      74, 75, 77, 75, 77, 75, 74, 70, 68, 67, 68, 70,
+    };
+    Bytes expected{0, 0};
+    for (auto tone : tones) {
+      expected.push_back(tone);
+      expected.push_back(0);
+    }
+    expected.push_back(0);
+    Check(notes == expected, "OhGreat note events differ from the reference");
+    std::cout << "OhGreat events " << notes.size() << ':';
+    for (auto note : notes) std::cout << ' ' << unsigned(note);
+    std::cout << '\n';
+    std::ofstream out(dir / "music-notes.bin", std::ios::binary);
+    out.write(reinterpret_cast<const char *>(notes.data()), notes.size());
+    out.close();
+    snapshot("music-exit");
+    cmd("ScrnCast(0,1);");
+    cmd(R"("Done Music exit %d\n",7*9;)");
+    wait_text("Music exit 63");
+    return;
+  }
   if (blot) {
     cmd(R"("BL %X %X %X\n",gr.dc->body,&Fs->pix_left,&Fs->pix_top;)");
     auto [pixels, left, top] = addresses("BL ");

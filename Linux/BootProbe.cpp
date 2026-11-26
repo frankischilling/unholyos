@@ -1163,6 +1163,12 @@ static void BootSoundReport(const CDrv &dvd, CTask &task)
   }
   Free(fmt);
   scrncast.print_fmt = nullptr;
+  old_debug = DbgModeCpp(false);
+  if (BootFileProgramReport(dvd, "/AUProbe.HC").okay)
+    BootGuestFileReport(*ram, "/AUProbe.AU");
+  if (BootFileProgramReport(dvd, "/MusicProbe.HC").okay)
+    BootGuestFileReport(*ram, "/MusicProbe.AU");
+  DbgModeCpp(old_debug);
 }
 
 static void BootAsmListingReport(const CDrv &dvd, CTask &task)

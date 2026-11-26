@@ -227,8 +227,12 @@ and `CScrnCastGlbls` records in `Kernel/KernelA.hpp` follow
 stack calls to the C++ ABI.
 
 `SleepUntilCpp` sets the idle bit and wake jiffy before yielding to the
-scheduler. The desktop playback in `Adam/ASnd.HC`, the AU writer in
-`Adam/Snd/SndFile.HC`, and video capture remain pending.
+scheduler. `Adam/Gr/ScrnCast.cpp` follows the `SndShift` and `AUWrite`
+functions in `Adam/Gr/ScrnCast.HC`. The compiler exposes the packed
+sound types and the live `scrncast` global. The AU writer includes the
+queue sentinel and stores timestamps as raw CDate values, followed by
+one signed note byte. Music notation playback is described below;
+video capture and the remaining desktop sound APIs are pending.
 
 ## VGA palette
 
@@ -987,6 +991,21 @@ The focused fixture runs through both source execution and a guest-built
 TOSB module; the host driver compares them with the pinned runtime trace.
 Fault delivery for zero divisors and signed division overflow, and
 unmasked floating-point exceptions, remain outside this comparison.
+
+## Music playback
+
+`Adam/ASnd.cpp` follows the note conversion, timing, notation parsing,
+and playback routines in `Adam/ASnd.HC`. `Adam/ASnd.hpp` retains the
+packed `CMusicGlbls` layout, including its seven-entry note map.
+The native compiler exposes those fields and the typed runtime
+functions. Playback uses the existing speaker and scheduler routines.
+The single-CPU implementation protects beat updates with interrupts
+disabled. `Play` also checks the lower bound of the note index before
+accessing `music.note_map`; the reference only checks the upper bound.
+Characters below `A` outside the notation modifiers therefore become
+rests instead of reading outside that array. SMP synchronization,
+`CurSongTask`, the waveform functions, `Noise`, and `Sweep` remain
+pending. Terry A. Davis's original song stays in `Demo/Snd/OhGreat.HC`.
 
 ## Remaining structural work
 
