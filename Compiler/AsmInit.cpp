@@ -674,8 +674,9 @@ static bool CmpDirData(CHashTable *table)
   auto *entry = CmpKernelClass(table, "CDirEntry", sizeof(CDirEntry));
   auto *context = CmpKernelClass(table, "CDirContext", sizeof(CDirContext));
   auto *drive = CmpKernelClass(table, "CDrv", sizeof(CDrv));
+  auto *bd = CmpKernelClass(table, "CBlkDev", sizeof(CBlkDev));
   auto *file = CmpKernelClass(table, "CFile", sizeof(CFile));
-  if (!entry || !context || !drive || !file)
+  if (!entry || !context || !drive || !bd || !file)
     return false;
   auto *heap = CurrentTask()->data_heap;
   auto *i64 = FindType("I64", table);
@@ -706,6 +707,11 @@ static bool CmpDirData(CHashTable *table)
       {"fs_type", drive, FindType("U16", table), offsetof(CDrv, fs_type)},
       {"root_clus", drive, i64, offsetof(CDrv, root_clus)},
       {"size", drive, i64, offsetof(CDrv, size)},
+      {"fat1", drive, i64, offsetof(CDrv, fat1)},
+      {"data_area", drive, i64, offsetof(CDrv, data_area)},
+      {"bd", drive, bd + 1, offsetof(CDrv, bd)},
+      {"flags", bd, FindType("U32", table), offsetof(CBlkDev, flags)},
+      {"RAM_dsk", bd, u8 + 1, offsetof(CBlkDev, RAM_dsk)},
       {"flags", file, i64, offsetof(CFile, flags)},
       {"de", file, entry, offsetof(CFile, de)},
       {"dv", file, drive + 1, offsetof(CFile, dv)},
@@ -1770,6 +1776,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"FilesFind", DirEntryPtr, FF_RET1, {{"files_find_mask", U8Ptr}, {"fuf_flags", I64, true}}},
       {"FileFind", Bool, FF_RET1,
        {{"filename", U8Ptr}, {"_de", DirEntryPtr, true}, {"fuf_flags", I64, true}}},
+      {"FileRead", U8Ptr, FF_RET1,
+       {{"filename", U8Ptr}, {"_size", I64Ptr, true}, {"_attr", I64Ptr, true}}},
+      {"FileWrite", I64, FF_RET1,
+       {{"filename", U8Ptr}, {"fbuf", U8Ptr}, {"size", I64}, {"cdt", Date, true}, {"attr", I64, true}}},
       {"FSize", I64, FF_RET1, {{"f", FilePtr}}},
       {"FOpen", FilePtr, FF_RET1, {{"filename", U8Ptr}, {"flags", U8Ptr}, {"cnt", I64, true}}},
       {"FClose", U0, FF_RET1, {{"f", FilePtr}}},
@@ -1777,6 +1787,15 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"f", FilePtr}, {"buf", U8Ptr}, {"blk", I64, true, FFB_NEXT_BLK}, {"cnt", I64, true, 1}}},
       {"FBlkWrite", Bool, FF_RET1,
        {{"f", FilePtr}, {"buf", U8Ptr}, {"blk", I64, true, FFB_NEXT_BLK}, {"cnt", I64, true, 1}}},
+      {"FileAttr", I64, FF_RET1, {{"name", U8Ptr}, {"old_attr", I64, true}}},
+      {"CopySingle", Bool, FF_RET1, {{"f1", U8Ptr}, {"f2", U8Ptr}}},
+      {"Del", I64, FF_RET1, {{"files_find_mask", U8Ptr}, {"make_mask", Bool, true}, {"del_dir", Bool, true}, {"print_msg", Bool, true, 1}}},
+      {"Copy", Bool, FF_RET1, {{"src_files_find_mask", U8Ptr}, {"dst_files_find_mask", U8Ptr, true, 0, "."}}},
+      {"Move", Bool, FF_RET1, {{"f1", U8Ptr}, {"f2", U8Ptr}}},
+      {"CopyTree", I64, FF_RET1, {{"src_files_find_mask", U8Ptr}, {"dst_files_find_mask", U8Ptr}, {"no_mask", Bool, true, 1}}},
+      {"DelTree", I64, FF_RET1, {{"files_find_mask", U8Ptr}, {"fu_flags", U8Ptr, true}}},
+      {"DirMk", Bool, FF_RET1, {{"filename", U8Ptr}, {"entry_cnt", I64, true}}},
+      {"ScanFlags", U0, FF_RET1, {{"_dst_flags", U8Ptr}, {"lst", U8Ptr}, {"src", U8Ptr}}},
       {"FilesFindMatch", Bool, FF_RET1,
        {{"_test_name", U8Ptr}, {"files_find_mask", U8Ptr}, {"fuf_flags", I64, true}}},
       {"DirEntryDel", U0, FF_RET1, {{"tmpde", DirEntryPtr}}},
@@ -2385,6 +2404,7 @@ static bool CmpFillHash(CHashTable *table)
       {"CDIR_FILENAME_LEN", "38"}, {"CDIR_SIZE", "64"},
       {"BLK_SIZE_BITS", "9"}, {"BLK_SIZE", "512"},
       {"RS_ATTR_DIR", "0x10"}, {"RS_ATTR_DELETED", "0x100"},
+      {"BDF_READ_ONLY", "4"}, {"RS_ATTR_READ_ONLY", "1"},
       {"RS_ATTR_RESIDENT", "0x200"}, {"RS_ATTR_COMPRESSED", "0x400"},
       {"RS_ATTR_CONTIGUOUS", "0x800"},
       {"FFB_NEXT_BLK", "0x7FFFFFFFFFFFFFFF"}, {"FF_WRITE", "1"},

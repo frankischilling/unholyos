@@ -52,6 +52,8 @@ void ExtChgHC(), ExtDftHC();
 void RedSeaISOHC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
 void FSizeHC(), FOpenHC(), FCloseHC(), FBlkReadHC(), FBlkWriteHC();
+void FileAttrHC(), CopySingleHC();
+void DelHC(),CopyHC(),MoveHC(),CopyTreeHC(),DelTreeHC(),DirMkHC(),ScanFlagsHC();
 void BlkReadHC(), BlkWriteHC();
 void SysTryHC(), SysUntryHC(), ThrowHC(), CallerHC(), PutExceptHC(), YorNHC();
 void StrPrintJoinHC(), StrPrintHC(), CatPrintHC(), MStrPrintHC(), PrintHC();
@@ -636,6 +638,15 @@ bool LoadKernel(CTask &task)
       {"FClose", reinterpret_cast<uintptr_t>(FCloseHC)},
       {"FBlkRead", reinterpret_cast<uintptr_t>(FBlkReadHC)},
       {"FBlkWrite", reinterpret_cast<uintptr_t>(FBlkWriteHC)},
+      {"FileAttr", reinterpret_cast<uintptr_t>(FileAttrHC)},
+      {"CopySingle", reinterpret_cast<uintptr_t>(CopySingleHC)},
+      {"Del", reinterpret_cast<uintptr_t>(DelHC)},
+      {"Copy", reinterpret_cast<uintptr_t>(CopyHC)},
+      {"Move", reinterpret_cast<uintptr_t>(MoveHC)},
+      {"CopyTree", reinterpret_cast<uintptr_t>(CopyTreeHC)},
+      {"DelTree", reinterpret_cast<uintptr_t>(DelTreeHC)},
+      {"DirMk", reinterpret_cast<uintptr_t>(DirMkHC)},
+      {"ScanFlags", reinterpret_cast<uintptr_t>(ScanFlagsHC)},
       {"RedSeaISO", reinterpret_cast<uintptr_t>(RedSeaISOHC)},
       {"BlkDevNextFreeSlot", reinterpret_cast<uintptr_t>(BlkDevNextFreeSlotHC)},
       {"BlkDevAdd", reinterpret_cast<uintptr_t>(BlkDevAddHC)},

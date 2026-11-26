@@ -82,6 +82,51 @@ The title uses the runtime `DD_OS_NAME_VERSION` definition, currently
 `UnholyOS`. Help navigation, the directory chooser, border controls,
 menus, autocomplete, and the full editor remain pending.
 
+## Copying RedSea files
+
+`FileCopyProbe.HC` runs with a 2,048-block RAM drive. It checks the
+filename attributes, self-copy rejection, a 65,573-byte copy across the
+64 KiB buffer boundary, compression and expansion on extension changes,
+contiguous files, the exact stored blocks of the DVD's `StartOS.HC.Z`,
+and an empty file. The probe also checks logical sizes and timestamps.
+Both guests printed the same six copy messages and `File copy probe FF`.
+The fixture SHA-256 is
+`29a53bb7019d46f1d6b1c84652b68e1e494005c2d906cf6c18f6c9497388ffed`.
+
+The focused UnholyOS build used `make -j4 BUILD=build/copy-check all
+build/copy-check/unholyos-startup-test.iso`. The focused disc was built with
+the existing `MakeISO` tool, the normal loader and kernel, `StartOS.HC.Z`,
+`FileWriteProbe.BIN`, and `FileCopyProbe.HC`.
+Both `build/copy-check/file-copy-focused.iso` and the pinned TempleOS live
+disc ran under QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512`.
+The reference ran the exact fixture through `ExePutS` after a debugger
+transfer to an allocated buffer; the native boot ran it from the disc.
+The boot suite checks the full output on startup and on the disc built
+in the guest.
+
+## RedSea file and directory operations
+
+`FileOperationsProbe.HC` checks preallocated directories, masked copy and
+move, nested tree copies, masked recursive deletion, complete tree removal,
+and preservation of file bytes and timestamps. It checks both the first
+and last allocated blocks of a deleted file in the RedSea bitmap and
+verifies that a read-only RAM drive retains the original file. The two
+tree copies return 9 and 7, including the directories, and the final
+result is `File operations probe FFF`.
+
+The focused build used `make -j4 BUILD=build/ops-check`; the ISO at
+`build/ops-check/file-operations.iso` used the normal loader and kernel,
+`StartOS.HC.Z`, `FileWriteProbe.BIN`, and the exact source fixture
+(SHA-256 `505323d9de4face5e0c6a6bac2c237a4b1d8242aaf4861b34a0da2c271d6d52d`).
+Both this image and the pinned TempleOS distribution ran with QEMU 8.2.2,
+`-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso> -display none`.
+The pinned guest ran the same source through `ExePutS` after GDB restored
+it into an allocated guest buffer. All 1,102 output bytes, including
+copy and deletion messages, matched. The startup and guest-built disc
+tests check this exact trace. The original account and distribution
+scripts that use these functions also require additional account setup,
+applications, and writable drives; they were not run.
+
 ## Building a RedSea ISO in the guest
 
 `RedSeaISO` takes an output filename, a source directory, and an optional
@@ -613,6 +658,44 @@ file and checks the public records, nested lookup, command arguments,
 and stack restoration. Pinned TempleOS and UnholyOS drew the same
 menu bar, selected and checked entries, and shortcut callout under
 QEMU 9.2.0 with PC, `qemu64`, and 512 MiB.
+
+## Digits
+
+Both boot discs include Terry A. Davis's unchanged
+[Demo/Games/Digits.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Games/Digits.HC)
+(1,933 bytes, SHA-256
+`d6b6901052ca2bdb6aa92d2c9cd49250bfbf7bb426775dd8c9848c616fd5ba45`).
+Run `ExeFile("::/Demo/Games/Digits.HC");` in the HolyC terminal.
+Press a key to start, memorize the colored digits, and enter them after
+the next prompt. A wrong answer reveals the pattern and score. Escape
+or Shift-Escape returns to the terminal.
+
+With `Seed(12345)` and the same QEMU 8.2.2 PC, `qemu64`, and 512 MiB
+settings, both guests displayed `4`, advanced to `40` after a correct
+answer, showed score 2 and the correct pattern after entering `41`, and
+restarted with `9`. The introduction wraps at the same word boundary.
+All 328 compared nonblank character and color-attribute cells matched
+across the introduction, patterns, guesses, score, restart, and restored
+prompt. The comparison excludes timing-dependent output, cursors, and
+the reference's separate autocomplete window. UnholyOS also passed
+Shift-Escape at the introduction. The two beeps run through the existing
+speaker implementation; their audio was not compared in this test.
+
+The focused check builds and boots the standard disc using:
+
+```sh
+make -j4 BUILD=build/digits-check
+make BUILD=build/digits-check build/digits-check/Linux/TestBoot
+build/digits-check/Linux/TestBoot --digits qemu-system-x86_64 \
+  build/digits-check/unholyos.iso build/digits-check/native
+```
+
+The QEMU driver sends keyboard input and captures the 80×60 text layer
+at each game phase. The same check runs in the startup and guest-built
+ISO suite. The reference run used the pinned distribution disc and
+`-machine pc -cpu qemu64 -m 512 -boot d -cdrom <reference.iso> -display
+none`; QEMU's monitor captured the corresponding text layer after the
+same input sequence.
 
 ## Arrows, raster text, and the common ancestor demo
 

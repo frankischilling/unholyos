@@ -538,7 +538,16 @@ directory afterward. `DocPlain.cpp` and `DocBin.cpp` resolve
 `DOCEF_BIN_PTR_LINK` by attachment number or tag. A cyclic link produces
 an error entry. Saving preserves the `BP` reference and omits the
 external binary from the appended data. Graphics-file dispatch through
-`DocGR`, word wrapping, and file-link navigation remain pending.
+`DocGR` and file-link navigation remain pending.
+
+`Adam/DolDoc/DocRecalc.cpp` follows `DocWordWrapDel`, `DocSplitTag`, and
+`DocWordWrapAdd` in `DocRecalc.HC` for ordinary editable text. `$WW,1$`
+enables word wrapping. Text splits at the preceding space when one is
+available within the reference's search range, and the inserted soft
+newline is omitted from serialization. A change in window bounds or
+cursor position permits rejoining the fragments before reflow. Complex
+tag editing and the complete DolDoc wrapping and highlighting rules
+remain pending.
 
 `Compiler/PrsExp.cpp` handles `TK_INS_BIN` as in `PrsExp.HC`. It retains
 the attachment's exact byte length in the generated image and gives
@@ -596,6 +605,40 @@ preallocation preserves the previous file rather than deleting it first.
 Close checks that changes to size stay within the allocated block count
 and that the entry still refers to the same file. FAT32, noncontiguous
 streams, dirty cluster buffers, and ATA writes remain pending.
+
+`Kernel/BlkDev/DskCopy.cpp` follows `CopySingleZ` and `CopySingle` in
+`DskCopy.HC`. Equal filename attributes select the raw block-stream path
+with a 128-block buffer. Attribute changes select `FileRead` and `FileWrite`
+to expand or encode data. Both paths preserve the source timestamp; the
+stream path also preserves the logical file size and attributes. `FileAttr`
+is in `DskStrA.cpp`, and native HolyC receives the typed `FileRead`,
+`FileWrite`, `FileAttr`, and `CopySingle` signatures.
+
+The current copy path checks block I/O return values that the reference
+ignores. It can leave a partially written destination on failure and does
+not guarantee transactional replacement. General error diagnostics and
+resident-cache coherence for raw stream writes remain pending.
+
+`Del` in `DskCopy.cpp` resolves a directory context and calls
+`RedSeaFilesDel` in `FileSysRedSea.cpp`. The latter marks matching directory
+entries deleted and releases their contiguous extents in the allocation
+bitmap. It excludes dot names, counts files only, and deletes directories
+only when requested. `DirMk` in `DskDirB.cpp` supports preallocating directory
+blocks for a specified entry count. As in TempleOS, `Del` on a nonempty
+directory with `del_dir` set is not a recursive deletion; use `DelTree`
+to reclaim the descendant extents as well.
+
+`Adam/ABlkDev/ADskA.cpp` follows `ADskA.HC` for `Copy`, `Move`, `CopyTree`,
+and `DelTree`. It traverses the actual `FilesFind` lists, preserves their
+ordering, and builds target paths from the directory context. `CopyTree2`
+counts one for each visited directory, including the destination root, as
+the reference does despite its files-only API comment. A same-drive
+destination inside the resolved source directory is rejected. `ScanFlags`
+in `Kernel/StrB.cpp` uses the file utility flag list from `KDefine.cpp`.
+Read-only devices are refused before mutation. Writable RAM RedSea is the
+implemented destination; ATA and FAT32 changes are pending. Error paths,
+resident-cache deletion behavior, and restoring a deleted current
+directory are not yet fully matched to TempleOS.
 
 ## HolyC function pointers
 

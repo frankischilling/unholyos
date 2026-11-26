@@ -24,7 +24,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Kernel/PCIBIOS.cpp Kernel/Mem/MemPag.cpp Kernel/Mem/MAllocFree.cpp \
 	Kernel/Mem/BlkPool.cpp Kernel/Mem/HeapCtrl.cpp Kernel/Mem/MemPhysical.cpp Kernel/Mem/PageTables.cpp \
 	Kernel/BlkDev/DskATA.cpp Kernel/BlkDev/DskATAId.cpp Kernel/BlkDev/DskAddDev.cpp \
-	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp \
+	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
 	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/Compress.cpp \
 	Compiler/CMain.cpp Compiler/Asm.cpp Compiler/AsmResolve.cpp Compiler/AsmLib.cpp Compiler/CHash.cpp Compiler/CExcept.cpp Compiler/CMisc.cpp Compiler/Lex.cpp Compiler/LexLib.cpp Compiler/AsmInit.cpp Compiler/PrsLib.cpp \
 	Compiler/PrsExp.cpp Compiler/PrsStmt.cpp Compiler/PrsVar.cpp Compiler/OptLib.cpp Compiler/BackC.cpp \
@@ -35,7 +35,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp \
 	Adam/DolDoc/DocChar.cpp Adam/DolDoc/DocPutKey.cpp Adam/DolDoc/DocRun.cpp \
 	Adam/DolDoc/DocGet.cpp Adam/DolDoc/DocForm.cpp Adam/DolDoc/DocTerm.cpp HomeSys.cpp \
-	Adam/Opt/Boot/DskISORedSea.cpp
+	Adam/ABlkDev/ADskA.cpp Adam/Opt/Boot/DskISORedSea.cpp
 GUEST_TEST_SRC := Linux/BootProbe.cpp
 ASM_OBJ := $(ASM_SRC:%.asm=$(BUILD)/%.asm.o)
 CXX_OBJ := $(CXX_SRC:%.cpp=$(BUILD)/%.o) $(GUEST_TEST_SRC:%.cpp=$(BUILD)/%.o)
@@ -72,10 +72,11 @@ CMP_PROBES := $(addprefix Linux/Fixtures/,CmpProbeRunner.HC CmpProbe.PRJ CmpProb
 	FixedAsm.HC FixedImage.HC AsmBranchProbe.HC AsmBranchImport.HC BuzzFizz.HC \
 	AsmListingProbe.HC AsmListingScope.HC SchedulerProbe.HC JobProbe.HC SoundProbe.HC SoundRecord.HC \
 	KeyboardProbe.HC MsgLoop.HC MouseProbe.HC PaletteProbe.HC DCProbe.HC RasterProbe.HC Blot3Probe.HC DepthSpansProbe.HC MatrixProbe.HC PenProbe.HC ArrowProbe.HC TaskSettingsProbe.HC WinScrollProbe.HC ScrollControlsProbe.HC DocRefreshProbe.HC ViewAnglesProbe.HC MenuProbe.HC MenuProbe.DD Lines.HC \
-	ScreenProbe.HC FontTextProbe.HC PromptProbe.HC DateOffsetProbe.HC CursorProbe.HC CursorExcept.HC Grid.HC FunctionPtrProbe.HC VariadicProbe.HC VariadicPtrProbe.HC DocFrame.HC DocButton.HC DocCallback.HC TryProbe.HC Exceptions.HC DirectoryProbe.HC DirContextProbe.HC FileStreamProbe.HC DocBinLinkProbe.HC SpriteProbe.HC MemberMetaProbe.HC LastClassProbe.HC)
+	ScreenProbe.HC FontTextProbe.HC PromptProbe.HC DateOffsetProbe.HC CursorProbe.HC CursorExcept.HC Grid.HC FunctionPtrProbe.HC VariadicProbe.HC VariadicPtrProbe.HC DocFrame.HC DocButton.HC DocCallback.HC TryProbe.HC Exceptions.HC DirectoryProbe.HC DirContextProbe.HC FileStreamProbe.HC FileCopyProbe.HC FileOperationsProbe.HC DocBinLinkProbe.HC SpriteProbe.HC MemberMetaProbe.HC LastClassProbe.HC)
 GRAPHICS_DEMOS := Demo/Graphics/3DPoly.HC Demo/Graphics/Box.HC \
 	Demo/Graphics/Symmetry.HC Demo/Graphics/CommonAncestor.HC Demo/Graphics/Shading.HC \
 	Demo/PullDownMenu.HC Demo/ExtChars.HC Demo/Prompt.HC
+GAME_DEMOS := Demo/Games/Digits.HC
 CLASS_META_DEMO := Demo/ClassMeta.HC Demo/LastClass.HC
 DOC_BIN_DEMOS := Demo/Graphics/SpritePut.HC Demo/Graphics/SpritePutExt.HC
 DOC_BIN_LINK := Linux/Fixtures/DocBinLink.DD
@@ -121,9 +122,9 @@ $(COMPRESS_TEST): Linux/TestCompress.cpp Linux/BootMedia.hpp Kernel/Compress.cpp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ Linux/TestCompress.cpp Kernel/Compress.cpp
 
-$(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GRAPHICS_DEMOS) $(CLASS_META_DEMO)
+$(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home \
-		$(foreach demo,$(GRAPHICS_DEMOS) $(CLASS_META_DEMO),--file-at $(demo) $(demo))
+		$(foreach demo,$(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO),--file-at $(demo) $(demo))
 
 TEST_MODULES := $(MODULE_PROBE) $(MODULE_CALLER) $(RUNTIME_PROBE) $(FILE_READ_PROBE) \
 	$(FILE_WRITE_PROBE) $(EXCEPT_PROBE) $(FORMAT_PROBE) $(HASH_CALLER) $(HASH_PROBE) \
@@ -132,9 +133,9 @@ TEST_MODULES := $(MODULE_PROBE) $(MODULE_CALLER) $(RUNTIME_PROBE) $(FILE_READ_PR
 STARTUP_FILES := $(TEST_MODULES) $(LEX_PROBES) $(DOC_SOURCE_PROBES) $(CLASS_META_DEMO) Linux/Fixtures/ClassReportProbe.HC Linux/Fixtures/LastClassRun.HC \
 	$(PRINT_SOURCE_PROBES) $(STREAM_PROBES) $(ISO_PROBE) $(MEMORY_PROBES) $(CMP_PROBES)
 
-$(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(STARTUP_FILES) $(STARTUP_DOC) $(DOC_BIN_DEMOS) $(DOC_BIN_LINK) $(GRAPHICS_DEMOS)
+$(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(STARTUP_FILES) $(STARTUP_DOC) $(DOC_BIN_DEMOS) $(DOC_BIN_LINK) $(GRAPHICS_DEMOS) $(GAME_DEMOS)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(STARTUP_FIXTURE) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(STARTUP_FILES)) \
-		$(foreach demo,$(DOC_BIN_DEMOS) $(GRAPHICS_DEMOS) $(CLASS_META_DEMO),--file-at $(demo) $(demo)) --file-at Demo/Graphics/DocBinLink.DD $(DOC_BIN_LINK)
+		$(foreach demo,$(DOC_BIN_DEMOS) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO),--file-at $(demo) $(demo)) --file-at Demo/Graphics/DocBinLink.DD $(DOC_BIN_LINK)
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
