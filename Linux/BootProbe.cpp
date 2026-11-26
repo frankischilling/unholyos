@@ -1569,6 +1569,19 @@ void BootProbe()
     BootVariadicReport(*adam_task->cur_dv, *adam_task, "/Doc/QueueProbe.HC",
                        "/QueueProbe.BIN.Z",
                        "Cmp(\"::/Doc/QueueProbe.HC\",,\"B:/QueueProbe.BIN.Z\");");
+    if (BootFileProgramReport(*adam_task->cur_dv, "/FifoProbe.HC").okay) {
+      auto *fun = reinterpret_cast<CHashFun *>(
+          HashFind("FifoProbe", adam_task->hash_table, HTT_FUN));
+      auto *heap = adam_task->data_heap;
+      const auto used = heap->used_u8s;
+      uint64_t result = 0;
+      bool okay = fun && CallHolyC0Checked(
+          reinterpret_cast<const uint8_t *>(fun->exe_addr), &result) &&
+          result == 0x1FF && heap->used_u8s == used;
+      SerialPutS("UnholyOS: FIFO heap cleanup ");
+      SerialPutHex(okay);
+      SerialPutS("\r\n");
+    }
     BootTimeClockReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/FileOperationsProbe.HC");
     {

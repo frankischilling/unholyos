@@ -1593,6 +1593,49 @@ cluster `0x5d`, and `UnholyOS: kernel entered in 64-bit mode`. QMP reported
 the VM running. The screenshot and serial log were captured under `build/`.
 This verifies the clean boot to the current kernel; the desktop is pending.
 
+## Native FIFO operations
+
+`Kernel/KDataTypes.HC` defines the byte and signed 64-bit FIFO operations.
+Both records have a typed buffer pointer followed by `mask`, `in_ptr`,
+and `out_ptr`, at offsets 0, 8, 16, and 24. The ring reserves one slot.
+The native insert, remove, peek, flush and count operations preserve the
+interrupt flag. Flush advances the read pointer to the write pointer.
+Count uses the reference's conditional subtraction, including its
+non-power-of-two mask behavior. Allocation retains UnholyOS's existing
+failure checks and deletion accepts a null record; those cases differ
+from the unchecked reference routines.
+
+The new `Linux/Fixtures/FifoProbe.HC` checks both typed layouts,
+empty operations (including null output pointers), capacity, byte and
+signed I64 values, peek, wraparound, flush, interrupt state and the
+size-six ring quirk. Both guests printed `FIFO probe 1FF`. A second
+direct call returned the same value without changing the task's
+data-heap usage.
+
+The focused native image was built using GCC 13.3.0:
+
+```sh
+make -j4 build/unholyos-startup-test.iso build/Linux/TestBoot
+build/Linux/MakeISO build/Adam/Opt/Boot/BootDVD.BIN \
+  build/0000Boot/0000Kernel.BIN.C build/fifo-focused.iso \
+  --compress-at Doc/Start.DD.Z Doc/Start.DD --dir Home \
+  --file Linux/Fixtures/FifoProbe.HC
+qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d \
+  -cdrom build/fifo-focused.iso -display none \
+  -serial file:build/fifo-focused.log -monitor none -no-reboot -no-shutdown
+```
+
+QEMU 8.2.2 booted the focused image and reported the FIFO result, heap
+cleanup and entry into 64-bit mode. The 512,176-byte kernel's BSS ended
+at `0x88DAB`, below the relocated DVD loader at `0x96600`.
+The pinned distribution DVD ran with the same PC, qemu64 and 512 MiB
+settings. Its kernel matches the 189,760-byte kernel file in the pinned
+checkout at DVD byte offset 52,224. GDB copied the 3,704-byte fixture into
+a zeroed guest buffer and read it back; the SHA-256 of both copies was
+`28e776de0d4d84d99cb1f1c6dbf68cac8bcaaf6f12b7542588c492dadff75f1e`.
+`ExePutS` ran that buffer, and a separate `KeyDevAdd` hook captured the
+output through QEMU's debug console. The reference heap check emitted 1.
+
 ## TimeClock and queue operations
 
 The original `Apps/TimeClock/Load.HC`, `Install.HC`, and `TimeClk.HC`

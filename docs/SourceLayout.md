@@ -186,7 +186,15 @@ for controller setup, the translated scan tables, and the
 `KbdPktRead`, `KbdHndlr`, and `KbdMsgsQue` stages. `IRQKbd` in
 `Kernel/KInts.asm` acknowledges IRQ1 and buffers bytes. Queue delivery
 runs from the scheduler and message scanner until the window manager
-takes over. The keyboard FIFOs use static storage during bootstrap.
+takes over. `KbdMsInit` allocates the five input FIFOs from the task heap.
+
+`Kernel/KDataTypes.cpp` and the shared ring operations in
+`Kernel/KernelB.hpp` implement both FIFO types from `Kernel/KDataTypes.HC`.
+`Kernel/KernelA.hpp` checks both 32-byte layouts against `KernelA.HH`.
+The compiler registers the classes, their typed buffer and index fields,
+and the declarations from `KernelC.HH`; the HolyC stack adapters in
+`Kernel/KUtils.asm` are published by `Kernel/KLoad.cpp`.
+The keyboard and mouse records expose their FIFO pointers with those types.
 
 `Kernel/SerialDev/Message.cpp` carries the reference `ScanChar`,
 `ScanKey`, `GetKey`, and `GetChar` paths. Echo and the raw cursor use

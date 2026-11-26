@@ -40,6 +40,10 @@ void _HASH_ADD(), _HASH_ADD_AFTER(), _HASH_FIND(), _HASH_SINGLE_TABLE_FIND();
 void HashTableNewHC(), HashTypeNumHC(), CeilU64HC(), Pow10I64HC();
 void LinkedLstDelHC(), LinkedLstSizeHC(), QueDelHC();
 void QueVectU8NewHC(), QueVectU8PutHC(), QueVectU8GetHC(), QueVectU8DelHC();
+void FifoU8NewHC(), FifoU8DelHC(), FifoU8InsHC(), FifoU8RemHC();
+void FifoU8PeekHC(), FifoU8FlushHC(), FifoU8CntHC();
+void FifoI64NewHC(), FifoI64DelHC(), FifoI64InsHC(), FifoI64RemHC();
+void FifoI64PeekHC(), FifoI64FlushHC(), FifoI64CntHC();
 void QSortHC(), QSortI64HC(), LstMatchHC();
 void FileReadHC(), FileNameAbsHC(), DirNameAbsHC(), DirCurHC(), DirFileHC();
 void CdHC(), IsDirHC(), DirHC(), PutDirLinkHC(), FilesFindHC(), FileFindHC(),
@@ -634,6 +638,20 @@ bool LoadKernel(CTask &task)
       {"QueVectU8Put", reinterpret_cast<uintptr_t>(QueVectU8PutHC)},
       {"QueVectU8Get", reinterpret_cast<uintptr_t>(QueVectU8GetHC)},
       {"QueVectU8Del", reinterpret_cast<uintptr_t>(QueVectU8DelHC)},
+      {"FifoU8New", reinterpret_cast<uintptr_t>(FifoU8NewHC)},
+      {"FifoU8Del", reinterpret_cast<uintptr_t>(FifoU8DelHC)},
+      {"FifoU8Ins", reinterpret_cast<uintptr_t>(FifoU8InsHC)},
+      {"FifoU8Rem", reinterpret_cast<uintptr_t>(FifoU8RemHC)},
+      {"FifoU8Peek", reinterpret_cast<uintptr_t>(FifoU8PeekHC)},
+      {"FifoU8Flush", reinterpret_cast<uintptr_t>(FifoU8FlushHC)},
+      {"FifoU8Cnt", reinterpret_cast<uintptr_t>(FifoU8CntHC)},
+      {"FifoI64New", reinterpret_cast<uintptr_t>(FifoI64NewHC)},
+      {"FifoI64Del", reinterpret_cast<uintptr_t>(FifoI64DelHC)},
+      {"FifoI64Ins", reinterpret_cast<uintptr_t>(FifoI64InsHC)},
+      {"FifoI64Rem", reinterpret_cast<uintptr_t>(FifoI64RemHC)},
+      {"FifoI64Peek", reinterpret_cast<uintptr_t>(FifoI64PeekHC)},
+      {"FifoI64Flush", reinterpret_cast<uintptr_t>(FifoI64FlushHC)},
+      {"FifoI64Cnt", reinterpret_cast<uintptr_t>(FifoI64CntHC)},
       {"QSort", reinterpret_cast<uintptr_t>(QSortHC)},
       {"QSortI64", reinterpret_cast<uintptr_t>(QSortI64HC)},
       {"LstMatch", reinterpret_cast<uintptr_t>(LstMatchHC)},

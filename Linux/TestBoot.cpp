@@ -3755,6 +3755,9 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/FileCopyProbe.HC", file_copy_output, '1');
     CheckProgramOutput(boot, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
     CheckProgramOutput(boot, "/QueueProbe.BIN.Z", "Queue probe FF\n", '1');
+    CheckProgramOutput(boot, "/FifoProbe.HC", "FIFO probe 1FF\n", '1');
+    Check(boot.find("UnholyOS: FIFO heap cleanup 0x0000000000000001") !=
+          std::string::npos, "FIFO allocations leaked");
     CheckProgramOutput(boot, "/TimeClockProbe.HC", time_clock_output, '1');
     CheckProgramOutput(boot, "/FileOperationsProbe.HC", file_operations_output, '1');
     CheckProgramOutput(boot, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
@@ -3871,6 +3874,9 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/FileCopyProbe.HC", file_copy_output, '1');
       CheckProgramOutput(output, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
       CheckProgramOutput(output, "/QueueProbe.BIN.Z", "Queue probe FF\n", '1');
+      CheckProgramOutput(output, "/FifoProbe.HC", "FIFO probe 1FF\n", '1');
+      Check(output.find("UnholyOS: FIFO heap cleanup 0x0000000000000001") !=
+            std::string::npos, "FIFO allocations leaked");
       CheckProgramOutput(output, "/TimeClockProbe.HC", time_clock_output, '1');
       CheckProgramOutput(output, "/FileOperationsProbe.HC", file_operations_output, '1');
       CheckProgramOutput(output, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
