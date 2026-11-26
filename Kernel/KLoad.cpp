@@ -84,7 +84,9 @@ void DCClearHC(),DCRstHC(),DCExtentsInitHC(),DCAliasHC();
 void DCNewHC(),DCDelHC(),DCSizeHC(),DCDepthBufRstHC();
 void DCDepthBufAllocHC(),DCCopyHC(),DCMonoHC(),DCColorChgHC();
 void DCSaveHC(),DCLoadHC(),GRWriteHC(),GRReadHC();
-void Mat4x4EquHC(),Mat4x4NewHC();
+void Mat4x4EquHC(),Mat4x4NewHC(),Mat4x4MulMat4x4EquHC(),Mat4x4MulMat4x4NewHC();
+void Mat4x4RotXHC(),Mat4x4RotYHC(),Mat4x4RotZHC(),Mat4x4ScaleHC();
+void Mat4x4TranslationEquHC(),Mat4x4TranslationAddHC(),DCSymmetrySetHC(),RefreshHC();
 void ScanCharHC(),ScanKeyHC(),GetKeyHC(),GetCharHC();
 void _HASH_REM_DEL(), SysSymImportsResolveHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
@@ -718,6 +720,16 @@ bool LoadKernel(CTask &task)
       {"GRWrite", reinterpret_cast<uintptr_t>(GRWriteHC)},
       {"GRRead", reinterpret_cast<uintptr_t>(GRReadHC)},
       {"Mat4x4Equ", reinterpret_cast<uintptr_t>(Mat4x4EquHC)},
+      {"Mat4x4MulMat4x4Equ", reinterpret_cast<uintptr_t>(Mat4x4MulMat4x4EquHC)},
+      {"Mat4x4MulMat4x4New", reinterpret_cast<uintptr_t>(Mat4x4MulMat4x4NewHC)},
+      {"Mat4x4RotX", reinterpret_cast<uintptr_t>(Mat4x4RotXHC)},
+      {"Mat4x4RotY", reinterpret_cast<uintptr_t>(Mat4x4RotYHC)},
+      {"Mat4x4RotZ", reinterpret_cast<uintptr_t>(Mat4x4RotZHC)},
+      {"Mat4x4Scale", reinterpret_cast<uintptr_t>(Mat4x4ScaleHC)},
+      {"Mat4x4TranslationEqu", reinterpret_cast<uintptr_t>(Mat4x4TranslationEquHC)},
+      {"Mat4x4TranslationAdd", reinterpret_cast<uintptr_t>(Mat4x4TranslationAddHC)},
+      {"DCSymmetrySet", reinterpret_cast<uintptr_t>(DCSymmetrySetHC)},
+      {"Refresh", reinterpret_cast<uintptr_t>(RefreshHC)},
       {"Mat4x4New", reinterpret_cast<uintptr_t>(Mat4x4NewHC)},
       {"PutKey", reinterpret_cast<uintptr_t>(PutKeyHC)},
       {"ScanChar", reinterpret_cast<uintptr_t>(ScanCharHC)},

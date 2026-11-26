@@ -69,7 +69,7 @@ void MsHardHndlr();
 void WinMsInput();
 void WinMsUpdate();
 bool WinMsCursorVisible();
-extern CWinMgrGlbls winmgr;
+alignas(8) extern CWinMgrGlbls winmgr;
 int64_t WinQueIPMsgs(bool que);
 extern "C" void GridInitCpp();
 extern "C" void MsSetCpp(int64_t x, int64_t y, int64_t z, int64_t l, int64_t r);
@@ -81,6 +81,8 @@ extern "C" uint64_t F64MulBits(uint64_t a, uint64_t b);
 extern "C" uint64_t F64DivBits(uint64_t a, uint64_t b);
 extern "C" uint64_t F64AddBits(uint64_t a, uint64_t b);
 extern "C" uint64_t F64SqrtBits(uint64_t value);
+extern "C" uint64_t F64SinBits(uint64_t value);
+extern "C" uint64_t F64CosBits(uint64_t value);
 void IntEntrySet(unsigned irq, void (*handler)(), uint16_t type = 0xE,
                  uint16_t dpl = 0);
 uint64_t GetTSC();

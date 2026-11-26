@@ -20,6 +20,7 @@ bool GrPlot1(CDC *dc, int64_t x, int64_t y);
 extern "C" int64_t GrPeekCpp(CDC *dc, int64_t x, int64_t y);
 extern "C" int64_t GrBlot3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z,
                               CDC *img);
+extern "C" int64_t *Mat4x4IdentEquCpp(int64_t *r);
 void DCTransformPoint(CDC &dc, CD3I64 &p);
 extern "C" void DCReflectCpp(CDC *dc, int64_t *x, int64_t *y, int64_t *z);
 extern "C" uint64_t DCSymmetry3SetCpp(CDC *dc, int64_t x1, int64_t y1,

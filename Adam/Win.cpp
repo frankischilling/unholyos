@@ -3,7 +3,7 @@
 
 #include <bit>
 
-CWinMgrGlbls winmgr{0, 0, 0, std::bit_cast<uint64_t>(30000.0 / 1001),
+alignas(8) CWinMgrGlbls winmgr{0, 0, 0, std::bit_cast<uint64_t>(30000.0 / 1001),
                    0, 0, nullptr, false, false, false};
 
 extern "C" CTask *WinRefocusCpp(CTask *task)

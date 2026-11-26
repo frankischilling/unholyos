@@ -1444,6 +1444,50 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   wait_text("__DATE__ __TIME__ SIZE");
   wait_text("00C8");
   wait_text("Start.DD.Z");
+
+  vm.ResetDeadline(14s);
+  type_cmd("WinMax;");
+  wait_mem(left + win_left + 8, 78, "WinMax did not prepare the polygon demo");
+  type_cmd("DocClear(,1);");
+  type_cmd(R"(ExeFile("::/Demo/Graphics/3DPoly.HC");)");
+  auto screen = dir / "polygon.ppm";
+  auto polygon_pixels = [&](Bytes &shape) {
+    vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
+               screen.string() + R"("}})");
+    const auto rgb = ReadVGA(screen);
+    size_t count = 0;
+    for (size_t i = 120 * 640; i < shape.size(); i++) {
+      auto red = rgb[3 * i], green = rgb[3 * i + 1], blue = rgb[3 * i + 2];
+      bool primary = (red == 0 && green == 0 && blue >= 128) ||
+                     (red == 0 && blue == 0 && green >= 128) ||
+                     (green == 0 && blue == 0 && red >= 128);
+      shape[i] = primary ? red | green | blue : 0;
+      count += primary;
+    }
+    return count;
+  };
+  Bytes shape(640 * 480), first_shape;
+  bool moved = false;
+  for (unsigned i = 0; i < 80; i++) {
+    if (polygon_pixels(shape) > 1200) {
+      if (first_shape.empty())
+        first_shape = shape;
+      else if (shape != first_shape) {
+        moved = true;
+        break;
+      }
+    }
+    std::this_thread::sleep_for(26ms);
+  }
+  Check(moved, "3DPoly.HC did not animate on the VGA display");
+  key("q");
+  wait_text("T:/Home>", false, 2);
+  for (unsigned i = 0; i < 60; i++) {
+    if (!polygon_pixels(shape))
+      return;
+    std::this_thread::sleep_for(26ms);
+  }
+  throw std::runtime_error("3DPoly.HC left polygons on the VGA display");
 }
 
 static fs::path CaptureGuestFile(CMonitor &vm, const fs::path &dir,
@@ -2085,6 +2129,14 @@ constexpr std::string_view screen_output = "screen normal\n"
                                            "screen zoom\n"
                                            "screen restored\n";
 
+constexpr std::string_view matrix_output =
+    "matrix pi 400921FB54442D18\n"
+    "matrix rotation 6812FEF91D413F68 17 -4 -5\n"
+    "matrix product DBCE19D7856E362E DBCE19D7856E362E\n"
+    "matrix sweep 9E2CB8A0EE1F90BD\n"
+    "matrix symmetry 1 0 2130900514 -3729075900 -2 17 6\n"
+    "matrix refresh 1 1 1 1 1\n";
+
 constexpr std::string_view depth_spans_output =
     "zs flat 6 6 3FADA006F427EE28\n"
     "zs depth 15 19 0 49125D7AEFFFF671 E85F2E55D1C242AE\n"
@@ -2171,6 +2223,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/RasterProbe.HC", raster_output, '1');
     CheckProgramOutput(boot, "/Blot3Probe.HC", blot3_output, '1');
     CheckProgramOutput(boot, "/DepthSpansProbe.HC", depth_spans_output, '1');
+    CheckProgramOutput(boot, "/MatrixProbe.HC", matrix_output, '1');
     CheckProgramOutput(boot, "/CursorProbe.HC", cursor_output, '1');
     CheckProgramOutput(boot, "/CursorExcept.HC", "cursor exception 1\n", '1');
     CheckProgramOutput(boot, "/FunctionPtrProbe.HC", function_ptr_output, '1');
@@ -2243,6 +2296,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/RasterProbe.HC", raster_output, '1');
       CheckProgramOutput(output, "/Blot3Probe.HC", blot3_output, '1');
       CheckProgramOutput(output, "/DepthSpansProbe.HC", depth_spans_output, '1');
+      CheckProgramOutput(output, "/MatrixProbe.HC", matrix_output, '1');
       CheckProgramOutput(output, "/CursorProbe.HC", cursor_output, '1');
       CheckProgramOutput(output, "/CursorExcept.HC", "cursor exception 1\n",
                          '1');

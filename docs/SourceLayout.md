@@ -264,6 +264,23 @@ test. Probability dithering uses the task RNG from `Kernel/KMathB.cpp`.
 The HolyC adapters extend narrow RNG returns through RAX. The public
 `Line` callback interface remains pending.
 
+## Graphics transforms and refresh
+
+`Adam/Gr/GrMath.cpp` follows `Mat4x4MulMat4x4Equ`, the three
+`Mat4x4Rot` routines, the scale and translation routines, and
+`DCSymmetrySet` in `GrMath.HC`. Rotations multiply in the reference
+order and store 32.32 matrix elements. `Kernel/KMathA.asm` uses the
+x87 sine and cosine instructions from the HolyC templates. The
+compiler registers the CP437 π define with the reference binary64
+value.
+
+`Refresh` in `Adam/WinMgr.cpp` waits on the window manager's completed
+frame count. It follows `Refresh` in `WinMgr.HC` for forced wakes,
+message pumping, and restoring the caller's idle and full-refresh
+flags. An early call before the window manager starts can return
+immediately. The window manager also returns immediately if one of
+its callbacks calls `Refresh` while painting.
+
 ## 3D bitmap drawing
 
 `GrBlot3` in `Adam/Gr/GrPrimatives.cpp` follows the three-corner

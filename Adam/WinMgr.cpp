@@ -1,6 +1,56 @@
 #include "DolDoc/DolDoc.hpp"
 #include "Gr/GrGlbls.hpp"
 
+static int64_t *WinMgrUpdates()
+{
+  // The packed global begins at the aligned update counter.
+  return static_cast<int64_t *>(__builtin_assume_aligned(&winmgr, 8));
+}
+
+extern "C" void RefreshCpp(int64_t cnt, uint8_t force)
+{
+  auto *task = CurrentTask();
+  auto *mgr = sys_winmgr_task;
+  if (!mgr || mgr == task)
+    return;
+  auto old_task_flags =
+      __atomic_fetch_or(&task->task_flags, TASKF_IDLE, __ATOMIC_RELAXED);
+  auto *doc = DocPut();
+  if (!cnt && force)
+    __atomic_fetch_or(&sys_semas[SEMA_JUST_PUMP_MSGS].flags, 1,
+                      __ATOMIC_RELAXED);
+  auto wake = [&]() {
+    if (force)
+      mgr->wake_jiffy = __atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED);
+  };
+  auto &refresh = sys_semas[SEMA_REFRESH_IN_PROGRESS].flags;
+  while (__atomic_load_n(&refresh, __ATOMIC_RELAXED) & 1) {
+    wake();
+    _YIELD();
+  }
+
+  uint64_t old_doc_flags = 0;
+  if (cnt > 1 && doc)
+    old_doc_flags =
+        __atomic_fetch_or(&doc->flags, DOCF_DO_FULL_REFRESH, __ATOMIC_RELAXED);
+  int64_t update_cnt =
+      uint64_t(__atomic_load_n(WinMgrUpdates(), __ATOMIC_RELAXED)) + cnt;
+  while (__atomic_load_n(WinMgrUpdates(), __ATOMIC_RELAXED) < update_cnt) {
+    wake();
+    SleepCpp(1);
+  }
+  if (cnt > 1 && doc) {
+    if (old_doc_flags & DOCF_DO_FULL_REFRESH)
+      __atomic_fetch_or(&doc->flags, DOCF_DO_FULL_REFRESH, __ATOMIC_RELAXED);
+    else
+      __atomic_fetch_and(&doc->flags, ~DOCF_DO_FULL_REFRESH, __ATOMIC_RELAXED);
+  }
+  if (old_task_flags & TASKF_IDLE)
+    __atomic_fetch_or(&task->task_flags, TASKF_IDLE, __ATOMIC_RELAXED);
+  else
+    __atomic_fetch_and(&task->task_flags, ~TASKF_IDLE, __ATOMIC_RELAXED);
+}
+
 static int64_t WinQueButton(CTask *task, bool que, bool left, uint64_t time,
                             int64_t x, int64_t y, CD3I64 &single_ms)
 {
@@ -186,6 +236,10 @@ static uint64_t WinMgrSleep(uint64_t ideal)
   WinMsUpdate();
   WinDocMouse(true, left);
   WinDocMouse(false, right);
+  if (__atomic_fetch_and(&sys_semas[SEMA_JUST_PUMP_MSGS].flags, ~uint64_t{1},
+                         __ATOMIC_RELAXED) &
+      1)
+    return ideal;
   // WINMGR_PERIOD is 1001/30000 seconds. Keep 1/30-jiffy units here.
   auto now = __atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED) * 30 + 1001 / 8;
   if (ideal < now)
@@ -194,6 +248,7 @@ static uint64_t WinMgrSleep(uint64_t ideal)
   __atomic_fetch_or(&refresh, 1, __ATOMIC_RELAXED);
   GrUpdateScrn();
   __atomic_fetch_and(&refresh, ~uint64_t{1}, __ATOMIC_RELAXED);
+  __atomic_fetch_add(WinMgrUpdates(), 1, __ATOMIC_RELAXED);
   SleepUntilCpp(ideal / 30);
   return ideal;
 }
