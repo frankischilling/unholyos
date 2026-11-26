@@ -1247,7 +1247,9 @@ struct [[gnu::may_alias]] CTaskDying
   int64_t wake_jiffy;
 };
 constexpr uint32_t DISPLAYF_SHOW = 1, DISPLAYF_NOT_RAW = 1 << 1,
-                   DISPLAYF_SILENT = 1 << 2, DISPLAYF_NO_BORDER = 1 << 3;
+                   DISPLAYF_SILENT = 1 << 2, DISPLAYF_NO_BORDER = 1 << 3,
+                   DISPLAYF_WIN_ON_TOP = 1 << 4,
+                   DISPLAYF_CHILDREN_NOT_ON_TOP = 1 << 5;
 constexpr uint8_t TTS_TASK_NAME = 2;
 
 struct CTask

@@ -17,15 +17,31 @@ void UserStartUp()
   DocTermNewCpp();
   if (!DocPut())
     return;
-  WinHorzCpp(1, TEXT_COLS / 2 - 1, task);
+  WinHorzCpp(1, TEXT_COLS - 2, task);
   WinVertCpp(2, TEXT_ROWS - 2, task);
   task->display_flags |= DISPLAYF_SHOW;
-  sys_focus_task = task;
+  WinToTopCpp(task, false);
   WinZBufUpdateCpp();
 }
 
 bool StartUpTasks()
 {
-  return SpawnCpp(reinterpret_cast<uintptr_t>(UserCmdLineHC), nullptr, nullptr,
-                  0, adam_task, 0, JOBF_ADD_TO_QUE);
+  auto *user1 = SpawnCpp(reinterpret_cast<uintptr_t>(UserCmdLineHC), nullptr,
+                         nullptr, -1, nullptr, 0, JOBF_ADD_TO_QUE);
+  if (!user1)
+    return false;
+  TaskWaitCpp(user1, true);
+  if (!TaskValidateCpp(user1))
+    return false;
+  auto *user2 = SpawnCpp(reinterpret_cast<uintptr_t>(UserCmdLineHC), nullptr,
+                         nullptr, -1, nullptr, 0, JOBF_ADD_TO_QUE);
+  if (!user2)
+    return false;
+  TaskWaitCpp(user2, true);
+  if (!TaskValidateCpp(user2))
+    return false;
+  WinToTopCpp(user1, false);
+  WinTileVertCpp();
+  WinZBufUpdateCpp();
+  return true;
 }

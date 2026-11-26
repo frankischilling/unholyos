@@ -636,6 +636,7 @@ static bool CmpTaskData(CHashTable *table, CHashClass *cls)
     }
   }
   return CmpKernelGlobal(table, "sys_winmgr_task", cls + 1, &sys_winmgr_task) &&
+         CmpKernelGlobal(table, "sys_focus_task", cls + 1, &sys_focus_task) &&
          CmpJobData(table, cls);
 }
 
@@ -1058,6 +1059,12 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"GrScaleZoom", U0, FF_RET1, {{"scale", F64}}},
       {"WinHorz", Bool, FF_RET1, {{"left", I64}, {"right", I64}, {"task", TaskPtr, true}}},
       {"WinVert", Bool, FF_RET1, {{"top", I64}, {"bottom", I64}, {"task", TaskPtr, true}}},
+      {"WinRefocus", TaskPtr, FF_RET1, {{"task", TaskPtr, true}}},
+      {"WinToTop", I64, FF_RET1, {{"task", TaskPtr, true}, {"update_z_buf", Bool, true, 1}}},
+      {"WinFocus", TaskPtr, FF_RET1, {{"task", TaskPtr, true}}},
+      {"WinTileHorz", U0, FF_RET1, {}},
+      {"WinTileVert", U0, FF_RET1, {}},
+      {"WinMax", U0, FF_RET1, {{"task", TaskPtr, true}}},
       {"WinZBufUpdate", U0, FF_RET1, {}},
       {"TextChar", Bool, FF_RET1,
        {{"task", TaskPtr}, {"allow_border", Bool, true}, {"x", I64}, {"y", I64}, {"d", I64}},

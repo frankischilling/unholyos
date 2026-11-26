@@ -13,18 +13,23 @@ The C++20 host tools build the RedSea image and check it against the kernel buil
 
 ## HolyC terminal
 
-After startup the focused DolDoc window accepts HolyC commands. Type
+Startup opens two DolDoc terminals side by side and focuses the left
+one. Type
 `6*7;` and press Enter to see `ans=0x0000002A=42`. Open statements
 continue on the next line. The cursor keys, Backspace, and Delete edit
-the document before the compiler reads the command. Shift+Escape closes
-the terminal task.
+the document before the compiler reads the command. `WinMax;` expands
+the current window. `WinTileHorz;` stacks the terminals by row, while
+`WinTileVert;` puts them side by side. Shift+Escape closes the focused
+terminal and returns focus to the other one.
 
 The boot suite sends PS/2 keyboard events and checks the display text
 for the results of editing a line, entering an expression across two
 lines, recovering from a syntax error, and reading an edited string
-through `GetStr`. It repeats the commands on the ISO built in the guest.
-The standard boot starts one terminal. The reference's second terminal,
-startup documents, menus, autocomplete, and full editor are pending.
+through `GetStr`. It checks the window bounds, sends input to the right
+terminal, closes it, and sends input to the left terminal again. The
+suite repeats the commands on the ISO built in the guest. The startup
+documents, border controls, menus, autocomplete, and full editor are
+pending.
 
 ## Building a RedSea ISO in the guest
 

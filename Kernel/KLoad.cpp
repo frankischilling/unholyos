@@ -89,6 +89,7 @@ void DocLockHC(), DocUnlockHC(), DocEntryRunHC(), DocBottomHC(), DocClearHC(), N
 void DocTermNewHC(), DocGetKeyHC(), DocScanLineHC(), GetStrHC(), GetSHC(), UserCmdLineHC();
 void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
     TextRectHC(), TextBorderHC(), WinZBufUpdateHC();
+void WinRefocusHC(), WinToTopHC(), WinFocusHC(), WinTileHorzHC(), WinTileVertHC(), WinMaxHC();
 void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
 void RawHC(), DbgModeHC(), IsDbgModeHC();
 void tSHC(), BusyHC(), SleepUntilHC(), SleepHC(), Ona2FreqHC(), Freq2OnaHC();
@@ -495,6 +496,7 @@ bool LoadKernel(CTask &task)
       {"gr_palette_gray", reinterpret_cast<uintptr_t>(gr_palette_gray)},
       {"gr", reinterpret_cast<uintptr_t>(&gr)},
       {"sys_winmgr_task", reinterpret_cast<uintptr_t>(&sys_winmgr_task)},
+      {"sys_focus_task", reinterpret_cast<uintptr_t>(&sys_focus_task)},
       {"scrncast", reinterpret_cast<uintptr_t>(&scrncast)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
       {"SYS_RUN_LEVEL", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
@@ -715,6 +717,12 @@ bool LoadKernel(CTask &task)
       {"DefineMatch", reinterpret_cast<uintptr_t>(DefineMatchHC)},
       {"WinHorz", reinterpret_cast<uintptr_t>(WinHorzHC)},
       {"WinVert", reinterpret_cast<uintptr_t>(WinVertHC)},
+      {"WinRefocus", reinterpret_cast<uintptr_t>(WinRefocusHC)},
+      {"WinToTop", reinterpret_cast<uintptr_t>(WinToTopHC)},
+      {"WinFocus", reinterpret_cast<uintptr_t>(WinFocusHC)},
+      {"WinTileHorz", reinterpret_cast<uintptr_t>(WinTileHorzHC)},
+      {"WinTileVert", reinterpret_cast<uintptr_t>(WinTileVertHC)},
+      {"WinMax", reinterpret_cast<uintptr_t>(WinMaxHC)},
       {"WinZBufUpdate", reinterpret_cast<uintptr_t>(WinZBufUpdateHC)},
       {"TextChar", reinterpret_cast<uintptr_t>(TextCharHC)},
       {"_TEXT_CHAR", reinterpret_cast<uintptr_t>(TextCharHC)},
