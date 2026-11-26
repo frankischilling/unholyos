@@ -4550,6 +4550,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--spline" ||
        std::string_view(argv[1]) == "--spline-reference" ||
        std::string_view(argv[1]) == "--flood-fill-reference" ||
+       std::string_view(argv[1]) == "--blot" ||
+       std::string_view(argv[1]) == "--blot-reference" ||
        std::string_view(argv[1]) == "--database" ||
        std::string_view(argv[1]) == "--database-reference" ||
        std::string_view(argv[1]) == "--form")) {
@@ -4559,6 +4561,7 @@ int main(int argc, char **argv)
     bool screen_capture = std::string_view(argv[1]).starts_with("--screen-capture");
     bool spline = std::string_view(argv[1]).starts_with("--spline");
     bool flood_fill = std::string_view(argv[1]).starts_with("--flood-fill");
+    bool blot = std::string_view(argv[1]).starts_with("--blot");
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -4568,8 +4571,8 @@ int main(int argc, char **argv)
       fs::create_directories(dir);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
-      if (character || tic || breaks || screen_capture || spline || flood_fill)
-        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference, tic, breaks, screen_capture, spline, flood_fill);
+      if (character || tic || breaks || screen_capture || spline || flood_fill || blot)
+        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference, tic, breaks, screen_capture, spline, flood_fill, blot);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");

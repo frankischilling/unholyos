@@ -1103,6 +1103,20 @@ verification uses the regular startup test ISO. Coverage does not yet
 include overlapping windows, probability dithering or the fixed ray
 stack's exhaustion behavior.
 
+The original [Demo/Graphics/Blot.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Graphics/Blot.HC)
+by Terry A. Davis is included without changes. The imported checkout
+contains 735 bytes (SHA-256
+`5a98a574fdb3341816fbc55877f125abfa30229e7e06f68c162bc6de6fc0e35e`).
+The interactive test runs the animated brush and bitmap composition,
+waits for the key prompt, records the graphics layer, and presses Space.
+The two guests' complete drawing buffers match byte for byte (SHA-256
+`897974d37f94c5224c05da2064c18684626a779738c013d8b8125bd14b7f40f4`).
+The cleared buffers also match. Both guests then evaluate another terminal
+expression successfully. The native test is part of `make test`; the
+reference run uses `build/Linux/TestBoot --blot-reference qemu-system-x86_64
+<reference.iso> build/blot-reference`. Both use QEMU 8.2.2, PC,
+`qemu64`, 512 MiB and a private QMP socket.
+
 ## Regular polygons, Bezier curves, and B-splines
 
 `SplineProbe.HC` exercises the typed callbacks, distance helpers,

@@ -15,7 +15,7 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
                                    const std::string &boot, bool reference,
                                    bool tic = false, bool breaks = false,
                                    bool screen_capture = false, bool spline = false,
-                                   bool flood_fill = false)
+                                   bool flood_fill = false, bool blot = false)
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -146,6 +146,48 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
   };
   wait_text("T:/Home>");
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
+  if (blot) {
+    cmd(R"("BL %X %X %X\n",gr.dc->body,&Fs->pix_left,&Fs->pix_top;)");
+    auto [pixels, left, top] = addresses("BL ");
+    cmd("DocClear(,1);DCFill;MsSet(620,460);");
+    cmd(R"(ExeFile("::/Demo/Graphics/Blot.HC");)");
+    wait_text("PRESS A KEY");
+    auto bitmap = [&](std::string name) {
+      auto file = dir / (name + ".raw");
+      vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+                 std::to_string(pixels) + R"(,"size":307200,"filename":")" +
+                 file.string() + R"("}})");
+      auto bytes = FileRead(file);
+      Check(bytes.size() == 640 * 480, "Incomplete blot drawing");
+      return bytes;
+    };
+    auto drawn = bitmap("blot-drawn");
+    std::array<uint64_t, 256> colors{};
+    uint64_t hash = 0xcbf29ce484222325ULL;
+    for (auto pixel : drawn) {
+      colors[pixel]++;
+      hash = (hash ^ pixel) * 0x100000001b3ULL;
+    }
+    std::cout << "Blot " << std::hex << hash << std::dec << " origin "
+              << ReadPhysical<1>(vm, left)[0] << ' ' << ReadPhysical<1>(vm, top)[0]
+              << " colors " << colors[4] << ' ' << colors[1] << ' ' << colors[14]
+              << ' ' << colors[255] << '\n';
+    Check(colors[4] && colors[1] && colors[14], "Blot did not draw all three colors");
+    Check(hash == 0xed339cb81a835d9dULL && colors[4] == 17188 &&
+              colors[1] == 3556 && colors[14] == 1600 && colors[255] == 284856,
+          "Blot drawing differs from the pinned reference");
+    snapshot("blot-drawn");
+    key("spc");
+    wait([&](const Cells &) {
+      auto data = bitmap("blot-cleared");
+      return std::all_of(data.begin(), data.end(), [](uint8_t c) { return c == 255; });
+    }, "Blot did not clear graphics on exit");
+    wait_text("T:/Home>");
+    cmd("3*21;");
+    wait_text("=63");
+    snapshot("blot-exit");
+    return;
+  }
   if (screen_capture) {
     cmd("CBlkDev *scbd=BlkDevNextFreeSlot('B',BDT_RAM);");
     cmd("scbd->max_blk=4095;BlkDevAdd(scbd,,0,1);HomeSet(\"B:/\");");
