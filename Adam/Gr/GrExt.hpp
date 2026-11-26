@@ -30,6 +30,15 @@ extern "C" int64_t GrPeek0Cpp(CDC *dc, int64_t x, int64_t y);
 extern "C" int64_t GrBlotCpp(CDC *dc, int64_t x, int64_t y, CDC *img);
 extern "C" int64_t GrRectCpp(CDC *dc, int64_t x, int64_t y, int64_t w,
                              int64_t h);
+extern "C" int64_t GrHLineCpp(CDC *dc, int64_t x1, int64_t x2, int64_t y,
+                              int64_t z1, int64_t z2);
+extern "C" int64_t GrVLineCpp(CDC *dc, int64_t x, int64_t y1, int64_t y2,
+                              int64_t z1, int64_t z2);
+extern "C" int64_t GrFillTri0Cpp(CDC *dc, const CD3I32 *p1, const CD3I32 *p2,
+                                 const CD3I32 *p4);
+extern "C" int64_t GrFillPoly3Cpp(CDC *dc, int64_t n, const CD3I32 *poly);
+extern "C" int64_t GrRect3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z,
+                              int64_t w, int64_t h);
 extern "C" uint64_t ClipLineCpp(int64_t *_x1, int64_t *_y1, int64_t *_x2,
                                 int64_t *_y2, int64_t left, int64_t top,
                                 int64_t right, int64_t bottom);

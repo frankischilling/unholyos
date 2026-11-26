@@ -483,6 +483,18 @@ and UnholyOS with QEMU 9.2.0, PC, `qemu64`, and 512 MiB. The boot suite
 checks those lines at each tested RAM size and after booting the ISO
 built in the guest.
 
+## Depth-buffered spans and polygons
+
+`DepthSpansProbe.HC` checks span counts, depth interpolation, window
+clipping, extents, collision counts, and dither RNG state. It also
+compares the color and depth buffers for 64 triangles that exercise
+clipping, a transformed polygon, its reflection, and a rectangular
+sprite.
+The same source printed 11 matching lines on pinned TempleOS and
+UnholyOS under QEMU 9.2.0 with PC, `qemu64`, and 512 MiB. The boot
+suite checks those lines at each tested RAM size and on the ISO
+built in the guest.
+
 ## 2D raster drawing
 
 `make -j4 test BUILD=build/raster` exercises clipping, extents, depth,
