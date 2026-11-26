@@ -2629,6 +2629,12 @@ constexpr std::string_view scroll_controls_output =
     "ctrl callback 8\n"
     "ctrl hidden 0\n";
 
+constexpr std::string_view doc_refresh_output =
+    "refresh partial 0 1 0\n"
+    "refresh full 3 0 1\n"
+    "refresh forced 4 0\n"
+    "refresh backwards 5 0 1\n";
+
 constexpr std::string_view menu_output =
     "menu layout 40 80 32 72\n"
     "menu stack 1 1 1\n"
@@ -2742,6 +2748,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/WinScrollProbe.HC", win_scroll_output, '1');
     CheckProgramOutput(boot, "/ScrollControlsProbe.HC", scroll_controls_output,
                        '1');
+    CheckProgramOutput(boot, "/DocRefreshProbe.HC", doc_refresh_output, '1');
     CheckProgramOutput(boot, "/MenuProbe.HC", menu_output, '1');
     CheckProgramOutput(boot, "/CursorProbe.HC", cursor_output, '1');
     CheckProgramOutput(boot, "/CursorExcept.HC", "cursor exception 1\n", '1');
@@ -2823,6 +2830,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/WinScrollProbe.HC", win_scroll_output, '1');
       CheckProgramOutput(output, "/ScrollControlsProbe.HC", scroll_controls_output,
                          '1');
+      CheckProgramOutput(output, "/DocRefreshProbe.HC", doc_refresh_output, '1');
       CheckProgramOutput(output, "/MenuProbe.HC", menu_output, '1');
       CheckProgramOutput(output, "/CursorProbe.HC", cursor_output, '1');
       CheckProgramOutput(output, "/CursorExcept.HC", "cursor exception 1\n",

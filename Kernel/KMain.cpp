@@ -597,6 +597,7 @@ static void BootRasterReport(const CDrv &dv)
   BootFileProgramReport(dv, "/TaskSettingsProbe.HC");
   BootFileProgramReport(dv, "/WinScrollProbe.HC");
   BootFileProgramReport(dv, "/ScrollControlsProbe.HC");
+  BootFileProgramReport(dv, "/DocRefreshProbe.HC");
   BootFileProgramReport(dv, "/MenuProbe.HC");
   SerialPutS("UnholyOS: raster context ");
   SerialPutHex(reinterpret_cast<uintptr_t>(gr.dc->body));

@@ -479,14 +479,15 @@ private:
       if (token == '&' && cc.token == TK_IDENT && !cc.local_var_entry &&
           cc.hash_entry && (cc.hash_entry->type & HTT_FUN)) {
         auto *callee = reinterpret_cast<const CHashFun *>(cc.hash_entry);
-        if ((callee->cls.flags & FF_INTERNAL) ||
-            (!callee->exe_addr && callee != fun &&
-             !(cc.flags & CCF_AOT_COMPILE)))
-          return NO_IC;
-        Lex(cc);
-        return Add({reinterpret_cast<uintptr_t>(callee), NO_IC, NO_IC, IC_ADDR,
-                    RT_I64, false, false, true, NO_IC, nullptr, nullptr,
-                    callee});
+        if (!(callee->cls.flags & FF_INTERNAL)) {
+          if (!callee->exe_addr && callee != fun &&
+              !(cc.flags & CCF_AOT_COMPILE))
+            return NO_IC;
+          Lex(cc);
+          return Add({reinterpret_cast<uintptr_t>(callee), NO_IC, NO_IC,
+                      IC_ADDR, RT_I64, false, false, true, NO_IC, nullptr,
+                      nullptr, callee});
+        }
       }
       auto value = Term(depth + 1);
       if (token == '*')

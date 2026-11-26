@@ -453,6 +453,7 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
       {"mem_task", doc, &task + 1, offsetof(CDoc, mem_task)},
       {"owning_task", doc, &task + 1, offsetof(CDoc, owning_task)},
       {"cmd_U8", doc, i64, offsetof(CDoc, cmd_U8)},
+      {"updates_cnt", doc, i64, offsetof(CDoc, updates_cnt)},
       {"doc_signature", doc, FindType("U32", table),
        offsetof(CDoc, doc_signature)},
       {"user_put_data", doc, u8ptr, offsetof(CDoc, user_put_data)},
@@ -1052,6 +1053,9 @@ static bool CmpDCData(CHashTable *table)
     CHashClass *type;
   } options[]{
       {"updates", offsetof(CWinMgrGlbls, updates), i64},
+      {"fps", offsetof(CWinMgrGlbls, fps), FindType("F64", table)},
+      {"last_refresh_tS", offsetof(CWinMgrGlbls, last_refresh_tS),
+       FindType("F64", table)},
       {"show_menu", offsetof(CWinMgrGlbls, show_menu), boolean},
       {"grab_scroll", offsetof(CWinMgrGlbls, grab_scroll), boolean},
       {"grab_scroll_closed", offsetof(CWinMgrGlbls, grab_scroll_closed), boolean},
@@ -1943,6 +1947,7 @@ static bool CmpFillHash(CHashTable *table)
       {"FUF_SCAN_PARENTS", "0x100000"}, {"FUF_FLATTEN_TREE", "0x200000"},
       {"DOCF_DONT_HIGHLIGHT_CURSOR", "0x1000"},
       {"DOCF_DONT_SHOW", "0x8000"},
+      {"DOCF_BWD_MOVEMENT", "0x40000"},
       {"DOCF_DO_FULL_REFRESH", "0x200000"}, {"TASKf_IDLE", "3"},
       {"RECALCt_FIND_CURSOR", "1"},
       {"RECALCt_TO_SCRN", "2"},

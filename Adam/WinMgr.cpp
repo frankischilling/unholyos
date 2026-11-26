@@ -2,6 +2,7 @@
 #include "Gr/GrGlbls.hpp"
 #include "Menu.hpp"
 #include "Ctrls/CtrlsA.hpp"
+#include <bit>
 
 static int64_t *WinMgrUpdates()
 {
@@ -606,6 +607,17 @@ extern "C" void WinMgrTaskEntry();
 
 static uint64_t WinMgrSleep(uint64_t ideal)
 {
+  constexpr auto one = std::bit_cast<uint64_t>(1.0);
+  constexpr auto hundredth = std::bit_cast<uint64_t>(0.01);
+  constexpr uint64_t sign = uint64_t{1} << 63;
+  auto time = tSCpp();
+  auto delta = F64AddBits(time, winmgr.last_refresh_tS ^ sign);
+  winmgr.last_refresh_tS = time;
+  if (!(delta & sign) && delta > hundredth)
+    winmgr.fps = delta < one ? F64DivBits(one, delta) : one;
+  else
+    winmgr.fps = std::bit_cast<uint64_t>(99.0);
+
   static CWinDocMouse left, right;
   WinRefocusCpp(sys_focus_task);
   WinMsUpdate();

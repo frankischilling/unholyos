@@ -569,6 +569,11 @@ return to the start of a plain text entry after release. The test
 checks both frames. `ScrollControlsProbe.HC` checks the control
 layouts, inclusive hit bounds, visibility flags, and HolyC callbacks.
 
+`DocRefreshProbe.HC` checks that a partial pass leaves a pending
+scroll request in place and skips a live tag below the viewport. It
+also checks a scheduled full pass, a forced refresh, and a document
+with a backward cursor movement.
+
 ## Pulldown menus
 
 Run `ExeFile("::/Demo/PullDownMenu.HC");` to open Terry A. Davis's
