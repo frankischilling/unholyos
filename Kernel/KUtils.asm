@@ -21,6 +21,7 @@ GLOBAL DirEntryDelHC,DirEntryDel2HC,DirTreeDelHC,DirTreeDel2HC
 GLOBAL DirContextNewHC,DirContextDelHC
 GLOBAL FileWriteHC,BlkDevNextFreeSlotHC,BlkDevAddHC,Let2DrvHC,BlkReadHC,BlkWriteHC
 GLOBAL FSizeHC,FOpenHC,FCloseHC,FBlkReadHC,FBlkWriteHC
+GLOBAL FmtHC
 GLOBAL FileAttrHC,CopySingleHC
 GLOBAL DelHC,CopyHC,MoveHC,CopyTreeHC,DelTreeHC,DirMkHC,ScanFlagsHC
 GLOBAL RedSeaISOHC
@@ -155,6 +156,7 @@ EXTERN DocMaxCpp,DocDataFmtCpp,DocDataScanCpp
 EXTERN DocFormCpp,DocEdCpp,DocFormFwdCpp,DocFormBwdCpp,ViewCpp,HomeSetCpp,ToUpperCpp
 EXTERN GetI64Cpp,GetF64Cpp,GetDateCpp
 EXTERN FileWriteCpp,BlkDevNextFreeSlotCpp,BlkDevAddCpp,Let2DrvCpp,BlkReadCpp,BlkWriteCpp
+EXTERN FmtCpp
 EXTERN FSizeCpp,FOpenCpp,FCloseCpp,FBlkReadCpp,FBlkWriteCpp
 EXTERN FileAttrCpp,CopySingleCpp
 EXTERN DelCpp,CopyCpp,MoveCpp,CopyTreeCpp,DelTreeCpp,DirMkCpp,ScanFlagsCpp
@@ -544,6 +546,7 @@ HOLYC_CPP BlkDevAddHC,BlkDevAddCpp,4
 HOLYC_CPP Let2DrvHC,Let2DrvCpp,2
 HOLYC_CPP BlkReadHC,BlkReadCpp,4
 HOLYC_CPP BlkWriteHC,BlkWriteCpp,4
+HOLYC_CPP FmtHC,FmtCpp,4
 HOLYC_CPP SysUntryHC,SysUntryCpp,0
 HOLYC_CPP YorNHC,YorNCpp,0
 HOLYC_CPP PutExceptHC,PutExceptCpp,1

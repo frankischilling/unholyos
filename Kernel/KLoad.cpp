@@ -57,6 +57,7 @@ void FSizeHC(), FOpenHC(), FCloseHC(), FBlkReadHC(), FBlkWriteHC();
 void FileAttrHC(), CopySingleHC();
 void DelHC(),CopyHC(),MoveHC(),CopyTreeHC(),DelTreeHC(),DirMkHC(),ScanFlagsHC();
 void BlkReadHC(), BlkWriteHC();
+void FmtHC();
 void SysTryHC(), SysUntryHC(), ThrowHC(), CallerHC(), PutExceptHC(), YorNHC();
 void BreakHC(), BreakLockHC(), BreakUnlockHC();
 void StrPrintJoinHC(), StrPrintHC(), CatPrintHC(), MStrPrintHC(), PrintHC();
@@ -673,6 +674,7 @@ bool LoadKernel(CTask &task)
       {"Let2Drv", reinterpret_cast<uintptr_t>(Let2DrvHC)},
       {"BlkRead", reinterpret_cast<uintptr_t>(BlkReadHC)},
       {"BlkWrite", reinterpret_cast<uintptr_t>(BlkWriteHC)},
+      {"Fmt", reinterpret_cast<uintptr_t>(FmtHC)},
       {"SysTry", reinterpret_cast<uintptr_t>(SysTryHC)},
       {"SysUntry", reinterpret_cast<uintptr_t>(SysUntryHC)},
       {"throw", reinterpret_cast<uintptr_t>(ThrowHC)},

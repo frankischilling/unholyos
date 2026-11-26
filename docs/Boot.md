@@ -277,9 +277,110 @@ build/fat-write/Linux/TestBoot --fat32-write qemu-system-x86_64 \
   build/fat-write/fat32-write-test.iso build/fat-write/fat32-writable.img
 ```
 
-FAT32 mounting is still read-only by default. Formatting, stream writes,
-general FAT cache behavior, cross-linked chain repair, and crash recovery
-remain pending. The test does not establish those behaviors.
+FAT32 mounting is still read-only by default. General FAT
+cache behavior, cross-linked chain repair, and crash recovery remain
+pending.
+
+## FAT32 buffered streams
+
+`Fat32StreamProbe.HC` exercises unbounded growth, preallocation, buffered
+updates, seeks, reopening, contiguous streams, and raw compressed-file
+copy. The unchanged probe SHA-256 is
+`41bcff4d80e16aabd99a53ece93d1891650f3b64427da2ecf71e9cdd8e527932`.
+The native and pinned reference guests both report:
+
+```text
+Copying C:/ZIP.BIN.Z to C:/ZIP2.BIN.Z
+FAT32 stream mutation 3F
+FAT32 stream probe 3F
+```
+
+On a cold reboot of each guest's own disk:
+
+```text
+FAT32 persisted streams
+FAT32 stream probe 3F
+```
+
+The reference uses QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512`
+and a writable raw IDE index-0 disk. Its disk SHA-256 after both boots is
+`260f34c49e2f9d5f3add8d0712fbd6939e7bad0f2b942a6cc7a89ad6c634632b`.
+The native test checks complete FAT mirror equality, persistence of the
+entire mutated disk across reboot, and preservation of the input image.
+The two systems' allocation order and timestamps need not be identical.
+
+```sh
+make -j4 BUILD=build/fat-stream test
+build/fat-stream/Linux/TestBoot --fat32-stream qemu-system-x86_64 \
+  build/fat-stream/fat32-stream-test.iso build/fat-stream/fat32-writable.img
+```
+
+## FAT32 fragmented streams and recursive file trees
+
+`Fat32TreeProbe.HC` forces a fragmented stream by allocating a separate
+file between two writes. It checks the complete file, random block seeks,
+the blocker, nested directories, masked copy and move, recursive copy,
+rejection of a destination inside the source, masked deletion, and
+restoration of the current directory. The native and pinned TempleOS
+guests produce identical operation traces ending in:
+
+```text
+FAT32 tree mutation FF
+FAT32 tree probe 3F
+```
+
+After a cold reboot both report `FAT32 persisted tree` and
+`FAT32 tree probe 3F`. The two FAT mirrors are compared in their entirety;
+the first native and reference FAT tables also match byte for byte.
+Only the four expected new cluster allocations survive the deletion of
+the copied trees. The original fixture and the post-mutation image are
+unchanged by the second boot. The reference disk SHA-256 after both
+boots is `2a08f393a723838485047df0c2ed2d6c9061ce4dbd7fb692a21fc09ea4d4136f`.
+
+```sh
+make -j4 BUILD=build/fat-tree test
+```
+
+## FAT32 formatting
+
+`Fat32FormatProbe.HC` writes a sentinel at the partition's final sector,
+quick-formats the volume, checks its empty root and FATs, and confirms
+that the sentinel survived. It writes a file, full-formats the volume,
+checks that the old file and sentinel are gone, and saves a new file.
+The native and pinned reference guests both report:
+
+```text
+FAT32 format mutation 3F
+FAT32 format probe 0F
+```
+
+After a cold reboot of each guest's own disk:
+
+```text
+FAT32 persisted format
+FAT32 format probe 0F
+```
+
+The probe SHA-256 is
+`fc860a08d86c5732346a442b7a43931b50574303cfbe48725ff1e143e9a362a6`.
+The pinned live DVD ran under QEMU 8.2.2 with `-machine pc -cpu qemu64
+-m 512`, explicit `ATAMount`, and a writable raw IDE index-0 fixture copy.
+The reference disk SHA-256 after formatting and after reboot was
+`149fe048dbe1454a446e707524a9428523bfbdd6429d967ad8b4cd159b409959`.
+The native test checks both complete FAT copies, the boot record,
+preservation of all sectors outside the formatted partition except the
+expected MBR partition type and active flag, zeroes throughout the
+remaining data sectors, and persistence of the complete image on reboot.
+On the second native boot the driver also attempts a read-only format
+and declines the default confirmation on a writable volume using actual
+keyboard input. The image must remain unchanged after both refusals.
+Volume serial numbers and file timestamps need not match the reference.
+
+```sh
+make -j4 BUILD=build/fat-format test
+build/fat-format/Linux/TestBoot --fat32-format qemu-system-x86_64 \
+  build/fat-format/fat32-format-test.iso build/fat-format/fat32-writable.img
+```
 
 ## Building a RedSea ISO in the guest
 
@@ -1240,6 +1341,35 @@ and the pinned `TOS_Distro.ISO`. It obtains the reference text-layer address
 from the guest through the QEMU debug port. `make test` runs the native
 regression after the normal boot suite.
 
+The persistent variant runs the same original database from the DVD with
+the generated writable FAT32 ATA fixture mounted as `C:`. It sets the
+home directory to `C:/`, creates and edits both accounts, cancels the
+overwrite, and checks both accounts in the original UI. A second VM boots
+from the same disk with writes disabled and reads both saved accounts
+again. The host traverses the actual directory and allocation chain and
+compares all 51,200 record bytes, including the unused and cancelled
+records, with the expected record layout. It also checks the mirrored
+FATs, boot sector, unchanged source fixture, and byte-for-byte preservation
+of the mutated image across the read-only reboot.
+
+Both the native and pinned TempleOS guests passed the persistent replay
+under QEMU 8.2.2 (`pc`, `qemu64`, 512 MiB). The source is the unchanged
+`DataBase.HC` identified above. The file data agrees exactly; directory
+timestamps and unused FAT directory fields need not match.
+
+```sh
+make -j4 BUILD=build/database-disk
+make BUILD=build/database-disk build/database-disk/Linux/TestBoot \
+  build/database-disk/fat32-writable.img
+build/database-disk/Linux/TestBoot --database-persistent qemu-system-x86_64 \
+  build/database-disk/unholyos.iso build/database-disk/fat32-writable.img
+```
+
+For the reference, substitute `--database-persistent-reference` and the
+pinned `TOS_Distro.ISO`. An optional final directory retains the disk and
+screen captures. `make test` runs both the native RAM-drive and persistent
+ATA-drive regressions.
+
 ## Numeric and date prompts
 
 `Demo/Prompt.HC` retains Terry A. Davis's original bytes. The prompt
@@ -1448,7 +1578,7 @@ reference file-error diagnostics remain pending.
 | Interrupts and timers | `Kernel/KInts.HC`, `Kernel/KMain.HC`, `Kernel/KMisc.HC` | Both IDT stages, PIC setup, PIT ticks, HPET, the initial TSC calibration sample, and boot fault diagnostics. Debugger recovery is pending. |
 | Memory | `Kernel/Mem/PageTables.HC`, `BlkPool.HC`, `MAllocFree.HC` | Initial identity map, code and data pools, and early heap allocation. Heap allocation and freeing, the 32-bit device range list, and the uncached device alias are active. |
 | Tasking and CPUs | `Kernel/KTask.HC`, `Sched.HC`, `MultiProc.HC` | Core 0 runs Adam, the idle task, and spawned tasks with cooperative switching and PIT wakeups. Starting additional CPUs remains pending. |
-| Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `FileSysFAT.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. ATA block writes and explicitly enabled FAT32 whole-file and directory mutations persist across cold boots. Formatting and FAT32 write streams remain pending. |
+| Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `FileSysFAT.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. ATA block writes, explicitly enabled FAT32 file and directory mutations, and buffered streams persist across cold boots. Fragmented streams, recursive file operations, cluster reclamation, and quick and full formatting of mounted FAT32 primary partitions are tested. Unmounted partitions and full cache and error-path parity remain pending. |
 | Graphics | `Kernel/Display.HC`, `Adam/Gr/GrScrn.HC` | VGA text and graphics composition, 16-color palette, cursor, zoom, and a scheduled refresh task |
 | Input and sound | `Kernel/SerialDev/Keyboard.HC`, `Mouse.HC`, `Message.HC`, `Kernel/KMisc.HC` | PS/2 keyboard and mouse messages, PC speaker tones, and queued sound recording. Desktop input controls and AU output remain pending. |
 | Desktop and system tools | `StartOS.HC`, `Adam/MakeAdam.HC`, `Adam/WinMgr.HC`, `Adam/DolDoc`, `Apps` | The refresh task draws visible DolDoc text and borders. The full editor and interactive desktop remain pending. |

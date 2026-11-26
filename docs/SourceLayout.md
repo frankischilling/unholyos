@@ -672,6 +672,19 @@ full filesystem exception parity, or Unicode support. FAT32 mutations
 require an explicitly writable ATA device; the normal mount policy is
 unchanged.
 
+`DskFmt.cpp` follows `DskFmt.HC` for `Fmt` and partition type updates.
+`FAT32Fmt` in `FileSysFAT.cpp` uses the pinned sector-per-cluster
+thresholds, boot record, FSInfo signatures, two FAT copies, and root
+cluster allocation. `BlkWriteZero` in `DskBlk.cpp` clears the metadata
+region for a quick format or the entire partition for a full format.
+The current ATA formatter accepts an existing mounted FAT32 primary
+partition only, checks its extent and excludes overlapping partitions.
+It preserves unrelated MBR bytes. `Fmt` honors confirmation and refuses
+read-only devices; it also supports the existing RAM RedSea formatting
+path. Formatting unmounted partitions, extended partitions, ATA RedSea,
+progress indicators, and complete error and cache behavior remain pending.
+Formatting is destructive and is not transactional.
+
 ## File streams
 
 `Kernel/BlkDev/DskCFile.cpp` follows `DskCFile.HC` for `FOpen`,
@@ -683,21 +696,18 @@ preallocation, `w` replacement, `w+` updates, and metadata changes on
 close, including preservation of the original timestamp. The containing
 directory must already exist.
 
-The current slice supports DVD reads, RAM reads and writes, and FAT32
-ATA reads. It rejects
-positive writes to a new stream without a preallocated extent; the
-reference contiguous path would otherwise use cluster zero. A failed
-preallocation preserves the previous file rather than deleting it first.
-Close checks that changes to size stay within the allocated block count
-and that the entry still refers to the same file. FAT32 `FOpen` and
-`FBlkRead` follow allocation chains for reads, including seek and next-block
-operations. An explicit contiguous read requires the `.C` extension; the
-implementation still checks the actual FAT chain to avoid reading unrelated
-sectors. The current reader revalidates and traverses chains on each call;
-it does not reproduce the reference's `FSetClus` cache fields or dirty
-cluster-buffer behavior. FAT32 write streams remain pending; whole-file
-and directory mutations and the ATA block-write path are independently
-tested across cold reboots.
+DVD reads, RedSea RAM streams, and FAT32 ATA streams share this interface.
+RedSea writes still require a preallocated extent. FAT32 noncontiguous
+streams can allocate and extend their cluster chains on demand; preallocated
+and contiguous streams also support bounded writes. `FSetClus` tracks the
+current cluster and flushes a dirty buffer before changing clusters or
+closing. Reads from the current dirty cluster use the buffered data.
+Close commits size and timestamp changes to the directory entry. An
+explicit contiguous FAT32 stream requires the `.C` extension and checks
+the chain before accessing its blocks. FAT32 mutations remain subject to
+the explicitly writable device policy. Concurrent open-stream coherence,
+general truncation, transactional recovery, and full error-path parity
+remain pending.
 
 `Kernel/BlkDev/DskCopy.cpp` follows `CopySingleZ` and `CopySingle` in
 `DskCopy.HC`. Equal filename attributes select the raw block-stream path
@@ -728,9 +738,10 @@ counts one for each visited directory, including the destination root, as
 the reference does despite its files-only API comment. A same-drive
 destination inside the resolved source directory is rejected. `ScanFlags`
 in `Kernel/StrB.cpp` uses the file utility flag list from `KDefine.cpp`.
-Read-only devices are refused before mutation. Writable RAM RedSea is the
-fully tested file-tree destination. FAT32 whole-file writes and deletion
-are implemented, while the block-stream copy and tree paths remain pending. Error paths,
+Read-only devices are refused before mutation. Writable RAM RedSea and
+explicitly writable FAT32 ATA destinations have recursive file-tree
+coverage. The FAT32 probe checks masked copy, move, nested trees, deletion,
+fragmented stream growth, and reclamation across cold boots. Error paths,
 resident-cache deletion behavior, and restoring a deleted current
 directory are not yet fully matched to TempleOS.
 
@@ -808,7 +819,10 @@ document in the current task rather than a separate popup task.
 
 `Kernel/BlkDev/DskDirB.cpp` exposes `HomeSet`, and the compiler headers expose
 the existing RAM-drive creation and lookup APIs so the database can write
-to a writable home directory. `Compiler/PrsExp.cpp` accepts address-of on
+to a writable home directory. The same unchanged database also writes to
+FAT32 ATA storage through the buffered file-stream APIs, with record
+creation, editing, cancellation, and cold-reboot retrieval tested against
+the pinned guest. `Compiler/PrsExp.cpp` accepts address-of on
 array expressions used by the original form's `StrCpy(&fds.name, ...)`.
 `Kernel/KLoad.cpp` exposes the existing `_STRCPY` adapter under its HolyC
 name; the `ToUpper` adapter in `Kernel/StrA.cpp` supplies the reference
