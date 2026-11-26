@@ -8,6 +8,7 @@ CDbgGlbls dbg;
 CSema sys_semas[SEMA_SEMAS_NUM];
 CScrnCastGlbls scrncast;
 CKbdStateGlbls kbd;
+CTextGlbls text;
 CMsHardStateGlbls ms_hard, ms_hard_last;
 CMsStateGlbls ms, ms_last, old_ms;
 CGridGlbls ms_grid;

@@ -1,6 +1,6 @@
 %include "Kernel/KernelA.inc"
 
-GLOBAL TextCharCpp,TextLenStrCpp,TextLenAttrCpp
+GLOBAL TextCharCpp,TextLenStrCpp,TextLenAttrStrCpp,TextLenAttrCpp
 EXTERN gr
 
 SECTION .text
@@ -111,6 +111,19 @@ TextLenStrCpp:
 	STOSD
 	DEC	RCX
 	JNZ	.next
+	MOV	EAX,1
+	RET
+.miss:
+	XOR	EAX,EAX
+	RET
+
+; The clipper advances a byte source. Scale its skipped cell count by four.
+TextLenAttrStrCpp:
+	XOR	R9D,R9D
+	CALL	TextLenClip
+	JC	.miss
+	LEA	RSI,[R8+RSI*4]
+	REP MOVSD
 	MOV	EAX,1
 	RET
 .miss:

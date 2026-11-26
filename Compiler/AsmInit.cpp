@@ -544,7 +544,8 @@ static bool CmpDirData(CHashTable *table)
   auto *entry = CmpKernelClass(table, "CDirEntry", sizeof(CDirEntry));
   auto *context = CmpKernelClass(table, "CDirContext", sizeof(CDirContext));
   auto *drive = CmpKernelClass(table, "CDrv", sizeof(CDrv));
-  if (!entry || !context || !drive)
+  auto *file = CmpKernelClass(table, "CFile", sizeof(CFile));
+  if (!entry || !context || !drive || !file)
     return false;
   auto *heap = CurrentTask()->data_heap;
   auto *i64 = FindType("I64", table);
@@ -575,6 +576,14 @@ static bool CmpDirData(CHashTable *table)
       {"fs_type", drive, FindType("U16", table), offsetof(CDrv, fs_type)},
       {"root_clus", drive, i64, offsetof(CDrv, root_clus)},
       {"size", drive, i64, offsetof(CDrv, size)},
+      {"flags", file, i64, offsetof(CFile, flags)},
+      {"de", file, entry, offsetof(CFile, de)},
+      {"dv", file, drive + 1, offsetof(CFile, dv)},
+      {"fblk_num", file, i64, offsetof(CFile, fblk_num)},
+      {"clus", file, i64, offsetof(CFile, clus)},
+      {"file_clus_num", file, i64, offsetof(CFile, file_clus_num)},
+      {"max_blk", file, i64, offsetof(CFile, max_blk)},
+      {"clus_buf", file, u8 + 1, offsetof(CFile, clus_buf)},
   };
   for (const auto &member : members) {
     auto *name = StrNew(member.name, heap);
@@ -761,6 +770,53 @@ static bool CmpKbdData(CHashTable *table)
     }
   }
   return CmpKernelGlobal(table, "kbd", cls, &kbd);
+}
+
+static bool CmpTextData(CHashTable *table)
+{
+  auto *cls=CmpKernelClass(table,"CTextGlbls",sizeof(CTextGlbls));
+  if (!cls)
+    return false;
+  auto *heap=CurrentTask()->data_heap;
+  auto *i64=FindType("I64",table);
+  auto *u8=FindType("U8",table);
+  auto *u64=FindType("U64",table);
+  const struct {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+    size_t count=0;
+  } members[]{
+    {"raw_col",i64,offsetof(CTextGlbls,raw_col)},
+    {"raw_flags",i64,offsetof(CTextGlbls,raw_flags)},
+    {"raw_scrn_image",u8+1,offsetof(CTextGlbls,raw_scrn_image)},
+    {"rows",i64,offsetof(CTextGlbls,rows)},
+    {"cols",i64,offsetof(CTextGlbls,cols)},
+    {"font",u64+1,offsetof(CTextGlbls,font)},
+    {"aux_font",u64+1,offsetof(CTextGlbls,aux_font)},
+    {"vga_alias",u8+1,offsetof(CTextGlbls,vga_alias)},
+    {"vga_text_alias",u8+1,offsetof(CTextGlbls,vga_text_alias)},
+    {"border_chars",u8,offsetof(CTextGlbls,border_chars),16},
+  };
+  for (const auto &member:members) {
+    auto *name=StrNew(member.name,heap);
+    auto *entry=name ? MemberAdd(*cls,name,*member.type,member.offset) : nullptr;
+    if (!entry) {
+      Free(name);
+      return false;
+    }
+    if (member.count) {
+      auto *axis=reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim),heap));
+      if (!axis)
+        return false;
+      axis->cnt=member.count;
+      axis->total_cnt=1;
+      entry->dim.next=axis;
+      entry->dim.total_cnt=member.count;
+      entry->size=member.count*member.type->size;
+    }
+  }
+  return CmpKernelGlobal(table,"text",cls,&text);
 }
 
 static bool CmpMouseData(CHashTable *table)
@@ -1352,6 +1408,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     MenuPtr,
     MenuEntryPtr,
     CtrlPtr,
+    FilePtr,
+    U32Ptr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1375,6 +1433,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CMenu", table) + 1,
       FindType("CMenuEntry", table) + 1,
       FindType("CCtrl", table) + 1,
+      FindType("CFile", table) + 1,
+      FindType("U32", table) + 1,
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -1408,6 +1468,13 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"FilesFind", DirEntryPtr, FF_RET1, {{"files_find_mask", U8Ptr}, {"fuf_flags", I64, true}}},
       {"FileFind", Bool, FF_RET1,
        {{"filename", U8Ptr}, {"_de", DirEntryPtr, true}, {"fuf_flags", I64, true}}},
+      {"FSize", I64, FF_RET1, {{"f", FilePtr}}},
+      {"FOpen", FilePtr, FF_RET1, {{"filename", U8Ptr}, {"flags", U8Ptr}, {"cnt", I64, true}}},
+      {"FClose", U0, FF_RET1, {{"f", FilePtr}}},
+      {"FBlkRead", Bool, FF_RET1,
+       {{"f", FilePtr}, {"buf", U8Ptr}, {"blk", I64, true, FFB_NEXT_BLK}, {"cnt", I64, true, 1}}},
+      {"FBlkWrite", Bool, FF_RET1,
+       {{"f", FilePtr}, {"buf", U8Ptr}, {"blk", I64, true, FFB_NEXT_BLK}, {"cnt", I64, true, 1}}},
       {"FilesFindMatch", Bool, FF_RET1,
        {{"_test_name", U8Ptr}, {"files_find_mask", U8Ptr}, {"fuf_flags", I64, true}}},
       {"DirEntryDel", U0, FF_RET1, {{"tmpde", DirEntryPtr}}},
@@ -1512,9 +1579,14 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"TextLenStr", Bool, FF_RET1,
        {{"task", TaskPtr}, {"x", I64}, {"y", I64}, {"len", I64}, {"attr", I64}, {"s", U8Ptr}},
        "_TEXT_LEN_STR"},
+      {"TextLenAttrStr", Bool, FF_RET1,
+       {{"task", TaskPtr}, {"x", I64}, {"y", I64}, {"len", I64}, {"_attr", U32Ptr}},
+       "_TEXT_LEN_ATTR_STR"},
       {"TextLenAttr", Bool, FF_RET1,
        {{"task", TaskPtr}, {"x", I64}, {"y", I64}, {"len", I64}, {"attr", I64}},
        "_TEXT_LEN_ATTR"},
+      {"TextPrint", U0, FF_DOT_DOT_DOT,
+       {{"task", TaskPtr}, {"x", I64}, {"y", I64}, {"attr", I64}, {"fmt", U8Ptr}}},
       {"TextRect", U0, FF_RET1, {{"l", I64}, {"r", I64}, {"t", I64}, {"b", I64}, {"d", I64}}},
       {"TextBorder", U0, FF_RET1,
        {{"task", TaskPtr, true}, {"l", I64}, {"r", I64}, {"t", I64}, {"b", I64},
@@ -1943,6 +2015,7 @@ static bool CmpFillHash(CHashTable *table)
       {"SPT_POLYPT","9"}, {"SPT_LINE","10"}, {"SPT_POLYLINE","11"},
       {"SPT_RECT","12"}, {"SPT_BITMAP","23"}, {"SPT_ARROW","26"},
       {"TEXT_COLS","80"}, {"TEXT_ROWS","60"}, {"TASKf_NONTIMER_RAND","14"},
+      {"FONT_WIDTH","8"}, {"FONT_HEIGHT","8"},
       {"DCF_COMPRESSED","1"}, {"DCF_PALETTE","2"}, {"DCF_NO_TRANSPARENTS","4"},
       {"DCF_TRANSFORMATION","0x100"}, {"DCF_SYMMETRY","0x200"},
       {"DCF_JUST_MIRROR","0x400"}, {"DCF_LOCATE_NEAREST","0x800"},
@@ -1962,9 +2035,13 @@ static bool CmpFillHash(CHashTable *table)
       {"DOCF_NO_SCROLL_BARS", "0x2000"}, {"TSF_SAME_SONG", "1"},
       {"CDATE_FREQ", "49710"},
       {"CDIR_FILENAME_LEN", "38"}, {"CDIR_SIZE", "64"},
+      {"BLK_SIZE_BITS", "9"}, {"BLK_SIZE", "512"},
       {"RS_ATTR_DIR", "0x10"}, {"RS_ATTR_DELETED", "0x100"},
       {"RS_ATTR_RESIDENT", "0x200"}, {"RS_ATTR_COMPRESSED", "0x400"},
       {"RS_ATTR_CONTIGUOUS", "0x800"},
+      {"FFB_NEXT_BLK", "0x7FFFFFFFFFFFFFFF"}, {"FF_WRITE", "1"},
+      {"FF_NEW_FILE", "2"}, {"FF_BUF_DIRTY", "4"}, {"FF_NEEDS_WRITE", "8"},
+      {"FF_CONTIGUOUS", "16"}, {"FF_USE_OLD_DATETIME", "32"},
       {"FUF_RECURSE", "1"}, {"FUF_SINGLE", "0x200"},
       {"FUF_JUST_DIRS", "0x400"}, {"FUF_JUST_FILES", "0x800"},
       {"FUF_JUST_TXT", "0x1000"}, {"FUF_JUST_DD", "0x2000"},
@@ -2108,7 +2185,7 @@ static bool CmpFillHash(CHashTable *table)
   auto *task = CmpKernelClass(table, "CTask", sizeof(CTask));
   return task && CmpRuntimeData(table) && CmpDateData(table) && CmpDirData(table) &&
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
-         CmpKbdData(table) &&
+         CmpKbdData(table) && CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
          CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
          CmpCtrlData(table, task) && CmpRuntimeHeaders(table);

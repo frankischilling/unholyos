@@ -670,6 +670,24 @@ tree pixels. The comparison excludes the terminal caret cell. The boot
 suite checks the probe on the startup-test and guest-built discs and
 runs the demo on the standard and guest-built discs.
 
+## Mutable fonts and text cells
+
+Both discs include Terry A. Davis's unchanged
+[`Demo/ExtChars.HC`](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/ExtChars.HC)
+(SHA-256 `c32514d7e3bf31fedf2bae25a10b49f4e3a365c46e5fa9b0256e5f58e07bb663`).
+It modifies glyph 255 and uses extended characters in both a string and
+a HolyC identifier. Ctrl+Alt+F swaps the standard and Cyrillic fonts.
+
+With QEMU 8.2.2, PC, `qemu64`, and 512 MiB, the pinned guest ran
+`FontTextProbe.HC` through `ExePutS` after the source was copied into
+guest memory using the debugger. The reference returned a size of 88
+for `CTextGlbls`, both full-font hashes, clipped attribute cells
+`2F42 3043 4144`, formatted cells `1E42 1E37 4144`, all 64 custom-glyph
+pixels, and two successful keyboard-driven font swaps. Running the
+original demo from its disc produced glyph `3C42BDC381A5423C`.
+The boot suite checks these results in UnholyOS, including the
+original demo's extended-character output, and restores the glyph.
+
 ## Depth-buffered spans and polygons
 
 `DepthSpansProbe.HC` checks span counts, depth interpolation, window
@@ -736,6 +754,23 @@ source and as a guest-compiled `.BIN.Z`. The probe checks local, global,
 member and parameter declarations, default arguments, pointer arrays,
 nested calls, and both stack cleanup conventions. The pinned guest
 faulted while running this stress probe.
+
+`VariadicProbe.HC` and `VariadicPtrProbe.HC` exercise native variadic
+definitions, default arguments, empty and nonempty argument lists, raw
+floating-point and pointer values, writable `argc` and `argv`, recursion,
+right-to-left evaluation, and repeated direct and indirect calls. Both
+fixtures ran from source and guest-compiled `.BIN.Z` files in QEMU 8.2.2
+with PC, `qemu64`, and 512 MiB. All six result lines matched the pinned
+TempleOS guest running the same source. TempleOS also warned that `argc`
+was unused in `VaRaw`; UnholyOS did not emit that warning.
+
+The focused build used `BUILD=build/variadic-check` and the ISO
+`build/variadic-check/variadic-aot.iso`, containing the two fixtures,
+`StartOS.HC.Z`, and `FileWriteProbe.BIN` to mount the RAM drive. The VM
+command was `qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d
+-cdrom build/variadic-check/variadic-aot.iso -display none -serial
+file:build/variadic-check/aot.log -monitor none -no-reboot`. The startup
+and guest-built ISO tests also check the six lines in both execution modes.
 
 `Linux/Fixtures/Grid.HC` contains the original 672 bytes of Terry A.
 Davis's [Grid demo](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Graphics/Grid.HC).

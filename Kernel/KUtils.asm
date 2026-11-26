@@ -14,6 +14,7 @@ GLOBAL CdHC,IsDirHC,DirHC,PutDirLinkHC,FilesFindHC,FileFindHC,FilesFindMatchHC
 GLOBAL DirEntryDelHC,DirEntryDel2HC,DirTreeDelHC,DirTreeDel2HC
 GLOBAL DirContextNewHC,DirContextDelHC
 GLOBAL FileWriteHC,BlkDevNextFreeSlotHC,BlkDevAddHC,Let2DrvHC,BlkReadHC,BlkWriteHC
+GLOBAL FSizeHC,FOpenHC,FCloseHC,FBlkReadHC,FBlkWriteHC
 GLOBAL RedSeaISOHC
 GLOBAL SysUntryHC,PutExceptHC,YorNHC
 GLOBAL StrPrintJoinHC,StrPrintHC,CatPrintHC,MStrPrintHC,PrintHC,PrintErrHC,PrintWarnHC
@@ -48,7 +49,8 @@ GLOBAL ScanCode2KeyNameHC
 GLOBAL WinBorderHC,SettingsPushHC,SettingsPopHC
 GLOBAL DocLockHC,DocUnlockHC,DocEntryRunHC,DocBottomHC,DocClearHC,NowHC
 GLOBAL DocTermNewHC,DocGetKeyHC,DocScanLineHC,GetStrHC,GetSHC,UserCmdLineHC
-GLOBAL TextCharHC,TextLenStrHC,TextLenAttrHC,TextRectHC,TextBorderHC,WinZBufUpdateHC
+GLOBAL TextCharHC,TextLenStrHC,TextLenAttrStrHC,TextLenAttrHC,TextPrintHC
+GLOBAL TextRectHC,TextBorderHC,WinZBufUpdateHC
 GLOBAL RawHC,DbgModeHC,IsDbgModeHC,PutFileLinkHC,PutSrcLinkHC,FixSetHC,AdamErrHC
 GLOBAL tSHC,BusyHC,SleepUntilHC,SleepHC,Ona2FreqHC,Freq2OnaHC,SndHC
 GLOBAL ScrnCastHC,SndRstHC,BeepHC,MuteHC,IsMuteHC
@@ -133,6 +135,7 @@ EXTERN CdCpp,IsDirCpp,DirCpp,PutDirLinkCpp,FilesFindCpp,FileFindCpp,FilesFindMat
 EXTERN DirEntryDelCpp,DirEntryDel2Cpp,DirTreeDelCpp,DirTreeDel2Cpp
 EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp
 EXTERN FileWriteCpp,BlkDevNextFreeSlotCpp,BlkDevAddCpp,Let2DrvCpp,BlkReadCpp,BlkWriteCpp
+EXTERN FSizeCpp,FOpenCpp,FCloseCpp,FBlkReadCpp,FBlkWriteCpp
 EXTERN RedSeaISOCpp
 EXTERN SysUntryCpp,PutExceptCpp,YorNCpp
 EXTERN StrPrintJoin,CatPrintCpp,MStrPrintCpp,PrintCpp,PrintErrCpp,PrintWarnCpp
@@ -167,7 +170,8 @@ EXTERN ScanCode2KeyNameCpp
 EXTERN WinBorderCpp,SettingsPushCpp,SettingsPopCpp
 EXTERN DocLockCpp,DocUnlockCpp,DocEntryRunCpp,DocBottomCpp,DocClearCpp,NowCpp
 EXTERN DocTermNewCpp,DocGetKeyCpp,DocScanLineCpp,GetStrCpp,GetSCpp,UserCmdLineCpp
-EXTERN TextCharCpp,TextLenStrCpp,TextLenAttrCpp,TextRectCpp,TextBorderCpp,WinZBufUpdateCpp
+EXTERN TextCharCpp,TextLenStrCpp,TextLenAttrStrCpp,TextLenAttrCpp,TextPrintCpp
+EXTERN TextRectCpp,TextBorderCpp,WinZBufUpdateCpp
 EXTERN RawCpp,DbgModeCpp,IsDbgModeCpp,PutFileLinkCpp,PutSrcLinkCpp,FixSetCpp,AdamErrCpp
 EXTERN tSCpp,BusyCpp,SleepUntilCpp,SleepCpp,Ona2FreqCpp,Freq2OnaCpp,SndCpp
 EXTERN ScrnCastCpp,SndRstCpp,BeepCpp,MuteCpp,IsMuteCpp
@@ -481,6 +485,11 @@ HOLYC_CPP DirContextNewHC,DirContextNewCpp,4
 HOLYC_CPP DirContextDelHC,DirContextDelCpp,2
 HOLYC_CPP Str2I64HC,Str2I64Cpp,3
 HOLYC_CPP FileWriteHC,FileWriteCpp,5
+HOLYC_CPP FSizeHC,FSizeCpp,1
+HOLYC_CPP FOpenHC,FOpenCpp,3
+HOLYC_CPP FCloseHC,FCloseCpp,1
+HOLYC_CPP FBlkReadHC,FBlkReadCpp,4
+HOLYC_CPP FBlkWriteHC,FBlkWriteCpp,4
 HOLYC_CPP RedSeaISOHC,RedSeaISOCpp,3
 HOLYC_CPP BlkDevNextFreeSlotHC,BlkDevNextFreeSlotCpp,2
 HOLYC_CPP BlkDevAddHC,BlkDevAddCpp,4
@@ -547,7 +556,18 @@ HOLYC_CPP SettingsPopHC,SettingsPopCpp,2
 HOLYC_CPP WinZBufUpdateHC,WinZBufUpdateCpp,0
 HOLYC_CPP TextCharHC,TextCharCpp,5
 HOLYC_CPP TextLenStrHC,TextLenStrCpp,6
+HOLYC_CPP TextLenAttrStrHC,TextLenAttrStrCpp,5
 HOLYC_CPP TextLenAttrHC,TextLenAttrCpp,5
+TextPrintHC:
+	HC_FRAME_ENTER
+	MOV	RDI,[RBP+16]
+	MOV	RSI,[RBP+24]
+	MOV	RDX,[RBP+32]
+	MOV	RCX,[RBP+40]
+	MOV	R8,[RBP+48]
+	LEA	R9,[RBP+56]
+	HC_FRAME_CALL TextPrintCpp
+	RET
 HOLYC_CPP TextRectHC,TextRectCpp,5
 HOLYC_CPP TextBorderHC,TextBorderCpp,7
 HOLYC_CPP DocPutHC,DocPutCpp,1

@@ -1079,9 +1079,18 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
       VerifyGraphicsContexts(vm, graphics, expected_data_hc);
   // The first terminal lexer loads the shared assembler table into Adam.
   constexpr uint64_t asm_hash_used = 0x10518;
+  std::smatch raw_screen;
+  Check(std::regex_search(output,raw_screen,
+                         std::regex(R"(raw screen (0x[0-9a-f]+))")),
+        "Missing raw screen image");
+  const uint64_t raw=std::stoull(raw_screen[1].str(),nullptr,16);
+  constexpr uint64_t raw_used=76*page-24;
+  Check(raw && ReadPhysical<2>(vm,raw-16)==
+                   std::array<uint64_t,2>{expected_data_hc,raw_used},
+        "Invalid raw screen image allocation");
   const uint64_t boot_used = range_bytes + late_used + symbol_used +
                              drive_used + allocation[1] + graphics_used +
-                             asm_hash_used;
+                             asm_hash_used + raw_used;
   auto code = VerifyHeap(vm, adam_hc, code_pool, adam);
   uint64_t code_used = 0x42840 + fault_used + (pool ? 0x5E8 : boot_used);
   uint64_t data_used = boot_used, data_alloced = 0;
@@ -2566,6 +2575,16 @@ constexpr std::string_view function_ptr_output =
     "function pointer target 27\n"
     "function pointer rebound 207\n";
 
+constexpr std::string_view variadic_output =
+    "variadic direct 9 219 114 0 308\n"
+    "variadic raw 73 mutate 213 recurse 10\n"
+    "variadic order 206 321\n"
+    "variadic cleanup 103000\n";
+
+constexpr std::string_view variadic_ptr_output =
+    "variadic pointer 3 211 0 108 211\n"
+    "variadic pointer cleanup 30600\n";
+
 static void DriveDocFrame(CMonitor &vm, const fs::path &serial)
 {
   constexpr std::array<uint8_t, 3> black{}, blue{0, 0, 168}, red{168, 0, 0},
@@ -2841,6 +2860,33 @@ constexpr std::string_view screen_output = "screen normal\n"
                                            "screen zoom\n"
                                            "screen restored\n";
 
+static void DriveFontText(CMonitor &vm,const fs::path &serial)
+{
+  vm.WaitSerial(serial,"font swap ready\n");
+  vm.Hmp("sendkey ctrl-alt-f 65");
+  vm.WaitSerial(serial,"font swapped 1 1\n");
+  std::this_thread::sleep_for(150ms);
+  vm.Hmp("sendkey ctrl-alt-f 65");
+  vm.WaitSerial(serial,"font restored 1 1\n");
+}
+
+static void CheckFontText(const std::string &output)
+{
+  CheckProgramOutput(output,"/FontTextProbe.HC",
+      "font layout 88 40 48 72 60 80\n"
+      "font data 64835F1EE471357B 3A41ADEE39E15EA1 2 D\n"
+      "text attr 1 2F42 3043 4144\n"
+      "text print 1E42 1E37 4144 0\n"
+      "font pixels 64\n"
+      "font swap ready\n"
+      "font swapped 1 1\n"
+      "font restored 1 1\n",'1');
+  CheckProgramOutput(output,"/Demo/ExtChars.HC",
+                     "Face:\xFF\nf\xFF\xFF=12345\n",'1');
+  Check(output.find("UnholyOS: extended character glyph 0x3c42bdc381a5423c")!=
+        std::string::npos,"The original ExtChars.HC did not change glyph 255");
+}
+
 constexpr std::string_view matrix_output =
     "matrix pi 400921FB54442D18\n"
     "matrix rotation 6812FEF91D413F68 17 -4 -5\n"
@@ -2992,6 +3038,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     DriveDocCallback(rebuilt, serial);
     DriveExceptions(rebuilt, serial);
     DriveScreen(rebuilt, serial);
+    DriveFontText(rebuilt,serial);
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
     CheckProgramOutput(boot, "/RasterProbe.HC", raster_output, '1');
@@ -3013,11 +3060,16 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/FunctionPtrProbe.HC", function_ptr_output, '1');
     CheckProgramOutput(boot, "/FunctionPtrProbe.BIN.Z", function_ptr_output,
                        '1');
+    CheckProgramOutput(boot, "/VariadicProbe.HC", variadic_output, '1');
+    CheckProgramOutput(boot, "/VariadicProbe.BIN.Z", variadic_output, '1');
+    CheckProgramOutput(boot, "/VariadicPtrProbe.HC", variadic_ptr_output, '1');
+    CheckProgramOutput(boot, "/VariadicPtrProbe.BIN.Z", variadic_ptr_output, '1');
     CheckProgramOutput(boot, "/DocFrame.HC", doc_frame_output, '1');
     CheckProgramOutput(boot, "/DocButton.HC", doc_button_output, '1');
     CheckProgramOutput(boot, "/DirectoryProbe.HC", "Directory probe 1FF\n",
                        '1');
     CheckProgramOutput(boot, "/DirContextProbe.HC", "Dir context FF\n", '1');
+    CheckProgramOutput(boot, "/FileStreamProbe.HC", "File stream probe 3FF\n", '1');
     CheckProgramOutput(boot, "/DocBinLinkProbe.HC", "Doc bin links 1F\n", '1');
     CheckProgramOutput(boot, "/SpriteProbe.HC", "sprite bitmap 12546 0 0 4\n",
                        '1');
@@ -3027,6 +3079,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
         std::string::npos)
       throw std::runtime_error("DolDoc callback exception did not propagate");
     CheckProgramOutput(boot, "/ScreenProbe.HC", screen_output, '1');
+    CheckFontText(boot);
     auto registers = StopAtIdle(rebuilt);
     VerifyHandoff(boot, media, registers);
     VerifyBootDrive(rebuilt, boot, media, true, false);
@@ -3062,6 +3115,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       DriveDocCallback(vm, serial);
       DriveExceptions(vm, serial);
       DriveScreen(vm, serial);
+      DriveFontText(vm,serial);
     }
     std::string output = vm.Boot(serial);
     std::string registers = StopAtIdle(vm);
@@ -3098,11 +3152,18 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          '1');
       CheckProgramOutput(output, "/FunctionPtrProbe.BIN.Z", function_ptr_output,
                          '1');
+      CheckProgramOutput(output, "/VariadicProbe.HC", variadic_output, '1');
+      CheckProgramOutput(output, "/VariadicProbe.BIN.Z", variadic_output, '1');
+      CheckProgramOutput(output, "/VariadicPtrProbe.HC", variadic_ptr_output, '1');
+      CheckProgramOutput(output, "/VariadicPtrProbe.BIN.Z", variadic_ptr_output,
+                         '1');
       CheckProgramOutput(output, "/DocFrame.HC", doc_frame_output, '1');
       CheckProgramOutput(output, "/DocButton.HC", doc_button_output, '1');
       CheckProgramOutput(output, "/DirectoryProbe.HC", "Directory probe 1FF\n",
                          '1');
       CheckProgramOutput(output, "/DirContextProbe.HC", "Dir context FF\n",
+                         '1');
+      CheckProgramOutput(output, "/FileStreamProbe.HC", "File stream probe 3FF\n",
                          '1');
       CheckProgramOutput(output, "/DocBinLinkProbe.HC", "Doc bin links 1F\n",
                          '1');
@@ -3114,6 +3175,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
           std::string::npos)
         throw std::runtime_error("DolDoc callback exception did not propagate");
       CheckProgramOutput(output, "/ScreenProbe.HC", screen_output, '1');
+      CheckFontText(output);
       CheckProgramOutput(output, "/PaletteProbe.HC",
                          "palette tables 8 AAAA55550000 777777777777 12 BROWN LTRED\n"
                          "palette start 0 AAAA55550000 FFFFFFFFFFFF\n"

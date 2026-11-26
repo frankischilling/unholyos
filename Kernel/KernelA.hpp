@@ -570,6 +570,25 @@ struct CDirEntry
   CDate datetime;
 };
 
+constexpr int64_t FFB_NEXT_BLK = INT64_MAX;
+constexpr int64_t FF_WRITE = 1, FF_NEW_FILE = 2, FF_BUF_DIRTY = 4,
+                  FF_NEEDS_WRITE = 8, FF_CONTIGUOUS = 16,
+                  FF_USE_OLD_DATETIME = 32;
+
+struct CFile
+{
+  int64_t flags;
+  CDirEntry de;
+  CDrv *dv;
+  int64_t fblk_num, clus, file_clus_num, max_blk;
+  uint8_t *clus_buf;
+};
+
+static_assert(sizeof(CFile) == 168 && offsetof(CFile, de) == 8 &&
+              offsetof(CFile, dv) == 120 && offsetof(CFile, fblk_num) == 128 &&
+              offsetof(CFile, clus) == 136 && offsetof(CFile, file_clus_num) == 144 &&
+              offsetof(CFile, max_blk) == 152 && offsetof(CFile, clus_buf) == 160);
+
 struct CDirContext
 {
   CDrv *old_dv, *dv;
@@ -1258,6 +1277,21 @@ static_assert(sizeof(CKbdStateGlbls) == 130 &&
               offsetof(CKbdStateGlbls, fifo) == 40 &&
               offsetof(CKbdStateGlbls, down_bitmap) == 64 &&
               offsetof(CKbdStateGlbls, irqs_working) == 129);
+
+struct [[gnu::packed]] CTextGlbls
+{
+  int64_t raw_col,raw_flags;
+  uint8_t *raw_scrn_image;
+  int64_t rows,cols;
+  uint64_t *font,*aux_font;
+  uint8_t *vga_alias,*vga_text_alias;
+  uint8_t border_chars[16];
+};
+static_assert(sizeof(CTextGlbls)==88 &&
+              offsetof(CTextGlbls,font)==40 &&
+              offsetof(CTextGlbls,aux_font)==48 &&
+              offsetof(CTextGlbls,border_chars)==72);
+
 struct CD3I64
 {
   int64_t x, y, z;
