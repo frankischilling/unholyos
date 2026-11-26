@@ -33,13 +33,20 @@ extern "C" CFile *FOpenCpp(const char *filename, const char *flags, int64_t cnt)
   auto *full_name = FileNameAbs(filename, task);
   if (full_name && *full_name && full_name[1] == ':')
     f->dv = PathDrive(task, *full_name);
-  if (!f->dv || f->dv->fs_type != FSt_REDSEA || f->dv->spc != 1) {
+  if (!f->dv || !ReadableFS(*f->dv) || f->dv->spc<=0) {
     Free(full_name);
     FDel(f);
     return nullptr;
   }
-  f->flags = FF_CONTIGUOUS;
-  f->clus_buf = CAlloc(BLK_SIZE, task.data_heap);
+  if (f->dv->fs_type==FSt_REDSEA || FFlag(flags,'c'))
+    f->flags=FF_CONTIGUOUS;
+  if (f->dv->fs_type==FSt_FAT32 && (f->flags&FF_CONTIGUOUS) &&
+      !(FileAttrCpp(filename,0)&RS_ATTR_CONTIGUOUS)) {
+    Free(full_name);
+    FDel(f);
+    return nullptr;
+  }
+  f->clus_buf = CAlloc(f->dv->spc*BLK_SIZE, task.data_heap);
   if (!f->clus_buf) {
     Free(full_name);
     FDel(f);
@@ -47,7 +54,7 @@ extern "C" CFile *FOpenCpp(const char *filename, const char *flags, int64_t cnt)
   }
 
   bool write = FFlag(flags, 'w');
-  if (write && (f->dv->bd->type != BDT_RAM ||
+  if (write && (f->dv->fs_type!=FSt_REDSEA || f->dv->bd->type != BDT_RAM ||
                 (f->dv->bd->flags & BDF_READ_ONLY))) {
     Free(full_name);
     FDel(f);
@@ -96,8 +103,7 @@ extern "C" void FCloseCpp(CFile *f)
 
 static bool FBlkRange(CFile *f, int64_t &blk, int64_t cnt)
 {
-  if (!f || !f->dv || f->dv->fs_type != FSt_REDSEA ||
-      !(f->flags & FF_CONTIGUOUS))
+  if (!f || !f->dv || !ReadableFS(*f->dv))
     return false;
   if (blk == FFB_NEXT_BLK)
     blk = f->fblk_num;
@@ -117,8 +123,9 @@ extern "C" uint64_t FBlkReadCpp(CFile *f, uint8_t *buf, int64_t blk, int64_t cnt
     return false;
   if (cnt <= 0)
     return true;
-  if (!buf || !FBlkExtent(f, blk, cnt) ||
-      !BlkReadCpp(f->dv, buf, f->de.clus + blk, cnt))
+  if (!buf || (f->dv->fs_type==FSt_FAT32?
+      !FAT32ReadBlocks(*f,buf,blk,cnt):
+      (!FBlkExtent(f,blk,cnt) || !BlkReadCpp(f->dv,buf,f->de.clus+blk,cnt))))
     return false;
   f->fblk_num = blk + cnt;
   return true;
@@ -127,7 +134,7 @@ extern "C" uint64_t FBlkReadCpp(CFile *f, uint8_t *buf, int64_t blk, int64_t cnt
 extern "C" uint64_t FBlkWriteCpp(CFile *f, const uint8_t *buf, int64_t blk,
                                  int64_t cnt)
 {
-  if (!FBlkRange(f, blk, cnt) || !(f->flags & FF_WRITE))
+  if (!FBlkRange(f, blk, cnt) || f->dv->fs_type!=FSt_REDSEA || !(f->flags & FF_WRITE))
     return false;
   if (cnt <= 0)
     return true;

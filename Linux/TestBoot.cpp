@@ -219,7 +219,7 @@ class CMonitor
 public:
   CMonitor(const char *qemu, const fs::path &iso, const fs::path &dir,
            const char *machine, const char *memory, bool secondary_slave,
-           bool debugcon = false)
+           const fs::path &disk={}, bool debugcon=false)
       : deadline(Clock::now() + 30s)
   {
     std::string image = fs::absolute(iso).string();
@@ -230,6 +230,14 @@ public:
         drive += ch;
     }
     drive += ",if=ide,index=3,media=cdrom";
+    std::string ata="file=";
+    if (!disk.empty()) {
+      for (char ch:fs::absolute(disk).string()) {
+        ata+=ch;
+        if (ch==',') ata+=ch;
+      }
+      ata+=",if=ide,index=0,format=raw,snapshot=on";
+    }
     std::string serial = "file:" + (dir / "serial.log").string();
     std::string log = (dir / "qemu.log").string();
     std::string debug = "file:" + (dir / "debugcon.bin").string();
@@ -251,6 +259,13 @@ public:
                "-boot", "d", "-cdrom", image.c_str(), "-display", "none",
                "-monitor", "none", "-serial", serial.c_str(), "-qmp", "stdio",
                "-debugcon", debug.c_str(), "-no-reboot", static_cast<char *>(nullptr));
+      if (!disk.empty()) {
+        execlp(qemu,qemu,"-machine",machine,"-cpu","qemu64","-m",memory,
+               "-boot","d","-cdrom",image.c_str(),"-drive",ata.c_str(),
+               "-display","none","-monitor","none","-serial",serial.c_str(),
+               "-qmp","stdio","-no-reboot",static_cast<char *>(nullptr));
+        _exit(127);
+      }
       execlp(qemu, qemu, "-machine", machine, "-cpu", "qemu64", "-m", memory,
              "-boot", "d", secondary_slave ? "-drive" : "-cdrom",
              secondary_slave ? drive.c_str() : image.c_str(), "-display",
@@ -1841,7 +1856,7 @@ static void DriveDataBase(CMonitor &vm, const fs::path &dir,
 }
 
 static void DriveUserTask(CMonitor &vm, const fs::path &dir,
-                          const std::string &boot, bool class_report = false)
+                          const std::string &boot, bool extended = false)
 {
   vm.ResetDeadline(15s);
   std::smatch match;
@@ -2118,7 +2133,7 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   wait_text("00C8");
   wait_text("Start.DD.Z");
 
-  if (class_report) {
+  if (extended) {
     vm.ResetDeadline(30s);
     type_cmd("DocClear(,1);");
     type_cmd(R"(ExeFile("::/LastClassRun.HC");)");
@@ -2399,6 +2414,29 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
 
   // The scrollbar exercise deliberately moves the document's edit cursor.
   DriveDigits(vm, dir, boot);
+
+  if (extended) {
+    vm.ResetDeadline(30s);
+    type_cmd(R"(ExeFile("::/TimeClockInputProbe.HC");)");
+    wait_text("TimeClock input in", false, 1, 60, std::string_view::npos, 300);
+    wait_text("Press <ESC> when done.");
+    keys({"s", "t", "a", "r", "t", "ret", "w", "o", "r", "k", "esc"});
+    wait_text("TimeClock input out", false, 1, 60, std::string_view::npos, 300);
+    wait_text("Press <ESC> when done.", false, 2);
+    keys({"d", "o", "n", "e", "esc"});
+    wait_text("TimeClock input 07", false, 1, 60, std::string_view::npos, 300);
+    wait_text("T:/Home>");
+    bool ready = false;
+    for (unsigned i = 0; i < 160; ++i) {
+      if ((ReadPhysical<1>(vm, left + 0x18, 'w')[0] & 0x218) == 0x218) {
+        ready = true;
+        break;
+      }
+      std::this_thread::sleep_for(25ms);
+    }
+    Check(ready, "TimeClock did not return to the command prompt");
+    std::cout << "TimeClock saved both typed descriptions and ordered timestamps\n";
+  }
 
   vm.ResetDeadline(30s);
   type_cmd("WinHorz(4,27);WinVert(5,18);");
@@ -3304,6 +3342,19 @@ static void CheckFontText(const std::string &output)
         std::string::npos,"The original ExtChars.HC did not change glyph 255");
 }
 
+constexpr std::string_view time_clock_output =
+    "Make Directory:~/TimeClock\n"
+    "After Loading, type $GREEN$PunchIn;$FG$, $GREEN$PunchOut;$FG$ or $GREEN$TimeRep;$FG$\n"
+    "You might want to make PLUGINS for hot keys.\n\n\n"
+    "$RED$IN  02/26/24 06:00:00:$FG$\nbegin\nwork\n"
+    "$RED$OUT 02/26/24 07:30:00:$FG$\nend\n"
+    "$RED$Week Total:01:30:00$FG$\n"
+    "$RED$IN  02/26/24 06:00:00:$FG$\nbegin\nwork\n"
+    "$RED$OUT 02/26/24 07:30:00:$FG$\nend\n"
+    "$RED$Week Total:01:30:00$FG$\n"
+    "$BK,1$Already Punched-Out$BK,0$\n"
+    "TimeClock probe 1F\n";
+
 constexpr std::string_view matrix_output =
     "matrix pi 400921FB54442D18\n"
     "matrix rotation 6812FEF91D413F68 17 -4 -5\n"
@@ -3489,6 +3540,9 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/DirContextProbe.HC", "Dir context FF\n", '1');
     CheckProgramOutput(boot, "/FileStreamProbe.HC", "File stream probe 3FF\n", '1');
     CheckProgramOutput(boot, "/FileCopyProbe.HC", file_copy_output, '1');
+    CheckProgramOutput(boot, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
+    CheckProgramOutput(boot, "/QueueProbe.BIN.Z", "Queue probe FF\n", '1');
+    CheckProgramOutput(boot, "/TimeClockProbe.HC", time_clock_output, '1');
     CheckProgramOutput(boot, "/FileOperationsProbe.HC", file_operations_output, '1');
     CheckProgramOutput(boot, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
     CheckProgramOutput(boot, "/ClassMeta.HC", class_meta_output, '1');
@@ -3597,6 +3651,9 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/FileStreamProbe.HC", "File stream probe 3FF\n",
                          '1');
       CheckProgramOutput(output, "/FileCopyProbe.HC", file_copy_output, '1');
+      CheckProgramOutput(output, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
+      CheckProgramOutput(output, "/QueueProbe.BIN.Z", "Queue probe FF\n", '1');
+      CheckProgramOutput(output, "/TimeClockProbe.HC", time_clock_output, '1');
       CheckProgramOutput(output, "/FileOperationsProbe.HC", file_operations_output, '1');
       CheckProgramOutput(output, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
       CheckProgramOutput(output, "/ClassMeta.HC", class_meta_output, '1');
@@ -4061,7 +4118,7 @@ int main(int argc, char **argv)
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
-      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, reference);
+      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, reference);
       vm.Connect();
       DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                     std::string_view(argv[1]) == "--form");
@@ -4071,6 +4128,39 @@ int main(int argc, char **argv)
       return 0;
     } catch (const std::exception &error) {
       std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
+  if (argc==6 && std::string_view(argv[1])=="--fat32") {
+    char path[]="/tmp/unholyos-fat32-XXXXXX";
+    if (!mkdtemp(path)) return 1;
+    fs::path dir=path;
+    try {
+      bool invalid=std::string_view(argv[5])=="invalid";
+      CMonitor vm(argv[2],argv[3],dir,"pc","512",false,argv[4]);
+      vm.Connect();
+      auto output=vm.Boot(dir/"serial.log");
+      if (invalid) {
+        Check(output.find("executing /Fat32ReadProbe.HC")==std::string::npos,
+              "Malformed FAT32 drive was mounted");
+        CheckProgramOutput(output,"/Fat32RejectProbe.HC",
+                           "FAT32 invalid geometry rejected\n",'1');
+      } else {
+        CheckProgramOutput(output,"/Fat32ReadProbe.HC",
+            "fat geometry 2 2048 132130 2 2 2080 3102\n"
+            "fat metadata FRAG.BIN 5 2501 20 02/29/24 12:34:56\n"
+            "fat entry SUB 1024\n"
+            "fat entry LongNameExample.txt 333\n"
+            "FAT32 read probe FFF\n",'1');
+        CheckProgramOutput(output,"/Fat32RejectProbe.HC","FAT32 reject probe 1F\n",'1');
+      }
+      vm.Command(R"({"execute":"quit"})");
+      std::cout<<(invalid?"Verified FAT32 invalid geometry refusal\n":
+                            "Verified FAT32 read, chain validation and write refusal\n");
+      fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr<<ReadText(dir/"serial.log")<<error.what()<<'\n'<<"Evidence: "<<dir<<'\n';
       return 1;
     }
   }

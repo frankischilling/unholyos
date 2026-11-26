@@ -26,7 +26,7 @@ extern "C" uint64_t CdCpp(const char *name, uint8_t make_dirs)
   const char *cwd = task.cur_dir ? task.cur_dir : "/";
   if (name[1] == ':') {
     auto *selected = Let2DrvCpp(*name, false);
-    if (!selected || selected->fs_type != FSt_REDSEA)
+    if (!selected || !ReadableFS(*selected))
       return false;
     if (selected != dv)
       cwd = "/";
@@ -82,7 +82,7 @@ extern "C" uint64_t CdCpp(const char *name, uint8_t make_dirs)
         dir[pos++] = '/';
       MemCpy(dir + pos, part, size + 1);
       if (dv &&
-          (RedSeaIsDir(*dv, dir) || (make_dirs && RedSeaMkDir(*dv, dir)))) {
+          (FsIsDir(*dv, dir) || (make_dirs && RedSeaMkDir(*dv, dir)))) {
         len = pos + size;
       } else {
         dir[len] = 0;

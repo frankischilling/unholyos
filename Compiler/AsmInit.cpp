@@ -625,6 +625,24 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
                            *FindType("Bool", table), 4, key_args, key_types);
 }
 
+static bool CmpQueData(CHashTable *table)
+{
+  auto *que=CmpKernelClass(table,"CQue",sizeof(CQue));
+  if (!que)
+    return false;
+  auto *heap=CurrentTask()->data_heap;
+  const char *fields[]{"next","last"};
+  for (const char *field : fields) {
+    auto *name=StrNew(field,heap);
+    size_t offset=*field=='n' ? offsetof(CQue,next) : offsetof(CQue,last);
+    if (!name || !MemberAdd(*que,name,*(que+1),offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool CmpDateData(CHashTable *table)
 {
   auto *date = CmpKernelClass(table, "CDate", sizeof(CDate));
@@ -681,7 +699,8 @@ static bool CmpDirData(CHashTable *table)
   auto *drive = CmpKernelClass(table, "CDrv", sizeof(CDrv));
   auto *bd = CmpKernelClass(table, "CBlkDev", sizeof(CBlkDev));
   auto *file = CmpKernelClass(table, "CFile", sizeof(CFile));
-  if (!entry || !context || !drive || !bd || !file)
+  auto *glbls = CmpKernelClass(table, "CBlkDevGlbls", sizeof(CBlkDevGlbls));
+  if (!entry || !context || !drive || !bd || !file || !glbls)
     return false;
   auto *heap = CurrentTask()->data_heap;
   auto *i64 = FindType("I64", table);
@@ -691,6 +710,7 @@ static bool CmpDirData(CHashTable *table)
     const char *name;
     CHashClass *record, *type;
     size_t offset;
+      size_t count = 0;
   } members[]{
       {"next", entry, entry + 1, offsetof(CDirEntry, next)},
       {"parent", entry, entry + 1, offsetof(CDirEntry, parent)},
@@ -700,7 +720,7 @@ static bool CmpDirData(CHashTable *table)
       {"user_data2", entry, i64, offsetof(CDirEntry, user_data2)},
       {"start", entry, FindType("U0", table), offsetof(CDirEntry, attr)},
       {"attr", entry, FindType("U16", table), offsetof(CDirEntry, attr)},
-      {"name", entry, u8, offsetof(CDirEntry, name)},
+      {"name", entry, u8, offsetof(CDirEntry, name), CDIR_FILENAME_LEN},
       {"clus", entry, i64, offsetof(CDirEntry, clus)},
       {"size", entry, i64, offsetof(CDirEntry, size)},
       {"datetime", entry, FindType("CDate", table), offsetof(CDirEntry, datetime)},
@@ -712,6 +732,10 @@ static bool CmpDirData(CHashTable *table)
       {"fs_type", drive, FindType("U16", table), offsetof(CDrv, fs_type)},
       {"root_clus", drive, i64, offsetof(CDrv, root_clus)},
       {"size", drive, i64, offsetof(CDrv, size)},
+      {"spc", drive, i64, offsetof(CDrv, spc)},
+      {"drv_offset", drive, i64, offsetof(CDrv, drv_offset)},
+      {"fat2", drive, i64, offsetof(CDrv, fat2)},
+      {"file_system_info_sect", drive, i64, offsetof(CDrv, file_system_info_sect)},
       {"fat1", drive, i64, offsetof(CDrv, fat1)},
       {"data_area", drive, i64, offsetof(CDrv, data_area)},
       {"bd", drive, bd + 1, offsetof(CDrv, bd)},
@@ -727,6 +751,25 @@ static bool CmpDirData(CHashTable *table)
       {"file_clus_num", file, i64, offsetof(CFile, file_clus_num)},
       {"max_blk", file, i64, offsetof(CFile, max_blk)},
       {"clus_buf", file, u8 + 1, offsetof(CFile, clus_buf)},
+      {"blkdevs", glbls, bd + 1, offsetof(CBlkDevGlbls, blkdevs)},
+      {"dft_iso_filename", glbls, u8 + 1, offsetof(CBlkDevGlbls, dft_iso_filename)},
+      {"dft_iso_c_filename", glbls, u8 + 1, offsetof(CBlkDevGlbls, dft_iso_c_filename)},
+      {"tmp_filename", glbls, u8 + 1, offsetof(CBlkDevGlbls, tmp_filename)},
+      {"home_dir", glbls, u8 + 1, offsetof(CBlkDevGlbls, home_dir)},
+      {"cache_size", glbls, i64, offsetof(CBlkDevGlbls, cache_size)},
+      {"read_cnt", glbls, i64, offsetof(CBlkDevGlbls, read_cnt)},
+      {"write_cnt", glbls, i64, offsetof(CBlkDevGlbls, write_cnt)},
+      {"drvs", glbls, drive + 1, offsetof(CBlkDevGlbls, drvs)},
+      {"let_to_drv", glbls, drive + 1, offsetof(CBlkDevGlbls, let_to_drv), 32},
+      {"mount_ide_auto_cnt", glbls, i64, offsetof(CBlkDevGlbls, mount_ide_auto_cnt)},
+      {"ins_base0", glbls, i64, offsetof(CBlkDevGlbls, ins_base0)},
+      {"ins_base1", glbls, i64, offsetof(CBlkDevGlbls, ins_base1)},
+      {"boot_drv_let", glbls, u8, offsetof(CBlkDevGlbls, boot_drv_let)},
+      {"first_hd_drv_let", glbls, u8, offsetof(CBlkDevGlbls, first_hd_drv_let)},
+      {"first_dvd_drv_let", glbls, u8, offsetof(CBlkDevGlbls, first_dvd_drv_let)},
+      {"dvd_boot_is_good", glbls, FindType("Bool", table), offsetof(CBlkDevGlbls, dvd_boot_is_good)},
+      {"ins_unit", glbls, FindType("Bool", table), offsetof(CBlkDevGlbls, ins_unit)},
+      {"pad", glbls, FindType("Bool", table), offsetof(CBlkDevGlbls, pad), 3},
   };
   for (const auto &member : members) {
     auto *name = StrNew(member.name, heap);
@@ -736,19 +779,19 @@ static bool CmpDirData(CHashTable *table)
       Free(name);
       return false;
     }
-    if (member.record == entry && member.offset == offsetof(CDirEntry, name)) {
+    if (member.count) {
       auto *axis =
           reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
       if (!axis)
         return false;
-      axis->cnt = CDIR_FILENAME_LEN;
+      axis->cnt = member.count;
       axis->total_cnt = 1;
       m->dim.next = axis;
-      m->dim.total_cnt = CDIR_FILENAME_LEN;
-      m->size = CDIR_FILENAME_LEN;
+      m->dim.total_cnt = member.count;
+      m->size = member.count * member.type->size;
     }
   }
-  return true;
+  return CmpKernelGlobal(table, "blkdev", glbls, &blkdev);
 }
 
 static CHashClass *CmpExceptData(CHashTable *table)
@@ -1692,6 +1735,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     MemberPtr,
     MemberMetaPtr,
     DateStructPtr,
+    QuePtr,
     CpuPtr,
     DefinePtr,
     BlkDevPtr,
@@ -1727,6 +1771,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CMemberLst", table) + 1,
       FindType("CMemberLstMeta", table) + 1,
       FindType("CDateStruct", table) + 1,
+      FindType("CQue", table) + 1,
       FindType("CCPU", table) + 1,
       FindType("CHashDefineStr", table) + 1,
       FindType("CBlkDev", table) + 1,
@@ -1843,6 +1888,12 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"needle_str", U8Ptr}, {"haystack_member_lst", MemberPtr}}},
       {"StrNew", U8Ptr, FF_RET1,
        {{"buf", U8Ptr}, {"mem_task", TaskPtr, true}}},
+      {"StrCpy", U0, FF_RET1, {{"dst", U8Ptr}, {"src", U8Ptr}}, "_STRCPY"},
+      {"StrLen", I64, FF_INTERNAL, {{"st", U8Ptr}}, nullptr, IC_STRLEN},
+      {"QueInit", U0, FF_INTERNAL, {{"head", QuePtr}}, nullptr, IC_QUE_INIT},
+      {"QueIns", U0, FF_INTERNAL, {{"entry", QuePtr}, {"pred", QuePtr}}, nullptr, IC_QUE_INS},
+      {"QueInsRev", U0, FF_INTERNAL, {{"entry", QuePtr}, {"succ", QuePtr}}, nullptr, IC_QUE_INS_REV},
+      {"QueRem", U0, FF_INTERNAL, {{"entry", QuePtr}}, nullptr, IC_QUE_REM},
       {"StrCmp", I64, FF_RET1, {{"st1", U8Ptr}, {"st2", U8Ptr}}, "_STRCMP"},
       {"MemCmp", I64, FF_RET1, {{"ptr1", U8Ptr}, {"ptr2", U8Ptr}, {"cnt", I64}},
        "_MEMCMP"},
@@ -2188,6 +2239,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"IsMute", Bool, FF_RET1, {}},
       {"Call", I64, FF_RET1, {{"addr", U64}}},
       {"StreamPrint", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
+      {"StreamDir", U0, FF_RET1, {}},
       {"StreamExePrint", I64, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
       {"RedSeaISO",
        I64,
@@ -2389,6 +2441,7 @@ static bool CmpFillHash(CHashTable *table)
     const char *name, *data;
   } defines[]{
       {"NULL", "0"}, {"TRUE", "1"}, {"FALSE", "0"}, {"ON", "1"}, {"OFF", "0"},
+      {"__DIR__", "#exe{StreamDir;}"},
       {"I64_MAX", "0x7FFFFFFFFFFFFFFF"},
       {"I64_MIN", "(-0x8000000000000000)"},
       {"F64_MIN", "(0xFFEFFFFFFFFFFFFF(F64))"},
@@ -2426,6 +2479,8 @@ static bool CmpFillHash(CHashTable *table)
       {"ROPF_PROBABILITY_DITHER","0x80000000"},
       {"CH_ESC", "0x1B"},
       {"CH_SHIFT_ESC", "0x1C"},
+      {"GSF_SHIFT_ESC_EXIT", "1"},
+      {"GSF_WITH_NEW_LINE", "2"},
       {"DOCF_BORDER_DOC", "0x100"},
       {"DOCF_HIDE_CURSOR", "0x800"},
       {"DOCF_NO_SCROLL_BARS", "0x2000"}, {"TSF_SAME_SONG", "1"},
@@ -2439,6 +2494,7 @@ static bool CmpFillHash(CHashTable *table)
       {"DOCF_OVERSTRIKE", "0x100000000"},
       {"RS_ATTR_DIR", "0x10"}, {"RS_ATTR_DELETED", "0x100"},
       {"BDF_READ_ONLY", "4"}, {"RS_ATTR_READ_ONLY", "1"},
+      {"FSt_FAT32", "2"}, {"FSt_REDSEA", "1"},
       {"RS_ATTR_RESIDENT", "0x200"}, {"RS_ATTR_COMPRESSED", "0x400"},
       {"RS_ATTR_CONTIGUOUS", "0x800"},
       {"FFB_NEXT_BLK", "0x7FFFFFFFFFFFFFFF"}, {"FF_WRITE", "1"},
@@ -2588,7 +2644,7 @@ static bool CmpFillHash(CHashTable *table)
     HashAdd(&entry->sym.hash,table);
   }
   auto *task = CmpKernelClass(table, "CTask", sizeof(CTask));
-  return task && CmpMemberData(table) && CmpRuntimeData(table) && CmpDateData(table) && CmpDirData(table) &&
+  return task && CmpMemberData(table) && CmpRuntimeData(table) && CmpQueData(table) && CmpDateData(table) && CmpDirData(table) &&
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) && CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
