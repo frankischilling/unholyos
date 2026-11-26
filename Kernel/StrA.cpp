@@ -71,6 +71,11 @@ static uint8_t ToUpper(uint8_t ch)
   return ch >= 'a' && ch <= 'z' ? ch - ('a' - 'A') : ch;
 }
 
+extern "C" int64_t ToUpperCpp(uint8_t ch)
+{
+  return ToUpper(ch);
+}
+
 extern "C" void StrCpyCpp(char *dst, const char *src)
 {
   if (!dst)

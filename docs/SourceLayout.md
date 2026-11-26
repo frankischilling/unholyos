@@ -701,11 +701,24 @@ allow the original `Demo/LastClass.HC` to run unchanged. `CTask` reflection
 still covers only the implemented member declarations; native reports
 therefore need not have the reference's number of nested records.
 
-`Adam/DolDoc/DocForm.cpp` implements `DocDataFmt` and the bound scalar
-formats of `DocDataScan` used by class reports. `DocChar`, `DocRecalc`, and
-`DocRun` connect editing, live refresh, and tree expansion to those entries.
-General form construction, list/checkbox binding, and reallocated data
-remain pending; the original database demo is not claimed runnable.
+`Adam/DolDoc/DocForm.cpp` follows `DocForm.HC` for metadata-driven form
+construction, navigation, bound data formatting and scanning, list fields,
+checkboxes, and reallocated string fields. `DocEd.cpp` handles modal editing
+and restores the caller's document and window state. `DocPlain`, `DocPutKey`,
+and `DocRecalc` connect the entries to parsing, input, and rendering.
+The original `Demo/Dsk/DataBase.HC` and `Demo/DolDoc/Form.HC` run unchanged.
+The scan implementation supports the field formats exercised by the demos
+and class reports; general `StrScan` and the full editor status bar, menu,
+undo, and task-end handling remain incomplete. List selection uses a modal
+document in the current task rather than a separate popup task.
+
+`Kernel/BlkDev/DskDirB.cpp` exposes `HomeSet`, and the compiler headers expose
+the existing RAM-drive creation and lookup APIs so the database can write
+to a writable home directory. `Compiler/PrsExp.cpp` accepts address-of on
+array expressions used by the original form's `StrCpy(&fds.name, ...)`.
+`Kernel/KLoad.cpp` exposes the existing `_STRCPY` adapter under its HolyC
+name; the `ToUpper` adapter in `Kernel/StrA.cpp` supplies the reference
+character conversion without the reference compiler's intrinsic lowering.
 
 The kernel header table stores numeric and string defaults in a tagged
 union. This saves space in the boot image while preserving the same

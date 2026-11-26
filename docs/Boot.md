@@ -922,6 +922,49 @@ live data entries. It observes `LastClass reports 7` before returning to
 the prompt. Report counts and pointer addresses are not expected to match
 because native task reflection and runtime records are still partial.
 
+## Document forms and database
+
+The original demos by Terry A. Davis are copied without changes from the
+pinned TempleOS checkout:
+
+- [Demo/Dsk/DataBase.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Dsk/DataBase.HC), SHA-256
+  `06f38c093a9a3bae9ef5f8a2b00ab8919e251b2eab35034f8bb80c877854985f`.
+- [Demo/DolDoc/Form.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/DolDoc/Form.HC), SHA-256
+  `d12fba94ec869f2becd9580f166e8fce1aa55068320450d93dddd6fec45fecbf`.
+
+The interactive regression mounts a temporary 2,048-block RedSea RAM drive
+as `B:`, sets the home directory to `B:/`, and runs the original database
+from the boot DVD. It enters two accounts, saves an edit to account 7,
+cancels a second overwrite, reads account 7 through the demo, then opens
+the resulting `DataBaseDemo.BIN` using `FOpen` and verifies its 51,200-byte
+size and both records with `FBlkRead`. It checks `Ada / 13 Pine` and
+`Bob / 45 Elm`, including backspace editing of the input fields. No host
+disk is attached to the VM. The database persists in the guest RAM drive
+for this session, not across a reboot.
+
+The original form demo displays four numeric values, a list, a fixed-length
+name, two allocated address strings, a date and a checkbox. The test
+selects Adult, changes the name to Jane, enters `Unit 2` in the empty
+address field, unchecks Check and saves. It compares the reported values
+with the pinned guest, including the unchanged numeric defaults and the
+first address. The list chooser and field content are tested with QEMU
+keyboard events and text-layer captures; full editor chrome and mouse
+behavior are not compared.
+
+Run the native regression with QEMU 8.2.2, `pc`, `qemu64`, 512 MiB:
+
+```sh
+make -j4 BUILD=build/docform
+make BUILD=build/docform build/docform/Linux/TestBoot
+build/docform/Linux/TestBoot --database qemu-system-x86_64 \
+  build/docform/unholyos.iso build/docform/database-native
+```
+
+For the reference replay, use the same driver with `--database-reference`
+and the pinned `TOS_Distro.ISO`. It obtains the reference text-layer address
+from the guest through the QEMU debug port. `make test` runs the native
+regression after the normal boot suite.
+
 ## Numeric and date prompts
 
 `Demo/Prompt.HC` retains Terry A. Davis's original bytes. The prompt

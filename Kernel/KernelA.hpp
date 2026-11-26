@@ -948,11 +948,13 @@ enum : uint8_t
 constexpr uint64_t DOCF_PLAIN_TEXT = 1, DOCF_PLAIN_TEXT_TABS = 2,
                    DOCF_NO_CURSOR = 8, DOCF_CARRIAGE_RETURN = 16,
                    DOCF_DBL_DOLLARS = 32, DOCF_COLOR_NAMES = 64,
-                   DOCF_BORDER_DOC = 0x100, DOCF_HIDE_CURSOR = 0x800,
+                   DOCF_BORDER_DOC = 0x100, DOCF_FORM = 0x200,
+                   DOCF_SIZE_MIN = 0x400, DOCF_HIDE_CURSOR = 0x800,
                    DOCF_DONT_HIGHLIGHT_CURSOR = 0x1000,
                    DOCF_NO_SCROLL_BARS = 0x2000, DOCF_DONT_SHOW = 0x8000,
                    DOCF_BWD_MOVEMENT = 0x40000, DOCF_DO_FULL_REFRESH = 0x200000,
-                   DOCF_BREAK_UNLOCKED = 0x400000, DOCF_IN_DOLLAR = 0x200000000;
+                   DOCF_BREAK_UNLOCKED = 0x400000,
+                   DOCF_OVERSTRIKE = 1ull << 32, DOCF_IN_DOLLAR = 0x200000000;
 constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
                    DOCEF_DEFINE = 8, DOCEF_HTML_LINK = 16, DOCEF_LEFT_EXP = 32,
                    DOCEF_LEFT_MACRO = 64, DOCEF_RIGHT_EXP = 128,
@@ -977,6 +979,7 @@ constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
                    DOCEF_HAS_TERMINATOR = 1ull << 49, DOCEF_HOLD = 1ull << 51,
                    DOCEF_TREE = 1ull << 52,
                    DOCEF_LST = 1ull << 53, DOCEF_SKIP = 1ull << 54,
+                   DOCEF_SKIP_IN_FORM = 1ull << 56,
                    DOCEF_FILTER_SKIP = 1ull << 57, DOCEF_NO_CLICK_ON = 1ull << 58,
                    DOCEF_DONT_DRAW = 1ull << 59,
                    DOCEF_DFT_LEN = 1ull << 60,
@@ -990,6 +993,10 @@ constexpr uint32_t RECALCt_NORMAL = 0, RECALCt_FIND_CURSOR = 1,
                    RECALCF_HAS_CURSOR = 0x100;
 constexpr int64_t DOC_DFT = INT32_MIN;
 constexpr int64_t DOCM_CANCEL = -1;
+constexpr uint64_t DOF_SIZE_MIN = 1, DOF_INTERCEPT_TASK_END = 2,
+                   DOF_DONT_HOME = 4, DOF_WIN_MAX = 8,
+                   DOF_DONT_TEXT_ATTR = 16, DOF_DONT_WINMGR_SYNC = 32,
+                   DOF_DONT_SHOW = 64;
 
 struct CDocSettings
 {
