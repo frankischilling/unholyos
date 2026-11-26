@@ -2610,6 +2610,18 @@ constexpr std::string_view variadic_ptr_output =
     "variadic pointer 3 211 0 108 211\n"
     "variadic pointer cleanup 30600\n";
 
+constexpr std::string_view class_meta_output =
+    "age:44 default:38\n"
+    "color: default:4\n"
+    "rank:3 default:3 Admiral\n"
+    "age:22 default:38 percentile: 54.20\n"
+    "rank:2 default:5\n"
+    "serial_num: 55555 default:123456\n";
+
+constexpr std::string_view last_class_output =
+    "Lastclass names I64i I64i I64i F64\n"
+    "Lastclass probe 0F\n";
+
 static void DriveDocFrame(CMonitor &vm, const fs::path &serial)
 {
   constexpr std::array<uint8_t, 3> black{}, blue{0, 0, 168}, red{168, 0, 0},
@@ -3095,6 +3107,10 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
                        '1');
     CheckProgramOutput(boot, "/DirContextProbe.HC", "Dir context FF\n", '1');
     CheckProgramOutput(boot, "/FileStreamProbe.HC", "File stream probe 3FF\n", '1');
+    CheckProgramOutput(boot, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
+    CheckProgramOutput(boot, "/ClassMeta.HC", class_meta_output, '1');
+    CheckProgramOutput(boot, "/LastClassProbe.HC", last_class_output, '1');
+    CheckProgramOutput(boot, "/LastClassProbe.BIN.Z", last_class_output, '1');
     CheckProgramOutput(boot, "/DocBinLinkProbe.HC", "Doc bin links 1F\n", '1');
     CheckProgramOutput(boot, "/SpriteProbe.HC", "sprite bitmap 12546 0 0 4\n",
                        '1');
@@ -3190,6 +3206,10 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          '1');
       CheckProgramOutput(output, "/FileStreamProbe.HC", "File stream probe 3FF\n",
                          '1');
+      CheckProgramOutput(output, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
+      CheckProgramOutput(output, "/ClassMeta.HC", class_meta_output, '1');
+      CheckProgramOutput(output, "/LastClassProbe.HC", last_class_output, '1');
+      CheckProgramOutput(output, "/LastClassProbe.BIN.Z", last_class_output, '1');
       CheckProgramOutput(output, "/DocBinLinkProbe.HC", "Doc bin links 1F\n",
                          '1');
       CheckProgramOutput(output, "/SpriteProbe.HC", "sprite bitmap 12546 0 0 4\n",

@@ -6,6 +6,7 @@ GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
 GLOBAL Str2I64HC
 GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
+GLOBAL MemberMetaDataHC,MemberMetaFindHC,MemberFindHC
 GLOBAL HashTableNewHC,HashTypeNumHC,CeilU64HC,Pow10I64HC
 GLOBAL LinkedLstDelHC,LinkedLstSizeHC,QueDelHC
 GLOBAL QueVectU8NewHC,QueVectU8PutHC,QueVectU8GetHC,QueVectU8DelHC
@@ -127,6 +128,7 @@ EXTERN MAllocCpp,FreeCpp,MSizeCpp,MSize2Cpp,MHeapCtrlCpp,CAllocCpp,MAllocIdentCp
 EXTERN StrNewCpp,AStrNewCpp,StrCpyCpp,StrCmpCpp,StrIMatchCpp,StrOccCpp
 EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
 EXTERN HashRemDelCpp,HashValCpp,HashDelCpp,HashTableDelCpp,HashSrcFileSetCpp,SysSymImportsResolveCpp
+EXTERN MemberMetaDataCpp,MemberMetaFindCpp,MemberFindCpp
 EXTERN HashTableNewCpp,HashTypeNumCpp,CeilU64Cpp,Pow10I64Cpp
 EXTERN LinkedLstDelCpp,LinkedLstSizeCpp,QueDelCpp
 EXTERN QueVectU8NewCpp,QueVectU8PutCpp,QueVectU8GetCpp,QueVectU8DelCpp
@@ -222,7 +224,7 @@ BITS 64
 	POP	RBP
 %endmacro
 
-; The optional fourth argument widens a SysV Bool return for HolyC.
+; The optional fourth argument widens a SysV U8 or Bool return for HolyC.
 %macro HOLYC_CPP 3-4 0
 %1:
 	HC_FRAME_ENTER
@@ -298,7 +300,7 @@ HOLYC_CPP FlushMsgsHC,FlushMsgsCpp,1
 HOLYC_CPP GetMsgHC,GetMsgCpp,4
 HOLYC_CPP InputFilterTaskHC,InputFilterTaskCpp,0
 HOLYC_CPP Char2ScanCodeHC,Char2ScanCodeCpp,2
-HOLYC_CPP ScanCode2CharHC,ScanCode2CharCpp,1
+HOLYC_CPP ScanCode2CharHC,ScanCode2CharCpp,1,1
 HOLYC_CPP KbdTypeMaticHC,KbdTypeMaticCpp,1
 HOLYC_CPP GridInitHC,GridInitCpp,0
 HOLYC_CPP MsSetHC,MsSetCpp,5
@@ -449,6 +451,9 @@ HOLYC_CPP HashValHC,HashValCpp,1
 HOLYC_CPP HashDelHC,HashDelCpp,1
 HOLYC_CPP HashTableDelHC,HashTableDelCpp,1
 HOLYC_CPP HashSrcFileSetHC,HashSrcFileSetCpp,3
+HOLYC_CPP MemberMetaDataHC,MemberMetaDataCpp,2
+HOLYC_CPP MemberMetaFindHC,MemberMetaFindCpp,2
+HOLYC_CPP MemberFindHC,MemberFindCpp,2
 HOLYC_CPP SysSymImportsResolveHC,SysSymImportsResolveCpp,2
 HOLYC_CPP HashTableNewHC,HashTableNewCpp,2
 HOLYC_CPP HashTypeNumHC,HashTypeNumCpp,1

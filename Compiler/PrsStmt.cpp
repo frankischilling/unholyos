@@ -50,6 +50,8 @@ static bool PrsClassBody(CCmpCtrl &cc, CHashClass &owner, bool overlay,
       auto end = offset + member->size;
       if (end > owner.size)
         owner.size = end;
+      if (!PrsMemberMeta(cc, *member))
+        return false;
     } while (cc.token == ',');
     if (cc.token != ';')
       return false;

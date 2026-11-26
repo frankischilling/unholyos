@@ -1433,6 +1433,11 @@ void BootProbe()
                     "UnholyOS: compiler runtime probe ");
     BootProbeReport(*adam_task->cur_dv, *adam_task, "/FileWriteProbe.BIN",
                     "FileWriteProbeResult", "UnholyOS: write probe ");
+    BootFileProgramReport(*adam_task->cur_dv, "/MemberMetaProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/ClassMeta.HC");
+    BootVariadicReport(*adam_task->cur_dv, *adam_task, "/LastClassProbe.HC",
+                       "/LastClassProbe.BIN.Z",
+                       "Cmp(\"::/LastClassProbe.HC\",,\"B:/LastClassProbe.BIN.Z\");");
     BootCmpReport(*adam_task->cur_dv, *adam_task);
     BootImportReport(*adam_task->cur_dv, *adam_task);
     BootAsmReport(*adam_task->cur_dv, *adam_task);

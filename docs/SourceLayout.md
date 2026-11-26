@@ -630,6 +630,37 @@ retains the reference's 127-element array metadata. Variadic functions use
 caller cleanup, including indirect calls. Explicit `argpop` variadic calls
 remain unsupported.
 
+## Class member metadata
+
+`PrsMemberMeta` in `Compiler/PrsVar.cpp` follows the class-member branch
+of `PrsVarLst` in `Compiler/PrsVar.HC`. A declaration can attach named
+strings and evaluated expressions to each member, including `format`
+strings. Each `CMemberLstMeta` is prepended to the member's list, so
+repeated names resolve to the last declaration. `MemberMetaData` and
+`MemberMetaFind` in `Compiler/LexLib.cpp` return the value and record,
+respectively; the latter distinguishes a missing value from zero.
+`ClassMemberLstDel` frees the metadata and owned strings.
+
+`PrsFunArgs` and `PrsFunCall` handle `lastclass` defaults. The default
+comes from the last explicitly supplied argument's class, before
+parameter conversion. Scalar aliases forward to their internal class,
+and pointer levels are stripped. JIT code uses the live class name;
+AOT code copies it into the module's string data. Explicit arguments
+override the default. Direct string defaults use the same ownership and
+AOT storage rules. Constant metadata expressions work in AOT; expressions
+that require executing or relocating unfinished AOT code remain pending.
+
+`AsmInit.cpp` exposes the compiler's member and class records for HolyC
+reflection, including `Fs->hash_table`, `HashFind`, and `MemberFind`.
+The records retain their ABI sizes; debugger and external-usage pointers
+are exposed as opaque addresses. The original `Demo/ClassMeta.HC` now runs
+unchanged. `ClassRep`, `ClassRepD`, and `DocForm` remain pending, so the
+original database demo and the complete `LastClass.HC` are not yet runnable.
+
+The kernel header table stores numeric and string defaults in a tagged
+union. This saves space in the boot image while preserving the same
+runtime argument records and the pinned DVD loader address.
+
 ## HolyC exception statements
 
 `Compiler/PrsStmt.cpp` follows `PrsTryBlk` in `Compiler/PrsStmt.HC`.
