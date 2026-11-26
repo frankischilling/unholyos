@@ -1567,8 +1567,10 @@ extern "C" void KMainCpp()
   } else {
     SerialPutS("UnholyOS: Could not mount the boot DVD\r\n");
   }
-  SerialPutS("UnholyOS: kernel entered in 64-bit mode\r\n");
+  adam_task->win_inhibit |= WIF_SELF_FOCUS;
+  adam_task->display_flags |= DISPLAYF_CHILDREN_NOT_ON_TOP;
   DbgModeCpp(false);
   if (!StartUpTasks())
     SerialPutS("UnholyOS: Could not start the user task\r\n");
+  SerialPutS("UnholyOS: kernel entered in 64-bit mode\r\n");
 }

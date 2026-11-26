@@ -341,9 +341,13 @@ edited document. `Kernel/SerialDev/Message.cpp` dispatches `GetStr` and
 the line stream from `Compiler/CMisc.cpp` and `Compiler/Lex.cpp`.
 `CmdLinePmt` adds the trailing semicolon used by the reference's lexer
 lookahead. Input skips the original filter and form actions while those
-editor subsystems are pending. `HomeSys.cpp` starts one user task and
-keeps its top border below the boot banner. The terminal uses the
-generic window frame while the reference's border controls are pending.
+editor subsystems are pending. `HomeSys.cpp` starts two user tasks and
+waits until each reaches its prompt before raising the first and calling
+`WinTileVert`. `Adam/Win.cpp` follows `WinToTop`, `WinFocus`,
+`WinRefocus`, and the reference tiling functions. The window manager
+restores focus on a refresh after the focused task exits. The terminals
+use generic frames below the boot banner. Startup document loading,
+`XTalk` startup input, and autocomplete remain pending.
 
 ## HolyC function pointers
 

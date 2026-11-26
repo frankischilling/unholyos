@@ -103,13 +103,7 @@ static CDoc *WinCursorPosSet(CTask &task, int64_t x, int64_t y)
   if (!DocRecalc(*doc, RECALCt_FIND_CURSOR))
     return nullptr;
   task.scroll_x = task.scroll_y = task.scroll_z = 0;
-  if (&task != sys_winmgr_task->last_task) {
-    TaskQueRemCpp(&task);
-    TaskQueInsCpp(&task, sys_winmgr_task);
-    WinZBufUpdateCpp();
-  }
-  if (!(task.win_inhibit & WIF_SELF_FOCUS))
-    sys_focus_task = &task;
+  WinToTopCpp(&task, true);
   return doc;
 }
 
@@ -188,6 +182,7 @@ extern "C" void WinMgrTaskEntry();
 static uint64_t WinMgrSleep(uint64_t ideal)
 {
   static CWinDocMouse left, right;
+  WinRefocusCpp(sys_focus_task);
   WinMsUpdate();
   WinDocMouse(true, left);
   WinDocMouse(false, right);

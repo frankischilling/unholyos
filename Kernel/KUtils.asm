@@ -19,6 +19,7 @@ GLOBAL PutCharsHC,IsRawHC,DefineLstLoadHC,DefineSubHC,DefineMatchHC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC,DocPutKeyHC
 GLOBAL DocPutHC,DocDisplayHC,DocBorderHC,DocRecalcHC,WinHorzHC,WinVertHC
+GLOBAL WinRefocusHC,WinToTopHC,WinFocusHC,WinTileHorzHC,WinTileVertHC,WinMaxHC
 GLOBAL DocLockHC,DocUnlockHC,DocEntryRunHC,DocBottomHC,DocClearHC,NowHC
 GLOBAL DocTermNewHC,DocGetKeyHC,DocScanLineHC,GetStrHC,GetSHC,UserCmdLineHC
 GLOBAL TextCharHC,TextLenStrHC,TextLenAttrHC,TextRectHC,TextBorderHC,WinZBufUpdateHC
@@ -96,6 +97,7 @@ EXTERN PutCharsCpp,PutS,PutHexCpp,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineM
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp,DocPutKeyCpp
 EXTERN DocPutCpp,DocDisplayCpp,DocBorderCpp,DocRecalcCpp,WinHorzCpp,WinVertCpp
+EXTERN WinRefocusCpp,WinToTopCpp,WinFocusCpp,WinTileHorzCpp,WinTileVertCpp,WinMaxCpp
 EXTERN DocLockCpp,DocUnlockCpp,DocEntryRunCpp,DocBottomCpp,DocClearCpp,NowCpp
 EXTERN DocTermNewCpp,DocGetKeyCpp,DocScanLineCpp,GetStrCpp,GetSCpp,UserCmdLineCpp
 EXTERN TextCharCpp,TextLenStrCpp,TextLenAttrCpp,TextRectCpp,TextBorderCpp,WinZBufUpdateCpp
@@ -367,6 +369,12 @@ HOLYC_CPP DefineSubHC,DefineSubCpp,2
 HOLYC_CPP DefineMatchHC,DefineMatchCpp,3
 HOLYC_CPP WinHorzHC,WinHorzCpp,3
 HOLYC_CPP WinVertHC,WinVertCpp,3
+HOLYC_CPP WinRefocusHC,WinRefocusCpp,1
+HOLYC_CPP WinToTopHC,WinToTopCpp,2
+HOLYC_CPP WinFocusHC,WinFocusCpp,1
+HOLYC_CPP WinTileHorzHC,WinTileHorzCpp,0
+HOLYC_CPP WinTileVertHC,WinTileVertCpp,0
+HOLYC_CPP WinMaxHC,WinMaxCpp,1
 HOLYC_CPP WinZBufUpdateHC,WinZBufUpdateCpp,0
 HOLYC_CPP TextCharHC,TextCharCpp,5
 HOLYC_CPP TextLenStrHC,TextLenStrCpp,6
