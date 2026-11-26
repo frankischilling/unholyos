@@ -1152,6 +1152,19 @@ struct CMsStateGlbls
        right_down_sent;
 };
 
+struct CWinMgrTimingGlbls;
+
+struct [[gnu::packed]] CWinMgrGlbls
+{
+  int64_t updates;
+  uint64_t ode_time, last_ode_time, fps, ideal_refresh_tS, last_refresh_tS;
+  CWinMgrTimingGlbls *t;
+  bool show_menu, grab_scroll, grab_scroll_closed;
+};
+
+static_assert(sizeof(CWinMgrGlbls) == 59 &&
+              offsetof(CWinMgrGlbls, grab_scroll) == 57);
+
 struct CGridGlbls
 {
   bool snap, show, coord;
@@ -1189,7 +1202,8 @@ struct [[gnu::may_alias]] CTaskDying
   CTaskDying *next, *last;
   int64_t wake_jiffy;
 };
-constexpr uint32_t DISPLAYF_NOT_RAW = 1 << 1, DISPLAYF_SILENT = 1 << 2;
+constexpr uint32_t DISPLAYF_SHOW = 1, DISPLAYF_NOT_RAW = 1 << 1,
+                   DISPLAYF_SILENT = 1 << 2, DISPLAYF_NO_BORDER = 1 << 3;
 constexpr uint8_t TTS_TASK_NAME = 2;
 
 struct CTask

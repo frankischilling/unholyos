@@ -32,6 +32,8 @@ GLOBAL Char2ScanCodeHC,ScanCode2CharHC,KbdTypeMaticHC,PutKeyHC
 GLOBAL GridInitHC,MsSetHC
 GLOBAL GrPaletteColorSetHC,GrPaletteColorGetHC
 GLOBAL GrPaletteGetHC,GrPaletteSetHC,PaletteSetStdHC,WinMgrTaskEntry
+GLOBAL CallHolyC1,CallHolyC3,CallHolyC4
+GLOBAL GrScaleZoomHC,DrawStdMsHC,WinFinalUpdateHC
 GLOBAL SignI64HC,RandI16HC,RandU16HC,RandI32HC
 GLOBAL RandU32HC,RandI64HC,RandU64HC,RandHC
 GLOBAL SeedHC,IsPixCovered0HC,GrPlot0HC,GrPeek0HC
@@ -57,6 +59,7 @@ EXTERN Char2ScanCodeCpp,ScanCode2CharCpp,KbdTypeMaticCpp,PutKeyCpp
 EXTERN GridInitCpp,MsSetCpp
 EXTERN GrPaletteColorSetCpp,GrPaletteColorGetCpp
 EXTERN GrPaletteGetCpp,GrPaletteSetCpp,PaletteSetStdCpp,WinMgrTask
+EXTERN GrScaleZoomCpp,DrawStdMsCpp,WinFinalUpdateCpp
 EXTERN SignI64Cpp,RandI16Cpp,RandU16Cpp,RandI32Cpp
 EXTERN RandU32Cpp,RandI64Cpp,RandU64Cpp,RandCpp
 EXTERN SeedCpp,IsPixCovered0Cpp,GrPlot0Cpp,GrPeek0Cpp
@@ -206,6 +209,9 @@ HOLYC_CPP GrPaletteGetHC,GrPaletteGetCpp,1
 HOLYC_CPP GrPaletteSetHC,GrPaletteSetCpp,1
 HOLYC_CPP PaletteSetStdHC,PaletteSetStdCpp,0
 HOLYC_CPP WinMgrTaskEntry,WinMgrTask,1
+HOLYC_CPP GrScaleZoomHC,GrScaleZoomCpp,1
+HOLYC_CPP DrawStdMsHC,DrawStdMsCpp,3
+HOLYC_CPP WinFinalUpdateHC,WinFinalUpdateCpp,1
 HOLYC_CPP SignI64HC,SignI64Cpp,1
 HOLYC_CPP RandI16HC,RandI16Cpp,0
 HOLYC_CPP RandU16HC,RandU16Cpp,0
@@ -386,6 +392,46 @@ DefineLstLoadHC:
 	MOV	RDX,RBP
 	HC_FRAME_CALL DefineLstLoadCpp
 	RET	16
+
+%macro CALL_HOLYC_CALLBACK 2
+%1:
+	PUSH	RBP
+	MOV	RBP,RSP
+	PUSH	RBX
+	PUSH	R12
+	PUSH	R13
+	PUSH	R14
+	PUSH	R15
+%if %2 = 4
+	SUB	RSP,8
+%endif
+%if %2 >= 4
+	PUSH	R8
+%endif
+%if %2 >= 3
+	PUSH	RCX
+%endif
+%if %2 >= 3
+	PUSH	RDX
+%endif
+	PUSH	RSI
+	CALL	RDI
+	CLD
+%if %2 = 4
+	ADD	RSP,8
+%endif
+	POP	R15
+	POP	R14
+	POP	R13
+	POP	R12
+	POP	RBX
+	POP	RBP
+	RET
+%endmacro
+
+CALL_HOLYC_CALLBACK CallHolyC1,1
+CALL_HOLYC_CALLBACK CallHolyC3,3
+CALL_HOLYC_CALLBACK CallHolyC4,4
 
 CallHolyC2:
 	PUSH	RBX

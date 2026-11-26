@@ -686,6 +686,10 @@ static bool CmpDCData(CHashTable *table)
       {"dc_cache", glbl, dc + 1, offsetof(CGrGlbls, dc_cache)},
       {"zoomed_dc", glbl, dc + 1, offsetof(CGrGlbls, zoomed_dc)},
       {"text_base", glbl, u32 + 1, offsetof(CGrGlbls, text_base)},
+      {"fp_final_scrn_update", glbl, u0 + 1,
+       offsetof(CGrGlbls, fp_final_scrn_update)},
+      {"fp_draw_ms", glbl, u0 + 1, offsetof(CGrGlbls, fp_draw_ms)},
+      {"fp_draw_grab_ms", glbl, u0 + 1, offsetof(CGrGlbls, fp_draw_grab_ms)},
       {"pan_text_x", glbl, i64, offsetof(CGrGlbls, pan_text_x)},
       {"pan_text_y", glbl, i64, offsetof(CGrGlbls, pan_text_y)},
       {"win_z_buf", glbl, FindType("U16",table) + 1, offsetof(CGrGlbls, win_z_buf)},
@@ -718,7 +722,26 @@ static bool CmpDCData(CHashTable *table)
       entry->size = member.type->size * member.count;
     }
   }
-  return CmpKernelGlobal(table, "gr", glbl, &gr);
+  auto *wm = CmpKernelClass(table, "CWinMgrGlbls", sizeof(CWinMgrGlbls));
+  if (!wm)
+    return false;
+  constexpr struct
+  {
+    const char *name;
+    size_t offset;
+  } options[]{
+      {"grab_scroll", offsetof(CWinMgrGlbls, grab_scroll)},
+      {"grab_scroll_closed", offsetof(CWinMgrGlbls, grab_scroll_closed)},
+  };
+  for (const auto &member : options) {
+    auto *name = StrNew(member.name, heap);
+    if (!name || !MemberAdd(*wm, name, *boolean, member.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return CmpKernelGlobal(table, "gr", glbl, &gr) &&
+         CmpKernelGlobal(table, "winmgr", wm, &winmgr);
 }
 
 static bool CmpRuntimeHeaders(CHashTable *table)
@@ -814,6 +837,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"GrPaletteColorGet", BGR48, FF_RET1, {{"color_num", I64}}},
       {"GrPaletteGet", U0, FF_RET1, {{"bgr48", BGR48Ptr}}},
       {"GrPaletteSet", U0, FF_RET1, {{"bgr48", BGR48Ptr}}},
+      {"GrScaleZoom", U0, FF_RET1, {{"scale", F64}}},
+      {"DrawStdMs", U0, FF_RET1, {{"dc", DCPtr}, {"x", I64}, {"y", I64}}},
       {"PaletteSetStd", U0, FF_RET1, {}},
       {"ClampI64", I64, FF_RET1, {{"i", I64}, {"lo", I64}, {"hi", I64}}, "_CLAMP_I64"},
       {"SignI64", I64, FF_RET1, {{"i", I64}}},

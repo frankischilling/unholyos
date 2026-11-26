@@ -66,6 +66,7 @@ void Char2ScanCodeHC(),ScanCode2CharHC(),KbdTypeMaticHC(),PutKeyHC();
 void GridInitHC(),MsSetHC();
 void GrPaletteColorSetHC(),GrPaletteColorGetHC();
 void GrPaletteGetHC(),GrPaletteSetHC(),PaletteSetStdHC();
+void GrScaleZoomHC(),DrawStdMsHC();
 void SignI64HC(),RandI16HC(),RandU16HC(),RandI32HC();
 void RandU32HC(),RandI64HC(),RandU64HC(),RandHC();
 void SeedHC(),IsPixCovered0HC(),GrPlot0HC(),GrPeek0HC();
@@ -623,6 +624,8 @@ bool LoadKernel(CTask &task)
       {"GrPaletteColorGet", reinterpret_cast<uintptr_t>(GrPaletteColorGetHC)},
       {"GrPaletteGet", reinterpret_cast<uintptr_t>(GrPaletteGetHC)},
       {"GrPaletteSet", reinterpret_cast<uintptr_t>(GrPaletteSetHC)},
+      {"GrScaleZoom", reinterpret_cast<uintptr_t>(GrScaleZoomHC)},
+      {"DrawStdMs", reinterpret_cast<uintptr_t>(DrawStdMsHC)},
       {"PaletteSetStd", reinterpret_cast<uintptr_t>(PaletteSetStdHC)},
       {"SignI64", reinterpret_cast<uintptr_t>(SignI64HC)},
       {"RandI16", reinterpret_cast<uintptr_t>(RandI16HC)},

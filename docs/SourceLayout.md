@@ -198,14 +198,12 @@ scaling, and grid snapping. The shared controller read path routes each
 byte using the auxiliary bit. `IRQMsHard` acknowledges the cascaded PIC
 interrupt and buffers bytes. A failed reset leaves IRQ12 masked.
 
-`WinMsUpdate` in `Adam/Win.cpp` transfers decoded positions to `ms`.
-`WinQueIPMsgs` in `Adam/WinMgr.cpp` delivers motion and button messages
-relative to the focused task, with the reference single- and
-double-click timing rules. Wheel changes are available through
-`ms.pos.z`. The bootstrap scheduler calls both functions as it drains
-input. The original window manager runs them on its frame loop. Cursor
-drawing, control hit-testing, mouse-speed decay, and zoom handling will
-need that loop.
+`WinMsInput` in `Adam/Win.cpp` transfers decoded positions to `ms`
+as the bootstrap scheduler drains input. `WinQueIPMsgs` in
+`Adam/WinMgr.cpp` delivers motion and button messages relative to the
+focused task. Wheel changes are available through `ms.pos.z`.
+`WinMsUpdate` runs on the frame loop to decay mouse speed and recenter
+zoom. Control hit-testing remains pending.
 
 ## PC speaker
 
@@ -272,8 +270,12 @@ and window composition remain pending.
 `gr.dc2`, then overlays nontransparent pixels from `gr.dc`.
 `Kernel/FontStd.cpp` preserves Terry A. Davis's standard font from
 `Kernel/FontStd.HC`. The bootstrap puts its first status line in
-`gr.text_base`. Per-window DolDoc rendering and the final window and
-cursor callbacks remain pending.
+`gr.text_base`. `GrUpdateScrn` calls `gr.fp_final_scrn_update` on an
+on-top alias of the composite. `WinFinalUpdate` invokes `DrawMs` before
+packing the frame. Cursor callbacks receive their original HolyC stack
+arguments. A callback exception drops the current frame and releases
+the alias. The compiler exposes the callback slots as addresses.
+General function-pointer declarations and calls remain pending.
 
 `DCBlotColor4` in `Adam/Gr/GrAsm.asm` caches eight indexed pixels at a
 time and packs their low four bits into VGA planes. The screen update
@@ -283,9 +285,19 @@ flush path also rewrites unchanged words.
 
 `WinMgrTask` schedules refreshes at the reference 1001/30000-second
 period using rational jiffy deadlines. It has its own task and stack.
-The bootstrap still uses one Adam window and a zero-filled coverage
-map. Mouse-driven zoom recentering and the full window manager remain
-pending.
+The manager owns the persistent screen context's window geometry.
+`DrawStdMs` uses the three line segments produced by the reference
+`GrArrow3` for this cursor angle and pen width. The general transformed
+and thick 3D arrow remains pending. In VGA text mode the bootstrap
+inverts the cursor cell while encoding the frame so the stored text
+attribute stays stable between refreshes.
+
+`GrScaleZoom` updates the mouse scale and offset on all three axes.
+`CtrlAltZ` in `Adam/Gr/GrEnd.cpp` doubles the scale, or halves it with
+Shift. The keyboard decoder dispatches this shortcut while the rest of
+the reference callback table is pending. The bootstrap still uses a
+zero-filled window coverage map. Per-window DolDoc rendering, the
+mouse grid, menus, and grab-scroll interaction remain pending.
 
 ## Remaining structural work
 

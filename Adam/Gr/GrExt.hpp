@@ -5,6 +5,7 @@
 bool GrPixelVisible(const CDC *dc, int64_t x, int64_t y, bool skip_top_task);
 extern "C" uint64_t IsPixCovered0Cpp(CTask *task, int64_t x, int64_t y);
 extern "C" uint64_t GrPlot0Cpp(CDC *dc, int64_t x, int64_t y);
+extern "C" uint64_t GrPlotCpp(CDC *dc, int64_t x, int64_t y);
 extern "C" int64_t GrPeek0Cpp(CDC *dc, int64_t x, int64_t y);
 extern "C" int64_t GrBlotCpp(CDC *dc, int64_t x, int64_t y, CDC *img);
 extern "C" int64_t GrRectCpp(CDC *dc, int64_t x, int64_t y, int64_t w,

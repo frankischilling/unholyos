@@ -1479,6 +1479,8 @@ extern "C" void KMainCpp()
       if (auto *ram = MountedDrive('B'))
         BootGuestFileReport(*ram, "/DCProbe.GR.Z");
     BootRasterReport(*adam_task->cur_dv);
+    BootFileProgramReport(*adam_task->cur_dv, "/CursorProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/CursorExcept.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ScreenProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/PaletteProbe.HC");
     BootSoundReport(*adam_task->cur_dv, *adam_task);

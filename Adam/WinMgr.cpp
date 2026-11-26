@@ -1,4 +1,5 @@
 #include "../Kernel/KernelB.hpp"
+#include "Gr/GrGlbls.hpp"
 
 static int64_t WinQueButton(CTask *task, bool que, bool left, uint64_t time,
                             int64_t x, int64_t y, CD3I64 &single_ms)
@@ -71,6 +72,7 @@ extern "C" void WinMgrTaskEntry();
 
 static uint64_t WinMgrSleep(uint64_t ideal)
 {
+  WinMsUpdate();
   // WINMGR_PERIOD is 1001/30000 seconds. Keep 1/30-jiffy units here.
   auto now = __atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED) * 30 + 1001 / 8;
   if (ideal < now)
@@ -95,5 +97,14 @@ bool WinMgrInit()
   sys_winmgr_task =
       SpawnCpp(reinterpret_cast<uintptr_t>(WinMgrTaskEntry), nullptr,
                "Window Manager", 0, adam_task, 0, JOBF_ADD_TO_QUE);
-  return sys_winmgr_task != nullptr;
+  auto *task = sys_winmgr_task;
+  if (!task)
+    return false;
+  task->win_left = task->win_top = 0;
+  task->win_right = TEXT_COLS - 1;
+  task->win_bottom = TEXT_ROWS - 1;
+  WinDerivedValsUpdate(task);
+  task->display_flags |= DISPLAYF_NO_BORDER | DISPLAYF_SHOW;
+  gr.dc->win_task = task;
+  return true;
 }
