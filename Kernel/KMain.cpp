@@ -178,6 +178,7 @@ extern "C" void KMainCpp()
     return;
   }
 
+  MusicSettingsRstCpp();
   BootProbe();
   adam_task->win_inhibit |= WIF_SELF_FOCUS;
   SYS_RUN_LEVEL |= RLF_DOC;

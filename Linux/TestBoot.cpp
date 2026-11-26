@@ -2715,6 +2715,29 @@ static void VerifyAU(CMonitor &vm, const fs::path &dir,
           "AU event differs from pinned TempleOS");
 }
 
+static void VerifyMusic(CMonitor &vm, const fs::path &dir,
+                        const std::string &output)
+{
+  CheckProgramOutput(output, "/MusicProbe.HC",
+                     "onethreefourfivesix\n"
+                     "0 0 60 0 63 0 50 0 53 55 0 0 0 \n"
+                     "music state 6 4 3 4 3FE0000000000000 401800000000000A\n"
+                     "Music probe 7F\n", '1');
+  auto file = FileRead(CaptureGuestFile(vm, dir, output, "MusicProbe.AU"));
+  constexpr uint8_t notes[]{0, 0, 60, 0, 63, 0, 50, 0, 53, 55, 0, 0, 0};
+  Check(file.size() == 9 * std::size(notes), "Incorrect music event count");
+  uint64_t last = ReadLE(file, 0, 8);
+  for (size_t i = 0; i < std::size(notes); i++) {
+    auto t = ReadLE(file, 9 * i, 8);
+    Check(t >= last && file[9 * i + 8] == notes[i],
+          "Music event sequence differs from pinned TempleOS");
+    last = t;
+  }
+  Check(ReadLE(file, 3 * 9, 8) > ReadLE(file, 2 * 9, 8) &&
+            ReadLE(file, 9 * 9, 8) > ReadLE(file, 8 * 9, 8),
+        "Music notes did not advance in time");
+}
+
 static std::string_view RedSeaName(const Bytes &image, size_t entry)
 {
   const char *name = reinterpret_cast<const char *>(image.data() + entry + 2);
@@ -4189,6 +4212,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
         Check(output.find(msg) != std::string::npos,
               "The speaker, timing, or sound event recording failed");
       VerifyAU(vm, dir, output);
+      VerifyMusic(vm, dir, output);
       CheckProgramOutput(output, "/FixedAsm.HC", "fixed jit 1 42\n", '1');
       CheckProgramOutput(output, "/FixedImage.BIN", "fixed load 42\n", '1');
       Check(output.find("UnholyOS: invalid ORG left the destination intact") !=
@@ -4509,10 +4533,13 @@ int main(int argc, char **argv)
   if ((argc == 4 || argc == 5) &&
       (std::string_view(argv[1]) == "--character-graphics" ||
        std::string_view(argv[1]) == "--character-graphics-reference" ||
+       std::string_view(argv[1]) == "--music" ||
+       std::string_view(argv[1]) == "--music-reference" ||
        std::string_view(argv[1]) == "--database" ||
        std::string_view(argv[1]) == "--database-reference" ||
        std::string_view(argv[1]) == "--form")) {
     bool character = std::string_view(argv[1]).starts_with("--character-graphics");
+    bool music_demo = std::string_view(argv[1]).starts_with("--music");
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -4522,8 +4549,9 @@ int main(int argc, char **argv)
       fs::create_directories(dir);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
-      if (character)
-        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference);
+      if (character || music_demo)
+        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
+                               reference, music_demo);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");
@@ -4634,7 +4662,8 @@ int main(int argc, char **argv)
               << "       " << argv[0]
               << " --digits qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
-              << " --character-graphics[-reference] qemu image.iso [capture-dir]\n";
+              << " --character-graphics[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0] << " --music[-reference] qemu image.iso [capture-dir]\n";
     return 2;
   }
   try {

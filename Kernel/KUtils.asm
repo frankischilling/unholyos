@@ -67,6 +67,8 @@ GLOBAL RawHC,DbgModeHC,IsDbgModeHC,PutFileLinkHC,PutSrcLinkHC,FixSetHC,AdamErrHC
 GLOBAL tSHC,BusyHC,SleepUntilHC,SleepHC,Ona2FreqHC,Freq2OnaHC,SndHC
 GLOBAL ScrnCastHC,SndRstHC,BeepHC,MuteHC,IsMuteHC
 GLOBAL SndShiftHC,AUWriteHC
+GLOBAL SndTaskEndCBHC,tMHC,BeatHC,MusicSetOctaveHC,MusicSetMeterHC,MusicSetNoteLenHC
+GLOBAL Note2OnaHC,Ona2NoteHC,Ona2OctaveHC,PlayHC,MusicSettingsRstHC
 GLOBAL SpawnHC,TaskValidateHC,SuspendHC,IsSuspendedHC,TaskQueInsHC,TaskQueRemHC
 GLOBAL SingleUserHC,IsSingleUserHC
 GLOBAL JobDelHC,TaskRstAwaitingMsgHC,TaskExeHC,TaskTextHC
@@ -200,6 +202,8 @@ EXTERN RawCpp,DbgModeCpp,IsDbgModeCpp,PutFileLinkCpp,PutSrcLinkCpp,FixSetCpp,Ada
 EXTERN tSCpp,BusyCpp,SleepUntilCpp,SleepCpp,Ona2FreqCpp,Freq2OnaCpp,SndCpp
 EXTERN ScrnCastCpp,SndRstCpp,BeepCpp,MuteCpp,IsMuteCpp
 EXTERN SndShiftCpp,AUWriteCpp
+EXTERN SndTaskEndCBCpp,tMCpp,BeatCpp,MusicSetOctaveCpp,MusicSetMeterCpp,MusicSetNoteLenCpp
+EXTERN Note2OnaCpp,Ona2NoteCpp,Ona2OctaveCpp,PlayCpp,MusicSettingsRstCpp
 
 SECTION .text
 BITS 64
@@ -682,6 +686,17 @@ HOLYC_CPP ScrnCastHC,ScrnCastCpp,3
 HOLYC_CPP SndShiftHC,SndShiftCpp,2
 HOLYC_CPP AUWriteHC,AUWriteCpp,4
 HOLYC_CPP SndRstHC,SndRstCpp,0
+HOLYC_CPP SndTaskEndCBHC,SndTaskEndCBCpp,0
+HOLYC_CPP tMHC,tMCpp,0
+HOLYC_CPP BeatHC,BeatCpp,0
+HOLYC_CPP MusicSetOctaveHC,MusicSetOctaveCpp,1
+HOLYC_CPP MusicSetMeterHC,MusicSetMeterCpp,1
+HOLYC_CPP MusicSetNoteLenHC,MusicSetNoteLenCpp,1
+HOLYC_CPP Note2OnaHC,Note2OnaCpp,2
+HOLYC_CPP Ona2NoteHC,Ona2NoteCpp,1
+HOLYC_CPP Ona2OctaveHC,Ona2OctaveCpp,1
+HOLYC_CPP PlayHC,PlayCpp,2
+HOLYC_CPP MusicSettingsRstHC,MusicSettingsRstCpp,0
 HOLYC_CPP BeepHC,BeepCpp,2
 HOLYC_CPP MuteHC,MuteCpp,1
 HOLYC_CPP IsMuteHC,IsMuteCpp,0

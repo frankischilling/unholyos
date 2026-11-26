@@ -1363,6 +1363,55 @@ static bool CmpScrnCastData(CHashTable *table)
   return CmpKernelGlobal(table, "scrncast", sc, &scrncast);
 }
 
+static bool CmpMusicData(CHashTable *table)
+{
+  auto *cls = CmpKernelClass(table, "CMusicGlbls", sizeof(CMusicGlbls));
+  if (!cls)
+    return false;
+  auto *u8 = FindType("U8", table);
+  auto *i64 = FindType("I64", table);
+  auto *f64 = FindType("F64", table);
+  const struct
+  {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+  } fields[]{
+      {"cur_song", u8 + 1, offsetof(CMusicGlbls, cur_song)},
+      {"cur_song_task", FindType("CTask", table) + 1, offsetof(CMusicGlbls, cur_song_task)},
+      {"octave", i64, offsetof(CMusicGlbls, octave)},
+      {"note_len", f64, offsetof(CMusicGlbls, note_len)},
+      {"note_map", u8, offsetof(CMusicGlbls, note_map)},
+      {"mute", FindType("Bool", table), offsetof(CMusicGlbls, mute)},
+      {"meter_top", i64, offsetof(CMusicGlbls, meter_top)},
+      {"meter_bottom", i64, offsetof(CMusicGlbls, meter_bottom)},
+      {"tempo", f64, offsetof(CMusicGlbls, tempo)},
+      {"stacatto_factor", f64, offsetof(CMusicGlbls, stacatto_factor)},
+      {"play_note_num", i64, offsetof(CMusicGlbls, play_note_num)},
+      {"tM_correction", f64, offsetof(CMusicGlbls, tM_correction)},
+      {"last_Beat", f64, offsetof(CMusicGlbls, last_Beat)},
+      {"last_tM", f64, offsetof(CMusicGlbls, last_tM)},
+  };
+  auto *heap = CurrentTask()->data_heap;
+  for (const auto &field : fields) {
+    auto *name = StrNew(field.name, heap);
+    auto *m = name ? MemberAdd(*cls, name, *field.type, field.offset) : nullptr;
+    if (!m) {
+      Free(name);
+      return false;
+    }
+    if (field.offset == offsetof(CMusicGlbls, note_map)) {
+      auto *axis = reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return false;
+      axis->cnt = m->dim.total_cnt = m->size = sizeof(music.note_map);
+      axis->total_cnt = 1;
+      m->dim.next = axis;
+    }
+  }
+  return CmpKernelGlobal(table, "music", cls, &music);
+}
+
 static bool CmpTaskSettingsData(CHashTable *table)
 {
   auto *cls = CmpKernelClass(table, "CTaskSettings", sizeof(CTaskSettings));
@@ -2305,6 +2354,17 @@ static bool CmpRuntimeHeaders(CHashTable *table)
         {"just_audio", Bool, true},
         {"print_fmt", U8Ptr, true, 0, "B:/Tmp/%X.GR"}}},
       {"SndRst", U0, FF_RET1, {}},
+      {"SndTaskEndCB", U0, FF_RET1, {}},
+      {"tM", F64, FF_RET1, {}},
+      {"Beat", F64, FF_RET1, {}},
+      {"MusicSetOctave", U8Ptr, FF_RET1, {{"st", U8Ptr}}},
+      {"MusicSetMeter", U8Ptr, FF_RET1, {{"st", U8Ptr}}},
+      {"MusicSetNoteLen", U8Ptr, FF_RET1, {{"st", U8Ptr}}},
+      {"Note2Ona", I8, FF_RET1, {{"note", I64}, {"octave", I64, true, 4}}},
+      {"Ona2Note", I8, FF_RET1, {{"ona", I8}}},
+      {"Ona2Octave", I8, FF_RET1, {{"ona", I8}}},
+      {"Play", U0, FF_RET1, {{"st", U8Ptr}, {"words", U8Ptr, true}}},
+      {"MusicSettingsRst", U0, FF_RET1, {}},
       {"SndShift", U0, FF_RET1, {{"head", SndPtr}, {"dt", F64, true}}},
       {"AUWrite", I64, FF_RET1,
        {{"filename", U8Ptr}, {"head", SndPtr}, {"t0_now", DatePtr}, {"t0_tS", F64}}},
@@ -2727,7 +2787,8 @@ static bool CmpFillHash(CHashTable *table)
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) && CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
-         CmpScrnCastData(table) && CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
+         CmpScrnCastData(table) && CmpMusicData(table) &&
+         CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
          CmpCtrlData(table, task) && CmpClassReportData(table, *task) &&
          CmpRuntimeHeaders(table);
 }

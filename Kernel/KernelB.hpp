@@ -1,6 +1,7 @@
 #pragma once
 
 #include "KernelA.hpp"
+#include "../Adam/ASnd.hpp"
 
 inline void MemSet(void *dst, uint8_t value, size_t count)
 {

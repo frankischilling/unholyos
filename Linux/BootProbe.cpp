@@ -1166,6 +1166,8 @@ static void BootSoundReport(const CDrv &dvd, CTask &task)
   old_debug = DbgModeCpp(false);
   if (BootFileProgramReport(dvd, "/AUProbe.HC").okay)
     BootGuestFileReport(*ram, "/AUProbe.AU");
+  if (BootFileProgramReport(dvd, "/MusicProbe.HC").okay)
+    BootGuestFileReport(*ram, "/MusicProbe.AU");
   DbgModeCpp(old_debug);
 }
 

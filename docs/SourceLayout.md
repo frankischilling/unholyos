@@ -223,8 +223,8 @@ scheduler. `Adam/Gr/ScrnCast.cpp` follows the `SndShift` and `AUWrite`
 functions in `Adam/Gr/ScrnCast.HC`. The compiler exposes the packed
 sound types and the live `scrncast` global. The AU writer includes the
 queue sentinel and stores timestamps as raw CDate values, followed by
-one signed note byte. Desktop playback in `Adam/ASnd.HC` and video
-capture remain pending.
+one signed note byte. Music notation playback is described below;
+video capture and the remaining desktop sound APIs are pending.
 
 ## VGA palette
 
@@ -877,6 +877,21 @@ external symbol machinery for the runtime calls in `.BIN.Z`. The
 bootstrap's `SysTryHC` aligns its internal C++ call and saves the
 unpadded guest stack for resumption. The original demo cautions against
 returning from a catch body. That path is outside the tested scope.
+
+## Music playback
+
+`Adam/ASnd.cpp` follows the note conversion, timing, notation parsing,
+and playback routines in `Adam/ASnd.HC`. `Adam/ASnd.hpp` retains the
+packed `CMusicGlbls` layout, including its seven-entry note map.
+The native compiler exposes those fields and the typed runtime
+functions. Playback uses the existing speaker and scheduler routines.
+The single-CPU implementation protects beat updates with interrupts
+disabled. `Play` also checks the lower bound of the note index before
+accessing `music.note_map`; the reference only checks the upper bound.
+Characters below `A` outside the notation modifiers therefore become
+rests instead of reading outside that array. SMP synchronization,
+`CurSongTask`, the waveform functions, `Noise`, and `Sweep` remain
+pending. Terry A. Davis's original song stays in `Demo/Snd/OhGreat.HC`.
 
 ## Remaining structural work
 
