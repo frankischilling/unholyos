@@ -641,10 +641,27 @@ static void BootVariadicReport(const CDrv &dvd, CTask &task,
     BootGuestFileReport(*ram, path);
 }
 
+extern "C" CBlkDev *BlkDevNextFreeSlotCpp(uint8_t letter, int64_t type);
+extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole,
+                               uint8_t make_free);
+
 static void BootISOReport(const CDrv &dv)
 {
+  CRedSeaDirEntry entry;
+  size_t prefix;
+  auto *source = MountedDrive('B');
+  if (!source || !RedSeaFileLookup(dv, "/RedSeaISOProbe.HC", false, false,
+                                  entry, prefix))
+    return;
+
+  // Keep the fixed-size file-operation test drive intact. Reserve space for
+  // both source volumes plus the ISO headers and directory/bitmap overhead.
+  auto *bd = BlkDevNextFreeSlotCpp('A', BDT_RAM);
+  bd->max_blk = dv.size + source->size + 1024 - 1;
+  if (BlkDevAddCpp(bd, INT64_MIN, false, true) != 1)
+    return;
   auto run = BootFileProgramReport(dv, "/RedSeaISOProbe.HC");
-  if (auto *ram = MountedDrive('B'); ram && run.okay) {
+  if (auto *ram = MountedDrive('A'); ram && run.okay) {
     BootGuestFileReport(*ram, "/GuestBuild.ISO.C");
     BootGuestFileReport(*ram, "/GuestData.ISO.C");
   }

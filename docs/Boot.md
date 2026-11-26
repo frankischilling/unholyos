@@ -150,7 +150,9 @@ archive checksum. The dates shown by `Dir` come from the image read by
 the guest.
 
 The QEMU boot suite runs `RedSeaISOProbe.HC` through `ExeFile` at 512,
-3,072, and 4,608 MiB. It reads the two output files from guest RAM, checks
+3,072, and 4,608 MiB. The boot harness mounts a separate RAM drive `A:`
+sized for both source volumes and ISO overhead, leaving the fixed-size
+file-operation test drive `B:` intact. It reads the two output files from guest RAM, checks
 the boot image against every source file, and checks that the data image
 contains the selected nested directory. The probe also checks that missing
 and out-of-tree stage-two files and an output path inside the source tree
