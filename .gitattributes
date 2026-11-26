@@ -80,6 +80,7 @@ Linux/Fixtures/TaskSettingsProbe.HC text eol=lf
 Linux/Fixtures/Lines.HC -text
 Linux/Fixtures/Grid.HC -text
 Linux/Fixtures/FunctionPtrProbe.HC text eol=lf
+Linux/Fixtures/FileCopyProbe.HC text eol=lf
 Linux/Fixtures/DocFrame.HC text eol=lf
 Linux/Fixtures/DocButton.HC text eol=lf
 Linux/Fixtures/DocCallback.HC text eol=lf

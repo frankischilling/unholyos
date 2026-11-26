@@ -116,16 +116,6 @@ static uint8_t *ExpandBuf(const uint8_t *data, size_t size, size_t &expanded,
   return res;
 }
 
-static uint64_t FileAttr(const char *name, uint64_t attr)
-{
-  attr &= ~uint64_t{RS_ATTR_COMPRESSED};
-  if (IsDotExt(name, 'Z'))
-    attr |= RS_ATTR_COMPRESSED;
-  if (IsDotExt(name, 'C'))
-    attr |= RS_ATTR_CONTIGUOUS;
-  return attr;
-}
-
 static uint8_t *RedSeaReadFound(const CDrv &dv, const CRedSeaDirEntry &entry,
                                 CHeapCtrl *hc, bool block_storage)
 {
@@ -169,7 +159,7 @@ uint8_t *FileRead(const CDrv &dv, const char *path, size_t &size, CHeapCtrl *hc)
   if (!data)
     return nullptr;
   size = entry.size;
-  return FileExpand(data, size, FileAttr(entry.name, entry.attr), hc);
+  return FileExpand(data, size, FileAttrCpp(entry.name, entry.attr), hc);
 }
 
 static const CHashGeneric *ResidentFile(const char *name, const char *alt)
@@ -243,7 +233,7 @@ extern "C" uint8_t *FileReadCpp(const char *filename, size_t *out_size,
       if (data) {
         MemCpy(data, reinterpret_cast<void *>(cached->user_data0), size);
         data[size] = 0;
-        attr = FileAttr(cached->hash.str, 0);
+        attr = FileAttrCpp(cached->hash.str, 0);
       } else {
         size = 0;
       }
@@ -254,7 +244,7 @@ extern "C" uint8_t *FileReadCpp(const char *filename, size_t *out_size,
       if (dv && RedSeaFileLookup(*dv, path + 2, true, true, entry, prefix) &&
           (data = RedSeaReadFound(*dv, entry, hc, true))) {
         size = entry.size;
-        attr = FileAttr(entry.name, entry.attr);
+        attr = FileAttrCpp(entry.name, entry.attr);
         if (alt && (attr & RS_ATTR_RESIDENT)) {
           const char *leaf = path + PathFileOffset(path);
           size_t len = StrLen(leaf);
@@ -291,7 +281,7 @@ extern "C" uint64_t FileWriteCpp(const char *filename, const uint8_t *data,
   }
 
   size_t size = static_cast<int64_t>(count) >= 0 ? count : 0;
-  attr = FileAttr(path + PathFileOffset(path), attr);
+  attr = FileAttrCpp(path + PathFileOffset(path), attr);
   uint8_t *encoded = nullptr;
   if (attr & RS_ATTR_COMPRESSED) {
     auto *hc = task.data_heap;

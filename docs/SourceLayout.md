@@ -606,6 +606,20 @@ Close checks that changes to size stay within the allocated block count
 and that the entry still refers to the same file. FAT32, noncontiguous
 streams, dirty cluster buffers, and ATA writes remain pending.
 
+`Kernel/BlkDev/DskCopy.cpp` follows `CopySingleZ` and `CopySingle` in
+`DskCopy.HC`. Equal filename attributes select the raw block-stream path
+with a 128-block buffer. Attribute changes select `FileRead` and `FileWrite`
+to expand or encode data. Both paths preserve the source timestamp; the
+stream path also preserves the logical file size and attributes. `FileAttr`
+is in `DskStrA.cpp`, and native HolyC receives the typed `FileRead`,
+`FileWrite`, `FileAttr`, and `CopySingle` signatures.
+
+The current copy path checks block I/O return values that the reference
+ignores. It can leave a partially written destination on failure and does
+not guarantee transactional replacement. General error diagnostics,
+resident-cache coherence for raw stream writes, `Del`, and Adam's
+directory-tree operations still need work.
+
 ## HolyC function pointers
 
 `Compiler/PrsVar.cpp` follows `PrsType` in `Compiler/PrsVar.HC` for

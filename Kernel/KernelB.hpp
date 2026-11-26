@@ -421,6 +421,8 @@ extern "C" uint64_t FilesFindMatchCpp(const char *name, const char *mask,
 extern "C" char *ExtDftCpp(const char *name, const char *ext);
 const char *FileExtDot(const char *name);
 bool IsDotExt(const char *name, char ext);
+extern "C" uint64_t FileAttrCpp(const char *name,uint64_t attr);
+extern "C" uint64_t CopySingleCpp(const char *f1,const char *f2);
 int64_t DirEntryCompareName(const CRedSeaDirEntry &a, const CRedSeaDirEntry &b);
 bool DirFilesSort(CDirEntry *&first, bool by_cluster);
 void DirFilesFlatten(CDirEntry *&first, uint64_t flags);

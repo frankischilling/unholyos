@@ -82,6 +82,28 @@ The title uses the runtime `DD_OS_NAME_VERSION` definition, currently
 `UnholyOS`. Help navigation, the directory chooser, border controls,
 menus, autocomplete, and the full editor remain pending.
 
+## Copying RedSea files
+
+`FileCopyProbe.HC` runs with a 2,048-block RAM drive. It checks the
+filename attributes, self-copy rejection, a 65,573-byte copy across the
+64 KiB buffer boundary, compression and expansion on extension changes,
+contiguous files, the exact stored blocks of the DVD's `StartOS.HC.Z`,
+and an empty file. The probe also checks logical sizes and timestamps.
+Both guests printed the same six copy messages and `File copy probe FF`.
+The fixture SHA-256 is
+`29a53bb7019d46f1d6b1c84652b68e1e494005c2d906cf6c18f6c9497388ffed`.
+
+The focused UnholyOS build used `make -j4 BUILD=build/copy-check all
+build/copy-check/unholyos-startup-test.iso`. The focused disc was built with
+the existing `MakeISO` tool, the normal loader and kernel, `StartOS.HC.Z`,
+`FileWriteProbe.BIN`, and `FileCopyProbe.HC`.
+Both `build/copy-check/file-copy-focused.iso` and the pinned TempleOS live
+disc ran under QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512`.
+The reference ran the exact fixture through `ExePutS` after a debugger
+transfer to an allocated buffer; the native boot ran it from the disc.
+The boot suite checks the full output on startup and on the disc built
+in the guest.
+
 ## Building a RedSea ISO in the guest
 
 `RedSeaISO` takes an output filename, a source directory, and an optional

@@ -276,6 +276,17 @@ bool IsDotExt(const char *name, char ext)
   return false;
 }
 
+extern "C" uint64_t FileAttrCpp(const char *name,uint64_t attr)
+{
+  if (IsDotExt(name,'Z'))
+    attr|=RS_ATTR_COMPRESSED;
+  else
+    attr&=~uint64_t{RS_ATTR_COMPRESSED};
+  if (IsDotExt(name,'C'))
+    attr|=RS_ATTR_CONTIGUOUS;
+  return attr;
+}
+
 bool FileNameChk(const char *name)
 {
   if (!name)
