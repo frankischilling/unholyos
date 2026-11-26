@@ -129,6 +129,9 @@ extern uint8_t gr_rainbow_10[10];
 bool GrPaletteInit();
 void GrPaletteIndicesSet();
 bool GrInit2();
+void GrUpdateScrn();
+bool WinMgrInit();
+extern const uint64_t sys_font_std[256];
 void WinDerivedValsUpdate(CTask *task);
 extern "C" uint64_t RandU16Cpp();
 extern "C" CDC *DCNewCpp(int64_t width, int64_t height, CTask *task,

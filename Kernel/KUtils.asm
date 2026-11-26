@@ -31,7 +31,7 @@ GLOBAL InputFilterTaskHC
 GLOBAL Char2ScanCodeHC,ScanCode2CharHC,KbdTypeMaticHC,PutKeyHC
 GLOBAL GridInitHC,MsSetHC
 GLOBAL GrPaletteColorSetHC,GrPaletteColorGetHC
-GLOBAL GrPaletteGetHC,GrPaletteSetHC,PaletteSetStdHC
+GLOBAL GrPaletteGetHC,GrPaletteSetHC,PaletteSetStdHC,WinMgrTaskEntry
 GLOBAL SignI64HC,RandI16HC,RandU16HC,RandI32HC
 GLOBAL RandU32HC,RandI64HC,RandU64HC,RandHC
 GLOBAL SeedHC,IsPixCovered0HC,GrPlot0HC,GrPeek0HC
@@ -56,7 +56,7 @@ EXTERN InputFilterTaskCpp
 EXTERN Char2ScanCodeCpp,ScanCode2CharCpp,KbdTypeMaticCpp,PutKeyCpp
 EXTERN GridInitCpp,MsSetCpp
 EXTERN GrPaletteColorSetCpp,GrPaletteColorGetCpp
-EXTERN GrPaletteGetCpp,GrPaletteSetCpp,PaletteSetStdCpp
+EXTERN GrPaletteGetCpp,GrPaletteSetCpp,PaletteSetStdCpp,WinMgrTask
 EXTERN SignI64Cpp,RandI16Cpp,RandU16Cpp,RandI32Cpp
 EXTERN RandU32Cpp,RandI64Cpp,RandU64Cpp,RandCpp
 EXTERN SeedCpp,IsPixCovered0Cpp,GrPlot0Cpp,GrPeek0Cpp
@@ -205,6 +205,7 @@ HOLYC_CPP GrPaletteColorGetHC,GrPaletteColorGetCpp,1
 HOLYC_CPP GrPaletteGetHC,GrPaletteGetCpp,1
 HOLYC_CPP GrPaletteSetHC,GrPaletteSetCpp,1
 HOLYC_CPP PaletteSetStdHC,PaletteSetStdCpp,0
+HOLYC_CPP WinMgrTaskEntry,WinMgrTask,1
 HOLYC_CPP SignI64HC,SignI64Cpp,1
 HOLYC_CPP RandI16HC,RandI16Cpp,0
 HOLYC_CPP RandU16HC,RandU16Cpp,0

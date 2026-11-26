@@ -231,7 +231,7 @@ green, red, and padding words and crosses the HolyC call boundary in one
 64-bit argument slot or return register.
 
 `GrInit2` runs the palette setup during the bootstrap. The reference
-calls it when loading the Adam graphics stack. The desktop compositor and task palette reset callback remain pending.
+calls it when loading the Adam graphics stack. The task palette reset callback remains pending.
 
 ## Graphics device contexts
 
@@ -246,8 +246,8 @@ LZW codec. `GRRead` also checks that the serialized data fits in the file.
 starts transparent with `DCF_SCRN_BITMAP | DCF_ON_TOP`. The context
 holds HolyC ABI addresses for the transform and lighting callbacks.
 HolyC can call the two functions by name. The current compiler headers
-still need typed callback member access. Brush tables, the text layer,
-and composition remain pending.
+still need typed callback member access. Brush tables and window
+composition remain pending.
 
 ## 2D raster drawing
 
@@ -264,7 +264,28 @@ The unclipped plot tests depth. Clipped 2D drawing bypasses that depth
 test. Probability dithering uses the task RNG from `Kernel/KMathB.cpp`.
 The HolyC adapters extend narrow RNG returns through RAX and pass up to
 eight fixed arguments. The public `Line` callback interface, 3D drawing,
-and desktop presentation remain pending.
+and window composition remain pending.
+
+## Screen composition and VGA
+
+`Adam/Gr/GrScrn.cpp` builds the text background and glyph layer in
+`gr.dc2`, then overlays nontransparent pixels from `gr.dc`.
+`Kernel/FontStd.cpp` preserves Terry A. Davis's standard font from
+`Kernel/FontStd.HC`. The bootstrap puts its first status line in
+`gr.text_base`. Per-window DolDoc rendering and the final window and
+cursor callbacks remain pending.
+
+`DCBlotColor4` in `Adam/Gr/GrAsm.asm` caches eight indexed pixels at a
+time and packs their low four bits into VGA planes. The screen update
+can zoom those planes before copying them to VGA. `GrUpdateLine64`
+reverses bits for VGA scan order and writes changed words. The
+flush path also rewrites unchanged words.
+
+`WinMgrTask` schedules refreshes at the reference 1001/30000-second
+period using rational jiffy deadlines. It has its own task and stack.
+The bootstrap still uses one Adam window and a zero-filled coverage
+map. Mouse-driven zoom recentering and the full window manager remain
+pending.
 
 ## Remaining structural work
 

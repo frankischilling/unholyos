@@ -1,4 +1,5 @@
 #include "KernelB.hpp"
+#include "../Adam/Gr/GrGlbls.hpp"
 
 constexpr unsigned FONT_HEIGHT = 16;
 
@@ -27,6 +28,16 @@ void WinDerivedValsUpdate(CTask *task)
 
 void BootPutS(const char *text)
 {
+  if (gr.text_base) {
+    unsigned col = 0;
+    for (; col < TEXT_COLS && text[col]; col++)
+      gr.text_base[col] = (WHITE << 8) | static_cast<uint8_t>(text[col]);
+    for (; col < TEXT_COLS; col++)
+      gr.text_base[col] = 0;
+    VGAFlush();
+    GrUpdateScrn();
+    return;
+  }
   if (SYS_RUN_LEVEL & RLF_VGA) {
     if (!SYS_FONT_ADDRESS)
       return;
