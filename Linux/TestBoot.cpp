@@ -258,8 +258,10 @@ public:
       if (debugcon)
         execlp(qemu, qemu, "-machine", machine, "-cpu", "qemu64", "-m", memory,
                "-boot", "d", "-cdrom", image.c_str(), "-display", "none",
-               "-monitor", "none", "-serial", serial.c_str(), "-qmp", "stdio",
-               "-debugcon", debug.c_str(), "-no-reboot", static_cast<char *>(nullptr));
+               "-monitor", "none", "-serial", serial.c_str(), "-qmp",
+               "stdio", "-debugcon", debug.c_str(), "-gdb",
+               "tcp:127.0.0.1:45362", "-no-reboot",
+               static_cast<char *>(nullptr));
       if (!disk.empty()) {
         execlp(qemu,qemu,"-machine",machine,"-cpu","qemu64","-m",memory,
                "-boot","d","-cdrom",image.c_str(),"-drive",ata.c_str(),
@@ -1674,6 +1676,8 @@ static void DriveDigits(CMonitor &vm, const fs::path &dir,
   std::cout << "Digits.HC matched seeded patterns, score, restart and Escape\n";
 }
 
+#include "TestCharacterGraphics.hpp"
+
 static void VerifyFormatRefusal(CMonitor &vm, const fs::path &dir,
                                 const std::string &boot)
 {
@@ -2387,6 +2391,8 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
       << "PullDownMenu.HC selected commands by mouse and keyboard and exited\n";
 
   vm.ResetDeadline(30s);
+  const auto tree_window = ReadPhysical<4>(vm, left + win_left);
+  const auto tree_draw = ReadPhysical<1>(vm, left + 0x1C0)[0];
   type_cmd("DocClear(,1);");
   type_cmd("MsSet(320,240);ms.show=FALSE;");
   type_cmd("Seed(12345);");
@@ -2466,6 +2472,14 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
     std::this_thread::sleep_for(26ms);
   }
   Check(!shape_pixels(tree), "CommonAncestor.HC left the tree on VGA");
+  // SettingsPop clears draw_it before its refresh and second restoration.
+  // A blank frame or a previously printed prompt alone is not completion.
+  type_cmd("54321;");
+  wait_text("ans=0x0000D431=54321");
+  Check(ReadPhysical<4>(vm, left + win_left) == tree_window,
+        "CommonAncestor.HC did not restore the terminal geometry");
+  Check(ReadPhysical<1>(vm, left + 0x1C0)[0] == tree_draw,
+        "CommonAncestor.HC did not restore the drawing callback");
 
   vm.ResetDeadline(40s);
   const auto shading_window = ReadPhysical<4>(vm, left + win_left);
@@ -2522,13 +2536,16 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   MouseMove(vm, 0, 48);
   wait_mem(state, 36, "The X angle did not track the drag");
   MouseButton(vm, "left", false);
+  wait_button(false);
   key("q");
   for (unsigned i = 0; i < 80 && find_view(); ++i)
     std::this_thread::sleep_for(20ms);
   Check(!find_view(), "Shading.HC left its control in the queue");
+  wait_text("T:/Home>");
+  type_cmd("54322;");
+  wait_text("ans=0x0000D432=54322");
   Check(ReadPhysical<4>(vm, left + win_left) == shading_window,
         "Shading.HC did not restore the terminal geometry");
-  wait_text("T:/Home>");
   std::cout << "Shading.HC drew the sphere and accepted a view-angle drag\n";
 
   // The scrollbar exercise deliberately moves the document's edit cursor.
@@ -3665,6 +3682,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/FileOperationsProbe.HC", file_operations_output, '1');
     CheckProgramOutput(boot, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
     CheckProgramOutput(boot, "/ClassMeta.HC", class_meta_output, '1');
+    CheckProgramOutput(boot, "/MemSetProbe.HC", "Memory set probe 3FF\n", '1');
     CheckProgramOutput(boot, "/ClassReportProbe.HC", class_report_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.HC", last_class_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.BIN.Z", last_class_output, '1');
@@ -3776,6 +3794,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/FileOperationsProbe.HC", file_operations_output, '1');
       CheckProgramOutput(output, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
       CheckProgramOutput(output, "/ClassMeta.HC", class_meta_output, '1');
+      CheckProgramOutput(output, "/MemSetProbe.HC", "Memory set probe 3FF\n", '1');
       CheckProgramOutput(output, "/ClassReportProbe.HC", class_report_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.HC", last_class_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.BIN.Z", last_class_output, '1');
@@ -4304,11 +4323,14 @@ int main(int argc, char **argv)
     }
   }
   if ((argc == 4 || argc == 5) &&
-      (std::string_view(argv[1]) == "--database" ||
+      (std::string_view(argv[1]) == "--character-graphics" ||
+       std::string_view(argv[1]) == "--character-graphics-reference" ||
+       std::string_view(argv[1]) == "--database" ||
        std::string_view(argv[1]) == "--database-reference" ||
        std::string_view(argv[1]) == "--form")) {
-    bool reference = std::string_view(argv[1]) == "--database-reference";
-    char path[] = "/tmp/unholyos-database-XXXXXX";
+    bool character = std::string_view(argv[1]).starts_with("--character-graphics");
+    bool reference = std::string_view(argv[1]).ends_with("-reference");
+    char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
@@ -4316,8 +4338,11 @@ int main(int argc, char **argv)
       fs::create_directories(dir);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
-      DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
-                    std::string_view(argv[1]) == "--form");
+      if (character)
+        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference);
+      else
+        DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
+                      std::string_view(argv[1]) == "--form");
       vm.Command(R"({"execute":"quit"})");
       if (argc == 4)
         fs::remove_all(dir);
@@ -4423,7 +4448,9 @@ int main(int argc, char **argv)
     std::cerr << "Usage: " << argv[0]
               << " qemu image.iso kernel [startup-test.iso]\n"
               << "       " << argv[0]
-              << " --digits qemu image.iso [capture-dir]\n";
+              << " --digits qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --character-graphics[-reference] qemu image.iso [capture-dir]\n";
     return 2;
   }
   try {

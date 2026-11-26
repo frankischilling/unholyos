@@ -928,6 +928,60 @@ ISO suite. The reference run used the pinned distribution disc and
 none`; QEMU's monitor captured the corresponding text layer after the
 same input sequence.
 
+## Character graphics and Maze
+
+Both boot discs include the unchanged originals by Terry A. Davis:
+
+- [Demo/Games/CharDemo.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Games/CharDemo.HC),
+  SHA-256 `f9aa176f08dcd25f259b17f54638e703029878950fd54973c945d46cf4de217b`.
+- [Demo/Games/Maze.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Games/Maze.HC),
+  SHA-256 `b6701b8e161069668b19585eb071a43cad21bc05c659599dd2186b42c5a6a6c4`.
+
+`MemSetProbe.HC` exercises typed fills of 8-, 16-, 32- and 64-bit
+elements. It checks the end-pointer return value, zero counts, guard
+elements, truncation, the packed text attributes and the previous-state
+return values of `DocCursor`, `DocHighlightCursor` and `DocScroll`.
+The startup test expects `Memory set probe 3FF`.
+
+The focused C++ driver runs the original game sources in a user task.
+With `Seed(12345)`, CharDemo cycles the four water glyphs, pans by one
+pixel at a time, moves 32 pixels in each direction, returns to its
+initial viewport, and regenerates its map on Enter. The test compares
+2,925 packed character/attribute cells per phase with fingerprints
+recorded from the pinned guest. It checks the original font pointer,
+task draw and animation callbacks, cursor and scroll flags, window
+geometry, and panning state after Escape.
+
+For Maze, the driver moves the mouse to pixel (240,416), holds the
+left button while moving across seven cells, and releases it. The
+wall occupies text cells (30,52) through (36,52). Right-click at
+pixel (264,392) starts the solver at (33,49). The path goes down
+to (33,51), around the right end of the wall, and down to the lower
+boundary without overwriting the wall. Enter clears the board and
+Escape restores the terminal. The driver verifies the wall and the
+first eight path cells; the captures also include the VGA framebuffer.
+
+Run the native regression with QEMU 8.2.2, PC, `qemu64` and 512 MiB:
+
+```sh
+make -j4 BUILD=build/character-check
+make BUILD=build/character-check build/character-check/Linux/TestBoot
+build/character-check/Linux/TestBoot --character-graphics qemu-system-x86_64 \
+  build/character-check/unholyos.iso build/character-check/native
+```
+
+To replay against the pinned distribution, invoke the same driver from
+the repository root with `--character-graphics-reference` and the
+reference ISO. It declines installation and the tour, obtains the text
+layer address from the guest's debug port, and uses GDB on local port
+45362 to copy the exact memory-set probe bytes into a guest allocation.
+The original demos execute from the reference DVD. The normal test uses
+QMP over a private socket pair and does not require GDB.
+
+This covers the tested keyboard, mouse, text-layer and cleanup paths,
+not every map boundary, maze shape, menu action, animation timing, or
+speaker output. No complete framebuffer or audio parity is claimed.
+
 ## Arrows, raster text, and the common ancestor demo
 
 Both boot discs include Terry A. Davis's unchanged

@@ -1511,6 +1511,7 @@ void BootProbe()
     BootProbeReport(*adam_task->cur_dv, *adam_task, "/FileWriteProbe.BIN",
                     "FileWriteProbeResult", "UnholyOS: write probe ");
     BootFileProgramReport(*adam_task->cur_dv, "/MemberMetaProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/MemSetProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ClassMeta.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ClassReportProbe.HC");
     BootVariadicReport(*adam_task->cur_dv, *adam_task, "/LastClassProbe.HC",

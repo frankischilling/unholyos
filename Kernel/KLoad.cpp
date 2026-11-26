@@ -32,7 +32,7 @@ struct CLoadedModule
 extern "C" {
 void CallModuleMain(const uint8_t *entry);
 void _BEQU(), _CALL(), _CLAMP_I64();
-void _MEMCPY(), _MEMSET(), _MEMSET_I64(), _MEMCMP();
+void _MEMCPY(), _MEMSET(), _MEMSET_U16(), _MEMSET_U32(), _MEMSET_I64(), _MEMCMP();
 void _MALLOC(), _FREE(), _MHEAP_CTRL(), _MSIZE(), _MSIZE2();
 void CAllocHC(), MAllocIdentHC(), StrNewHC(), AStrNewHC();
 void _STRCMP(), _STRCPY(), _STRIMATCH(), StrOccHC();
@@ -109,6 +109,7 @@ void DocReadHC(), DocTypeHC(), TypeHC();
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
 void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC(), DocPutKeyHC();
 void DocLockHC(), DocUnlockHC(), DocEntryRunHC(), DocBottomHC(), DocClearHC(), NowHC();
+void DocCursorHC(), DocHighlightCursorHC(), DocScrollHC();
 void Struct2DateHC(), Date2StructHC(), YearStartDateHC(), DayOfWeekHC();
 void FirstDayOfMonHC(), LastDayOfMonHC(), FirstDayOfYearHC(), LastDayOfYearHC();
 void DocTermNewHC(), DocGetKeyHC(), DocScanLineHC(), GetStrHC(), GetSHC(), UserCmdLineHC();
@@ -557,9 +558,15 @@ bool LoadKernel(CTask &task)
       {"MemCpy", reinterpret_cast<uintptr_t>(_MEMCPY)},
       {"_MEMSET", reinterpret_cast<uintptr_t>(_MEMSET)},
       {"MemSet", reinterpret_cast<uintptr_t>(_MEMSET)},
+      {"MemSetU8", reinterpret_cast<uintptr_t>(_MEMSET)},
+      {"_MEMSET_U16", reinterpret_cast<uintptr_t>(_MEMSET_U16)},
+      {"MemSetU16", reinterpret_cast<uintptr_t>(_MEMSET_U16)},
+      {"_MEMSET_U32", reinterpret_cast<uintptr_t>(_MEMSET_U32)},
+      {"MemSetU32", reinterpret_cast<uintptr_t>(_MEMSET_U32)},
       {"_MEMCMP", reinterpret_cast<uintptr_t>(_MEMCMP)},
       {"MemCmp", reinterpret_cast<uintptr_t>(_MEMCMP)},
       {"_MEMSET_I64", reinterpret_cast<uintptr_t>(_MEMSET_I64)},
+      {"MemSetI64", reinterpret_cast<uintptr_t>(_MEMSET_I64)},
       {"_MALLOC", reinterpret_cast<uintptr_t>(_MALLOC)},
       {"MAlloc", reinterpret_cast<uintptr_t>(_MALLOC)},
       {"_FREE", reinterpret_cast<uintptr_t>(_FREE)},
@@ -903,6 +910,9 @@ bool LoadKernel(CTask &task)
       {"DocEntryRun", reinterpret_cast<uintptr_t>(DocEntryRunHC)},
       {"DocBottom", reinterpret_cast<uintptr_t>(DocBottomHC)},
       {"DocClear", reinterpret_cast<uintptr_t>(DocClearHC)},
+      {"DocCursor", reinterpret_cast<uintptr_t>(DocCursorHC)},
+      {"DocHighlightCursor", reinterpret_cast<uintptr_t>(DocHighlightCursorHC)},
+      {"DocScroll", reinterpret_cast<uintptr_t>(DocScrollHC)},
       {"Now", reinterpret_cast<uintptr_t>(NowHC)},
       {"Struct2Date", reinterpret_cast<uintptr_t>(Struct2DateHC)},
       {"Date2Struct", reinterpret_cast<uintptr_t>(Date2StructHC)},

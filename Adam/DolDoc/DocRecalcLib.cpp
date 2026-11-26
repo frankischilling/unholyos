@@ -59,6 +59,32 @@ extern "C" void DocBottomCpp(CDoc *doc)
   DocRecalc(*doc);
 }
 
+static bool DocShowFlag(bool show, CDoc *doc, uint64_t mask)
+{
+  if (!doc)
+    doc = DocPut();
+  if (!doc)
+    return false;
+  uint64_t old = show ? __atomic_fetch_and(&doc->flags, ~mask, __ATOMIC_RELAXED)
+                      : __atomic_fetch_or(&doc->flags, mask, __ATOMIC_RELAXED);
+  return !(old & mask);
+}
+
+extern "C" bool DocCursorCpp(bool show, CDoc *doc)
+{
+  return DocShowFlag(show, doc, DOCF_HIDE_CURSOR);
+}
+
+extern "C" bool DocHighlightCursorCpp(bool show, CDoc *doc)
+{
+  return DocShowFlag(show, doc, DOCF_DONT_HIGHLIGHT_CURSOR);
+}
+
+extern "C" bool DocScrollCpp(bool val, CDoc *doc)
+{
+  return DocShowFlag(val, doc, DOCF_NO_SCROLL_BARS);
+}
+
 extern "C" void DocClearCpp(CDoc *doc, uint8_t clear_holds)
 {
   if (!doc)
