@@ -90,3 +90,15 @@ extern "C" uint64_t CopySingleCpp(const char *f1,const char *f2)
   Free(buf);
   return res;
 }
+
+extern "C" int64_t DelCpp(const char *mask, uint8_t make_mask,
+                           uint8_t del_dir, uint8_t print_msg)
+{
+  int64_t res = 0;
+  if (auto *dirc = DirContextNewCpp(mask, make_mask, false, false)) {
+    res = RedSeaFilesDel(*dirc->dv, CurrentTask()->cur_dir, dirc->mask, 0,
+                         del_dir, print_msg);
+    DirContextDelCpp(dirc, true);
+  }
+  return res;
+}

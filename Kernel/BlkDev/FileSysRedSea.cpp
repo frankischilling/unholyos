@@ -1,5 +1,7 @@
 #include "../KernelB.hpp"
 
+extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
+
 bool RedSeaInit(CDrv &dv)
 {
   CRedSeaBoot boot;
@@ -381,7 +383,7 @@ bool RedSeaStreamCommit(CDrv &dv, const char *path, CDirEntry &de, bool new_file
 
 static uint64_t RedSeaWrite(CDrv &dv, const char *path, const uint8_t *data,
                             size_t size, uint64_t date, uint16_t attr,
-                            bool directory)
+                            bool directory, int64_t entry_cnt = 0)
 {
   if (*path++ != '/' || dv.bd->type != BDT_RAM ||
       (dv.bd->flags & BDF_READ_ONLY) || dv.fs_type != FSt_REDSEA ||
@@ -413,6 +415,13 @@ static uint64_t RedSeaWrite(CDrv &dv, const char *path, const uint8_t *data,
     if (!child) {
       entry.attr = RS_ATTR_DIR | RS_ATTR_CONTIGUOUS;
       entry.size = BLK_SIZE;
+      if (directory && !*path && entry_cnt > 0) {
+        if (uint64_t(entry_cnt) > uint64_t(dv.size) *
+                                      (BLK_SIZE / sizeof(entry)) - 3)
+          return 0;
+        entry.size = RedSeaBlocks((uint64_t(entry_cnt) + 3) * sizeof(entry)) *
+                     BLK_SIZE;
+      }
       if (!RedSeaDirNew(dv, dir, entry, nullptr, true))
         return 0;
       child = RedSeaChild(dv, dir, entry.name);
@@ -424,6 +433,42 @@ static uint64_t RedSeaWrite(CDrv &dv, const char *path, const uint8_t *data,
       return dir.cluster;
     path++;
   }
+}
+
+int64_t RedSeaFilesDel(CDrv &dv, const char *cur_dir, const char *mask,
+                      uint64_t flags, bool del_dir, bool print_msg)
+{
+  if (dv.fs_type != FSt_REDSEA || dv.bd->type != BDT_RAM ||
+      (dv.bd->flags & BDF_READ_ONLY))
+    return 0;
+  CMemLock lock(dv.locked_flags);
+  uint64_t cluster;
+  if (!RedSeaDirClus(dv, cur_dir, StrLen(cur_dir), cluster))
+    return 0;
+  auto *head = RedSeaDirHead(dv, {cluster, nullptr});
+  if (!head)
+    return 0;
+  int64_t res = 0;
+  size_t count = head->size / sizeof(*head);
+  for (size_t i = 2; i < count && head[i].name[0]; ++i) {
+    auto &entry = head[i];
+    if ((entry.attr & RS_ATTR_DELETED) || entry.name[0] == '.' ||
+        (!del_dir && (entry.attr & RS_ATTR_DIR)) ||
+        !FileNameChk(entry.name) || !FilesFindMatch(entry.name, mask, flags))
+      continue;
+    if (entry.size && (!RedSeaExtent(dv, entry.clus, entry.size) ||
+                       entry.clus == cluster || entry.clus == uint64_t(dv.root_clus)))
+      continue;
+    if (!(entry.attr & RS_ATTR_DIR))
+      res++;
+    if (print_msg) {
+      uint64_t arg = reinterpret_cast<uintptr_t>(entry.name);
+      PrintCpp("Del %s\n", 1, &arg);
+    }
+    entry.attr |= RS_ATTR_DELETED;
+    RedSeaMark(dv, entry.clus, RedSeaBlocks(entry.size), false);
+  }
+  return res;
 }
 
 uint64_t RedSeaFileWrite(CDrv &dv, const char *path, const uint8_t *data,
@@ -510,7 +555,7 @@ bool RedSeaFilesFind(CDrv &dv, uint64_t clus, uint64_t parent_clus,
   return valid;
 }
 
-bool RedSeaMkDir(CDrv &dv, const char *path)
+bool RedSeaMkDir(CDrv &dv, const char *path, int64_t entry_cnt)
 {
-  return RedSeaWrite(dv, path, nullptr, 0, Now(), 0, true);
+  return RedSeaWrite(dv, path, nullptr, 0, Now(), 0, true, entry_cnt);
 }

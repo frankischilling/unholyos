@@ -759,7 +759,7 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
 {
   uint64_t used = 0, count = 0;
   bool kernel = false, hash_del = false, hash_src = false, put_str = false;
-  bool colors = false, rainbow = false, os_name = false;
+  bool colors = false, rainbow = false, os_name = false, file_util = false;
   for (uint64_t i = 0; i < 1024; i += 64) {
     auto buckets = ReadPhysical<64>(vm, table_body + i * 8);
     for (size_t j = 0; j < buckets.size(); j++) {
@@ -801,7 +801,8 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           bool color_list = str == "ST_COLORS";
           bool rainbow_list = str == "ST_RAINBOW_10";
           bool startup_name = str == "DD_OS_NAME_VERSION";
-          Check(color_list || rainbow_list || startup_name,
+          bool file_util_list = str == "ST_FILE_UTIL_FLAGS";
+          Check(color_list || rainbow_list || startup_name || file_util_list,
                 "Unexpected boot definition");
           constexpr char color_data[] =
               "BLACK\0BLUE\0GREEN\0CYAN\0RED\0PURPLE\0BROWN\0LTGRAY\0DKGRAY\0"
@@ -809,10 +810,13 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           constexpr char rainbow_data[] =
               "BLACK\0BROWN\0RED\0LTRED\0YELLOW\0GREEN\0BLUE\0PURPLE\0LTGRAY\0WHITE\0";
           constexpr char os_name_data[] = "UnholyOS\0";
+          constexpr char file_util_data[] =
+              "r\0d\0i\0a\0c\0R\0p\0m\0x\0s\0D\0F\0T\0$\0S\0A\0J\0G\0Z\0O\0P\0f\0l\0lb\0la\0";
           auto def = ReadPhysical<11>(vm, addr);
-          uint64_t entries = color_list ? 16 : rainbow_list ? 10 : 1;
+          uint64_t entries = color_list ? 16 : rainbow_list ? 10 : file_util_list ? 25 : 1;
           uint64_t data_size = color_list     ? sizeof(color_data)
                                : rainbow_list ? sizeof(rainbow_data)
+                               : file_util_list ? sizeof(file_util_data)
                                               : sizeof(os_name_data);
           Check(def[10] == entries && def[3] >= 16 && def[8] >= 16 &&
                     def[9] >= 16,
@@ -829,6 +833,7 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           colors |= color_list;
           rainbow |= rainbow_list;
           os_name |= startup_name;
+          file_util |= file_util_list;
         }
         kernel |= module && str == "/Kernel/Kernel";
         hash_del |= !module && str == "HashDel";
@@ -844,7 +849,7 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
     }
   }
   Check(kernel && hash_del && hash_src && put_str && colors && rainbow &&
-            os_name && graphics && winmgr_slot,
+            os_name && file_util && graphics && winmgr_slot,
         "Missing boot symbols");
   return used;
 }
@@ -2627,6 +2632,61 @@ constexpr std::string_view file_copy_output =
     "Copying B:/CopyEmpty.BIN to B:/CopyEmpty2.BIN\n"
     "File copy probe FF\n";
 
+constexpr std::string_view file_operations_output =
+    "Make Directory:B:/Ops\n"
+    "Make Directory:B:/Ops/Sub\n"
+    "Make Directory:B:/Ops/Sub/Deep\n"
+    "Make Directory:B:/Ops/Empty\n"
+    "Make Directory:B:/Pick\n"
+    "Copying B:/Ops/A.TXT to B:/Pick/A.TXT\n"
+    "Copying B:/Pick/A.TXT to B:/Pick/R.TXT\n"
+    "Del A.TXT\n"
+    "Make Directory:B:/Clone/Empty\n"
+    "Make Directory:B:/Clone/Sub\n"
+    "Make Directory:B:/Clone/Sub/Deep\n"
+    "Copying B:/Ops/Sub/Deep/D.TXT to B:/Clone/Sub/Deep/D.TXT\n"
+    "Copying B:/Ops/Sub/E.BIN.Z to B:/Clone/Sub/E.BIN.Z\n"
+    "Copying B:/Ops/Sub/C.TXT to B:/Clone/Sub/C.TXT\n"
+    "Copying B:/Ops/B.BIN to B:/Clone/B.BIN\n"
+    "Copying B:/Ops/A.TXT to B:/Clone/A.TXT\n"
+    "tree count 9\n"
+    "Make Directory:B:/Txt/Empty\n"
+    "Make Directory:B:/Txt/Sub\n"
+    "Make Directory:B:/Txt/Sub/Deep\n"
+    "Copying B:/Ops/Sub/Deep/D.TXT to B:/Txt/Sub/Deep/D.TXT\n"
+    "Copying B:/Ops/Sub/C.TXT to B:/Txt/Sub/C.TXT\n"
+    "Copying B:/Ops/A.TXT to B:/Txt/A.TXT\n"
+    "masked tree count 7\n"
+    "Del D.TXT\n"
+    "Del C.TXT\n"
+    "Del Deep\n"
+    "Del E.BIN.Z\n"
+    "Del Empty\n"
+    "Del Sub\n"
+    "Del B.BIN\n"
+    "Del Clone\n"
+    "Del D.TXT\n"
+    "Del Deep\n"
+    "Del C.TXT\n"
+    "Del Empty\n"
+    "Del Sub\n"
+    "Del A.TXT\n"
+    "Del Txt\n"
+    "Del R.TXT\n"
+    "Del Pick\n"
+    "Del Reclaim.BIN\n"
+    "Del Guard.BIN\n"
+    "Del D.TXT\n"
+    "Del Deep\n"
+    "Del C.TXT\n"
+    "Del E.BIN.Z\n"
+    "Del Sub\n"
+    "Del Empty\n"
+    "Del A.TXT\n"
+    "Del B.BIN\n"
+    "Del Ops\n"
+    "File operations probe FFF\n";
+
 constexpr std::string_view class_meta_output =
     "age:44 default:38\n"
     "color: default:4\n"
@@ -3187,6 +3247,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/DirContextProbe.HC", "Dir context FF\n", '1');
     CheckProgramOutput(boot, "/FileStreamProbe.HC", "File stream probe 3FF\n", '1');
     CheckProgramOutput(boot, "/FileCopyProbe.HC", file_copy_output, '1');
+    CheckProgramOutput(boot, "/FileOperationsProbe.HC", file_operations_output, '1');
     CheckProgramOutput(boot, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
     CheckProgramOutput(boot, "/ClassMeta.HC", class_meta_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.HC", last_class_output, '1');
@@ -3293,6 +3354,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/FileStreamProbe.HC", "File stream probe 3FF\n",
                          '1');
       CheckProgramOutput(output, "/FileCopyProbe.HC", file_copy_output, '1');
+      CheckProgramOutput(output, "/FileOperationsProbe.HC", file_operations_output, '1');
       CheckProgramOutput(output, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
       CheckProgramOutput(output, "/ClassMeta.HC", class_meta_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.HC", last_class_output, '1');

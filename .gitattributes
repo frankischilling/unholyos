@@ -11,6 +11,7 @@ Demo/Games/Digits.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/ExtChars.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Prompt.HC -text whitespace=cr-at-eol,-blank-at-eol
 Linux/Fixtures/PromptProbe.HC text eol=lf
+Linux/Fixtures/FileOperationsProbe.HC text eol=lf
 Linux/Fixtures/DateOffsetProbe.HC text eol=lf
 Demo/ClassMeta.HC -text whitespace=cr-at-eol,-blank-at-eol
 Linux/Fixtures/MemberMetaProbe.HC text eol=lf
