@@ -1521,6 +1521,14 @@ extern "C" void KMainCpp()
     BootGridReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/DocFrame.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/DocButton.HC");
+    if (BootFileProgramReport(*adam_task->cur_dv, "/DocCallback.HC").okay) {
+      auto thrown = ExePutS("DocCBThrowTest;", nullptr, 0);
+      auto cleanup = ExePutS("DocCBThrowCheck;", nullptr, 0);
+      SerialPutS("UnholyOS: document callback propagation ");
+      SerialPutHex(!thrown.okay && thrown.exception == 0x4243636F44 &&
+                   cleanup.okay && cleanup.value == 1);
+      SerialPutS("\r\n");
+    }
     BootFileProgramReport(*adam_task->cur_dv, "/ScreenProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/PaletteProbe.HC");
     BootSoundReport(*adam_task->cur_dv, *adam_task);

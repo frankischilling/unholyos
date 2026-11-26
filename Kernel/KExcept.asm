@@ -1,8 +1,8 @@
 %include "Kernel/KernelA.inc"
 
 GLOBAL SysTryHC,ThrowHC,CallerHC,TestExcept,RaiseHolyC
-GLOBAL CallHolyC0Checked,CallHolyC1Checked
-EXTERN SysTryCpp,SysUntryCpp,ThrowCpp,CallerCpp,CallHolyC0,CallHolyC1
+GLOBAL CallHolyC0Checked,CallHolyC1Checked,CallHolyC2Checked,CallHolyC3Checked
+EXTERN SysTryCpp,SysUntryCpp,ThrowCpp,CallerCpp,CallHolyC0,CallHolyC1,CallHolyC2,CallHolyC3
 
 SECTION .text
 BITS 64
@@ -130,21 +130,40 @@ TakeExcept:
 	PUSH	RBX
 	PUSH	R12
 	PUSH	R13
+	PUSH	R14
+	PUSH	R15
 	SUB	RSP,8
 	MOV	R12,RDI
 	MOV	R13,RSI
+%if %3 >= 2
+	MOV	R14,RDX
+%endif
+%if %3 = 2
+	MOV	RBX,RCX
+%elif %3 = 3
+	MOV	R15,RCX
+	MOV	RBX,R8
+%endif
 	LEA	RAX,[REL .accepted]
 	PUSH	RAX
 	LEA	RAX,[REL .catch]
 	PUSH	RAX
 	CALL	SysTryHC
 	MOV	RDI,R12
-%if %3
+%if %3 >= 1
 	MOV	RSI,R13
 %endif
+%if %3 >= 2
+	MOV	RDX,R14
+%endif
+%if %3 = 3
+	MOV	RCX,R15
+%endif
 	CALL	%2
-%if !%3
+%if %3 = 0
 	MOV	[R13],RAX
+%elif %3 >= 2
+	MOV	[RBX],RAX
 %endif
 	MOV	R12D,1
 	JMP	.cleanup
@@ -159,6 +178,8 @@ TakeExcept:
 	CALL	SysUntryCpp
 	MOV	EAX,R12D
 	ADD	RSP,8
+	POP	R15
+	POP	R14
 	POP	R13
 	POP	R12
 	POP	RBX
@@ -168,5 +189,7 @@ TakeExcept:
 
 CALL_HOLYC_CHECKED CallHolyC0Checked,CallHolyC0,0
 CALL_HOLYC_CHECKED CallHolyC1Checked,CallHolyC1,1
+CALL_HOLYC_CHECKED CallHolyC2Checked,CallHolyC2,2
+CALL_HOLYC_CHECKED CallHolyC3Checked,CallHolyC3,3
 
 SECTION .note.GNU-stack noalloc noexec nowrite progbits

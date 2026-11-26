@@ -12,6 +12,14 @@ struct CTask;
 struct CTaskDying;
 struct CTSS;
 
+struct CDate
+{
+  uint32_t time;
+  int32_t date;
+};
+
+static_assert(sizeof(CDate) == 8 && offsetof(CDate, date) == 4);
+
 struct CCPU
 {
   CCPU *addr;
@@ -862,12 +870,18 @@ constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
                    DOCEF_LEFT_MACRO = 64, DOCEF_RIGHT_EXP = 128,
                    DOCEF_RIGHT_MACRO = 256, DOCEF_HAS_BIN = 512,
                    DOCEF_BIN_PTR_LINK = 1024, DOCEF_RAW_TYPE = 2048,
+                   DOCEF_LEFT_CB = 1ull << 16, DOCEF_RIGHT_CB = 1ull << 18,
+                   DOCEF_LEFT_X = 1ull << 20, DOCEF_CENTER_X = 1ull << 21,
+                   DOCEF_RIGHT_X = 1ull << 22, DOCEF_TOP_Y = 1ull << 23,
+                   DOCEF_CENTER_Y = 1ull << 24, DOCEF_BOTTOM_Y = 1ull << 25,
                    DOCEF_HIGHLIGHT = 1ull << 26, DOCEF_WORD_WRAP = 1ull << 27,
-                   DOCEF_TAG_CB = 1ull << 32,
+                   DOCEF_TAG_CB = 1ull << 32, DOCEF_PAGE_REL_Y = 1ull << 33,
+                   DOCEF_MARGIN_REL_X = 1ull << 34, DOCEF_LINK = 1ull << 36,
                    DOCEF_ESC = 1ull << 37, DOCEF_QUIT = 1ull << 38,
                    DOCEF_HAS_BORDER = 1ull << 40, DOCEF_SOLID_BORDER = 1ull << 41,
                    DOCEF_BORDER_PLOT = 1ull << 42,
-                   DOCEF_REMALLOC_DATA = 1ull << 48, DOCEF_TREE = 1ull << 52,
+                   DOCEF_REMALLOC_DATA = 1ull << 48, DOCEF_HOLD = 1ull << 51,
+                   DOCEF_TREE = 1ull << 52,
                    DOCEF_LST = 1ull << 53, DOCEF_SKIP = 1ull << 54,
                    DOCEF_FILTER_SKIP = 1ull << 57, DOCEF_NO_CLICK_ON = 1ull << 58,
                    DOCEF_DONT_DRAW = 1ull << 59,
@@ -925,9 +939,13 @@ struct CDocEntry
   union {
     int64_t attr;
     int64_t left_exp;
+    uintptr_t left_cb;
   };
   char *left_macro;
-  int64_t right_exp;
+  union {
+    int64_t right_exp;
+    uintptr_t right_cb;
+  };
   char *right_macro;
   uintptr_t tag_cb;
   char *define_str, *aux_str, *bin_ptr_link, *html_link, *my_fmt_data;
@@ -1201,10 +1219,11 @@ static_assert(sizeof(CMsStateGlbls) == 168 &&
 static_assert(sizeof(CGridGlbls) == 80 && offsetof(CGridGlbls, x) == 8);
 
 constexpr uint32_t WIF_SELF_FOCUS = 1, WIF_SELF_MS_L = 1 << 3,
-                   WIF_SELF_DOC = 1 << 10,
+                   WIF_SELF_MS_R = 1 << 5, WIF_SELF_DOC = 1 << 10,
                    WIF_SELF_KEY_DESC = 1 << 12,
                    WIF_FOCUS_TASK_MS_L = 1 << 19,
                    WIF_FOCUS_TASK_MS_L_D = 1 << 20,
+                   WIF_FOCUS_TASK_MS_R = 1 << 21,
                    WIF_FOCUS_TASK_MS_R_D = 1 << 22;
 
 static_assert(sizeof(CJob) == 0x70 && offsetof(CJob, aux1) == 0x48 &&

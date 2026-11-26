@@ -85,6 +85,7 @@ void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
     DocWriteHC();
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
 void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC(), DocPutKeyHC();
+void DocLockHC(), DocUnlockHC(), DocEntryRunHC(), DocBottomHC(), DocClearHC(), NowHC();
 void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
     TextRectHC(), TextBorderHC(), WinZBufUpdateHC();
 void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
@@ -512,6 +513,7 @@ bool LoadKernel(CTask &task)
       {"_MEMSET", reinterpret_cast<uintptr_t>(_MEMSET)},
       {"_MEMSET_I64", reinterpret_cast<uintptr_t>(_MEMSET_I64)},
       {"_MALLOC", reinterpret_cast<uintptr_t>(_MALLOC)},
+      {"MAlloc", reinterpret_cast<uintptr_t>(_MALLOC)},
       {"_FREE", reinterpret_cast<uintptr_t>(_FREE)},
       {"Free", reinterpret_cast<uintptr_t>(_FREE)},
       {"_MHEAP_CTRL", reinterpret_cast<uintptr_t>(_MHEAP_CTRL)},
@@ -722,6 +724,12 @@ bool LoadKernel(CTask &task)
       {"DocBorder", reinterpret_cast<uintptr_t>(DocBorderHC)},
       {"DocRecalc", reinterpret_cast<uintptr_t>(DocRecalcHC)},
       {"DocPutKey", reinterpret_cast<uintptr_t>(DocPutKeyHC)},
+      {"DocLock", reinterpret_cast<uintptr_t>(DocLockHC)},
+      {"DocUnlock", reinterpret_cast<uintptr_t>(DocUnlockHC)},
+      {"DocEntryRun", reinterpret_cast<uintptr_t>(DocEntryRunHC)},
+      {"DocBottom", reinterpret_cast<uintptr_t>(DocBottomHC)},
+      {"DocClear", reinterpret_cast<uintptr_t>(DocClearHC)},
+      {"Now", reinterpret_cast<uintptr_t>(NowHC)},
       {"DocNew", reinterpret_cast<uintptr_t>(DocNewHC)},
       {"DocDel", reinterpret_cast<uintptr_t>(DocDelHC)},
       {"DocLoad", reinterpret_cast<uintptr_t>(DocLoadHC)},

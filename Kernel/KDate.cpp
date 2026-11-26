@@ -17,6 +17,11 @@ int64_t YearStartDate(int64_t year)
   return year * 365 + last / 4 - last / 100 + last / 400 - last / 4000;
 }
 
+extern "C" uint64_t NowCpp()
+{
+  return Now();
+}
+
 uint64_t Now()
 {
   static uint64_t locked_flags;

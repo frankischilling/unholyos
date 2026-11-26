@@ -1634,6 +1634,55 @@ constexpr std::string_view doc_button_output = "doc button ready\n"
                                                "doc button exit ready\n"
                                                "doc button cancel 2 27 0\n";
 
+static void DriveDocCallback(CMonitor &vm, const fs::path &serial)
+{
+  auto check_tag = [&](uint64_t glyph, const char *phase) {
+    auto path =
+        serial.parent_path() / (std::string("callback-") + phase + ".ppm");
+    for (unsigned attempt = 0; attempt < 25; ++attempt) {
+      vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
+                 path.string() + R"("}})");
+      auto image = ReadVGA(path);
+      bool match = true;
+      for (size_t y = 0; y < 8; ++y) {
+        for (size_t x = 0; x < 8; ++x) {
+          size_t pixel = ((20 * 8 + y) * 640 + 18 * 8 + x) * 3;
+          bool ink = (glyph >> (y * 8 + x)) & 1;
+          match &= image[pixel] == (ink ? 255 : 0) &&
+                   image[pixel + 1] == (ink ? 255 : 0) &&
+                   image[pixel + 2] == (ink ? 255 : 168);
+        }
+      }
+      if (match)
+        return;
+      std::this_thread::sleep_for(45ms);
+    }
+    throw std::runtime_error(
+        std::string("DolDoc callback tag differs during ") + phase);
+  };
+  auto click = [&](const char *name) {
+    for (const char *down : {"true", "false"}) {
+      vm.Command(
+          std::string(
+              R"({"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"button":")") +
+          name + R"(","down":)" + down + R"(}}]}})");
+      std::this_thread::sleep_for(100ms);
+    }
+  };
+  vm.WaitSerial(serial, "doc callback ready 51\n");
+  check_tag(0x007E060606060606, "live"); // L
+  click("left");
+  vm.WaitSerial(serial, "doc callback right ready\n");
+  check_tag(0x006666767E6E6666, "next"); // N
+  click("right");
+}
+
+constexpr std::string_view doc_callback_output = "doc callback ready 51\n"
+                                                 "doc callback left 32 101\n"
+                                                 "doc callback right ready\n"
+                                                 "doc callback right 10 202\n"
+                                                 "doc callback checks 63\n";
+
 static void DriveScreen(CMonitor &vm, const fs::path &serial)
 {
   constexpr std::array<std::array<uint8_t, 3>, 16> colors{{
@@ -1773,6 +1822,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     DriveGrid(rebuilt, serial);
     DriveDocFrame(rebuilt, serial);
     DriveDocButton(rebuilt, serial);
+    DriveDocCallback(rebuilt, serial);
     DriveScreen(rebuilt, serial);
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
@@ -1784,6 +1834,10 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
                        '1');
     CheckProgramOutput(boot, "/DocFrame.HC", doc_frame_output, '1');
     CheckProgramOutput(boot, "/DocButton.HC", doc_button_output, '1');
+    CheckProgramOutput(boot, "/DocCallback.HC", doc_callback_output, '1');
+    if (boot.find("UnholyOS: document callback propagation 0x0000000000000001") ==
+        std::string::npos)
+      throw std::runtime_error("DolDoc callback exception did not propagate");
     CheckProgramOutput(boot, "/ScreenProbe.HC", screen_output, '1');
     auto registers = StopAtIdle(rebuilt);
     VerifyHandoff(boot, media, registers);
@@ -1815,6 +1869,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       DriveGrid(vm, serial);
       DriveDocFrame(vm, serial);
       DriveDocButton(vm, serial);
+      DriveDocCallback(vm, serial);
       DriveScreen(vm, serial);
     }
     std::string output = vm.Boot(serial);
@@ -1841,6 +1896,10 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          '1');
       CheckProgramOutput(output, "/DocFrame.HC", doc_frame_output, '1');
       CheckProgramOutput(output, "/DocButton.HC", doc_button_output, '1');
+      CheckProgramOutput(output, "/DocCallback.HC", doc_callback_output, '1');
+      if (output.find("UnholyOS: document callback propagation 0x0000000000000001") ==
+          std::string::npos)
+        throw std::runtime_error("DolDoc callback exception did not propagate");
       CheckProgramOutput(output, "/ScreenProbe.HC", screen_output, '1');
       CheckProgramOutput(output, "/PaletteProbe.HC",
                          "palette tables 8 AAAA55550000 777777777777 12 BROWN LTRED\n"

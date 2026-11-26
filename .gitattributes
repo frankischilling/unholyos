@@ -52,6 +52,7 @@ Linux/Fixtures/Grid.HC -text
 Linux/Fixtures/FunctionPtrProbe.HC text eol=lf
 Linux/Fixtures/DocFrame.HC text eol=lf
 Linux/Fixtures/DocButton.HC text eol=lf
+Linux/Fixtures/DocCallback.HC text eol=lf
 Linux/Fixtures/ScreenProbe.HC text eol=lf
 Linux/Fixtures/CursorProbe.HC text eol=lf
 Linux/Fixtures/CursorExcept.HC text eol=lf

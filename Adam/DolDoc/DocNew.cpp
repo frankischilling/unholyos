@@ -6,13 +6,13 @@ bool DocCanLock(const CDoc &doc)
          __atomic_load_n(&doc.owning_task, __ATOMIC_ACQUIRE) == CurrentTask();
 }
 
-static bool DocLock(CDoc &doc)
+bool DocLock(CDoc &doc)
 {
   auto *task = CurrentTask();
   if (__atomic_load_n(&doc.owning_task, __ATOMIC_ACQUIRE) == task)
     return false;
   while (__atomic_fetch_or(&doc.locked_flags, 1, __ATOMIC_ACQUIRE) & 1)
-    asm volatile("pause");
+    _YIELD();
   constexpr uint32_t break_locked = 1 << 10;
   bool was_locked =
       __atomic_fetch_or(&task->task_flags, break_locked, __ATOMIC_RELAXED) &
@@ -25,7 +25,7 @@ static bool DocLock(CDoc &doc)
   return true;
 }
 
-static bool DocUnlock(CDoc &doc)
+bool DocUnlock(CDoc &doc)
 {
   auto *task = CurrentTask();
   if (__atomic_load_n(&doc.owning_task, __ATOMIC_ACQUIRE) != task)
@@ -36,6 +36,16 @@ static bool DocUnlock(CDoc &doc)
   if (unlock_break)
     __atomic_fetch_and(&task->task_flags, ~(1u << 10), __ATOMIC_RELAXED);
   return true;
+}
+
+extern "C" uint64_t DocLockCpp(CDoc *doc)
+{
+  return doc && DocLock(*doc);
+}
+
+extern "C" uint64_t DocUnlockCpp(CDoc *doc)
+{
+  return doc && DocUnlock(*doc);
 }
 
 CDocLock::CDocLock(CDoc &doc) : locked(DocLock(doc) ? &doc : nullptr)

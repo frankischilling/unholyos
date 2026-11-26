@@ -19,6 +19,7 @@ GLOBAL PutCharsHC,IsRawHC,DefineLstLoadHC,DefineSubHC,DefineMatchHC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC,DocPutKeyHC
 GLOBAL DocPutHC,DocDisplayHC,DocBorderHC,DocRecalcHC,WinHorzHC,WinVertHC
+GLOBAL DocLockHC,DocUnlockHC,DocEntryRunHC,DocBottomHC,DocClearHC,NowHC
 GLOBAL TextCharHC,TextLenStrHC,TextLenAttrHC,TextRectHC,TextBorderHC,WinZBufUpdateHC
 GLOBAL RawHC,DbgModeHC,IsDbgModeHC,PutFileLinkHC,PutSrcLinkHC,FixSetHC,AdamErrHC
 GLOBAL tSHC,BusyHC,SleepUntilHC,SleepHC,Ona2FreqHC,Freq2OnaHC,SndHC
@@ -94,6 +95,7 @@ EXTERN PutCharsCpp,PutS,PutHexCpp,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineM
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp,DocPutKeyCpp
 EXTERN DocPutCpp,DocDisplayCpp,DocBorderCpp,DocRecalcCpp,WinHorzCpp,WinVertCpp
+EXTERN DocLockCpp,DocUnlockCpp,DocEntryRunCpp,DocBottomCpp,DocClearCpp,NowCpp
 EXTERN TextCharCpp,TextLenStrCpp,TextLenAttrCpp,TextRectCpp,TextBorderCpp,WinZBufUpdateCpp
 EXTERN RawCpp,DbgModeCpp,IsDbgModeCpp,PutFileLinkCpp,PutSrcLinkCpp,FixSetCpp,AdamErrCpp
 EXTERN tSCpp,BusyCpp,SleepUntilCpp,SleepCpp,Ona2FreqCpp,Freq2OnaCpp,SndCpp
@@ -372,6 +374,12 @@ HOLYC_CPP DocDisplayHC,DocDisplayCpp,1
 HOLYC_CPP DocBorderHC,DocBorderCpp,1
 HOLYC_CPP DocRecalcHC,DocRecalcCpp,2
 HOLYC_CPP DocPutKeyHC,DocPutKeyCpp,3
+HOLYC_CPP DocLockHC,DocLockCpp,1
+HOLYC_CPP DocUnlockHC,DocUnlockCpp,1
+HOLYC_CPP DocEntryRunHC,DocEntryRunCpp,4
+HOLYC_CPP DocBottomHC,DocBottomCpp,1
+HOLYC_CPP DocClearHC,DocClearCpp,2
+HOLYC_CPP NowHC,NowCpp,0
 HOLYC_CPP DocNewHC,DocNewCpp,2
 HOLYC_CPP DocDelHC,DocDelCpp,1
 HOLYC_CPP DocLoadHC,DocLoadCpp,3
@@ -419,7 +427,7 @@ DefineLstLoadHC:
 	PUSH	R13
 	PUSH	R14
 	PUSH	R15
-%if %2 = 4
+%if %2 = 2 || %2 = 4
 	SUB	RSP,8
 %endif
 %if %2 >= 4
@@ -428,13 +436,13 @@ DefineLstLoadHC:
 %if %2 >= 3
 	PUSH	RCX
 %endif
-%if %2 >= 3
+%if %2 >= 2
 	PUSH	RDX
 %endif
 	PUSH	RSI
 	CALL	RDI
 	CLD
-%if %2 = 4
+%if %2 = 2 || %2 = 4
 	ADD	RSP,8
 %endif
 	POP	R15
@@ -447,17 +455,9 @@ DefineLstLoadHC:
 %endmacro
 
 CALL_HOLYC_CALLBACK CallHolyC1,1
+CALL_HOLYC_CALLBACK CallHolyC2,2
 CALL_HOLYC_CALLBACK CallHolyC3,3
 CALL_HOLYC_CALLBACK CallHolyC4,4
-
-CallHolyC2:
-	PUSH	RBX
-	PUSH	RDX
-	PUSH	RSI
-	CALL	RDI
-	CLD
-	POP	RBX
-	RET
 
 CallModuleMain:
 CallHolyC0:

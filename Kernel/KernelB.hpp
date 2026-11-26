@@ -111,6 +111,10 @@ extern "C" [[noreturn]] void RaiseHolyC(uint64_t tag);
 extern "C" uint64_t CallHolyC0(const uint8_t *entry);
 extern "C" bool CallHolyC0Checked(const uint8_t *entry, uint64_t *result);
 extern "C" bool CallHolyC1Checked(uintptr_t function, uint64_t arg1);
+extern "C" bool CallHolyC2Checked(uintptr_t function, uint64_t arg1,
+                                  uint64_t arg2, uint64_t *result);
+extern "C" bool CallHolyC3Checked(uintptr_t function, uint64_t arg1,
+                                  uint64_t arg2, uint64_t arg3, uint64_t *result);
 extern "C" int64_t CallHolyC2(uintptr_t function, uint64_t arg1, uint64_t arg2);
 extern "C" int64_t CallHolyC3(uintptr_t function, uint64_t arg1, uint64_t arg2,
                               uint64_t arg3);
