@@ -917,7 +917,8 @@ constexpr uint64_t DOCF_PLAIN_TEXT = 1, DOCF_PLAIN_TEXT_TABS = 2,
                    DOCF_NO_CURSOR = 8, DOCF_CARRIAGE_RETURN = 16,
                    DOCF_DBL_DOLLARS = 32, DOCF_COLOR_NAMES = 64,
                    DOCF_BORDER_DOC = 0x100, DOCF_HIDE_CURSOR = 0x800,
-                   DOCF_DONT_HIGHLIGHT_CURSOR = 0x1000, DOCF_DONT_SHOW = 0x8000,
+                   DOCF_DONT_HIGHLIGHT_CURSOR = 0x1000,
+                   DOCF_NO_SCROLL_BARS = 0x2000, DOCF_DONT_SHOW = 0x8000,
                    DOCF_DO_FULL_REFRESH = 0x200000,
                    DOCF_BREAK_UNLOCKED = 0x400000, DOCF_IN_DOLLAR = 0x200000000;
 constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
@@ -1359,6 +1360,31 @@ struct CTask
   CWinScroll horz_scroll, vert_scroll;
   int64_t user_data;
 };
+
+constexpr int64_t TSF_SAME_SONG = 1;
+
+struct CTaskSettings
+{
+  CTaskSettings *next;
+  char *cur_dir;
+  int64_t left, right, top, bottom;
+  void (*draw_it)(CTask *task, CDC *dc);
+  void (*task_end_cb)();
+  CTask *song_task, *animate_task;
+  int64_t scroll_x, scroll_y, scroll_z;
+  CBGR48 palette[COLORS_NUM];
+  uint32_t win_inhibit;
+  uint8_t text_attr, title_src, border_attr, border_src, task_title[144];
+  bool border, hide_cursor, highlight_cursor, scroll, autocomplete, pad[3];
+};
+
+static_assert(sizeof(CTaskSettings) == 392 &&
+              offsetof(CTaskSettings, draw_it) == 48 &&
+              offsetof(CTaskSettings, scroll_x) == 80 &&
+              offsetof(CTaskSettings, palette) == 104 &&
+              offsetof(CTaskSettings, task_title) == 240 &&
+              offsetof(CTaskSettings, autocomplete) == 388);
+static_assert(offsetof(CTask, draw_it) == 0x1C0);
 
 struct alignas(4096) CSysFixedArea
 {

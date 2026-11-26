@@ -509,6 +509,23 @@ a sequence of 64 rotation updates, planar symmetry, and the
 refresh counter and flags. Both guests produced the same six
 trace lines under QEMU 9.2.0 with PC, `qemu64`, and 512 MiB.
 
+## Task settings and the rotating box
+
+Both boot discs include Terry A. Davis's unchanged
+`Demo/Graphics/Box.HC`. Run `ExeFile("::/Demo/Graphics/Box.HC");` in
+a maximized HolyC terminal. The task's draw callback renders the box
+as it rotates and scales. Press a key to exit. The boot suite checks
+for moving VGA pixels, return to the prompt, and removal of the box
+on the standard ISO and on the ISO rebuilt in the guest.
+
+`TaskSettingsProbe.HC` checks the native record layout, nested settings,
+window borders, callback restoration, animation and song task state,
+and restoration of the directory, document flags, and palette. The same
+fixture produced six matching trace lines in both guests under QEMU
+9.2.0 with PC, `qemu64`, and 512 MiB. Under those settings both guests
+also ran the same 1,273 bytes of `Box.HC`, animated the box, and returned
+to the prompt on Q.
+
 ## Depth-buffered spans and polygons
 
 `DepthSpansProbe.HC` checks span counts, depth interpolation, window

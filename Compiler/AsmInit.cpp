@@ -670,6 +670,12 @@ static bool CmpTaskData(CHashTable *table, CHashClass *cls)
       {"display_flags", u32, offsetof(CTask, display_flags)},
       {"text_attr", u8, offsetof(CTask, text_attr)},
       {"border_attr", u8, offsetof(CTask, border_attr)},
+      {"border_src", u8, offsetof(CTask, border_src)},
+      {"title_src", u8, offsetof(CTask, title_src)},
+      {"task_title", u8, offsetof(CTask, task_title),
+       sizeof(CTask::task_title)},
+      {"song_task", cls + 1, offsetof(CTask, song_task)},
+      {"animate_task", cls + 1, offsetof(CTask, animate_task)},
       {"put_doc", FindType("CDoc", table) + 1, offsetof(CTask, put_doc)},
       {"display_doc", FindType("CDoc", table) + 1,
        offsetof(CTask, display_doc)},
@@ -718,6 +724,8 @@ static bool CmpTaskData(CHashTable *table, CHashClass *cls)
   }
   return CmpKernelGlobal(table, "sys_winmgr_task", cls + 1, &sys_winmgr_task) &&
          CmpKernelGlobal(table, "sys_focus_task", cls + 1, &sys_focus_task) &&
+         CmpKernelGlobal(table, "sys_task_being_scrn_updated", cls + 1,
+                         &sys_task_being_scrn_updated) &&
          CmpJobData(table, cls);
 }
 
@@ -1056,6 +1064,91 @@ static bool CmpDCData(CHashTable *table)
          CmpKernelGlobal(table, "winmgr", wm, &winmgr);
 }
 
+static bool CmpTaskSettingsData(CHashTable *table)
+{
+  auto *cls = CmpKernelClass(table, "CTaskSettings", sizeof(CTaskSettings));
+  if (!cls)
+    return false;
+  auto *heap = CurrentTask()->data_heap;
+  auto *task = FindType("CTask", table);
+  auto *dc = FindType("CDC", table);
+  auto *u0 = FindType("U0", table);
+  auto *i64 = FindType("I64", table);
+  auto *u8 = FindType("U8", table);
+  auto *boolean = FindType("Bool", table);
+  const struct
+  {
+    const char *name;
+    CHashClass *record, *type;
+    size_t offset;
+    size_t count = 0;
+  } members[]{
+      {"next_settings", task, cls + 1, offsetof(CTask, next_settings)},
+      {"next", cls, cls + 1, offsetof(CTaskSettings, next)},
+      {"cur_dir", cls, u8 + 1, offsetof(CTaskSettings, cur_dir)},
+      {"left", cls, i64, offsetof(CTaskSettings, left)},
+      {"right", cls, i64, offsetof(CTaskSettings, right)},
+      {"top", cls, i64, offsetof(CTaskSettings, top)},
+      {"bottom", cls, i64, offsetof(CTaskSettings, bottom)},
+      {"song_task", cls, task + 1, offsetof(CTaskSettings, song_task)},
+      {"animate_task", cls, task + 1, offsetof(CTaskSettings, animate_task)},
+      {"scroll_x", cls, i64, offsetof(CTaskSettings, scroll_x)},
+      {"scroll_y", cls, i64, offsetof(CTaskSettings, scroll_y)},
+      {"scroll_z", cls, i64, offsetof(CTaskSettings, scroll_z)},
+      {"palette", cls, FindType("CBGR48", table),
+       offsetof(CTaskSettings, palette), COLORS_NUM},
+      {"win_inhibit", cls, FindType("U32", table),
+       offsetof(CTaskSettings, win_inhibit)},
+      {"text_attr", cls, u8, offsetof(CTaskSettings, text_attr)},
+      {"title_src", cls, u8, offsetof(CTaskSettings, title_src)},
+      {"border_attr", cls, u8, offsetof(CTaskSettings, border_attr)},
+      {"border_src", cls, u8, offsetof(CTaskSettings, border_src)},
+      {"task_title", cls, u8, offsetof(CTaskSettings, task_title),
+       sizeof(CTaskSettings::task_title)},
+      {"border", cls, boolean, offsetof(CTaskSettings, border)},
+      {"hide_cursor", cls, boolean, offsetof(CTaskSettings, hide_cursor)},
+      {"highlight_cursor", cls, boolean,
+       offsetof(CTaskSettings, highlight_cursor)},
+      {"scroll", cls, boolean, offsetof(CTaskSettings, scroll)},
+      {"autocomplete", cls, boolean, offsetof(CTaskSettings, autocomplete)},
+      {"pad", cls, boolean, offsetof(CTaskSettings, pad), 3},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    auto *entry =
+        name ? MemberAdd(*member.record, name, *member.type, member.offset)
+             : nullptr;
+    if (!entry) {
+      Free(name);
+      return false;
+    }
+    if (member.count) {
+      auto *axis =
+          reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return false;
+      axis->cnt = member.count;
+      axis->total_cnt = 1;
+      entry->dim.next = axis;
+      entry->dim.total_cnt = member.count;
+      entry->size = member.type->size * member.count;
+    }
+  }
+  const char *args[]{"task", "dc"};
+  CHashClass *types[]{task + 1, dc + 1};
+  return CmpKernelCallback(table, *task, "draw_it", offsetof(CTask, draw_it),
+                           *u0, 2, args, types) &&
+         CmpKernelCallback(table, *task, "task_end_cb",
+                           offsetof(CTask, task_end_cb), *u0, 0, nullptr,
+                           nullptr) &&
+         CmpKernelCallback(table, *cls, "draw_it",
+                           offsetof(CTaskSettings, draw_it), *u0, 2, args,
+                           types) &&
+         CmpKernelCallback(table, *cls, "task_end_cb",
+                           offsetof(CTaskSettings, task_end_cb), *u0, 0,
+                           nullptr, nullptr);
+}
+
 static bool CmpRuntimeHeaders(CHashTable *table)
 {
   enum : uint8_t
@@ -1088,6 +1181,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     DirEntryPtr,
     DirContextPtr,
     U8PtrPtr,
+    TaskSettingsPtr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1106,6 +1200,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CDirEntry", table) + 1,
       FindType("CDirContext", table) + 1,
       FindType("U8", table) + 2,
+      FindType("CTaskSettings", table) + 1,
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -1154,6 +1249,11 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"PutExcept", U0, FF_RET1, {{"catch_it", Bool, true, 1}}},
       {"YorN", Bool, FF_RET1, {}},
       {"Free", U0, FF_RET1, {{"addr", U8Ptr}}, "_FREE"},
+      {"StrNew", U8Ptr, FF_RET1,
+       {{"buf", U8Ptr}, {"mem_task", TaskPtr, true}}},
+      {"StrCmp", I64, FF_RET1, {{"st1", U8Ptr}, {"st2", U8Ptr}}, "_STRCMP"},
+      {"MemCmp", I64, FF_RET1, {{"ptr1", U8Ptr}, {"ptr2", U8Ptr}, {"cnt", I64}},
+       "_MEMCMP"},
       {"MemCpy", U8Ptr, FF_RET1,
        {{"dst", U8Ptr}, {"src", U8Ptr}, {"cnt", I64}}, "_MEMCPY"},
       {"MemSet", U8Ptr, FF_RET1,
@@ -1202,6 +1302,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"WinTileHorz", U0, FF_RET1, {}},
       {"WinTileVert", U0, FF_RET1, {}},
       {"WinMax", U0, FF_RET1, {{"task", TaskPtr, true}}},
+      {"WinBorder", Bool, FF_RET1, {{"val", Bool, true}, {"task", TaskPtr, true}}},
+      {"SettingsPush", TaskSettingsPtr, FF_RET1,
+       {{"task", TaskPtr, true}, {"flags", I64, true}}},
+      {"SettingsPop", U0, FF_RET1, {{"task", TaskPtr, true}, {"flags", I64, true}}},
       {"WinZBufUpdate", U0, FF_RET1, {}},
       {"TextChar", Bool, FF_RET1,
        {{"task", TaskPtr}, {"allow_border", Bool, true}, {"x", I64}, {"y", I64}, {"d", I64}},
@@ -1642,6 +1746,7 @@ static bool CmpFillHash(CHashTable *table)
       {"CH_SHIFT_ESC", "0x1C"},
       {"DOCF_BORDER_DOC", "0x100"},
       {"DOCF_HIDE_CURSOR", "0x800"},
+      {"DOCF_NO_SCROLL_BARS", "0x2000"}, {"TSF_SAME_SONG", "1"},
       {"CDATE_FREQ", "49710"},
       {"CDIR_FILENAME_LEN", "38"}, {"CDIR_SIZE", "64"},
       {"RS_ATTR_DIR", "0x10"}, {"RS_ATTR_DELETED", "0x100"},
@@ -1735,7 +1840,7 @@ static bool CmpFillHash(CHashTable *table)
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
-         CmpRuntimeHeaders(table);
+         CmpTaskSettingsData(table) && CmpRuntimeHeaders(table);
 }
 
 CHashTable *CmpAsmHashNew()

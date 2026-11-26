@@ -323,6 +323,24 @@ callback, including the original endpoint rules.
 `SPT_THICK` and restores the caller's width. Point and line elements
 use the 3D primitives, including their packed variants.
 
+## Task settings and drawing callbacks
+
+`Adam/TaskSettings.cpp` follows `SettingsPush`, `SettingsPop2`, and
+`SettingsPop` in `TaskSettings.HC`. The 392-byte `CTaskSettings` layout
+and its callback types come from `Kernel/KernelA.HH`. Settings form a
+stack for each task and cover the directory, draw and end callbacks,
+song and animation tasks, window bounds and attributes, document
+flags, and palette. The pop applies the screen settings again after a
+forced refresh. Active autocomplete restoration depends on the
+remaining autocomplete task implementation.
+
+`WinBorder` in `Adam/Win.cpp` preserves the one-cell geometry changes
+and previous-state return from `Win.HC`. `GrUpdateTaskWin` in
+`Adam/Gr/GrScrn.cpp` calls the visible task's `draw_it` with a task-owned
+alias of `gr.dc2`, using the HolyC stack convention. `TaskEnd` in
+`Kernel/KTask.cpp` defers deletion while the window manager uses that
+task and schedules the task's end callback before teardown.
+
 ## Screen composition and VGA
 
 `Adam/Gr/GrScrn.cpp` builds the text background and glyph layer in
@@ -388,8 +406,8 @@ task. Entry callbacks run with the document unlocked. Live tags in
 `DocRecalc.cpp` receive the locked document, entry, and owning memory
 task. A tag callback that throws falls back to an empty tag during
 that refresh. `DocRecalcLib.cpp` supplies `DocBottom` and the hold-aware
-`DocClear` pass. Macro dispatch, wrapping, data widgets, the full editor,
-and per-task drawing remain pending.
+`DocClear` pass. Macro dispatch, wrapping, data widgets, and the full
+editor remain pending.
 
 `Adam/DolDoc/DocTerm.cpp` creates the put, display, and border documents
 from `DocTermNew` in `Adam/DolDoc/DocTerm.HC`.

@@ -240,6 +240,7 @@ static void GrUpdateVGAGraphics()
 
 static void GrUpdateTaskWin(CTask *task)
 {
+  sys_task_being_scrn_updated = task;
   if (!(task->display_flags & DISPLAYF_NO_BORDER))
     TextBorderCpp(sys_winmgr_task, task->win_left, task->win_right,
                   task->win_top, task->win_bottom, task->border_attr,
@@ -248,6 +249,26 @@ static void GrUpdateTaskWin(CTask *task)
               static_cast<uint32_t>(task->text_attr) << 8);
   if (!(task->win_inhibit & WIF_SELF_DOC))
     DocUpdateTaskDocs(task);
+
+  if (TaskValidateCpp(task) && task->draw_it) {
+    if (auto *dc = DCAliasCpp(gr.dc2, task)) {
+      uint64_t result;
+      bool drawn = CallHolyC2Checked(reinterpret_cast<uintptr_t>(task->draw_it),
+                                     reinterpret_cast<uintptr_t>(task),
+                                     reinterpret_cast<uintptr_t>(dc), &result);
+      DCDelCpp(dc);
+      if (!drawn && task != CurrentTask() && TaskValidateCpp(task)) {
+        task->display_flags &= ~DISPLAYF_SHOW;
+        __atomic_fetch_or(&sys_semas[SEMA_UPDATE_WIN_Z_BUF].flags, 1,
+                          __ATOMIC_RELAXED);
+        PutS("Exception in WinMgr: Update Task Win\n");
+        PutExceptCpp(true);
+        SleepCpp(3000);
+        VGAFlush();
+      }
+    }
+  }
+  sys_task_being_scrn_updated = nullptr;
 }
 
 static void GrUpdateTasks()
@@ -269,6 +290,8 @@ static void GrUpdateTasks()
     if (!gr.highest_uncovered ||
         gr.win_uncovered_bitmap[z >> 4] & (1 << (z & 15)))
       GrUpdateTaskWin(task);
+    if (!TaskValidateCpp(task))
+      break;
   }
 }
 
