@@ -409,7 +409,8 @@ static bool ParseCommand(CDollarCmd &cmd, CDocEntry &entry, CHeapCtrl *heap)
     if (!cmd.Number(entry.hex_ed_width))
       return false;
   }
-  uint64_t processed = 0;
+  // Data entries get their tag from the format, not a tag argument.
+  uint64_t processed = type == DOCT_DATA ? DOCEF_TAG : 0;
   for (;;) {
     cmd.Commas();
     int idx = cmd.Match(flag_names);

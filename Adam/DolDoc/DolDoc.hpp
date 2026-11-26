@@ -68,6 +68,13 @@ bool DocDelToNum(CDoc &doc, int64_t count);
 CDocEntryBase *DocPutS(CDoc &doc, const char *src, size_t size,
                        const CDocReadContext *context = nullptr);
 void DocDump(CDoc &doc, int64_t us_delay);
+extern "C" CDocEntryBase *DocPrintCpp(CDoc *doc, const char *fmt, int64_t argc,
+                                      const uint64_t *argv);
+void DocDataFmt(CDoc &doc, CDocEntry &entry, int64_t d = DOCM_CANCEL);
+bool DocDataScan(CDoc &doc, CDocEntry &entry);
+extern "C" void DocDataFmtCpp(CDoc *doc, CDocEntry *entry, int64_t d);
+extern "C" void DocDataScanCpp(CDoc *doc, CDocEntry *entry);
+extern "C" int64_t DocMaxCpp(int64_t entries);
 CDocEntry *PrsDollarCmd(CDoc &doc, const char *text, const char *end,
                         const CDocReadContext *context);
 CDocBin *DocBinCopy(CDoc &doc, const CDocBin &source, const char *tag);
