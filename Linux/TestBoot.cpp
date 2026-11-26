@@ -1536,8 +1536,29 @@ static void DriveDigits(CMonitor &vm, const fs::path &dir,
     }
   };
   wait("T:/Home>");
-  type_cmd("WinMax;DocClear(,1);Seed(12345);");
+  constexpr uint64_t adam = 0x100300, last_task = 0x88;
+  const auto winmgr = ReadPhysical<1>(vm, adam + last_task)[0];
+  const auto task = ReadPhysical<1>(vm, winmgr + last_task)[0];
+  const auto doc = ReadPhysical<1>(vm, task + 0x30)[0];
+  auto wait_prompt = [&] {
+    for (unsigned i = 0; i < 160; ++i) {
+      if ((ReadPhysical<1>(vm, task + 0x18, 'w')[0] & 0x218) == 0x218)
+        return;
+      std::this_thread::sleep_for(25ms);
+    }
+    throw std::runtime_error("Digits terminal did not reach its command prompt");
+  };
+  wait_prompt();
+  Check(ReadPhysical<1>(vm, doc + 104)[0] == doc,
+        "Digits terminal cursor is not at the command prompt");
+  type_cmd("WinMax;");
+  wait_prompt();
+  Check(ReadPhysical<4>(vm, task + 0x48) ==
+            std::array<uint64_t, 4>{1, 78, 2, 58},
+        "Digits terminal did not maximize");
+  type_cmd("DocClear(,1);Seed(12345);");
   wait("ans=0x00003039=12345", "T:/Home>");
+  wait_prompt();
   const auto before = cells[find("T:/Home>") + 1];
   type_cmd(R"(ExeFile("::/Demo/Games/Digits.HC");)");
   wait("PRESS A KEY", "colored based on electrical engineering color codes.");
@@ -1588,6 +1609,7 @@ static void DriveDigits(CMonitor &vm, const fs::path &dir,
   wait("Guess", "Length:1");
   key("esc");
   wait("T:/Home>");
+  wait_prompt();
   Check(!find("Guess") && cells[find("T:/Home>") + 1] == before,
         "Digits did not restore the terminal");
   snapshot("exit");
@@ -1595,6 +1617,7 @@ static void DriveDigits(CMonitor &vm, const fs::path &dir,
   wait("PRESS A KEY");
   key("shift-esc");
   wait("T:/Home>");
+  wait_prompt();
   Check(!find("PRESS A KEY") && cells[find("T:/Home>") + 1] == before,
         "Digits did not restore the terminal after Shift-Escape");
   std::cout << "Digits.HC matched seeded patterns, score, restart and Escape\n";
@@ -2140,6 +2163,9 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   wait_text("T:/Home>");
   std::cout << "Shading.HC drew the sphere and accepted a view-angle drag\n";
 
+  // The scrollbar exercise deliberately moves the document's edit cursor.
+  DriveDigits(vm, dir, boot);
+
   vm.ResetDeadline(30s);
   type_cmd("WinHorz(4,27);WinVert(5,18);");
   constexpr std::array<uint64_t, 4> scroll_window{4, 27, 5, 18};
@@ -2210,7 +2236,6 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
         "The horizontal thumb resized the window");
   key("q");
   std::cout << "Scrollbar thumbs and wheel scrolled the terminal document\n";
-  DriveDigits(vm, dir, boot);
 }
 
 static fs::path CaptureGuestFile(CMonitor &vm, const fs::path &dir,
