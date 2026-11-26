@@ -735,6 +735,27 @@ reproduced explicitly for common and leap years without an out-of-bounds
 read. CPU fault recovery, full compiler diagnostics, and unordered
 floating-point comparisons remain outside this prompt implementation.
 
+## Queue primitives and source paths
+
+`Compiler/BackC.cpp` emits the queue operations from `BackC.HC` and
+the string-length operation from `Templates.HC`. The compiler keeps the
+reference opcodes for `QueInit`, `QueIns`, `QueInsRev`, `QueRem`, and
+`StrLen`. `CQue` exposes its two actual pointers. `StrCpy` uses the
+existing native `_STRCPY` entry point and HolyC calling convention.
+
+`StreamDir` in `Compiler/CMisc.cpp` obtains the active source directory
+and writes its quoted name to the compile-time stream, as in `CMisc.HC`.
+It skips define-expansion frames to reach the source file. The `__DIR__`
+define invokes it through `#exe`. This is needed by the unchanged
+application loaders rather than a fixed path for any particular app.
+
+`Compiler/AsmInit.cpp` describes the implemented block-device globals
+using the actual `CBlkDevGlbls` fields and array offsets, including
+`home_dir`. Cache pointers remain outside the exposed record members
+until the cache subsystem is implemented. The original `Apps/TimeClock`
+sources use the native queue, date, prompt, and file APIs directly.
+The probes set a temporary RAM home directory and restore it afterward.
+
 ## HolyC exception statements
 
 `Compiler/PrsStmt.cpp` follows `PrsTryBlk` in `Compiler/PrsStmt.HC`.
