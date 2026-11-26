@@ -49,6 +49,7 @@ void ExtChgHC(), ExtDftHC();
 void RedSeaISOHC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
 void FSizeHC(), FOpenHC(), FCloseHC(), FBlkReadHC(), FBlkWriteHC();
+void FileAttrHC(), CopySingleHC();
 void BlkReadHC(), BlkWriteHC();
 void SysTryHC(), SysUntryHC(), ThrowHC(), CallerHC(), PutExceptHC(), YorNHC();
 void StrPrintJoinHC(), StrPrintHC(), CatPrintHC(), MStrPrintHC(), PrintHC();
@@ -619,6 +620,8 @@ bool LoadKernel(CTask &task)
       {"FClose", reinterpret_cast<uintptr_t>(FCloseHC)},
       {"FBlkRead", reinterpret_cast<uintptr_t>(FBlkReadHC)},
       {"FBlkWrite", reinterpret_cast<uintptr_t>(FBlkWriteHC)},
+      {"FileAttr", reinterpret_cast<uintptr_t>(FileAttrHC)},
+      {"CopySingle", reinterpret_cast<uintptr_t>(CopySingleHC)},
       {"RedSeaISO", reinterpret_cast<uintptr_t>(RedSeaISOHC)},
       {"BlkDevNextFreeSlot", reinterpret_cast<uintptr_t>(BlkDevNextFreeSlotHC)},
       {"BlkDevAdd", reinterpret_cast<uintptr_t>(BlkDevAddHC)},

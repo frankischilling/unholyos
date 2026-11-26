@@ -2404,6 +2404,15 @@ constexpr std::string_view variadic_ptr_output =
     "variadic pointer 3 211 0 108 211\n"
     "variadic pointer cleanup 30600\n";
 
+constexpr std::string_view file_copy_output =
+    "Copying B:/CopySrc.BIN to B:/CopyDst.BIN\n"
+    "Copying B:/CopySrc.BIN to B:/CopyDst.BIN.Z\n"
+    "Copying B:/CopyDst.BIN.Z to B:/CopyDst.BIN\n"
+    "Copying B:/CopySrc.BIN to B:/CopyDst.BIN.C\n"
+    "Copying ::/StartOS.HC.Z to B:/CopyArchive.HC.Z\n"
+    "Copying B:/CopyEmpty.BIN to B:/CopyEmpty2.BIN\n"
+    "File copy probe FF\n";
+
 constexpr std::string_view class_meta_output =
     "age:44 default:38\n"
     "color: default:4\n"
@@ -2901,6 +2910,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
                        '1');
     CheckProgramOutput(boot, "/DirContextProbe.HC", "Dir context FF\n", '1');
     CheckProgramOutput(boot, "/FileStreamProbe.HC", "File stream probe 3FF\n", '1');
+    CheckProgramOutput(boot, "/FileCopyProbe.HC", file_copy_output, '1');
     CheckProgramOutput(boot, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
     CheckProgramOutput(boot, "/ClassMeta.HC", class_meta_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.HC", last_class_output, '1');
@@ -3000,6 +3010,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          '1');
       CheckProgramOutput(output, "/FileStreamProbe.HC", "File stream probe 3FF\n",
                          '1');
+      CheckProgramOutput(output, "/FileCopyProbe.HC", file_copy_output, '1');
       CheckProgramOutput(output, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
       CheckProgramOutput(output, "/ClassMeta.HC", class_meta_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.HC", last_class_output, '1');
