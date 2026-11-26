@@ -2,6 +2,7 @@ GLOBAL CPUStructInit,TaskInit,SET_GS_BASE,SET_FS_BASE,CallModuleMain,CallHolyC0,
 GLOBAL _MEMCPY,_MEMSET,_MEMSET_I64,_BEQU,_CALL,_CLAMP_I64
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
+GLOBAL Str2I64HC
 GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
 GLOBAL HashTableNewHC,HashTypeNumHC,CeilU64HC,Pow10I64HC
@@ -11,6 +12,7 @@ GLOBAL QSortHC,QSortI64HC,LstMatchHC
 GLOBAL FileReadHC,FileNameAbsHC,DirNameAbsHC,DirCurHC,DirFileHC,ExtChgHC,ExtDftHC
 GLOBAL CdHC,IsDirHC,DirHC,PutDirLinkHC,FilesFindHC,FileFindHC,FilesFindMatchHC
 GLOBAL DirEntryDelHC,DirEntryDel2HC,DirTreeDelHC,DirTreeDel2HC
+GLOBAL DirContextNewHC,DirContextDelHC
 GLOBAL FileWriteHC,BlkDevNextFreeSlotHC,BlkDevAddHC,Let2DrvHC,BlkReadHC,BlkWriteHC
 GLOBAL RedSeaISOHC
 GLOBAL SysUntryHC,PutExceptHC,YorNHC
@@ -92,6 +94,7 @@ EXTERN QSortCpp,QSortI64Cpp,LstMatchCpp
 EXTERN FileReadCpp,FileNameAbsCpp,DirNameAbsCpp,DirCurCpp,DirFileCpp,ExtChgCpp,ExtDftCpp
 EXTERN CdCpp,IsDirCpp,DirCpp,PutDirLinkCpp,FilesFindCpp,FileFindCpp,FilesFindMatchCpp
 EXTERN DirEntryDelCpp,DirEntryDel2Cpp,DirTreeDelCpp,DirTreeDel2Cpp
+EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp
 EXTERN FileWriteCpp,BlkDevNextFreeSlotCpp,BlkDevAddCpp,Let2DrvCpp,BlkReadCpp,BlkWriteCpp
 EXTERN RedSeaISOCpp
 EXTERN SysUntryCpp,PutExceptCpp,YorNCpp
@@ -356,6 +359,9 @@ HOLYC_CPP DirEntryDelHC,DirEntryDelCpp,1
 HOLYC_CPP DirEntryDel2HC,DirEntryDel2Cpp,1
 HOLYC_CPP DirTreeDelHC,DirTreeDelCpp,1
 HOLYC_CPP DirTreeDel2HC,DirTreeDel2Cpp,1
+HOLYC_CPP DirContextNewHC,DirContextNewCpp,4
+HOLYC_CPP DirContextDelHC,DirContextDelCpp,2
+HOLYC_CPP Str2I64HC,Str2I64Cpp,3
 HOLYC_CPP FileWriteHC,FileWriteCpp,5
 HOLYC_CPP RedSeaISOHC,RedSeaISOCpp,3
 HOLYC_CPP BlkDevNextFreeSlotHC,BlkDevNextFreeSlotCpp,2

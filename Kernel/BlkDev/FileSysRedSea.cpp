@@ -79,27 +79,13 @@ static bool RedSeaNameEq(const char (&disk_name)[CDIR_FILENAME_LEN],
   return false;
 }
 
-static bool RedSeaNameValid(const char *name)
-{
-  if (name[0] == '.' && (!name[1] || (name[1] == '.' && !name[2])))
-    return true;
-  for (size_t i = 0; i < CDIR_FILENAME_LEN; i++) {
-    uint8_t ch = name[i];
-    if (!ch)
-      return i != 0;
-    if (!(char_bmp_filename[ch / 32] & (uint32_t{1} << (ch % 32))))
-      return false;
-  }
-  return false;
-}
-
 bool RedSeaFileFind(const CDrv &dv, uint64_t dir, const char *name,
                     bool directory, CRedSeaDirEntry &entry)
 {
   MemSet(&entry, 0, sizeof(entry));
   CRedSeaDirEntry block[BLK_SIZE / sizeof(CRedSeaDirEntry)];
   auto *buf = reinterpret_cast<uint8_t *>(block);
-  if (dv.fs_type != FSt_REDSEA || !RedSeaNameValid(name) ||
+  if (dv.fs_type != FSt_REDSEA || !FileNameChk(name) ||
       !RedSeaExtent(dv, dir, BLK_SIZE) ||
       !BlkDevReadBytes(*dv.bd, buf, dir * BLK_SIZE, BLK_SIZE))
     return false;
@@ -334,7 +320,7 @@ static uint64_t RedSeaWrite(CDrv &dv, const char *path, const uint8_t *data,
     if (!len || len >= sizeof(entry.name))
       return 0;
     MemCpy(entry.name, part, len);
-    if (!RedSeaNameValid(entry.name) ||
+    if (!FileNameChk(entry.name) ||
         (entry.name[0] == '.' &&
          (len == 1 || (len == 2 && entry.name[1] == '.'))))
       return 0;
@@ -406,7 +392,7 @@ bool RedSeaFilesFind(CDrv &dv, uint64_t clus, uint64_t parent_clus,
   bool valid = true;
   for (size_t i = 0; valid && i < count && disk[i].name[0]; i++) {
     const auto &de = disk[i];
-    if ((de.attr & RS_ATTR_DELETED) || !RedSeaNameValid(de.name))
+    if ((de.attr & RS_ATTR_DELETED) || !FileNameChk(de.name))
       continue;
     bool dir = de.attr & RS_ATTR_DIR;
     bool recurse = dir && (flags & FUF_RECURSE);

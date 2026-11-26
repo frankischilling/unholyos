@@ -128,22 +128,13 @@ CDocEntryBase *DocEntryCopy(CDoc &doc, const CDocEntryBase &entry)
            dup(DOCEF_REMALLOC_DATA, copy->data);
     if (okay && (entry.de_flags & DOCEF_HAS_BIN)) {
       auto *old = copy->bin_data;
-      auto *bin =
-          reinterpret_cast<CDocBin *>(MAllocIdentCpp(old, doc.mem_task));
-      auto *data = old ? MAllocIdentCpp(old->data, doc.mem_task) : nullptr;
       const auto *title =
           (entry.de_flags & DOCEF_TAG) ? copy->base.tag : nullptr;
-      auto *tag =
-          title && *title ? StrNew(title, MemTaskHeap(doc.mem_task)) : nullptr;
-      okay = bin && (!old->data || data) && (!title || !*title || tag) &&
-             doc.cur_bin_num < INT32_MAX;
-      if (!okay) {
-        Free(tag);
-        Free(data);
-        Free(bin);
-      } else {
-        bin->data = data;
-        bin->tag = tag;
+      auto *bin = old && doc.cur_bin_num < INT32_MAX
+                      ? DocBinCopy(doc, *old, title)
+                      : nullptr;
+      okay = bin != nullptr;
+      if (bin) {
         bin->num = doc.cur_bin_num++;
         bin->use_cnt = 1;
         QueIns(*bin, *doc.bin_head.last);

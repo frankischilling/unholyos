@@ -43,6 +43,7 @@ void QSortHC(), QSortI64HC(), LstMatchHC();
 void FileReadHC(), FileNameAbsHC(), DirNameAbsHC(), DirCurHC(), DirFileHC();
 void CdHC(), IsDirHC(), DirHC(), PutDirLinkHC(), FilesFindHC(), FileFindHC(),
     FilesFindMatchHC(), DirEntryDelHC(), DirEntryDel2HC(), DirTreeDelHC(), DirTreeDel2HC();
+void DirContextNewHC(), DirContextDelHC(), Str2I64HC();
 void ExtChgHC(), ExtDftHC();
 void RedSeaISOHC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
@@ -577,6 +578,9 @@ bool LoadKernel(CTask &task)
       {"DirEntryDel2", reinterpret_cast<uintptr_t>(DirEntryDel2HC)},
       {"DirTreeDel", reinterpret_cast<uintptr_t>(DirTreeDelHC)},
       {"DirTreeDel2", reinterpret_cast<uintptr_t>(DirTreeDel2HC)},
+      {"DirContextNew", reinterpret_cast<uintptr_t>(DirContextNewHC)},
+      {"DirContextDel", reinterpret_cast<uintptr_t>(DirContextDelHC)},
+      {"Str2I64", reinterpret_cast<uintptr_t>(Str2I64HC)},
       {"FileWrite", reinterpret_cast<uintptr_t>(FileWriteHC)},
       {"RedSeaISO", reinterpret_cast<uintptr_t>(RedSeaISOHC)},
       {"BlkDevNextFreeSlot", reinterpret_cast<uintptr_t>(BlkDevNextFreeSlotHC)},

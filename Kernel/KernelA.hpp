@@ -216,7 +216,7 @@ constexpr uint8_t MBR_PT_REDSEA = 0x88;
 constexpr uint32_t BD_SIGNATURE_VAL = 0x56534442;  // BDSV
 constexpr uint32_t DRV_SIGNATURE_VAL = 0x56535644; // DVSV
 constexpr uint32_t BDF_REMOVABLE = 1, BDF_INITIALIZED = 2, BDF_READ_ONLY = 4,
-                   BDF_READ_CACHE = 0x20;
+                   BDF_READ_CACHE = 0x20, BDF_INIT_IN_PROGRESS = 0x80;
 
 struct [[gnu::packed]] CPalindromeU16
 {
@@ -567,6 +567,16 @@ struct CDirEntry
   int64_t clus, size;
   CDate datetime;
 };
+
+struct CDirContext
+{
+  CDrv *old_dv, *dv;
+  char *old_dir, *mask;
+};
+
+static_assert(sizeof(CDirContext) == 32 && offsetof(CDirContext, dv) == 8 &&
+              offsetof(CDirContext, old_dir) == 16 &&
+              offsetof(CDirContext, mask) == 24);
 
 static_assert(sizeof(CDirEntry) == 112 && offsetof(CDirEntry, attr) == 48 &&
               offsetof(CDirEntry, name) == 50 &&

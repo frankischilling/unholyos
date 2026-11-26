@@ -427,7 +427,8 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
 {
   auto *doc = CmpKernelClass(table, "CDoc", sizeof(CDoc));
   auto *entry = CmpKernelClass(table, "CDocEntry", sizeof(CDocEntry));
-  if (!doc || !entry)
+  auto *bin = CmpKernelClass(table, "CDocBin", sizeof(CDocBin));
+  if (!doc || !entry || !bin)
     return false;
   auto *i32 = FindType("I32", table);
   auto *i64 = FindType("I64", table);
@@ -453,14 +454,32 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
       {"doc_signature", doc, FindType("U32", table),
        offsetof(CDoc, doc_signature)},
       {"user_put_data", doc, u8ptr, offsetof(CDoc, user_put_data)},
+      {"bin_head", doc, bin, offsetof(CDoc, bin_head)},
       {"de_flags", entry, u64,
        offsetof(CDocEntry, base) + offsetof(CDocEntryBase, de_flags)},
       {"tag", entry, u8ptr,
        offsetof(CDocEntry, base) + offsetof(CDocEntryBase, tag)},
       {"last", entry, entry + 1,
        offsetof(CDocEntry, base) + offsetof(CDocEntryBase, last)},
+      {"next", entry, entry + 1, offsetof(CDocEntry, base) + offsetof(CDocEntryBase, next)},
+      {"type_u8", entry, FindType("U8", table), offsetof(CDocEntry, base) + offsetof(CDocEntryBase, type)},
       {"left_exp", entry, i64, offsetof(CDocEntry, left_exp)},
       {"right_exp", entry, i64, offsetof(CDocEntry, right_exp)},
+      {"bin_ptr_link", entry, u8ptr, offsetof(CDocEntry, bin_ptr_link)},
+      {"bin_num", entry, i32, offsetof(CDocEntry, bin_num)},
+      {"bin_data", entry, bin + 1, offsetof(CDocEntry, bin_data)},
+      {"next", bin, bin + 1, offsetof(CDocBin, next)},
+      {"last", bin, bin + 1, offsetof(CDocBin, last)},
+      {"tmp_use_cnt", bin, i32, offsetof(CDocBin, tmp_use_cnt)},
+      {"renum_num", bin, i32, offsetof(CDocBin, renum_num)},
+      {"tag", bin, u8ptr, offsetof(CDocBin, tag)},
+      {"start", bin, FindType("U0", table), offsetof(CDocBin, num)},
+      {"num", bin, FindType("U32", table), offsetof(CDocBin, num)},
+      {"flags", bin, FindType("U32", table), offsetof(CDocBin, flags)},
+      {"size", bin, FindType("U32", table), offsetof(CDocBin, size)},
+      {"use_cnt", bin, FindType("U32", table), offsetof(CDocBin, use_cnt)},
+      {"end", bin, FindType("U0", table), offsetof(CDocBin, data)},
+      {"data", bin, u8ptr, offsetof(CDocBin, data)},
   };
   for (const auto &member : members) {
     auto *name = StrNew(member.name, heap);
@@ -520,7 +539,9 @@ static bool CmpDateData(CHashTable *table)
 static bool CmpDirData(CHashTable *table)
 {
   auto *entry = CmpKernelClass(table, "CDirEntry", sizeof(CDirEntry));
-  if (!entry)
+  auto *context = CmpKernelClass(table, "CDirContext", sizeof(CDirContext));
+  auto *drive = CmpKernelClass(table, "CDrv", sizeof(CDrv));
+  if (!entry || !context || !drive)
     return false;
   auto *heap = CurrentTask()->data_heap;
   auto *i64 = FindType("I64", table);
@@ -528,31 +549,39 @@ static bool CmpDirData(CHashTable *table)
   const struct
   {
     const char *name;
-    CHashClass *type;
+    CHashClass *record, *type;
     size_t offset;
   } members[]{
-      {"next", entry + 1, offsetof(CDirEntry, next)},
-      {"parent", entry + 1, offsetof(CDirEntry, parent)},
-      {"sub", entry + 1, offsetof(CDirEntry, sub)},
-      {"full_name", u8 + 1, offsetof(CDirEntry, full_name)},
-      {"user_data", i64, offsetof(CDirEntry, user_data)},
-      {"user_data2", i64, offsetof(CDirEntry, user_data2)},
-      {"start", FindType("U0", table), offsetof(CDirEntry, attr)},
-      {"attr", FindType("U16", table), offsetof(CDirEntry, attr)},
-      {"name", u8, offsetof(CDirEntry, name)},
-      {"clus", i64, offsetof(CDirEntry, clus)},
-      {"size", i64, offsetof(CDirEntry, size)},
-      {"datetime", FindType("CDate", table), offsetof(CDirEntry, datetime)},
+      {"next", entry, entry + 1, offsetof(CDirEntry, next)},
+      {"parent", entry, entry + 1, offsetof(CDirEntry, parent)},
+      {"sub", entry, entry + 1, offsetof(CDirEntry, sub)},
+      {"full_name", entry, u8 + 1, offsetof(CDirEntry, full_name)},
+      {"user_data", entry, i64, offsetof(CDirEntry, user_data)},
+      {"user_data2", entry, i64, offsetof(CDirEntry, user_data2)},
+      {"start", entry, FindType("U0", table), offsetof(CDirEntry, attr)},
+      {"attr", entry, FindType("U16", table), offsetof(CDirEntry, attr)},
+      {"name", entry, u8, offsetof(CDirEntry, name)},
+      {"clus", entry, i64, offsetof(CDirEntry, clus)},
+      {"size", entry, i64, offsetof(CDirEntry, size)},
+      {"datetime", entry, FindType("CDate", table), offsetof(CDirEntry, datetime)},
+      {"old_dv", context, drive + 1, offsetof(CDirContext, old_dv)},
+      {"dv", context, drive + 1, offsetof(CDirContext, dv)},
+      {"old_dir", context, u8 + 1, offsetof(CDirContext, old_dir)},
+      {"mask", context, u8 + 1, offsetof(CDirContext, mask)},
+      {"drv_let", drive, u8, offsetof(CDrv, drv_let)},
+      {"fs_type", drive, FindType("U16", table), offsetof(CDrv, fs_type)},
+      {"root_clus", drive, i64, offsetof(CDrv, root_clus)},
+      {"size", drive, i64, offsetof(CDrv, size)},
   };
   for (const auto &member : members) {
     auto *name = StrNew(member.name, heap);
-    auto *m = name ? MemberAdd(*entry, name, *member.type, member.offset)
+    auto *m = name ? MemberAdd(*member.record, name, *member.type, member.offset)
                    : nullptr;
     if (!m) {
       Free(name);
       return false;
     }
-    if (member.offset == offsetof(CDirEntry, name)) {
+    if (member.record == entry && member.offset == offsetof(CDirEntry, name)) {
       auto *axis =
           reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
       if (!axis)
@@ -649,6 +678,7 @@ static bool CmpTaskData(CHashTable *table, CHashClass *cls)
       {"win_top", i64, offsetof(CTask, win_top)},
       {"win_bottom", i64, offsetof(CTask, win_bottom)},
       {"cur_dir", u8 + 1, offsetof(CTask, cur_dir)},
+      {"cur_dv", FindType("CDrv", table) + 1, offsetof(CTask, cur_dv)},
       {"parent_task", cls + 1, offsetof(CTask, parent_task)},
       {"next_task", cls + 1, offsetof(CTask, next_task)},
       {"last_task", cls + 1, offsetof(CTask, last_task)},
@@ -1025,6 +1055,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     DocEntryPtrPtr,
     Date,
     DirEntryPtr,
+    DirContextPtr,
+    U8PtrPtr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1041,6 +1073,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CDocEntry", table) + 2,
       FindType("CDate", table),
       FindType("CDirEntry", table) + 1,
+      FindType("CDirContext", table) + 1,
+      FindType("U8", table) + 2,
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -1078,6 +1112,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"DirEntryDel2", U0, FF_RET1, {{"tmpde", DirEntryPtr}}},
       {"DirTreeDel", U0, FF_RET1, {{"tmpde", DirEntryPtr}}},
       {"DirTreeDel2", U0, FF_RET1, {{"tmpde", DirEntryPtr}}},
+      {"DirContextNew", DirContextPtr, FF_RET1,
+       {{"mask", U8Ptr}, {"make_mask", Bool, true}, {"make_dirs", Bool, true}, {"no_mask", Bool, true}}},
+      {"DirContextDel", U0, FF_RET1, {{"dirc", DirContextPtr}, {"restore", Bool, true, 1}}},
+      {"Str2I64", I64, FF_RET1, {{"st", U8Ptr}, {"radix", I64, true, 10}, {"_end_ptr", U8PtrPtr, true}}},
       {"SysTry", U0, FF_RET1, {{"catch_start", U8Ptr}, {"untry_start", U8Ptr}}},
       {"SysUntry", U0, FF_RET1, {}},
       {"throw", U0, FF_RET1, {{"ch", I64, true}, {"no_log", Bool, true}}},
@@ -1147,6 +1185,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
         {"attr", I64}, {"solid", Bool}}},
       {"DocNew", DocPtr, FF_RET1, {{"filename", U8Ptr, true}, {"task", TaskPtr, true}}},
       {"DocRead", DocPtr, FF_RET1, {{"name", U8Ptr, true}, {"flags", I64, true}}},
+      {"DocSave", U8Ptr, FF_RET1, {{"doc", DocPtr}, {"_size", I64Ptr, true}}},
       {"DocType", Bool, FF_RET1,
        {{"doc", DocPtr, true}, {"filename", U8Ptr}, {"trailing_new_lines", I64, true, 1}}},
       {"Type", Bool, FF_RET1, {{"filename", U8Ptr}, {"trailing_new_lines", I64, true, 1}}},

@@ -38,42 +38,64 @@ static void LoadBins(CDoc &doc, const uint8_t *src, size_t size)
   }
 }
 
-extern "C" void DocLoadCpp(CDoc *doc, const uint8_t *src, int64_t size)
+static void DocLoad(CDoc &doc, const uint8_t *src, size_t size,
+                    const CDocReadContext *context)
 {
-  if (!doc || doc->doc_signature != DOC_SIGNATURE_VAL || size < 0)
-    return;
-  CDocLock lock(*doc);
-  doc->find_replace->filter_lines = 0;
+  CDocLock lock(doc);
+  doc.find_replace->filter_lines = 0;
   if (src) {
-    size_t text = 0, total = size;
-    while (text < total && src[text])
+    size_t text = 0;
+    while (text < size && src[text])
       text++;
-    DocPutS(*doc, reinterpret_cast<const char *>(src), text);
-    if (text < total)
-      LoadBins(*doc, src + text + 1, total - text - 1);
+    DocPutS(doc, reinterpret_cast<const char *>(src), text, context);
+    if (text < size)
+      LoadBins(doc, src + text + 1, size - text - 1);
   }
-  if (!(doc->flags & DOCG_PLAIN))
-    DocBinsValidate(*doc);
-  doc->cur_entry = doc->head.next;
-  doc->cur_col = doc->cur_entry->min_col;
-  doc->line_start_col = doc->top_line_num = 0;
-  DocRecalc(*doc);
+  if (!(doc.flags & DOCG_PLAIN))
+    DocBinsValidate(doc);
+  doc.cur_entry = doc.head.next;
+  doc.cur_col = doc.cur_entry->min_col;
+  doc.line_start_col = doc.top_line_num = 0;
+  DocRecalc(doc);
 }
 
-extern "C" CDoc *DocReadCpp(const char *name, int64_t flags)
+extern "C" void DocLoadCpp(CDoc *doc, const uint8_t *src, int64_t size)
+{
+  if (doc && doc->doc_signature == DOC_SIGNATURE_VAL && size >= 0)
+    DocLoad(*doc, src, size, nullptr);
+}
+
+CDoc *DocRead(const char *name, int64_t flags, const CDocReadContext *parent)
 {
   auto *path = FileNameAbs(name ? name : blkdev.tmp_filename, *CurrentTask());
+  for (auto *read = parent; path && read; read = read->parent)
+    if (!StrCmpCpp(reinterpret_cast<uint8_t *>(path),
+                   reinterpret_cast<const uint8_t *>(read->name))) {
+      Free(path);
+      return nullptr;
+    }
   auto *doc = DocNewCpp(path, nullptr);
   if (doc) {
     doc->flags |= flags;
     size_t size = 0;
     auto *src = path ? FileReadCpp(path, &size, &doc->file_attr) : nullptr;
-    if (src && size <= INT64_MAX)
-      DocLoadCpp(doc, src, size);
+    if (src && size <= INT64_MAX) {
+      auto *dirc = DirContextNewCpp(path, false, false, false);
+      if (dirc) {
+        const CDocReadContext context{path, parent};
+        DocLoad(*doc, src, size, &context);
+        DirContextDelCpp(dirc, true);
+      }
+    }
     Free(src);
   }
   Free(path);
   return doc;
+}
+
+extern "C" CDoc *DocReadCpp(const char *name, int64_t flags)
+{
+  return DocRead(name, flags, nullptr);
 }
 
 static bool PlainEntry(const CDocEntryBase &entry)

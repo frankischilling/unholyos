@@ -1,7 +1,6 @@
 #include "../KernelB.hpp"
 
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
-extern "C" CDrv *Let2DrvCpp(uint8_t letter, uint8_t except);
 
 extern "C" uint64_t CdCpp(const char *name, uint8_t make_dirs)
 {
@@ -90,12 +89,9 @@ extern "C" uint64_t IsDirCpp(const char *name)
 {
   if (!name)
     return false;
-  auto &task = *CurrentTask();
-  auto *path = DirNameAbs(name, task);
-  auto *dv =
-      path && *path && path[1] == ':' ? PathDrive(task, path[0]) : nullptr;
-  bool res = dv && RedSeaIsDir(*dv, path + 2);
-  Free(path);
+  auto *context = DirContextNewCpp(name, false, false, true);
+  bool res = context != nullptr;
+  DirContextDelCpp(context, true);
   return res;
 }
 

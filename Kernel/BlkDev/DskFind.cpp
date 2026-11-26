@@ -41,99 +41,56 @@ extern "C" CDirEntry *FilesFindCpp(const char *mask, uint64_t flags)
     return nullptr;
   }
 
-  auto *text = PathTrim(mask, task.data_heap);
-  if (!text)
+  auto *dirc = DirContextNewCpp(mask, true, false, false);
+  if (!dirc)
     return nullptr;
-  auto *tail = text;
-  while (*tail && *tail != ';')
-    tail++;
-  char separator = *tail;
-  *tail = 0;
-  auto *directory = !separator ? DirNameAbs(text, task) : nullptr;
-  auto *dv = directory && *directory && directory[1] == ':'
-                 ? PathDrive(task, directory[0])
-                 : nullptr;
-  if (dv && RedSeaIsDir(*dv, directory + 2)) {
-    directory[0] = dv->drv_let;
-    auto *res = FilesFind2(*dv, directory, "*", flags);
-    Free(directory);
-    Free(text);
-    return res;
-  }
+  auto *directory = DirCurCpp(nullptr, nullptr);
+  auto *res = directory ? FilesFind2(*task.cur_dv, directory, dirc->mask, flags)
+                        : nullptr;
   Free(directory);
-
-  auto *path = FileNameAbs(text, task);
-  *tail = separator;
-  CDirEntry *res = nullptr;
-  dv = path && *path && path[1] == ':' ? PathDrive(task, path[0]) : nullptr;
-  if (dv && path[2] == '/') {
-    char *leaf = path + 3;
-    for (char *p = leaf; *p; p++)
-      if (*p == '/')
-        leaf = p + 1;
-    size_t suffix = StrLen(leaf);
-    size_t tail_len = StrLen(tail);
-    auto *pattern =
-        reinterpret_cast<char *>(MAlloc(suffix + tail_len + 1, task.data_heap));
-    if (pattern) {
-      MemCpy(pattern, leaf, suffix);
-      MemCpy(pattern + suffix, tail, tail_len + 1);
-      if (leaf != path + 3)
-        leaf--;
-      *leaf = 0;
-      path[0] = dv->drv_let;
-      res = FilesFind2(*dv, path, pattern, flags);
-      Free(pattern);
-    }
-  }
-  Free(path);
-  Free(text);
+  DirContextDelCpp(dirc, true);
   return res;
 }
 
-static bool FileFind2(char *path, CDirEntry *res, uint64_t flags, bool parents)
+static bool FileFind2(const char *path, CDirEntry *res, uint64_t flags,
+                      bool parents)
 {
-  if (!path || !*path || path[1] != ':' || path[2] != '/')
+  if (!path)
     return false;
-  auto *dv = PathDrive(*CurrentTask(), *path);
-  if (!dv)
+  auto *dirc = DirContextNewCpp(path, false, false, false);
+  if (!dirc)
     return false;
-  auto *dir = path + 2;
-  size_t prefix = 1;
-  for (size_t i = 1; dir[i]; i++)
-    if (dir[i] == '/')
-      prefix = i + 1;
-  auto *name = dir + prefix;
-  if (!*name)
-    return false;
-  uint64_t clus;
-  while (RedSeaDirClus(*dv, dir, prefix, clus)) {
-    CRedSeaDirEntry de;
-    if (!parents && ((!(flags & FUF_JUST_FILES) &&
-                      RedSeaFileFind(*dv, clus, name, true, de)) ||
-                     (!(flags & FUF_JUST_DIRS) &&
-                      RedSeaFileFind(*dv, clus, name, false, de)))) {
-      if (res) {
-        char save = dir[prefix];
-        dir[prefix] = 0;
-        path[0] = dv->drv_let;
-        auto *full_name = DirEntryFullName(path, de.name);
-        dir[prefix] = save;
-        if (!full_name)
-          return false;
-        MemCpy(&res->attr, &de, sizeof(de));
-        res->full_name = full_name;
-      }
-      return true;
-    }
-    if (prefix <= 1 || !(flags & FUF_SCAN_PARENTS))
+  auto &task = *CurrentTask();
+  bool found = false;
+  while (*dirc->mask && task.cur_dir) {
+    if (parents && (!task.cur_dir[1] || !CdCpp("..", false)))
       break;
-    parents = false;
-    do {
-      prefix--;
-    } while (prefix > 1 && dir[prefix - 1] != '/');
+    uint64_t clus;
+    CRedSeaDirEntry de;
+    if (!RedSeaDirClus(*dirc->dv, task.cur_dir, StrLen(task.cur_dir), clus))
+      break;
+    if ((!(flags & FUF_JUST_FILES) &&
+         RedSeaFileFind(*dirc->dv, clus, dirc->mask, true, de)) ||
+        (!(flags & FUF_JUST_DIRS) &&
+         RedSeaFileFind(*dirc->dv, clus, dirc->mask, false, de))) {
+      found = true;
+      if (res) {
+        auto *cwd = DirCurCpp(nullptr, nullptr);
+        auto *full_name = cwd ? DirEntryFullName(cwd, de.name) : nullptr;
+        Free(cwd);
+        found = full_name != nullptr;
+        if (found) {
+          MemCpy(&res->attr, &de, sizeof(de));
+          res->full_name = full_name;
+        }
+      }
+      break;
+    }
+    if (!parents)
+      break;
   }
-  return false;
+  DirContextDelCpp(dirc, true);
+  return found;
 }
 
 extern "C" uint64_t FileFindCpp(const char *name, CDirEntry *entry,
@@ -142,24 +99,24 @@ extern "C" uint64_t FileFindCpp(const char *name, CDirEntry *entry,
   constexpr uint64_t fuf_error = 'F' | uint64_t('U') << 8 | uint64_t('F') << 16;
   if (flags & ~FUG_FILE_FIND)
     RaiseHolyC(fuf_error);
-  if (!name)
+  if (!name || (*name && name[1] == ':' && !Let2DrvCpp(*name, false)))
     return false;
   auto &task = *CurrentTask();
-  auto *alt =
-      flags & FUF_Z_OR_NOT_Z ? ToggleZorNotZ(name, task.data_heap) : nullptr;
-  char *paths[]{FileNameAbs(name, task),
-                alt ? FileNameAbs(alt, task) : nullptr};
-  Free(alt);
+  auto *filename = StrNew(name, task.data_heap);
+  if (!filename)
+    return false;
+  auto *alt = flags & FUF_Z_OR_NOT_Z ? ToggleZorNotZ(filename, task.data_heap)
+                                     : nullptr;
   CDirEntry de{};
   auto *res = entry ? &de : nullptr;
-  bool found = FileFind2(paths[0], res, flags & ~FUF_SCAN_PARENTS, false) ||
-               FileFind2(paths[1], res, flags & ~FUF_SCAN_PARENTS, false);
+  bool found = FileFind2(filename, res, flags, false) ||
+               FileFind2(alt, res, flags, false);
   if (!found && (flags & FUF_SCAN_PARENTS))
-    found = FileFind2(paths[0], res, flags, true) ||
-            FileFind2(paths[1], res, flags, true);
+    found = FileFind2(filename, res, flags, true) ||
+            FileFind2(alt, res, flags, true);
   if (entry)
     *entry = de;
-  Free(paths[0]);
-  Free(paths[1]);
+  Free(filename);
+  Free(alt);
   return found;
 }

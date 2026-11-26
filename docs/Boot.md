@@ -37,6 +37,21 @@ on the ISO built in the guest. `DirectoryProbe.HC` checks the native
 searches, flattening, and directory changes on the DVD and on a writable
 RedSea RAM drive.
 
+`DirContextProbe.HC` checks the native record layout, nested contexts,
+mask splitting, directory creation, and restore behavior. The DolDoc
+probe reads the external attachment from `SpritePutExt.HC` and
+checks that a saved document retains its `BP` link. A separate fixture
+resolves links by number and tag from its own directory while the caller
+stays in `/Home`. It also includes a cycle.
+With the DolDoc lexer enabled, `$IS` reads the referenced attachment's
+size in a native HolyC expression.
+
+`Demo/Graphics/SpritePut.HC` and `SpritePutExt.HC` are Terry A. Davis's
+public-domain programs. The test disc includes both byte for byte at
+their original paths. The probe reads the original documents and
+checks the attachment without running their sprite drawing routines.
+[Pinned TempleOS graphics demos](https://github.com/cia-foundation/TempleOS/tree/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Graphics)
+
 [`Doc/Start.DD`](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Doc/Start.DD)
 is Terry A. Davis's public-domain startup document, copied byte for
 byte from the pinned source. Its SHA-256 is
