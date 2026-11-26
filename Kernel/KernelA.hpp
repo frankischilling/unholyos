@@ -968,7 +968,13 @@ constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
                    DOCEF_ESC = 1ull << 37, DOCEF_QUIT = 1ull << 38,
                    DOCEF_FROM_START = 1ull << 39, DOCEF_HAS_BORDER = 1ull << 40,
                    DOCEF_SOLID_BORDER = 1ull << 41, DOCEF_BORDER_PLOT = 1ull << 42,
-                   DOCEF_REMALLOC_DATA = 1ull << 48, DOCEF_HOLD = 1ull << 51,
+                   DOCEF_CHECKED_COLLAPSED = 1ull << 43,
+                   DOCEF_CHECK_COLLAPSABLE = 1ull << 44,
+                   DOCEF_REFRESH_DATA = 1ull << 45,
+                   DOCEF_UPDATE_DATA = 1ull << 46,
+                   DOCEF_DEREF_DATA = 1ull << 47,
+                   DOCEF_REMALLOC_DATA = 1ull << 48,
+                   DOCEF_HAS_TERMINATOR = 1ull << 49, DOCEF_HOLD = 1ull << 51,
                    DOCEF_TREE = 1ull << 52,
                    DOCEF_LST = 1ull << 53, DOCEF_SKIP = 1ull << 54,
                    DOCEF_FILTER_SKIP = 1ull << 57, DOCEF_NO_CLICK_ON = 1ull << 58,
@@ -983,6 +989,7 @@ constexpr uint32_t RECALCt_NORMAL = 0, RECALCt_FIND_CURSOR = 1,
                    RECALCt_TO_SCRN = 2, RECALCG_MASK = 0xFF,
                    RECALCF_HAS_CURSOR = 0x100;
 constexpr int64_t DOC_DFT = INT32_MIN;
+constexpr int64_t DOCM_CANCEL = -1;
 
 struct CDocSettings
 {

@@ -46,6 +46,8 @@ void CdHC(), IsDirHC(), DirHC(), PutDirLinkHC(), FilesFindHC(), FileFindHC(),
     FilesFindMatchHC(), DirEntryDelHC(), DirEntryDel2HC(), DirTreeDelHC(), DirTreeDel2HC();
 void DirContextNewHC(), DirContextDelHC(), Str2I64HC();
 void Str2DateHC(), GetI64HC(), GetF64HC(), GetDateHC();
+void Str2F64HC(), ChkPtrHC(), ClassRep2HC(), ClassRepHC(), ClassRepDHC();
+void DocMaxHC(), DocDataFmtHC(), DocDataScanHC();
 void ExtChgHC(), ExtDftHC();
 void RedSeaISOHC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
@@ -622,6 +624,14 @@ bool LoadKernel(CTask &task)
       {"DirContextDel", reinterpret_cast<uintptr_t>(DirContextDelHC)},
       {"Str2I64", reinterpret_cast<uintptr_t>(Str2I64HC)},
       {"Str2Date", reinterpret_cast<uintptr_t>(Str2DateHC)},
+      {"Str2F64", reinterpret_cast<uintptr_t>(Str2F64HC)},
+      {"ChkPtr", reinterpret_cast<uintptr_t>(ChkPtrHC)},
+      {"ClassRep2", reinterpret_cast<uintptr_t>(ClassRep2HC)},
+      {"ClassRep", reinterpret_cast<uintptr_t>(ClassRepHC)},
+      {"ClassRepD", reinterpret_cast<uintptr_t>(ClassRepDHC)},
+      {"DocMax", reinterpret_cast<uintptr_t>(DocMaxHC)},
+      {"DocDataFmt", reinterpret_cast<uintptr_t>(DocDataFmtHC)},
+      {"DocDataScan", reinterpret_cast<uintptr_t>(DocDataScanHC)},
       {"FileWrite", reinterpret_cast<uintptr_t>(FileWriteHC)},
       {"FSize", reinterpret_cast<uintptr_t>(FSizeHC)},
       {"FOpen", reinterpret_cast<uintptr_t>(FOpenHC)},
