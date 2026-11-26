@@ -4154,7 +4154,9 @@ static void TestBoot(const char *qemu, const fs::path &iso,
 
 int main(int argc, char **argv)
 {
-  if (argc==5 && std::string_view(argv[1])=="--fat32-write") {
+  if (argc==5 && (std::string_view(argv[1])=="--fat32-write" ||
+                  std::string_view(argv[1])=="--fat32-stream")) {
+    bool stream=std::string_view(argv[1])=="--fat32-stream";
     char path[]="/tmp/unholyos-fat32-write-XXXXXX";
     if (!mkdtemp(path)) return 1;
     fs::path dir=path,disk=dir/"owned.img";
@@ -4170,7 +4172,12 @@ int main(int argc, char **argv)
         CMonitor vm(argv[2],argv[3],run,"pc","512",false,disk,true);
         vm.Connect();
         auto output=vm.Boot(run/"serial.log");
-        CheckProgramOutput(output,"/Fat32WriteProbe.HC",
+        if (stream)
+          CheckProgramOutput(output,"/Fat32StreamProbe.HC",
+              pass?"FAT32 persisted streams\nFAT32 stream probe 3F\n":
+                   "Copying C:/ZIP.BIN.Z to C:/ZIP2.BIN.Z\n"
+                   "FAT32 stream mutation 3F\nFAT32 stream probe 3F\n",'1');
+        else CheckProgramOutput(output,"/Fat32WriteProbe.HC",
             pass?"FAT32 persisted files\nFAT32 file probe FF\n":
                  "Make Directory:C:/Work\nMake Directory:C:/Work/Grow\n"
                  "Make Directory:C:/Work/Empty\nFAT32 mutation 3F\nFAT32 file probe FF\n",'1');
@@ -4188,7 +4195,8 @@ int main(int argc, char **argv)
         }
       }
       Check(FileRead(argv[4])==original,"Original FAT32 fixture was modified");
-      std::cout<<"Verified FAT32 file and directory mutations, mirrored FATs and cold reboot\n";
+      std::cout<<(stream?"Verified FAT32 buffered streams, growth, copy and cold reboot\n":
+                         "Verified FAT32 file and directory mutations, mirrored FATs and cold reboot\n");
       fs::remove_all(dir);
       return 0;
     } catch (const std::exception &error) {

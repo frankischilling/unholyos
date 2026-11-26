@@ -277,9 +277,43 @@ build/fat-write/Linux/TestBoot --fat32-write qemu-system-x86_64 \
   build/fat-write/fat32-write-test.iso build/fat-write/fat32-writable.img
 ```
 
-FAT32 mounting is still read-only by default. Formatting, stream writes,
-general FAT cache behavior, cross-linked chain repair, and crash recovery
-remain pending. The test does not establish those behaviors.
+FAT32 mounting is still read-only by default. Formatting, general FAT
+cache behavior, cross-linked chain repair, and crash recovery remain
+pending.
+
+## FAT32 buffered streams
+
+`Fat32StreamProbe.HC` exercises unbounded growth, preallocation, buffered
+updates, seeks, reopening, contiguous streams, and raw compressed-file
+copy. The unchanged probe SHA-256 is
+`41bcff4d80e16aabd99a53ece93d1891650f3b64427da2ecf71e9cdd8e527932`.
+The native and pinned reference guests both report:
+
+```text
+Copying C:/ZIP.BIN.Z to C:/ZIP2.BIN.Z
+FAT32 stream mutation 3F
+FAT32 stream probe 3F
+```
+
+On a cold reboot of each guest's own disk:
+
+```text
+FAT32 persisted streams
+FAT32 stream probe 3F
+```
+
+The reference uses QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512`
+and a writable raw IDE index-0 disk. Its disk SHA-256 after both boots is
+`260f34c49e2f9d5f3add8d0712fbd6939e7bad0f2b942a6cc7a89ad6c634632b`.
+The native test checks complete FAT mirror equality, persistence of the
+entire mutated disk across reboot, and preservation of the input image.
+The two systems' allocation order and timestamps need not be identical.
+
+```sh
+make -j4 BUILD=build/fat-stream test
+build/fat-stream/Linux/TestBoot --fat32-stream qemu-system-x86_64 \
+  build/fat-stream/fat32-stream-test.iso build/fat-stream/fat32-writable.img
+```
 
 ## Building a RedSea ISO in the guest
 

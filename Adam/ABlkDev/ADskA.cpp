@@ -97,8 +97,7 @@ extern "C" int64_t CopyTreeCpp(const char *src,const char *dst,uint8_t no_mask)
   int64_t res=0;
   if (valid && (dirc=DirContextNewCpp(dst,true,true,false))) {
     st2=DirCurCpp(nullptr,nullptr);
-    if (st2 && dirc->dv->bd->type==BDT_RAM &&
-        !(dirc->dv->bd->flags & BDF_READ_ONLY) &&
+    if (st2 && WritableFS(*dirc->dv) &&
         dirc->mask[0]=='*' && !dirc->mask[1]) {
       size_t i1=StrLen(st1),i2=StrLen(st2);
       res=CopyTree2(de,i1==3?2:i1,i2==3?2:i2,st2);
