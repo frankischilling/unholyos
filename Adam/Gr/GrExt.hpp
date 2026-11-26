@@ -48,6 +48,11 @@ extern "C" int64_t GrFillTri0Cpp(CDC *dc, const CD3I32 *p1, const CD3I32 *p2,
 extern "C" int64_t GrFillPoly3Cpp(CDC *dc, int64_t n, const CD3I32 *poly);
 extern "C" int64_t GrRect3Cpp(CDC *dc, int64_t x, int64_t y, int64_t z,
                               int64_t w, int64_t h);
+inline constexpr uint64_t GR_ARROW_WIDTH = 0x4006000000000000; // 2.75
+extern "C" bool GrArrow3Cpp(CDC *dc, int64_t x1, int64_t y1, int64_t z1,
+                            int64_t x2, int64_t y2, int64_t z2,
+                            uint64_t w = GR_ARROW_WIDTH, int64_t step = 1,
+                            int64_t start = 0);
 extern "C" uint64_t ClipLineCpp(int64_t *_x1, int64_t *_y1, int64_t *_x2,
                                 int64_t *_y2, int64_t left, int64_t top,
                                 int64_t right, int64_t bottom);

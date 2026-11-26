@@ -323,6 +323,23 @@ callback, including the original endpoint rules.
 `SPT_THICK` and restores the caller's width. Point and line elements
 use the 3D primitives, including their packed variants.
 
+## Arrows and raster text
+
+`GrBorder` and `GrArrow3` in `Adam/Gr/GrComposites.cpp` follow
+`GrComposites.HC`. Each arrow uses the native line walker for the shaft
+and its two wings. The arrow reflects the endpoints before calculating
+the wings, and the shaft alone uses the caller's start offset.
+`DrawStdMs` and packed `SPT_ARROW` elements use the same routine.
+
+`GrPutChar` and `GrPrint` in `Adam/Gr/GrBitMap.cpp` follow
+`GrBitMap.HC` for clipping, extent recording, collision, XOR, tab
+stops, and `SX` and `SY` offsets. The leading cell keeps the reference's
+preceding-byte read when a glyph is unaligned. Glyphs use the standard
+font data. Runtime font selection remains pending.
+
+`PressAKey` in `Kernel/StrB.cpp` prints the blinking prompt and
+reads a nonzero character without echo, as in `StrB.HC`.
+
 ## Window input masks
 
 The HolyC compiler exposes the `WIf_` bit indices, `WIF_` masks, and
@@ -372,10 +389,8 @@ flush path also rewrites unchanged words.
 `WinMgrTask` schedules refreshes at the reference 1001/30000-second
 period using rational jiffy deadlines. It has its own task and stack.
 The manager owns the persistent screen context's window geometry.
-`DrawStdMs` uses the three line segments produced by the reference
-`GrArrow3` for this cursor angle and pen width. The general transformed
-and thick 3D arrow remains pending. In VGA text mode the bootstrap
-inverts the cursor cell while encoding the frame so the stored text
+`DrawStdMs` calls `GrArrow3` with the reference cursor angle and pen
+width. In VGA text mode the bootstrap inverts the cursor cell while encoding the frame so the stored text
 attribute stays stable between refreshes.
 
 `GrScaleZoom` updates the mouse scale and offset on all three axes.
