@@ -403,29 +403,21 @@ static void OutUnquote(CPrintOut &out, const char *text, unsigned flags)
 static void OutDateTime(CPrintOut &out, uint64_t value, bool date)
 {
   const CPrintFmt two{2, 0, 0, PRTF_PAD_ZERO};
+  CDate cdt;
+  MemCpy(&cdt, &value, sizeof(cdt));
+  CDateStruct ds;
+  Date2Struct(ds, cdt);
   int64_t first, second, third;
   char sep;
   if (date) {
-    constexpr int starts[]{0,   31,  59,  90,  120, 151,
-                           181, 212, 243, 273, 304, 334};
-    int64_t days = static_cast<int32_t>(value >> 32);
-    int64_t year = (days + 1) * 100000 / 36524225;
-    while (YearStartDate(year) > days)
-      year--;
-    days -= YearStartDate(year);
-    bool leap = YearStartDate(year + 1) - YearStartDate(year) != 365;
-    int month = 0;
-    while (month < 11 && days >= starts[month + 1] + (leap && month))
-      month++;
-    first = month + 1;
-    second = days - starts[month] - (leap && month > 1) + 1;
-    third = year % 100;
+    first = ds.mon;
+    second = ds.day_of_mon;
+    third = ds.year % 100;
     sep = '/';
   } else {
-    uint64_t secs = (((421875 * uint64_t(uint32_t(value))) >> 21) + 1) / 10000;
-    first = secs / 3600;
-    second = secs / 60 % 60;
-    third = secs % 60;
+    first = ds.hour;
+    second = ds.min;
+    third = ds.sec;
     sep = ':';
   }
   OutInteger(out, first, two, 10);

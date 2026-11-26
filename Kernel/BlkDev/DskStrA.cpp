@@ -1,7 +1,83 @@
 #include "../KernelB.hpp"
 
-constexpr uint64_t FUF_JUST_DIRS = 0x400, FUF_Z_OR_NOT_Z = 0x0040000,
-                   FUF_SCAN_PARENTS = 0x0100000;
+static bool WildMatch(const char *test, const char *wild, const char *end)
+{
+  const char *fall_back_src = nullptr, *fall_back_wild = nullptr;
+  for (;;) {
+    char ch = *test++;
+    if (!ch)
+      return wild == end || *wild == '*';
+    if (wild == end)
+      return false;
+    char match = *wild++;
+    if (match == '*') {
+      fall_back_src = test;
+      fall_back_wild = wild - 1;
+      if (wild == end)
+        return true;
+      match = *wild++;
+      while (match != ch)
+        if (!(ch = *test++))
+          return false;
+    } else if (match != '?' && match != ch) {
+      if (!fall_back_wild)
+        return false;
+      wild = fall_back_wild;
+      test = fall_back_src;
+      fall_back_wild = nullptr;
+    }
+  }
+}
+
+bool FilesFindMatch(const char *name, const char *mask, uint64_t flags)
+{
+  if (!name || !mask)
+    return false;
+  const char *basename = name;
+  for (const char *p = name; *p; p++)
+    if (*p == '/')
+      basename = p + 1;
+  bool found = false;
+  for (const char *end = mask; *mask; mask = end + 1) {
+    bool path_mask = false;
+    end = mask;
+    while (*end && *end != ';') {
+      path_mask |= *end == '/';
+      end++;
+    }
+    if (mask == end)
+      break;
+    bool exclude = *mask == '!';
+    if (WildMatch(path_mask ? name : basename, mask + exclude, end)) {
+      if (exclude)
+        return false;
+      found = true;
+    }
+    if (!*end)
+      break;
+  }
+  if (!found)
+    return false;
+  constexpr struct
+  {
+    uint64_t flag;
+    const char *mask;
+  } filters[]{
+      {FUF_JUST_TXT, FILEMASK_TXT}, {FUF_JUST_DD, FILEMASK_DD},
+      {FUF_JUST_SRC, FILEMASK_SRC}, {FUF_JUST_AOT, FILEMASK_AOT},
+      {FUF_JUST_JIT, FILEMASK_JIT}, {FUF_JUST_GR, FILEMASK_GR},
+  };
+  for (const auto &filter : filters)
+    if ((flags & filter.flag) && !FilesFindMatch(name, filter.mask))
+      return false;
+  return true;
+}
+
+extern "C" uint64_t FilesFindMatchCpp(const char *name, const char *mask,
+                                      uint64_t flags)
+{
+  return FilesFindMatch(name, mask, flags);
+}
 
 static char *Join(const char *dir, const char *separator, const char *name,
                   const char *extension, CHeapCtrl *hc)
@@ -23,7 +99,7 @@ static bool PathSpace(uint8_t ch)
   return char_bmp_white_space[ch / 32] & (uint32_t{1} << (ch % 32));
 }
 
-static char *PathTrim(const char *name, CHeapCtrl *hc)
+char *PathTrim(const char *name, CHeapCtrl *hc)
 {
   if (!name)
     name = "";
@@ -71,7 +147,7 @@ static char *LastSlash(char *path)
   return slash;
 }
 
-static char *DirNameAbs(const char *name, const CTask &task)
+char *DirNameAbs(const char *name, const CTask &task)
 {
   auto *hc = task.data_heap;
   if (!task.cur_dir || !*task.cur_dir)

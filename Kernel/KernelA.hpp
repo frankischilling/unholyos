@@ -20,6 +20,14 @@ struct CDate
 
 static_assert(sizeof(CDate) == 8 && offsetof(CDate, date) == 4);
 
+struct CDateStruct
+{
+  uint8_t sec10000, sec100, sec, min, hour, day_of_week, day_of_mon, mon;
+  int32_t year;
+};
+
+static_assert(sizeof(CDateStruct) == 12 && offsetof(CDateStruct, year) == 8);
+
 struct CCPU
 {
   CCPU *addr;
@@ -262,6 +270,25 @@ constexpr uint16_t RS_ATTR_DIR = 0x10, RS_ATTR_DELETED = 0x100,
 constexpr size_t CDIR_FILENAME_LEN = 38;
 constexpr uint64_t INVALID_CLUS = UINT64_MAX;
 constexpr char BOOT_DVD_LET = 'T', HOME_DIR[] = "/Home";
+constexpr uint64_t FUF_RECURSE = 1, FUF_SINGLE = 0x200, FUF_JUST_DIRS = 0x400,
+                   FUF_JUST_FILES = 0x800, FUF_JUST_TXT = 0x1000,
+                   FUF_JUST_DD = 0x2000, FUF_JUST_SRC = 0x4000,
+                   FUF_JUST_AOT = 0x8000, FUF_JUST_JIT = 0x10000,
+                   FUF_JUST_GR = 0x20000, FUF_Z_OR_NOT_Z = 0x40000,
+                   FUF_CLUS_ORDER = 0x80000, FUF_SCAN_PARENTS = 0x100000,
+                   FUF_FLATTEN_TREE = 0x200000;
+constexpr uint64_t FUG_FILES_FIND =
+    FUF_RECURSE | FUF_SINGLE | FUF_CLUS_ORDER | FUF_JUST_DIRS | FUF_JUST_FILES |
+    FUF_JUST_TXT | FUF_JUST_DD | FUF_JUST_SRC | FUF_JUST_AOT | FUF_JUST_JIT |
+    FUF_JUST_GR | FUF_FLATTEN_TREE;
+constexpr uint64_t FUG_FILE_FIND =
+    FUF_JUST_DIRS | FUF_JUST_FILES | FUF_Z_OR_NOT_Z | FUF_SCAN_PARENTS;
+constexpr char FILEMASK_JIT[] = "*.HC*;*.HH*",
+               FILEMASK_AOT[] = "*.HC*;*.HH*;*.PRJ*",
+               FILEMASK_SRC[] = "*.HC*;*.HH*;*.IN*;*.PRJ*",
+               FILEMASK_DD[] = "*.HC*;*.HH*;*.IN*;*.PRJ*;*.DD*",
+               FILEMASK_TXT[] = "*.HC*;*.HH*;*.IN*;*.PRJ*;*.DD*;*.TXT*",
+               FILEMASK_GR[] = "*.GR*";
 
 struct [[gnu::packed]] CBlkDev
 {
@@ -529,6 +556,22 @@ struct CRedSeaDirEntry
   char name[CDIR_FILENAME_LEN];
   uint64_t clus, size, datetime;
 };
+
+struct CDirEntry
+{
+  CDirEntry *next, *parent, *sub;
+  char *full_name;
+  int64_t user_data, user_data2;
+  uint16_t attr;
+  char name[CDIR_FILENAME_LEN];
+  int64_t clus, size;
+  CDate datetime;
+};
+
+static_assert(sizeof(CDirEntry) == 112 && offsetof(CDirEntry, attr) == 48 &&
+              offsetof(CDirEntry, name) == 50 &&
+              offsetof(CDirEntry, clus) == 88 &&
+              offsetof(CDirEntry, datetime) == 104);
 
 static_assert(sizeof(CBlkDev) == 124 && offsetof(CBlkDev, base0) == 32 &&
               offsetof(CBlkDev, drv_offset) == 44 &&

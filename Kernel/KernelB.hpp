@@ -135,6 +135,7 @@ extern "C" char *StrPrintJoin(char *dst, const char *fmt, int64_t argc,
                               const uint64_t *argv);
 const CHash *FunSegFind(uintptr_t addr, uint64_t &offset);
 int64_t YearStartDate(int64_t year);
+void Date2Struct(CDateStruct &ds, CDate cdt);
 extern "C" uint64_t Pow10I64Cpp(int64_t exponent);
 extern "C" uint64_t IsRawCpp();
 extern "C" uint64_t RawCpp(uint8_t enabled);
@@ -367,10 +368,38 @@ CDrv *PathDrive(const CTask &task, char letter);
 uint64_t RedSeaFileWrite(CDrv &dv, const char *path, const uint8_t *data,
                          size_t size, uint64_t date, uint16_t attr);
 char *FileNameAbs(const char *name, const CTask &task, uint64_t flags = 0);
+char *DirNameAbs(const char *name, const CTask &task);
+char *PathTrim(const char *name, CHeapCtrl *hc);
+bool FilesFindMatch(const char *name, const char *mask, uint64_t flags = 0);
+extern "C" uint64_t FilesFindMatchCpp(const char *name, const char *mask,
+                                      uint64_t flags);
 extern "C" char *ExtDftCpp(const char *name, const char *ext);
 const char *FileExtDot(const char *name);
 bool IsDotExt(const char *name, char ext);
 int64_t DirEntryCompareName(const CRedSeaDirEntry &a, const CRedSeaDirEntry &b);
+bool DirFilesSort(CDirEntry *&first, bool by_cluster);
+void DirFilesFlatten(CDirEntry *&first, uint64_t flags);
+char *DirEntryFullName(const char *directory, const char *name);
+extern "C" void DirEntryDelCpp(CDirEntry *entry);
+extern "C" void DirEntryDel2Cpp(CDirEntry *entry);
+extern "C" void DirTreeDelCpp(CDirEntry *entry);
+extern "C" void DirTreeDel2Cpp(CDirEntry *entry);
+extern "C" CDirEntry *FilesFindCpp(const char *mask, uint64_t flags);
+extern "C" uint64_t FileFindCpp(const char *name, CDirEntry *entry,
+                                uint64_t flags);
+extern "C" int64_t DirCpp(const char *mask, uint8_t full);
+extern "C" uint64_t CdCpp(const char *name, uint8_t make_dirs);
+extern "C" uint64_t IsDirCpp(const char *name);
+extern "C" void PutDirLinkCpp(const char *name, const char *full_name);
+extern "C" void PutFileLinkCpp(const char *filename, const char *full_name,
+                               int64_t line, uint8_t plain_text);
+extern "C" char *DirCurCpp(const CTask *task, void *mem_task);
+bool RedSeaFilesFind(CDrv &dv, uint64_t clus, uint64_t parent_clus,
+                     const char *directory, const char *mask, uint64_t flags,
+                     CDirEntry *parent, CDirEntry *&res);
+bool RedSeaMkDir(CDrv &dv, const char *path);
+void QSortI64Native(int64_t *base, int64_t count,
+                    int64_t (*compare)(int64_t, int64_t));
 char *ToggleZorNotZ(const char *name, CHeapCtrl *hc);
 void ResidentDriveClear(char letter);
 uint8_t *FileRead(const CDrv &dv, const char *path, size_t &size,

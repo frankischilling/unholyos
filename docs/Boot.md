@@ -14,29 +14,36 @@ The C++20 host tools build the RedSea image and check it against the kernel buil
 ## HolyC terminal
 
 Startup opens two DolDoc terminals side by side and focuses the left
-one. Each terminal reads `::/Doc/Start.DD` from the boot disc before
-its first prompt. `Type("::/Doc/Start.DD");` inserts another copy at the
-cursor. Type `6*7;` and press Enter to see `ans=0x0000002A=42`. Open statements
+one. Each terminal reads `::/Doc/Start.DD` from the boot disc and lists
+`T:/Home` before its first prompt. The empty RedSea home directory
+shows `.` and `..`. `Dir("::/Doc/St?rt.DD*");` lists the startup
+document, and `Cd("::/Doc");` changes the current directory. Run
+`Cd;` to return home. `Type("::/Doc/Start.DD");` inserts another copy
+at the cursor. Type `6*7;` and press Enter to see `ans=0x0000002A=42`. Open statements
 continue on the next line. The cursor keys, Backspace, and Delete edit
 the document before the compiler reads the command. `WinMax;` expands
 the current window. `WinTileHorz;` stacks the terminals by row, while
 `WinTileVert;` puts them side by side. Shift+Escape closes the focused
 terminal and returns focus to the other one.
 
-The boot suite checks the centered title, subtitle, and link labels in
+The boot suite checks the title, subtitle, links, and home listing in
 both terminals. It sends PS/2 keyboard events to test line editing,
 multiline expressions, syntax error recovery, `GetStr`, tiling, and
 focus. After closing the right terminal, it types `Type` in the left
-terminal and checks that the document appears again. The suite repeats
-these checks on the ISO built in the guest.
+terminal and checks that the document appears again. It also runs `Dir`
+at the prompt and checks the return count. The suite repeats these checks
+on the ISO built in the guest. `DirectoryProbe.HC` checks the native
+`CDirEntry` layout, wildcard and exclusion masks, single and recursive
+searches, flattening, and directory changes on the DVD and on a writable
+RedSea RAM drive.
 
 [`Doc/Start.DD`](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Doc/Start.DD)
 is Terry A. Davis's public-domain startup document, copied byte for
 byte from the pinned source. Its SHA-256 is
 `0f5f7dc1ebd091d2acee39b81b4211a8ffcd0febc423e6b8d5075e9854017530`.
 The title uses the runtime `DD_OS_NAME_VERSION` definition, currently
-`UnholyOS`. Help navigation, the startup directory listing, border
-controls, menus, autocomplete, and the full editor remain pending.
+`UnholyOS`. Help navigation, the directory chooser, border controls,
+menus, autocomplete, and the full editor remain pending.
 
 ## Building a RedSea ISO in the guest
 
@@ -52,9 +59,13 @@ The source can be the mounted DVD or a RedSea RAM directory. The guest sizes
 the source tree, sorts each directory, copies file bytes and dates, and
 patches the included `BootDVD` loader to the copied stage-two extent. The
 host builder uses the same descriptor and loader patch code.
-`Linux/MakeISO` accepts `--file-at Doc/Start.DD Doc/Start.DD`, which
-creates the `Doc` directory and writes the file into it. The boot suite
-checks the startup document's directory records and checksum.
+`Linux/MakeISO` uses `--compress-at Doc/Start.DD.Z Doc/Start.DD` to
+encode the source using the same routine as the guest. The 200-byte
+archive matches `/Doc/Start.DD.Z` on the pinned live CD, and the guest
+expands it when opening `::/Doc/Start.DD`. `--dir Home` adds an empty
+directory. The boot suite checks both directory records and the
+archive checksum. The dates shown by `Dir` come from the image read by
+the guest.
 
 The QEMU boot suite runs `RedSeaISOProbe.HC` through `ExeFile` at 512,
 3,072, and 4,608 MiB. It reads the two output files from guest RAM, checks
