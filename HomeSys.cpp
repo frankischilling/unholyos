@@ -23,6 +23,7 @@ void UserStartUp()
   task->display_flags |= DISPLAYF_SHOW;
   WinToTopCpp(task, false);
   WinZBufUpdateCpp();
+  DirCpp("*", false);
 }
 
 bool StartUpTasks()

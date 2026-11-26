@@ -9,6 +9,8 @@ GLOBAL LinkedLstDelHC,LinkedLstSizeHC,QueDelHC
 GLOBAL QueVectU8NewHC,QueVectU8PutHC,QueVectU8GetHC,QueVectU8DelHC
 GLOBAL QSortHC,QSortI64HC,LstMatchHC
 GLOBAL FileReadHC,FileNameAbsHC,DirNameAbsHC,DirCurHC,DirFileHC,ExtChgHC,ExtDftHC
+GLOBAL CdHC,IsDirHC,DirHC,PutDirLinkHC,FilesFindHC,FileFindHC,FilesFindMatchHC
+GLOBAL DirEntryDelHC,DirEntryDel2HC,DirTreeDelHC,DirTreeDel2HC
 GLOBAL FileWriteHC,BlkDevNextFreeSlotHC,BlkDevAddHC,Let2DrvHC,BlkReadHC,BlkWriteHC
 GLOBAL RedSeaISOHC
 GLOBAL SysUntryHC,PutExceptHC,YorNHC
@@ -88,6 +90,8 @@ EXTERN LinkedLstDelCpp,LinkedLstSizeCpp,QueDelCpp
 EXTERN QueVectU8NewCpp,QueVectU8PutCpp,QueVectU8GetCpp,QueVectU8DelCpp
 EXTERN QSortCpp,QSortI64Cpp,LstMatchCpp
 EXTERN FileReadCpp,FileNameAbsCpp,DirNameAbsCpp,DirCurCpp,DirFileCpp,ExtChgCpp,ExtDftCpp
+EXTERN CdCpp,IsDirCpp,DirCpp,PutDirLinkCpp,FilesFindCpp,FileFindCpp,FilesFindMatchCpp
+EXTERN DirEntryDelCpp,DirEntryDel2Cpp,DirTreeDelCpp,DirTreeDel2Cpp
 EXTERN FileWriteCpp,BlkDevNextFreeSlotCpp,BlkDevAddCpp,Let2DrvCpp,BlkReadCpp,BlkWriteCpp
 EXTERN RedSeaISOCpp
 EXTERN SysUntryCpp,PutExceptCpp,YorNCpp
@@ -341,6 +345,17 @@ HOLYC_CPP DirCurHC,DirCurCpp,2
 HOLYC_CPP DirFileHC,DirFileCpp,3
 HOLYC_CPP ExtChgHC,ExtChgCpp,2
 HOLYC_CPP ExtDftHC,ExtDftCpp,2
+HOLYC_CPP CdHC,CdCpp,2
+HOLYC_CPP IsDirHC,IsDirCpp,1
+HOLYC_CPP DirHC,DirCpp,2
+HOLYC_CPP PutDirLinkHC,PutDirLinkCpp,2
+HOLYC_CPP FilesFindHC,FilesFindCpp,2
+HOLYC_CPP FileFindHC,FileFindCpp,3
+HOLYC_CPP FilesFindMatchHC,FilesFindMatchCpp,3
+HOLYC_CPP DirEntryDelHC,DirEntryDelCpp,1
+HOLYC_CPP DirEntryDel2HC,DirEntryDel2Cpp,1
+HOLYC_CPP DirTreeDelHC,DirTreeDelCpp,1
+HOLYC_CPP DirTreeDel2HC,DirTreeDel2Cpp,1
 HOLYC_CPP FileWriteHC,FileWriteCpp,5
 HOLYC_CPP RedSeaISOHC,RedSeaISOCpp,3
 HOLYC_CPP BlkDevNextFreeSlotHC,BlkDevNextFreeSlotCpp,2

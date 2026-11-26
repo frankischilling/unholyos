@@ -1551,6 +1551,7 @@ extern "C" void KMainCpp()
     BootGridReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/DocFrame.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/DocButton.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/DirectoryProbe.HC");
     if (BootFileProgramReport(*adam_task->cur_dv, "/DocCallback.HC").okay) {
       auto thrown = ExePutS("DocCBThrowTest;", nullptr, 0);
       auto cleanup = ExePutS("DocCBThrowCheck;", nullptr, 0);

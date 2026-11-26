@@ -13,6 +13,7 @@
 #include <map>
 #include <poll.h>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <string>
 #include <sys/socket.h>
@@ -67,35 +68,56 @@ struct CBootMedia
 static std::string_view RedSeaName(const Bytes &image, size_t entry);
 static size_t RedSeaDirectory(const Bytes &image, uint64_t cluster);
 
+static size_t FindRedSeaEntry(const Bytes &disc, uint64_t directory,
+                              std::string_view name)
+{
+  constexpr size_t blk = 512;
+  auto end = RedSeaDirectory(disc, directory);
+  for (size_t entry = directory * blk + 128; entry < end; entry += 64) {
+    auto found = RedSeaName(disc, entry);
+    if (found.empty())
+      break;
+    if (found == name)
+      return entry;
+  }
+  throw std::runtime_error("Missing RedSea entry " + std::string(name));
+}
+
 static void VerifyStartDoc(const Bytes &disc, uint64_t root)
 {
   constexpr size_t blk = 512;
-  auto end = RedSeaDirectory(disc, root);
-  for (size_t entry = root * blk + 128; entry < end; entry += 64) {
-    if (RedSeaName(disc, entry) != "Doc")
-      continue;
-    Check(ReadLE(disc, entry, 2) == 0x810, "Invalid Doc directory attributes");
-    auto doc = ReadLE(disc, entry + 40, 8);
-    auto doc_end = RedSeaDirectory(disc, doc);
-    Check(ReadLE(disc, doc * blk + 64 + 40, 8) == root,
-          "Doc directory has the wrong parent");
-    for (size_t file = doc * blk + 128; file < doc_end; file += 64) {
-      if (RedSeaName(disc, file) != "Start.DD")
-        continue;
-      auto start = ReadLE(disc, file + 40, 8);
-      auto size = ReadLE(disc, file + 48, 8);
-      Check(ReadLE(disc, file, 2) == 0x800 && size == 219 &&
-                start < disc.size() / blk && size <= disc.size() - start * blk,
-            "Invalid Start.DD extent");
-      uint64_t hash = 14695981039346656037ULL;
-      for (size_t i = 0; i < size; i++)
-        hash = (hash ^ disc[start * blk + i]) * 1099511628211ULL;
-      Check(hash == 0x43379D2E29990DF3ULL, "Start.DD differs from TempleOS");
-      return;
-    }
-    break;
-  }
-  throw std::runtime_error("Missing RedSea /Doc/Start.DD");
+  auto entry = FindRedSeaEntry(disc, root, "Doc");
+  Check(ReadLE(disc, entry, 2) == 0x810, "Invalid Doc directory attributes");
+  auto doc = ReadLE(disc, entry + 40, 8);
+  auto file = FindRedSeaEntry(disc, doc, "Start.DD.Z");
+  Check(ReadLE(disc, doc * blk + 64 + 40, 8) == root,
+        "Doc directory has the wrong parent");
+  auto start = ReadLE(disc, file + 40, 8);
+  auto size = ReadLE(disc, file + 48, 8);
+  Check(ReadLE(disc, file, 2) == 0xC00 && size == 200 &&
+            start < disc.size() / blk && size <= disc.size() - start * blk,
+        "Invalid Start.DD.Z extent");
+  uint64_t hash = 14695981039346656037ULL;
+  for (size_t i = 0; i < size; i++)
+    hash = (hash ^ disc[start * blk + i]) * 1099511628211ULL;
+  Check(hash == 0x0C20EFB983195E6C0ULL, "Start.DD.Z differs from TempleOS");
+}
+
+static void VerifyHome(const Bytes &disc, uint64_t root)
+{
+  constexpr size_t blk = 512;
+  auto record = FindRedSeaEntry(disc, root, "Home");
+  auto clus = ReadLE(disc, record + 40, 8);
+  auto pos = clus * blk;
+  auto end = RedSeaDirectory(disc, clus);
+  Check(ReadLE(disc, record, 2) == 0x810 &&
+            ReadLE(disc, record + 48, 8) == blk && end - pos == blk &&
+            RedSeaName(disc, pos) == "Home" &&
+            ReadLE(disc, pos + 40, 8) == clus &&
+            RedSeaName(disc, pos + 64) == ".." &&
+            ReadLE(disc, pos + 64 + 40, 8) == root &&
+            RedSeaName(disc, pos + 128).empty(),
+        "Invalid empty RedSea Home directory");
 }
 
 static CBootMedia VerifyMedia(const fs::path &iso, const fs::path &kernel_path)
@@ -132,6 +154,7 @@ static CBootMedia VerifyMedia(const fs::path &iso, const fs::path &kernel_path)
   Check(root == drive + bitmap_blocks + 1 && root < disc.size() / blk,
         "Invalid RedSea root");
   VerifyStartDoc(disc, root);
+  VerifyHome(disc, root);
 
   // TempleOS packs CISOPriDesc and writes the cluster at the record start.
   for (size_t base : {16 * dvd, 18 * dvd}) {
@@ -880,6 +903,37 @@ static void VerifyCoverage(BlockRanges blocks, const BlockRanges &ranges)
   Check(block == blocks.end(), "Block pool has pages outside its ranges");
 }
 
+static void ReadCachedFreePages(CMonitor &vm, uint64_t pool,
+                                BlockRanges &ranges)
+{
+  constexpr uint64_t page = 512, slots = 256;
+  constexpr uint64_t hash = 0x28, hash2 = hash + slots * 8;
+  std::set<uint64_t> seen;
+  auto read = [&](uint64_t head, size_t slot, bool large) {
+    for (auto addr = head; addr;) {
+      Check(!(addr & (page - 1)) && seen.insert(addr).second,
+            "Invalid cached free page link");
+      auto block = ReadPhysical<3>(vm, addr);
+      uint64_t pages = block[2] >> 32;
+      Check(static_cast<uint32_t>(block[2]) == 0x6E55424D && pages &&
+                (large ? pages >= slots &&
+                             size_t(std::bit_width(pages - 2) - 1) == slot
+                       : pages == slot),
+            "Invalid cached free page block");
+      ranges.emplace_back(addr, addr + pages * page);
+      addr = block[0];
+    }
+  };
+  for (size_t i = 0; i < slots; i += 64) {
+    auto bucket = ReadPhysical<64>(vm, pool + hash + 8 * i);
+    for (size_t j = 0; j < bucket.size(); j++)
+      read(bucket[j], i + j, false);
+  }
+  auto large = ReadPhysical<55>(vm, pool + hash2);
+  for (size_t i = 0; i < large.size(); i++)
+    read(large[i], i, true);
+}
+
 static uint64_t VerifyGraphicsContexts(CMonitor &vm, uint64_t graphics,
                                        uint64_t owner)
 {
@@ -1068,6 +1122,7 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
         "Invalid code pool free list");
   code.ranges.emplace_back(heap, heap + (low_free[2] >> 32) * page);
   code.ranges.emplace_back(code_base, code_base + (high_free[2] >> 32) * page);
+  ReadCachedFreePages(vm, code_pool, code.ranges);
   VerifyCoverage(std::move(code.ranges), {{heap, ram_end}, {code_base, limit}});
 
   if (pool) {
@@ -1089,6 +1144,7 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
               std::array<uint64_t, 4>{
                   0, data_bytes, data.alloced + data_alloced, prev},
           "Invalid data block pool");
+    ReadCachedFreePages(vm, pool, data.ranges);
     VerifyCoverage(std::move(data.ranges), data_ranges);
   }
 
@@ -1292,6 +1348,15 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
         case '.':
           key("dot");
           break;
+        case ',':
+          key("comma");
+          break;
+        case '?':
+          key("shift-slash");
+          break;
+        case '*':
+          key("shift-8");
+          break;
         default: {
           const char name[]{ch, 0};
           key(name);
@@ -1316,7 +1381,11 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
     wait_text("UnholyOS", right_pane, 1, 2, 16);
     wait_text(start_body, right_pane, 1, 4, 5);
     wait_text("Help & Index, Quick Start: Cmd line", right_pane, 1, 6, 1);
-    wait_text(">", right_pane);
+    wait_text("Directory of T:/Home", right_pane, 1, 8, 1);
+    wait_text("DATE_ TIME_ SIZE", right_pane, 1, 9, 1);
+    wait_text("0200 .", right_pane, 1, 10);
+    wait_text("0000 ..", right_pane, 1, 11);
+    wait_text("T:/Home>", right_pane, 1, 12, 1);
   }
   keys({"3", "5", "shift-equal", "8", "backspace", "7", "semicolon", "ret"});
   wait_text("ans=0x0000002A=42");
@@ -1367,6 +1436,14 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   type_cmd("Type(\"::/Doc/Start.DD\");");
   wait_text(start_body, false, 2);
   wait_text("ans=0x00000001=1");
+  type_cmd("Dir;");
+  wait_text("Directory of T:/Home", false, 2);
+  wait_text("ans=0x00000002=2");
+  type_cmd("Dir(\"::/Doc/St?rt.DD*\",1);");
+  wait_text("Directory of T:/Doc");
+  wait_text("__DATE__ __TIME__ SIZE");
+  wait_text("00C8");
+  wait_text("Start.DD.Z");
 }
 
 static fs::path CaptureGuestFile(CMonitor &vm, const fs::path &dir,
@@ -2079,6 +2156,8 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
                        '1');
     CheckProgramOutput(boot, "/DocFrame.HC", doc_frame_output, '1');
     CheckProgramOutput(boot, "/DocButton.HC", doc_button_output, '1');
+    CheckProgramOutput(boot, "/DirectoryProbe.HC", "Directory probe 1FF\n",
+                       '1');
     CheckProgramOutput(boot, "/DocCallback.HC", doc_callback_output, '1');
     CheckTry(boot);
     if (boot.find("UnholyOS: document callback propagation 0x0000000000000001") ==
@@ -2145,6 +2224,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          '1');
       CheckProgramOutput(output, "/DocFrame.HC", doc_frame_output, '1');
       CheckProgramOutput(output, "/DocButton.HC", doc_button_output, '1');
+      CheckProgramOutput(output, "/DirectoryProbe.HC", "Directory probe 1FF\n",
+                         '1');
       CheckProgramOutput(output, "/DocCallback.HC", doc_callback_output, '1');
       CheckTry(output);
       if (output.find("UnholyOS: document callback propagation 0x0000000000000001") ==

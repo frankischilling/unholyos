@@ -349,8 +349,8 @@ reaches its prompt before raising the first and calling `WinTileVert`.
 used by the document. `Adam/Win.cpp` follows `WinToTop`, `WinFocus`,
 `WinRefocus`, and the reference tiling functions. The window manager
 restores focus on a refresh after the focused task exits. The terminals
-use generic frames below the boot banner. The startup `Dir` listing,
-`XTalk` input, and autocomplete remain pending.
+use generic frames below the boot banner. `UserStartUp` calls `Dir`
+after showing each terminal. `XTalk` input and autocomplete remain pending.
 
 `Adam/DolDoc/DocFile.cpp` follows `DocRead`, `DocInsDoc`, `DocType`
 and `Type`. It reads through the task's file path and inserts copies
@@ -359,6 +359,25 @@ entry-owned strings and attachments. In raw mode `DocPutS.cpp` scans
 the source document into lines for output. Relative resource lookup
 through `DirContextNew`, graphics-file dispatch through `DocGR`,
 word wrapping, and file-link navigation remain pending.
+
+## Directory listing
+
+`Kernel/BlkDev/DskFind.cpp` follows `FilesFind` and `FileFind` in
+`DskFind.HC`. `FileSysRedSea.cpp` reads a bounded directory extent,
+exposes the first record as `.`, resolves the `..` cluster, and skips
+deleted records. `DskStrA.cpp` applies the case-sensitive wildcard,
+exclusion, and file-class masks used by the reference. `DskDirA.cpp`
+sorts the returned `CDirEntry` records by the reference keys and emits
+the `PutDirLink` macro. Flattened file-only lists clear parent pointers
+when the corresponding parent records are freed.
+
+`Kernel/BlkDev/DskDirB.cpp` follows `Dir`, `Cd`, and `IsDir` in
+`DskDirB.HC`. `KDate.cpp` supplies the `Date2Struct` conversion used
+by the short listing. Searches resolve RedSea DVD and RAM paths through
+the existing absolute path helpers and preserve the working directory.
+`Cd` visits each path component and retains the valid prefix when a
+component fails. FAT32, public directory contexts, `PopUpCd`, and
+the full drive error reporting remain pending.
 
 ## HolyC function pointers
 

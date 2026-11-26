@@ -315,8 +315,9 @@ static CRedSeaDirEntry *RedSeaChild(const CDrv &dv, CRedSeaDir dir,
   return nullptr;
 }
 
-uint64_t RedSeaFileWrite(CDrv &dv, const char *path, const uint8_t *data,
-                         size_t size, uint64_t date, uint16_t attr)
+static uint64_t RedSeaWrite(CDrv &dv, const char *path, const uint8_t *data,
+                            size_t size, uint64_t date, uint16_t attr,
+                            bool directory)
 {
   if (*path++ != '/' || dv.bd->type != BDT_RAM ||
       (dv.bd->flags & BDF_READ_ONLY) || dv.fs_type != FSt_REDSEA ||
@@ -339,7 +340,7 @@ uint64_t RedSeaFileWrite(CDrv &dv, const char *path, const uint8_t *data,
       return 0;
     entry.attr = attr | RS_ATTR_CONTIGUOUS;
     entry.datetime = date;
-    if (!*path) {
+    if (!*path && !directory) {
       entry.size = size;
       return RedSeaDirNew(dv, dir, entry, data, false);
     }
@@ -355,6 +356,97 @@ uint64_t RedSeaFileWrite(CDrv &dv, const char *path, const uint8_t *data,
     if (!child || !(child->attr & RS_ATTR_DIR))
       return 0;
     dir = {child->clus, child};
+    if (!*path)
+      return dir.cluster;
     path++;
   }
+}
+
+uint64_t RedSeaFileWrite(CDrv &dv, const char *path, const uint8_t *data,
+                         size_t size, uint64_t date, uint16_t attr)
+{
+  return RedSeaWrite(dv, path, data, size, date, attr, false);
+}
+
+static CRedSeaDirEntry *RedSeaReadDir(CDrv &dv, uint64_t clus)
+{
+  CMemLock lock(dv.locked_flags);
+  CRedSeaDirEntry block[BLK_SIZE / sizeof(CRedSeaDirEntry)];
+  if (!RedSeaExtent(dv, clus, BLK_SIZE) ||
+      !BlkDevReadBytes(*dv.bd, reinterpret_cast<uint8_t *>(block),
+                       clus * BLK_SIZE, BLK_SIZE))
+    return nullptr;
+  auto size = block[0].size;
+  if (size < BLK_SIZE || size % BLK_SIZE || !RedSeaExtent(dv, clus, size))
+    return nullptr;
+  auto *data = MAlloc(size, CurrentTask()->data_heap);
+  if (!data)
+    return nullptr;
+  MemCpy(data, block, BLK_SIZE);
+  if (size > BLK_SIZE &&
+      !BlkDevReadBytes(*dv.bd, data + BLK_SIZE, (clus + 1) * BLK_SIZE,
+                       size - BLK_SIZE)) {
+    Free(data);
+    return nullptr;
+  }
+  return reinterpret_cast<CRedSeaDirEntry *>(data);
+}
+
+bool RedSeaFilesFind(CDrv &dv, uint64_t clus, uint64_t parent_clus,
+                     const char *directory, const char *mask, uint64_t flags,
+                     CDirEntry *parent, CDirEntry *&res)
+{
+  auto *disk = RedSeaReadDir(dv, clus);
+  if (!disk)
+    return false;
+  disk[0].name[0] = '.';
+  disk[0].name[1] = 0;
+  disk[1].clus = parent_clus;
+  size_t count = disk[0].size / sizeof(*disk);
+  bool valid = true;
+  for (size_t i = 0; valid && i < count && disk[i].name[0]; i++) {
+    const auto &de = disk[i];
+    if ((de.attr & RS_ATTR_DELETED) || !RedSeaNameValid(de.name))
+      continue;
+    bool dir = de.attr & RS_ATTR_DIR;
+    bool recurse = dir && (flags & FUF_RECURSE);
+    if ((recurse && de.name[0] == '.') || (!dir && (flags & FUF_JUST_DIRS)))
+      continue;
+    auto *name = DirEntryFullName(directory, de.name);
+    if (!name) {
+      valid = false;
+      break;
+    }
+    if (!recurse && !FilesFindMatch(name, mask, flags)) {
+      Free(name);
+      continue;
+    }
+    auto *entry = reinterpret_cast<CDirEntry *>(
+        CAlloc(sizeof(CDirEntry), CurrentTask()->data_heap));
+    if (!entry) {
+      Free(name);
+      valid = false;
+      break;
+    }
+    MemCpy(&entry->attr, &de, sizeof(de));
+    entry->full_name = name;
+    entry->parent = parent;
+    entry->next = res;
+    res = entry;
+    if (recurse) {
+      valid = de.clus != clus && de.clus != uint64_t(dv.root_clus);
+      for (auto *p = parent; valid && p; p = p->parent)
+        valid = uint64_t(p->clus) != de.clus;
+      if (valid)
+        valid = RedSeaFilesFind(dv, de.clus, clus, name, mask, flags, entry,
+                                entry->sub);
+    }
+  }
+  Free(disk);
+  return valid;
+}
+
+bool RedSeaMkDir(CDrv &dv, const char *path)
+{
+  return RedSeaWrite(dv, path, nullptr, 0, Now(), 0, true);
 }

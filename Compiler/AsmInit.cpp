@@ -517,6 +517,56 @@ static bool CmpDateData(CHashTable *table)
   return true;
 }
 
+static bool CmpDirData(CHashTable *table)
+{
+  auto *entry = CmpKernelClass(table, "CDirEntry", sizeof(CDirEntry));
+  if (!entry)
+    return false;
+  auto *heap = CurrentTask()->data_heap;
+  auto *i64 = FindType("I64", table);
+  auto *u8 = FindType("U8", table);
+  const struct
+  {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+  } members[]{
+      {"next", entry + 1, offsetof(CDirEntry, next)},
+      {"parent", entry + 1, offsetof(CDirEntry, parent)},
+      {"sub", entry + 1, offsetof(CDirEntry, sub)},
+      {"full_name", u8 + 1, offsetof(CDirEntry, full_name)},
+      {"user_data", i64, offsetof(CDirEntry, user_data)},
+      {"user_data2", i64, offsetof(CDirEntry, user_data2)},
+      {"start", FindType("U0", table), offsetof(CDirEntry, attr)},
+      {"attr", FindType("U16", table), offsetof(CDirEntry, attr)},
+      {"name", u8, offsetof(CDirEntry, name)},
+      {"clus", i64, offsetof(CDirEntry, clus)},
+      {"size", i64, offsetof(CDirEntry, size)},
+      {"datetime", FindType("CDate", table), offsetof(CDirEntry, datetime)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    auto *m = name ? MemberAdd(*entry, name, *member.type, member.offset)
+                   : nullptr;
+    if (!m) {
+      Free(name);
+      return false;
+    }
+    if (member.offset == offsetof(CDirEntry, name)) {
+      auto *axis =
+          reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return false;
+      axis->cnt = CDIR_FILENAME_LEN;
+      axis->total_cnt = 1;
+      m->dim.next = axis;
+      m->dim.total_cnt = CDIR_FILENAME_LEN;
+      m->size = CDIR_FILENAME_LEN;
+    }
+  }
+  return true;
+}
+
 static CHashClass *CmpExceptData(CHashTable *table)
 {
   auto *cls = CmpKernelClass(table, "CExcept", sizeof(CExcept));
@@ -974,6 +1024,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     DocEntryPtr,
     DocEntryPtrPtr,
     Date,
+    DirEntryPtr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -989,6 +1040,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CDoc", table) + 1, FindType("CDocEntry", table) + 1,
       FindType("CDocEntry", table) + 2,
       FindType("CDate", table),
+      FindType("CDirEntry", table) + 1,
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -1012,6 +1064,20 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"StrPrint", U8Ptr, FF_DOT_DOT_DOT, {{"dst", U8Ptr}, {"fmt", U8Ptr}}},
       {"MAlloc", U8Ptr, FF_RET1, {{"size", I64}, {"mem_task", TaskPtr, true}}, "_MALLOC"},
       {"Now", Date, FF_RET1, {}},
+      {"Cd", Bool, FF_RET1, {{"dirname", U8Ptr, true}, {"make_dirs", Bool, true}}},
+      {"IsDir", Bool, FF_RET1, {{"dir_name", U8Ptr}}},
+      {"Dir", I64, FF_RET1, {{"files_find_mask", U8Ptr, true, 0, "*"}, {"full", Bool, true}}},
+      {"DirCur", U8Ptr, FF_RET1, {{"task", TaskPtr, true}, {"mem_task", TaskPtr, true}}},
+      {"PutDirLink", U0, FF_RET1, {{"dirname", U8Ptr}, {"full_name", U8Ptr, true}}},
+      {"FilesFind", DirEntryPtr, FF_RET1, {{"files_find_mask", U8Ptr}, {"fuf_flags", I64, true}}},
+      {"FileFind", Bool, FF_RET1,
+       {{"filename", U8Ptr}, {"_de", DirEntryPtr, true}, {"fuf_flags", I64, true}}},
+      {"FilesFindMatch", Bool, FF_RET1,
+       {{"_test_name", U8Ptr}, {"files_find_mask", U8Ptr}, {"fuf_flags", I64, true}}},
+      {"DirEntryDel", U0, FF_RET1, {{"tmpde", DirEntryPtr}}},
+      {"DirEntryDel2", U0, FF_RET1, {{"tmpde", DirEntryPtr}}},
+      {"DirTreeDel", U0, FF_RET1, {{"tmpde", DirEntryPtr}}},
+      {"DirTreeDel2", U0, FF_RET1, {{"tmpde", DirEntryPtr}}},
       {"SysTry", U0, FF_RET1, {{"catch_start", U8Ptr}, {"untry_start", U8Ptr}}},
       {"SysUntry", U0, FF_RET1, {}},
       {"throw", U0, FF_RET1, {{"ch", I64, true}, {"no_log", Bool, true}}},
@@ -1436,6 +1502,17 @@ static bool CmpFillHash(CHashTable *table)
       {"DOCF_BORDER_DOC", "0x100"},
       {"DOCF_HIDE_CURSOR", "0x800"},
       {"CDATE_FREQ", "49710"},
+      {"CDIR_FILENAME_LEN", "38"}, {"CDIR_SIZE", "64"},
+      {"RS_ATTR_DIR", "0x10"}, {"RS_ATTR_DELETED", "0x100"},
+      {"RS_ATTR_RESIDENT", "0x200"}, {"RS_ATTR_COMPRESSED", "0x400"},
+      {"RS_ATTR_CONTIGUOUS", "0x800"},
+      {"FUF_RECURSE", "1"}, {"FUF_SINGLE", "0x200"},
+      {"FUF_JUST_DIRS", "0x400"}, {"FUF_JUST_FILES", "0x800"},
+      {"FUF_JUST_TXT", "0x1000"}, {"FUF_JUST_DD", "0x2000"},
+      {"FUF_JUST_SRC", "0x4000"}, {"FUF_JUST_AOT", "0x8000"},
+      {"FUF_JUST_JIT", "0x10000"}, {"FUF_JUST_GR", "0x20000"},
+      {"FUF_Z_OR_NOT_Z", "0x40000"}, {"FUF_CLUS_ORDER", "0x80000"},
+      {"FUF_SCAN_PARENTS", "0x100000"}, {"FUF_FLATTEN_TREE", "0x200000"},
       {"DOCF_DONT_HIGHLIGHT_CURSOR", "0x1000"},
       {"DOCF_DONT_SHOW", "0x8000"},
       {"RECALCt_FIND_CURSOR", "1"},
@@ -1512,7 +1589,7 @@ static bool CmpFillHash(CHashTable *table)
     HashAdd(&entry->sym.hash,table);
   }
   auto *task = CmpKernelClass(table, "CTask", sizeof(CTask));
-  return task && CmpRuntimeData(table) && CmpDateData(table) &&
+  return task && CmpRuntimeData(table) && CmpDateData(table) && CmpDirData(table) &&
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&

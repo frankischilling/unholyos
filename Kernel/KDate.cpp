@@ -17,6 +17,38 @@ int64_t YearStartDate(int64_t year)
   return year * 365 + last / 4 - last / 100 + last / 400 - last / 4000;
 }
 
+void Date2Struct(CDateStruct &ds, CDate cdt)
+{
+  constexpr uint16_t mon_start_days1[]{0,   31,  59,  90,  120, 151,
+                                       181, 212, 243, 273, 304, 334};
+  constexpr uint16_t mon_start_days2[]{0,   31,  60,  91,  121, 152,
+                                       182, 213, 244, 274, 305, 335};
+  int64_t date = cdt.date;
+  ds.day_of_week = date >= 0 ? date % 7 : 6 - (6 - date) % 7;
+  ds.year = (date + 1) * 100000 / 36524225;
+  auto start = YearStartDate(ds.year);
+  while (start > date)
+    start = YearStartDate(--ds.year);
+  date -= start;
+  const auto *months = YearStartDate(ds.year + 1) - start == 365
+                           ? mon_start_days1
+                           : mon_start_days2;
+  uint8_t month = 0;
+  while (month < 11 && date >= months[month + 1])
+    month++;
+  ds.mon = month + 1;
+  ds.day_of_mon = date - months[month] + 1;
+  uint64_t ticks = (421875 * uint64_t(cdt.time) >> 21) + 1;
+  ds.sec10000 = ticks % 100;
+  ticks /= 100;
+  ds.sec100 = ticks % 100;
+  ticks /= 100;
+  ds.sec = ticks % 60;
+  ticks /= 60;
+  ds.min = ticks % 60;
+  ds.hour = ticks / 60;
+}
+
 extern "C" uint64_t NowCpp()
 {
   return Now();

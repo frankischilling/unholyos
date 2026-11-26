@@ -1,4 +1,5 @@
 Doc/Start.DD -text
+Linux/Fixtures/DirectoryProbe.HC text eol=lf
 Linux/Fixtures/LexProbe.HC text eol=lf
 Linux/Fixtures/LexDirectives.HC text eol=lf
 Linux/Fixtures/LexInput.HC text eol=lf

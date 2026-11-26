@@ -1,4 +1,5 @@
 #include "../Adam/Opt/Boot/DskISORedSea.hpp"
+#include "../Kernel/Compress.hpp"
 #include "BootMedia.hpp"
 
 #include <algorithm>
@@ -71,7 +72,7 @@ static void WriteEntries(Bytes &disc, size_t entry, size_t parent,
     auto size = file.Size(), offset = file.clus * BLK_SIZE;
     RedSeaDirEntry(disc, entry, file.name, file.clus, size, file.attr);
     if (file.attr & RS_ATTR_DIR) {
-      RedSeaDirEntry(disc, offset, ".", file.clus, size, RS_ATTR_DIR);
+      RedSeaDirEntry(disc, offset, file.name, file.clus, size, RS_ATTR_DIR);
       RedSeaDirEntry(disc, offset + 64, "..", parent, 0, RS_ATTR_DIR);
       WriteEntries(disc, offset + 128, file.clus, file.children);
     } else
@@ -172,8 +173,8 @@ static bool ValidName(std::string_view name)
          name.find_first_of("\\:") == name.npos;
 }
 
-static void AddFile(std::vector<CImageEntry> &root, std::string_view name,
-                    const fs::path &path)
+static void AddEntry(std::vector<CImageEntry> &root, std::string_view name,
+                     const fs::path *path, bool compress = false)
 {
   if (name.starts_with('/'))
     name.remove_prefix(1);
@@ -189,13 +190,31 @@ static void AddFile(std::vector<CImageEntry> &root, std::string_view name,
     if (slash == name.npos) {
       if (found != files->end())
         throw std::runtime_error("Duplicate RedSea name " + std::string(part));
-      auto bytes = FileRead(path);
+      if (!path) {
+        files->push_back({std::string(part), {}, RS_ATTR_DIR, 0, {}});
+        return;
+      }
+      auto bytes = FileRead(*path);
+      if (compress) {
+        if (!part.ends_with(".Z"))
+          throw std::runtime_error("Compressed RedSea name must end in .Z");
+        if (bytes.size() > SIZE_MAX - ARC_WRITE_OVERHEAD)
+          throw std::runtime_error("RedSea file too large to compress");
+        CArcEncodeCtrl ctrl;
+        Bytes packed(bytes.size() + ARC_WRITE_OVERHEAD);
+        auto size = ArcCompressBuf(bytes.data(), bytes.size(), packed.data(),
+                                   packed.size(), ctrl);
+        if (!size)
+          throw std::runtime_error("Could not compress " + path->string());
+        packed.resize(size);
+        bytes = std::move(packed);
+      }
       uint16_t attr = 0;
       if (part.ends_with(".Z")) {
         if (bytes.size() < 17 || ReadLE(bytes, 0, 8) != bytes.size() ||
             bytes[16] < 1 || bytes[16] > 3)
           throw std::runtime_error("Invalid archive header in " +
-                                   path.string());
+                                   path->string());
         attr = RS_ATTR_COMPRESSED;
       }
       files->push_back({std::string(part), std::move(bytes), attr, 0, {}});
@@ -219,7 +238,8 @@ int main(int argc, char **argv)
   if (argc < 4) {
     std::cerr << "Usage: " << argv[0]
               << " loader kernel output.iso [StartOS.HC.Z]"
-                 " [--file path | --file-at guest-path path]...\n";
+                 " [--file path | --file-at guest-path path"
+                 " | --compress-at guest-path path | --dir guest-path]...\n";
     return 2;
   }
   try {
@@ -238,19 +258,25 @@ int main(int argc, char **argv)
 
     std::vector<CImageEntry> files;
     int arg = 4;
-    if (arg < argc && !std::string_view(argv[arg]).starts_with("--"))
-      AddFile(files, "StartOS.HC.Z", argv[arg++]);
+    if (arg < argc && !std::string_view(argv[arg]).starts_with("--")) {
+      const fs::path path = argv[arg++];
+      AddEntry(files, "StartOS.HC.Z", &path);
+    }
     while (arg < argc) {
       std::string_view option = argv[arg++];
       if (option == "--file" && arg < argc) {
         fs::path path = argv[arg++];
-        AddFile(files, path.filename().string(), path);
-      } else if (option == "--file-at" && arg + 1 < argc) {
+        AddEntry(files, path.filename().string(), &path);
+      } else if ((option == "--file-at" || option == "--compress-at") &&
+                 arg + 1 < argc) {
         std::string_view name = argv[arg++];
-        AddFile(files, name, argv[arg++]);
+        const fs::path path = argv[arg++];
+        AddEntry(files, name, &path, option == "--compress-at");
+      } else if (option == "--dir" && arg < argc) {
+        AddEntry(files, argv[arg++], nullptr);
       } else
         throw std::runtime_error(
-            "Expected --file path or --file-at guest-path path");
+            "Expected --file, --file-at, --compress-at, or --dir");
     }
     size_t root;
     CDvdExtent extent;

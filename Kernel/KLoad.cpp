@@ -41,6 +41,8 @@ void LinkedLstDelHC(), LinkedLstSizeHC(), QueDelHC();
 void QueVectU8NewHC(), QueVectU8PutHC(), QueVectU8GetHC(), QueVectU8DelHC();
 void QSortHC(), QSortI64HC(), LstMatchHC();
 void FileReadHC(), FileNameAbsHC(), DirNameAbsHC(), DirCurHC(), DirFileHC();
+void CdHC(), IsDirHC(), DirHC(), PutDirLinkHC(), FilesFindHC(), FileFindHC(),
+    FilesFindMatchHC(), DirEntryDelHC(), DirEntryDel2HC(), DirTreeDelHC(), DirTreeDel2HC();
 void ExtChgHC(), ExtDftHC();
 void RedSeaISOHC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
@@ -564,6 +566,17 @@ bool LoadKernel(CTask &task)
       {"DirFile", reinterpret_cast<uintptr_t>(DirFileHC)},
       {"ExtChg", reinterpret_cast<uintptr_t>(ExtChgHC)},
       {"ExtDft", reinterpret_cast<uintptr_t>(ExtDftHC)},
+      {"Cd", reinterpret_cast<uintptr_t>(CdHC)},
+      {"IsDir", reinterpret_cast<uintptr_t>(IsDirHC)},
+      {"Dir", reinterpret_cast<uintptr_t>(DirHC)},
+      {"PutDirLink", reinterpret_cast<uintptr_t>(PutDirLinkHC)},
+      {"FilesFind", reinterpret_cast<uintptr_t>(FilesFindHC)},
+      {"FileFind", reinterpret_cast<uintptr_t>(FileFindHC)},
+      {"FilesFindMatch", reinterpret_cast<uintptr_t>(FilesFindMatchHC)},
+      {"DirEntryDel", reinterpret_cast<uintptr_t>(DirEntryDelHC)},
+      {"DirEntryDel2", reinterpret_cast<uintptr_t>(DirEntryDel2HC)},
+      {"DirTreeDel", reinterpret_cast<uintptr_t>(DirTreeDelHC)},
+      {"DirTreeDel2", reinterpret_cast<uintptr_t>(DirTreeDel2HC)},
       {"FileWrite", reinterpret_cast<uintptr_t>(FileWriteHC)},
       {"RedSeaISO", reinterpret_cast<uintptr_t>(RedSeaISOHC)},
       {"BlkDevNextFreeSlot", reinterpret_cast<uintptr_t>(BlkDevNextFreeSlotHC)},

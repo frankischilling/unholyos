@@ -33,7 +33,8 @@ static void QSortPartitions(int64_t first, int64_t count,
     QSortPartitions(left, upper, partition);
 }
 
-extern "C" void QSortI64Cpp(int64_t *base, int64_t count, uintptr_t compare)
+template <typename Compare>
+static void QSortI64(int64_t *base, int64_t count, const Compare &compare)
 {
   if (count <= 1)
     return;
@@ -41,13 +42,25 @@ extern "C" void QSortI64Cpp(int64_t *base, int64_t count, uintptr_t compare)
     int64_t pivot = base[first + length / 2];
     return QSortSplit(
         first, length,
-        [&](int64_t index) { return CallHolyC2(compare, base[index], pivot); },
+        [&](int64_t index) { return compare(base[index], pivot); },
         [&](int64_t left, int64_t right) {
           auto value = base[left];
           base[left] = base[right];
           base[right] = value;
         });
   });
+}
+
+extern "C" void QSortI64Cpp(int64_t *base, int64_t count, uintptr_t compare)
+{
+  QSortI64(base, count,
+           [&](int64_t a, int64_t b) { return CallHolyC2(compare, a, b); });
+}
+
+void QSortI64Native(int64_t *base, int64_t count,
+                    int64_t (*compare)(int64_t, int64_t))
+{
+  QSortI64(base, count, compare);
 }
 
 extern "C" void QSortCpp(uint8_t *base, int64_t count, size_t width,

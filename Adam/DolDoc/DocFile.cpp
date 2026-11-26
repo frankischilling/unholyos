@@ -230,35 +230,13 @@ static bool DocInsDoc(CDoc &doc, CDoc &source)
   return true;
 }
 
-static bool DocTextFile(const char *name)
-{
-  if (!name)
-    return false;
-  const char *base = name;
-  for (auto *p = name; *p; p++)
-    if (*p == '/')
-      base = p + 1;
-  constexpr const char *suffixes[]{".HC", ".HH", ".IN", ".PRJ", ".DD", ".TXT"};
-  for (auto *p = base; *p; p++)
-    if (*p == '.')
-      for (const char *suffix : suffixes) {
-        const char *s = p;
-        while (*suffix && *suffix == *s) {
-          suffix++;
-          s++;
-        }
-        if (!*suffix)
-          return true;
-      }
-  return false;
-}
-
 extern "C" uint64_t DocTypeCpp(CDoc *doc, const char *name,
                                int64_t trailing_new_lines)
 {
   if (!doc)
     doc = DocPut();
-  if (!doc || doc->doc_signature != DOC_SIGNATURE_VAL || !DocTextFile(name))
+  if (!doc || doc->doc_signature != DOC_SIGNATURE_VAL ||
+      !FilesFindMatch(name, FILEMASK_TXT))
     return 0;
   auto *source = DocReadCpp(name, 0);
   if (!source)
