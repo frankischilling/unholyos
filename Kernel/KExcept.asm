@@ -1,8 +1,8 @@
 %include "Kernel/KernelA.inc"
 
 GLOBAL SysTryHC,ThrowHC,CallerHC,TestExcept,RaiseHolyC
-GLOBAL CallHolyC0Checked,CallHolyC1Checked,CallHolyC2Checked,CallHolyC3Checked
-EXTERN SysTryCpp,SysUntryCpp,ThrowCpp,CallerCpp,CallHolyC0,CallHolyC1,CallHolyC2,CallHolyC3
+GLOBAL CallHolyC0Checked,CallHolyC1Checked,CallHolyC2Checked,CallHolyC3Checked,CallHolyC4Checked
+EXTERN SysTryCpp,SysUntryCpp,ThrowCpp,CallerCpp,CallHolyC0,CallHolyC1,CallHolyC2,CallHolyC3,CallHolyC4
 
 SECTION .text
 BITS 64
@@ -143,6 +143,10 @@ TakeExcept:
 %elif %3 = 3
 	MOV	R15,RCX
 	MOV	RBX,R8
+%elif %3 = 4
+	MOV	R15,RCX
+	MOV	[RBP-48],R8
+	MOV	RBX,R9
 %endif
 	LEA	RAX,[REL .accepted]
 	PUSH	RAX
@@ -156,8 +160,11 @@ TakeExcept:
 %if %3 >= 2
 	MOV	RDX,R14
 %endif
-%if %3 = 3
+%if %3 >= 3
 	MOV	RCX,R15
+%endif
+%if %3 = 4
+	MOV	R8,[RBP-48]
 %endif
 	CALL	%2
 %if %3 = 0
@@ -191,5 +198,6 @@ CALL_HOLYC_CHECKED CallHolyC0Checked,CallHolyC0,0
 CALL_HOLYC_CHECKED CallHolyC1Checked,CallHolyC1,1
 CALL_HOLYC_CHECKED CallHolyC2Checked,CallHolyC2,2
 CALL_HOLYC_CHECKED CallHolyC3Checked,CallHolyC3,3
+CALL_HOLYC_CHECKED CallHolyC4Checked,CallHolyC4,4
 
 SECTION .note.GNU-stack noalloc noexec nowrite progbits

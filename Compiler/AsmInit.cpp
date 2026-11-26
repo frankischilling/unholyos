@@ -1209,6 +1209,93 @@ static bool CmpMenuData(CHashTable *table, CHashClass *task)
                           &sys_cur_submenu_entry);
 }
 
+static bool CmpCtrlData(CHashTable *table, CHashClass *task)
+{
+  auto *ctrl = CmpKernelClass(table, "CCtrl", sizeof(CCtrl));
+  auto *scroll = CmpKernelClass(table, "CWinScroll", sizeof(CWinScroll));
+  if (!ctrl || !scroll)
+    return false;
+  auto *heap = CurrentTask()->data_heap;
+  auto *i64 = FindType("I64", table);
+  auto *u32 = FindType("U32", table);
+  auto *u8 = FindType("U8", table);
+  auto *u0 = FindType("U0", table);
+  auto *boolean = FindType("Bool", table);
+  auto *dc = FindType("CDC", table);
+  struct
+  {
+    const char *name;
+    CHashClass *record, *type;
+    size_t offset, count = 0;
+  } members[]{
+      {"next", ctrl, ctrl + 1, offsetof(CCtrl, next)},
+      {"last", ctrl, ctrl + 1, offsetof(CCtrl, last)},
+      {"win_task", ctrl, task + 1, offsetof(CCtrl, win_task)},
+      {"type", ctrl, i64, offsetof(CCtrl, type)},
+      {"flags", ctrl, i64, offsetof(CCtrl, flags)},
+      {"left", ctrl, i64, offsetof(CCtrl, left)},
+      {"right", ctrl, i64, offsetof(CCtrl, right)},
+      {"top", ctrl, i64, offsetof(CCtrl, top)},
+      {"bottom", ctrl, i64, offsetof(CCtrl, bottom)},
+      {"scrn_left", ctrl, i64, offsetof(CCtrl, scrn_left)},
+      {"scrn_right", ctrl, i64, offsetof(CCtrl, scrn_right)},
+      {"scrn_top", ctrl, i64, offsetof(CCtrl, scrn_top)},
+      {"scrn_bottom", ctrl, i64, offsetof(CCtrl, scrn_bottom)},
+      {"state", ctrl, u8 + 1, offsetof(CCtrl, state)},
+      {"min", scroll, i64, offsetof(CWinScroll, min)},
+      {"pos", scroll, i64, offsetof(CWinScroll, pos)},
+      {"max", scroll, i64, offsetof(CWinScroll, max)},
+      {"flags", scroll, u32, offsetof(CWinScroll, flags)},
+      {"color", scroll, u8, offsetof(CWinScroll, color)},
+      {"pad", scroll, u8, offsetof(CWinScroll, pad), 3},
+      {"next_ctrl", task, ctrl + 1, offsetof(CTask, next_ctrl)},
+      {"last_ctrl", task, ctrl + 1, offsetof(CTask, last_ctrl)},
+      {"horz_scroll", task, scroll, offsetof(CTask, horz_scroll)},
+      {"vert_scroll", task, scroll, offsetof(CTask, vert_scroll)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    auto *field = name ? MemberAdd(*member.record, name, *member.type, member.offset)
+                       : nullptr;
+    if (!field) {
+      Free(name);
+      return false;
+    }
+    if (member.count) {
+      auto *axis = reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return false;
+      axis->cnt = member.count;
+      axis->total_cnt = 1;
+      field->dim.next = axis;
+      field->dim.total_cnt = member.count;
+      field->size = member.type->size * member.count;
+    }
+  }
+  const char *coords[]{"c", "x", "y", "down"};
+  CHashClass *coord_types[]{ctrl + 1, i64, i64, boolean};
+  const char *draw_args[]{"dc", "c"};
+  CHashClass *draw_types[]{dc + 1, ctrl + 1};
+  const char *wheel_args[]{"c", "delta"};
+  CHashClass *wheel_types[]{ctrl + 1, i64};
+  return CmpKernelCallback(table, *ctrl, "update_derived_vals",
+                           offsetof(CCtrl, update_derived_vals), *u0, 1,
+                           coords, coord_types) &&
+         CmpKernelCallback(table, *ctrl, "draw_it", offsetof(CCtrl, draw_it),
+                           *u0, 2, draw_args, draw_types) &&
+         CmpKernelCallback(table, *ctrl, "inside_ctrl",
+                           offsetof(CCtrl, inside_ctrl), *boolean, 3,
+                           coords, coord_types) &&
+         CmpKernelCallback(table, *ctrl, "left_click",
+                           offsetof(CCtrl, left_click), *u0, 4,
+                           coords, coord_types) &&
+         CmpKernelCallback(table, *ctrl, "right_click",
+                           offsetof(CCtrl, right_click), *u0, 4,
+                           coords, coord_types) &&
+         CmpKernelCallback(table, *ctrl, "wheel_chg", offsetof(CCtrl, wheel_chg),
+                           *u0, 2, wheel_args, wheel_types);
+}
+
 static bool CmpRuntimeHeaders(CHashTable *table)
 {
   enum : uint8_t
@@ -1245,6 +1332,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     D3I64Ptr,
     MenuPtr,
     MenuEntryPtr,
+    CtrlPtr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1267,6 +1355,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CD3I64", table) + 1,
       FindType("CMenu", table) + 1,
       FindType("CMenuEntry", table) + 1,
+      FindType("CCtrl", table) + 1,
   };
   auto *task = CurrentTask();
   static constexpr struct
@@ -1372,6 +1461,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"WinBorder", Bool, FF_RET1, {{"val", Bool, true}, {"task", TaskPtr, true}}},
       {"WinScrollNull", U0, FF_RET1, {{"task", TaskPtr}, {"s", D3I64Ptr}}},
       {"WinScrollRestore", U0, FF_RET1, {{"task", TaskPtr}, {"s", D3I64Ptr}}},
+      {"CtrlFindUnique", CtrlPtr, FF_RET1, {{"task", TaskPtr}, {"type", I64}}},
+      {"CtrlInside", Bool, FF_RET1, {{"c", CtrlPtr}, {"x", I64}, {"y", I64}}},
+      {"WinScrollsInit", U0, FF_RET1, {{"task", TaskPtr}}},
       {"MenuSubEntryFind", MenuEntryPtr, FF_RET1, {{"haystack_first", MenuEntryPtr}, {"needle_entry_name", U8Ptr}}},
       {"MenuEntryFind", MenuEntryPtr, FF_RET1, {{"haystack_menu", MenuPtr}, {"needle_full_name", U8Ptr}}},
       {"MenuNew", MenuPtr, FF_RET1, {{"st", U8Ptr}, {"flags", I64, true}, {"task", TaskPtr, true}}},
@@ -1862,6 +1954,16 @@ static bool CmpFillHash(CHashTable *table)
       {"WIF_SELF_MS_L", "0x8"},
       {"WIF_SELF_MS_R", "0x20"},
       {"WIF_SELF_MS_WHEEL", "0x80"},
+      {"CTRLT_GENERIC", "0"},
+      {"CTRLT_WIN_HSCROLL", "1"},
+      {"CTRLT_WIN_VSCROLL", "2"},
+      {"CTRLT_VIEWING_ANGLES", "3"},
+      {"CTRLF_SHOW", "1"},
+      {"CTRLF_BORDER", "2"},
+      {"CTRLF_CAPTURE_LEFT_MS", "4"},
+      {"CTRLF_CAPTURE_RIGHT_MS", "8"},
+      {"CTRLF_CLICKED", "16"},
+      {"WSSf_SET_TO_POS", "0"},
       {"WIF_SELF_BORDER", "0x100"},
       {"WIF_SELF_GRAB_SCROLL", "0x200"},
       {"WIF_SELF_DOC", "0x400"},
@@ -1974,7 +2076,8 @@ static bool CmpFillHash(CHashTable *table)
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
-         CmpTaskSettingsData(table) && CmpMenuData(table, task) && CmpRuntimeHeaders(table);
+         CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
+         CmpCtrlData(table, task) && CmpRuntimeHeaders(table);
 }
 
 CHashTable *CmpAsmHashNew()

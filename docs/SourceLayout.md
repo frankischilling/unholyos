@@ -354,9 +354,22 @@ right, bottom, and right edges. The held drag keeps its task through
 successive refreshes, using `WinHorz` and `WinVert` for bounds and
 raising the task with `WinToTop` at the start. `WIF_SELF_BORDER`
 and `WIF_FOCUS_TASK_BORDER` gate the gestures and title actions.
-TempleOS checks a scrollbar thumb before the border hit zones.
-The `CCtrl` scrollbar capture path from `Adam/Ctrls/CtrlsA.HC`
-and `Adam/WinMgr.HC` remains pending.
+The control dispatch in `Adam/WinMgr.cpp` checks control rectangles or
+their HolyC hit-test callbacks before the border hit zones. It keeps a
+captured control until release and applies wheel changes to the
+focused window under the pointer. During a capture the local
+thumb rectangle moves while the screen hit bounds stay cached
+until the control is released.
+
+`Adam/Ctrls/CtrlsA.cpp` follows the reference `CCtrl` queue, its
+coordinate updates, and the horizontal and vertical scrollbar
+callbacks. The HolyC compiler sees both `CCtrl` and `CWinScroll`
+with their reference layouts and callback signatures. DolDoc
+reads pending positions and publishes the document range in its
+screen recalc pass. UnholyOS currently recalculates the full document
+each frame. It follows the visible entry start during a scrollbar
+screen pass, as in `Adam/DolDoc/DocRecalc.HC`. The view-angle control
+from `CtrlsA.HC` remains pending.
 
 `Adam/DolDoc/DocTerm.cpp` puts `MENU` and `[X]` in the border
 document at the reference positions. The rest of the standard

@@ -1463,12 +1463,45 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
         key(key_name.c_str());
       } else {
         switch (ch) {
-        case '(': key("shift-9"); break;
-        case ')': key("shift-0"); break;
-        case '-': key("minus"); break;
-        case '>': key("shift-dot"); break;
-        case '_': key("shift-minus"); break;
-        case ';': key("semicolon"); break;
+        case '(':
+          key("shift-9");
+          break;
+        case ')':
+          key("shift-0");
+          break;
+        case '-':
+          key("minus");
+          break;
+        case '<':
+          key("shift-comma");
+          break;
+        case '>':
+          key("shift-dot");
+          break;
+        case '+':
+          key("shift-equal");
+          break;
+        case '{':
+          key("shift-bracket_left");
+          break;
+        case '}':
+          key("shift-bracket_right");
+          break;
+        case '%':
+          key("shift-5");
+          break;
+        case '\\':
+          key("backslash");
+          break;
+        case ' ':
+          key("spc");
+          break;
+        case '_':
+          key("shift-minus");
+          break;
+        case ';':
+          key("semicolon");
+          break;
         case '=':
           key("equal");
           break;
@@ -1837,11 +1870,89 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
     if (!shape_pixels(tree)) {
       std::cout << "CommonAncestor.HC panned, reset the tree, and returned to "
                    "the prompt\n";
-      return;
+      break;
     }
     std::this_thread::sleep_for(26ms);
   }
-  throw std::runtime_error("CommonAncestor.HC left the tree on VGA");
+  Check(!shape_pixels(tree), "CommonAncestor.HC left the tree on VGA");
+
+  vm.ResetDeadline(30s);
+  type_cmd("WinHorz(4,27);WinVert(5,18);");
+  constexpr std::array<uint64_t, 4> scroll_window{4, 27, 5, 18};
+  set_pointer(160, 104);
+  type_cmd(R"HC(U0 Sl(){I64 i;for(i=0;i<60;i++)"%02d ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\n",i;PressAKey;})HC");
+  type_cmd("DocClear(,1);Sl;");
+  try {
+    wait_text("PRESS A KEY", false, 1, 60, std::string_view::npos, 300);
+  } catch (const std::exception &error) {
+    auto cells = FileRead(path);
+    std::string visible;
+    for (size_t row = 4; row < 20; ++row) {
+      for (size_t col = 4; col <= 27; ++col) {
+        auto ch = cells[(row * 80 + col) * 4];
+        visible += ch >= 32 && ch < 127 ? char(ch) : ' ';
+      }
+      visible += '\n';
+    }
+    throw std::runtime_error(std::string(error.what()) + "\n" + visible);
+  }
+
+  constexpr uint64_t next_ctrl = 0x398, put_doc = 0x30;
+  constexpr uint64_t ctrl_box = 0x48, ctrl_flags = 0x20;
+  constexpr uint64_t line_start = 0x80, top_line = 0x84;
+  auto horz = ReadPhysical<1>(vm, left + next_ctrl)[0];
+  auto vert = ReadPhysical<1>(vm, horz)[0];
+  const auto doc = ReadPhysical<1>(vm, left + put_doc)[0];
+  auto wait_view = [&](uint64_t offset, uint64_t expected, const char *error) {
+    for (unsigned i = 0; i < 80; ++i) {
+      if (ReadPhysical<1>(vm, doc + offset, 'w')[0] == expected)
+        return;
+      std::this_thread::sleep_for(20ms);
+    }
+    throw std::runtime_error(error);
+  };
+  wait_view(top_line, 48, "The scrollbar document did not start at its end");
+  MouseButton(vm, "wheel-up", true);
+  MouseButton(vm, "wheel-up", false);
+  wait_view(top_line, 47, "A wheel notch did not scroll one line");
+
+  int64_t mouse_x = 160, mouse_y = 104;
+  auto grab_thumb = [&](uint64_t ctrl) {
+    auto box = ReadPhysical<4>(vm, ctrl + ctrl_box);
+    int64_t x = box[0] + 3, y = box[2] + 3;
+    while (mouse_x != x || mouse_y != y) {
+      auto dx = std::clamp(x - mouse_x, int64_t(-80), int64_t(80));
+      auto dy = std::clamp(y - mouse_y, int64_t(-80), int64_t(80));
+      MouseMove(vm, dx * 2, dy * 2);
+      std::this_thread::sleep_for(125ms);
+      mouse_x += dx;
+      mouse_y += dy;
+    }
+    MouseButton(vm, "left", true);
+    wait_mem(ctrl + ctrl_flags, 23,
+             "The scrollbar thumb did not capture the mouse");
+  };
+  grab_thumb(vert);
+  MouseMove(vm, 0, -100);
+  mouse_y -= 50;
+  wait_view(top_line, 27, "The vertical thumb did not scroll the document");
+  MouseButton(vm, "left", false);
+  wait_mem(vert + ctrl_flags, 7, "The vertical thumb did not release");
+  Check(ReadPhysical<4>(vm, left + win_left) == scroll_window,
+        "The vertical thumb resized the window");
+
+  grab_thumb(horz);
+  MouseMove(vm, 96, 0);
+  wait_mem(horz + 40, 64, "The horizontal thumb did not move");
+  wait_text("CDEFGH", false, 1, 5, 4, 120);
+  MouseButton(vm, "left", false);
+  wait_mem(horz + ctrl_flags, 7, "The horizontal thumb did not release");
+  wait_text("27 ABC", false, 1, 5, 4, 120);
+  wait_view(line_start, 0, "The cursor did not restore the viewport");
+  Check(ReadPhysical<4>(vm, left + win_left) == scroll_window,
+        "The horizontal thumb resized the window");
+  key("q");
+  std::cout << "Scrollbar thumbs and wheel scrolled the terminal document\n";
 }
 
 static fs::path CaptureGuestFile(CMonitor &vm, const fs::path &dir,
@@ -2511,6 +2622,13 @@ constexpr std::string_view win_scroll_output =
     "scroll cleared 0 0 0\n"
     "scroll restored 48 -24 3\n";
 
+constexpr std::string_view scroll_controls_output =
+    "ctrl layout 160 32 136 24\n"
+    "ctrl box 1 1 0\n"
+    "ctrl shape 0 1\n"
+    "ctrl callback 8\n"
+    "ctrl hidden 0\n";
+
 constexpr std::string_view menu_output =
     "menu layout 40 80 32 72\n"
     "menu stack 1 1 1\n"
@@ -2622,6 +2740,8 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/TaskSettingsProbe.HC", task_settings_output,
                        '1');
     CheckProgramOutput(boot, "/WinScrollProbe.HC", win_scroll_output, '1');
+    CheckProgramOutput(boot, "/ScrollControlsProbe.HC", scroll_controls_output,
+                       '1');
     CheckProgramOutput(boot, "/MenuProbe.HC", menu_output, '1');
     CheckProgramOutput(boot, "/CursorProbe.HC", cursor_output, '1');
     CheckProgramOutput(boot, "/CursorExcept.HC", "cursor exception 1\n", '1');
@@ -2701,6 +2821,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/TaskSettingsProbe.HC", task_settings_output,
                          '1');
       CheckProgramOutput(output, "/WinScrollProbe.HC", win_scroll_output, '1');
+      CheckProgramOutput(output, "/ScrollControlsProbe.HC", scroll_controls_output,
+                         '1');
       CheckProgramOutput(output, "/MenuProbe.HC", menu_output, '1');
       CheckProgramOutput(output, "/CursorProbe.HC", cursor_output, '1');
       CheckProgramOutput(output, "/CursorExcept.HC", "cursor exception 1\n",

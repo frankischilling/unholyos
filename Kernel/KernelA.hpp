@@ -1153,12 +1153,41 @@ struct CJobCtrl
   int64_t flags;
 };
 
+enum : int64_t
+{
+  CTRLT_GENERIC, CTRLT_WIN_HSCROLL, CTRLT_WIN_VSCROLL, CTRLT_VIEWING_ANGLES,
+};
+constexpr int64_t CTRLF_SHOW = 1, CTRLF_BORDER = 2,
+                  CTRLF_CAPTURE_LEFT_MS = 4, CTRLF_CAPTURE_RIGHT_MS = 8,
+                  CTRLF_CLICKED = 16;
+constexpr uint32_t WSSF_SET_TO_POS = 1;
+
 struct CWinScroll
 {
   int64_t min, pos, max;
   uint32_t flags;
   uint8_t color, pad[3];
 };
+
+struct CCtrl
+{
+  CCtrl *next, *last;
+  CTask *win_task;
+  int64_t type, flags;
+  int64_t left, right, top, bottom;
+  int64_t scrn_left, scrn_right, scrn_top, scrn_bottom;
+  void *state;
+  uintptr_t update_derived_vals, draw_it, inside_ctrl;
+  uintptr_t left_click, right_click, wheel_chg;
+};
+
+static_assert(sizeof(CWinScroll) == 32 && offsetof(CWinScroll, flags) == 24 &&
+              offsetof(CWinScroll, color) == 28);
+static_assert(sizeof(CCtrl) == 160 && offsetof(CCtrl, win_task) == 16 &&
+              offsetof(CCtrl, left) == 40 && offsetof(CCtrl, scrn_left) == 72 &&
+              offsetof(CCtrl, state) == 104 &&
+              offsetof(CCtrl, update_derived_vals) == 112 &&
+              offsetof(CCtrl, wheel_chg) == 152);
 
 constexpr int64_t JOBF_WAKE_MASTER = 1 << 0, JOBF_FOCUS_MASTER = 1 << 1,
                   JOBF_EXIT_ON_COMPLETE = 1 << 2, JOBF_DONT_FILTER = 1 << 3,

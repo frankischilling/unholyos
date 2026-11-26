@@ -555,6 +555,20 @@ is marked for termination. The `MENU` area posts the reference Ctrl+M
 key message. The Personal Menu dialog still needs its DolDoc command
 handler.
 
+## Terminal scrollbars
+
+Drag the thumb on the right to scroll through lines and the thumb
+along the bottom to scroll across columns. The wheel moves the
+document in the focused window under the pointer. A thumb takes
+the mouse gesture before the window border can resize.
+
+The boot test uses a document of 60 wide lines, checks a wheel notch
+and both thumb drags, and verifies that the window bounds stay
+fixed. TempleOS can draw a horizontal offset during the drag and
+return to the start of a plain text entry after release. The test
+checks both frames. `ScrollControlsProbe.HC` checks the control
+layouts, inclusive hit bounds, visibility flags, and HolyC callbacks.
+
 ## Pulldown menus
 
 Run `ExeFile("::/Demo/PullDownMenu.HC");` to open Terry A. Davis's

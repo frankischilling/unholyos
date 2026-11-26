@@ -1,6 +1,7 @@
 #include "DolDoc/DolDoc.hpp"
 #include "Gr/GrGlbls.hpp"
 #include "Menu.hpp"
+#include "Ctrls/CtrlsA.hpp"
 
 static int64_t *WinMgrUpdates()
 {
@@ -114,16 +115,30 @@ void WinMenuPointer(int64_t &x, int64_t &y)
   }
 }
 
+static CCtrl *WinCtrlAt(CTask *task, int64_t x, int64_t y)
+{
+  auto *head = CtrlHead(task);
+  for (auto *c = task->next_ctrl; c != head; c = c->next)
+    if (CtrlInsideCpp(c, x, y))
+      return c;
+  return nullptr;
+}
+
 int64_t WinQueIPMsgs(bool que)
 {
   static CD3I64 single_ms;
   auto *task = sys_focus_task;
   if (winmgr.grab_scroll || win_menu.menu || !TaskValidateCpp(task))
     return MSG_NULL;
-  bool moved = old_ms.presnap.x != ms.presnap.x || old_ms.presnap.y != ms.presnap.y;
+  bool moved =
+      old_ms.presnap.x != ms.presnap.x || old_ms.presnap.y != ms.presnap.y;
   if (!moved && ms.lb == ms_last.lb && ms.rb == ms_last.rb &&
       !ms.left_dbl_time && !ms.right_dbl_time)
     return MSG_NULL;
+
+  if (que && !(task->win_inhibit & WIF_FOCUS_TASK_CTRLS) &&
+      WinCtrlAt(task, ms.pos.x, ms.pos.y))
+    que = false;
 
   auto x = ms.pos.x - task->pix_left - task->scroll_x;
   auto y = ms.pos.y - task->pix_top - task->scroll_y;
@@ -176,6 +191,19 @@ static struct
   CWinBorderDrag mode;
 } win_border;
 
+static struct
+{
+  CTask *task;
+  CCtrl *ctrl;
+  int64_t task_num;
+  bool left;
+} win_ctrl;
+
+bool WinCtrlsCaptured()
+{
+  return win_ctrl.ctrl != nullptr;
+}
+
 static bool WinMenuBar()
 {
   return ms_hard.installed && 0 <= ms.pos.y && ms.pos.y < FONT_HEIGHT &&
@@ -200,7 +228,7 @@ bool WinMenuInput()
 {
   if (win_menu.menu)
     return true;
-  if (winmgr.grab_scroll || win_border.task || !sys_winmgr_task)
+  if (winmgr.grab_scroll || win_ctrl.ctrl || win_border.task || !sys_winmgr_task)
     return false;
   bool keyboard = WinMenuKey(SC_GUI);
   if (!keyboard && !(ms.lb && !ms_last.lb && WinMenuBar()))
@@ -289,7 +317,7 @@ bool WinGrabScrollInput()
     grab_task = nullptr;
     winmgr.grab_scroll = winmgr.grab_scroll_closed = false;
   }
-  if (!ctrl || win_border.task || !sys_winmgr_task)
+  if (!ctrl || win_ctrl.ctrl || win_border.task || !sys_winmgr_task)
     return false;
   if (!grab_task) {
     auto *task = WinTaskAt(ms.pos.x, ms.pos.y);
@@ -416,6 +444,76 @@ static void WinDocMouse(bool left, CWinDocMouse &button)
   pressed_entry = entry;
 }
 
+static void WinCtrlClick(CTask *task, CCtrl *c, bool left, bool down)
+{
+  auto function = left ? c->left_click : c->right_click;
+  if (!function)
+    return;
+  int64_t x = uint64_t(ms.pos.x) - task->pix_left;
+  int64_t y = uint64_t(ms.pos.y) - task->pix_top;
+  if (c->flags & CTRLF_BORDER) {
+    x += FONT_WIDTH;
+    y += FONT_HEIGHT;
+  }
+  uint64_t result;
+  CallHolyC4Checked(function, reinterpret_cast<uintptr_t>(c), x, y, down,
+                    &result);
+}
+
+static bool WinCtrlMouse(bool old_lb, bool old_rb)
+{
+  if (auto *c = win_ctrl.ctrl) {
+    auto *task = win_ctrl.task;
+    if (TaskValidateCpp(task) && task->task_num == win_ctrl.task_num) {
+      auto *head = CtrlHead(task);
+      for (auto *entry = task->next_ctrl; entry != head; entry = entry->next)
+        if (entry == c) {
+          bool down = win_ctrl.left ? ms.lb : ms.rb;
+          WinCtrlClick(task, c, win_ctrl.left, down);
+          if (!down)
+            win_ctrl = {};
+          return true;
+        }
+    }
+    win_ctrl = {};
+    return true;
+  }
+
+  static int64_t wheel_z;
+  auto *task = WinTaskAt(ms.pos.x, ms.pos.y);
+  auto *focus = sys_focus_task;
+  if (!TaskValidateCpp(focus))
+    wheel_z = ms.pos.z;
+  if (!task || (task->win_inhibit & WIF_SELF_CTRLS) ||
+      (TaskValidateCpp(focus) && (focus->win_inhibit & WIF_FOCUS_TASK_CTRLS)))
+    return false;
+
+  bool left = ms.lb != old_lb;
+  if (left || ms.rb != old_rb) {
+    if (auto *c = WinCtrlAt(task, ms.pos.x, ms.pos.y)) {
+      bool down = left ? ms.lb : ms.rb;
+      if (down &&
+          (c->flags & (left ? CTRLF_CAPTURE_LEFT_MS : CTRLF_CAPTURE_RIGHT_MS)))
+        win_ctrl = {task, c, task->task_num, left};
+      WinCtrlClick(task, c, left, down);
+      return true;
+    }
+  }
+  if (ms.has_wheel && task == focus && wheel_z != ms.pos.z) {
+    int64_t delta = uint64_t(ms.pos.z) - wheel_z;
+    wheel_z = ms.pos.z;
+    auto *head = CtrlHead(task);
+    for (auto *c = task->next_ctrl; c != head; c = c->next)
+      if (c->wheel_chg) {
+        uint64_t result;
+        CallHolyC2Checked(c->wheel_chg, reinterpret_cast<uintptr_t>(c), delta,
+                          &result);
+        return true;
+      }
+  }
+  return false;
+}
+
 static void WinBorderMouse(bool was_down)
 {
   const auto x = ms.pos_text.x, y = ms.pos_text.y;
@@ -516,12 +614,21 @@ static uint64_t WinMgrSleep(uint64_t ideal)
     left.was_down = ms.lb;
     right.was_down = ms.rb;
     WinBorderMouse(was_down);
+  } else if (WinCtrlsCaptured()) {
+    WinCtrlMouse(was_down, right.was_down);
+    left.was_down = ms.lb;
+    right.was_down = ms.rb;
   } else {
     WinMenuUpdate();
     if (!WinGrabScroll() && !win_menu.menu && !winmgr.show_menu) {
-      WinDocMouse(true, left);
-      WinDocMouse(false, right);
-      WinBorderMouse(was_down);
+      if (WinCtrlMouse(was_down, right.was_down)) {
+        left.was_down = ms.lb;
+        right.was_down = ms.rb;
+      } else {
+        WinDocMouse(true, left);
+        WinDocMouse(false, right);
+        WinBorderMouse(was_down);
+      }
     }
   }
   if (__atomic_fetch_and(&sys_semas[SEMA_JUST_PUMP_MSGS].flags, ~uint64_t{1},
