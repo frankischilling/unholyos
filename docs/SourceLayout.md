@@ -592,8 +592,15 @@ The probe covers fixed signatures, pointer-to-pointer and array access,
 floating-point arguments and results, and caller-pop and callee-pop
 calls. It also rebinds a pointer while evaluating an argument.
 Pointer arithmetic loses the callable signature, as in the pinned
-compiler. Variadic function-pointer declarations, function-pointer casts, and
-relocatable initializers are still pending.
+compiler. Function-pointer casts and relocatable initializers are still pending.
+
+`PrsDotDotDot` in `Compiler/PrsVar.cpp` follows the corresponding HolyC
+routine for native variadic functions and pointer signatures. The hidden
+`argc` and inline `argv` members follow the fixed parameters at positive RBP
+offsets. Their count is excluded from `arg_cnt` and `member_cnt`; `argv`
+retains the reference's 127-element array metadata. Variadic functions use
+caller cleanup, including indirect calls. Explicit `argpop` variadic calls
+remain unsupported.
 
 ## HolyC exception statements
 

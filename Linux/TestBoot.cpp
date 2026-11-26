@@ -2394,6 +2394,16 @@ constexpr std::string_view function_ptr_output =
     "function pointer target 27\n"
     "function pointer rebound 207\n";
 
+constexpr std::string_view variadic_output =
+    "variadic direct 9 219 114 0 308\n"
+    "variadic raw 73 mutate 213 recurse 10\n"
+    "variadic order 206 321\n"
+    "variadic cleanup 103000\n";
+
+constexpr std::string_view variadic_ptr_output =
+    "variadic pointer 3 211 0 108 211\n"
+    "variadic pointer cleanup 30600\n";
+
 static void DriveDocFrame(CMonitor &vm, const fs::path &serial)
 {
   constexpr std::array<uint8_t, 3> black{}, blue{0, 0, 168}, red{168, 0, 0},
@@ -2869,6 +2879,10 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/FunctionPtrProbe.HC", function_ptr_output, '1');
     CheckProgramOutput(boot, "/FunctionPtrProbe.BIN.Z", function_ptr_output,
                        '1');
+    CheckProgramOutput(boot, "/VariadicProbe.HC", variadic_output, '1');
+    CheckProgramOutput(boot, "/VariadicProbe.BIN.Z", variadic_output, '1');
+    CheckProgramOutput(boot, "/VariadicPtrProbe.HC", variadic_ptr_output, '1');
+    CheckProgramOutput(boot, "/VariadicPtrProbe.BIN.Z", variadic_ptr_output, '1');
     CheckProgramOutput(boot, "/DocFrame.HC", doc_frame_output, '1');
     CheckProgramOutput(boot, "/DocButton.HC", doc_button_output, '1');
     CheckProgramOutput(boot, "/DirectoryProbe.HC", "Directory probe 1FF\n",
@@ -2955,6 +2969,11 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/FunctionPtrProbe.HC", function_ptr_output,
                          '1');
       CheckProgramOutput(output, "/FunctionPtrProbe.BIN.Z", function_ptr_output,
+                         '1');
+      CheckProgramOutput(output, "/VariadicProbe.HC", variadic_output, '1');
+      CheckProgramOutput(output, "/VariadicProbe.BIN.Z", variadic_output, '1');
+      CheckProgramOutput(output, "/VariadicPtrProbe.HC", variadic_ptr_output, '1');
+      CheckProgramOutput(output, "/VariadicPtrProbe.BIN.Z", variadic_ptr_output,
                          '1');
       CheckProgramOutput(output, "/DocFrame.HC", doc_frame_output, '1');
       CheckProgramOutput(output, "/DocButton.HC", doc_button_output, '1');
