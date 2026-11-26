@@ -488,6 +488,7 @@ bool LoadKernel(CTask &task)
       {"gr_palette_std", reinterpret_cast<uintptr_t>(gr_palette_std)},
       {"gr_palette_gray", reinterpret_cast<uintptr_t>(gr_palette_gray)},
       {"gr", reinterpret_cast<uintptr_t>(&gr)},
+      {"sys_winmgr_task", reinterpret_cast<uintptr_t>(&sys_winmgr_task)},
       {"scrncast", reinterpret_cast<uintptr_t>(&scrncast)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
       {"SYS_RUN_LEVEL", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},

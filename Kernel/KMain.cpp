@@ -999,7 +999,10 @@ static void BootSchedulerReport(const CDrv &dvd)
   _YIELD();
   auto *cpu = CurrentCPU();
   if (cpu->next_dying == reinterpret_cast<CTaskDying *>(&cpu->next_dying) &&
-      adam_task->next_task == adam_task && adam_task->last_task == adam_task)
+      adam_task->next_task == sys_winmgr_task &&
+      adam_task->last_task == sys_winmgr_task &&
+      sys_winmgr_task->next_task == adam_task &&
+      sys_winmgr_task->last_task == adam_task)
     SerialPutS("UnholyOS: dead tasks reaped\r\n");
   BootGuestFileReport(*ram, path);
 }
@@ -1364,6 +1367,10 @@ extern "C" void KMainCpp()
     return;
   }
   BootPutS("UnholyOS kernel entered in 64-bit mode");
+  if (!WinMgrInit()) {
+    SerialPutS("UnholyOS: Could not start the window manager\r\n");
+    return;
+  }
 
   SerialPutS("UnholyOS: DVD LBA ");
   SerialPutHex(SYS_BOOT_BLK);
@@ -1468,11 +1475,12 @@ extern "C" void KMainCpp()
     BootJobReport(*adam_task->cur_dv);
     BootKeyboardReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/MouseProbe.HC");
-    BootFileProgramReport(*adam_task->cur_dv, "/PaletteProbe.HC");
     if (BootFileProgramReport(*adam_task->cur_dv, "/DCProbe.HC").okay)
       if (auto *ram = MountedDrive('B'))
         BootGuestFileReport(*ram, "/DCProbe.GR.Z");
     BootRasterReport(*adam_task->cur_dv);
+    BootFileProgramReport(*adam_task->cur_dv, "/ScreenProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/PaletteProbe.HC");
     BootSoundReport(*adam_task->cur_dv, *adam_task);
     BootFileProgramReport(*adam_task->cur_dv, "/AsmListingScope.HC");
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);

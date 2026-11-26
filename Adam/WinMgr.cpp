@@ -66,3 +66,34 @@ int64_t WinQueIPMsgs(bool que)
   MemCpy(&old_ms, &ms, sizeof(ms));
   return right ? right : left ? left : moved ? MSG_MS_MOVE : MSG_NULL;
 }
+
+extern "C" void WinMgrTaskEntry();
+
+static uint64_t WinMgrSleep(uint64_t ideal)
+{
+  // WINMGR_PERIOD is 1001/30000 seconds. Keep 1/30-jiffy units here.
+  auto now = __atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED) * 30 + 1001 / 8;
+  if (ideal < now)
+    ideal += ((now - ideal + 1000) / 1001) * 1001;
+  auto &refresh = sys_semas[SEMA_REFRESH_IN_PROGRESS].flags;
+  __atomic_fetch_or(&refresh, 1, __ATOMIC_RELAXED);
+  GrUpdateScrn();
+  __atomic_fetch_and(&refresh, ~uint64_t{1}, __ATOMIC_RELAXED);
+  SleepUntilCpp(ideal / 30);
+  return ideal;
+}
+
+extern "C" [[noreturn]] void WinMgrTask(int64_t)
+{
+  auto ideal = __atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED) * 30;
+  for (;;)
+    ideal = WinMgrSleep(ideal);
+}
+
+bool WinMgrInit()
+{
+  sys_winmgr_task =
+      SpawnCpp(reinterpret_cast<uintptr_t>(WinMgrTaskEntry), nullptr,
+               "Window Manager", 0, adam_task, 0, JOBF_ADD_TO_QUE);
+  return sys_winmgr_task != nullptr;
+}

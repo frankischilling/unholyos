@@ -48,6 +48,7 @@ Linux/Fixtures/PaletteProbe.HC text eol=lf
 Linux/Fixtures/DCProbe.HC text eol=lf
 Linux/Fixtures/RasterProbe.HC text eol=lf
 Linux/Fixtures/Lines.HC -text
+Linux/Fixtures/ScreenProbe.HC text eol=lf
 Linux/Fixtures/MsgLoop.HC -text whitespace=cr-at-eol
 Linux/Fixtures/SoundProbe.HC text eol=lf
 Linux/Fixtures/SoundRecord.HC text eol=lf

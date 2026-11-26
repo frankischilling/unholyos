@@ -57,8 +57,9 @@ bool GrPixelVisible(const CDC *dc, int64_t x, int64_t y, bool skip_top_task)
   if (!(dc->flags & DCF_SCRN_BITMAP) || (dc->flags & DCF_ON_TOP))
     return true;
   auto *task = dc->win_task;
-  // The bootstrap has no separate window-manager task.
-  return (skip_top_task && task->next_task == sys_winmgr_task) ||
+  // The shortcut applies once the window manager has prepared its z-order.
+  return (skip_top_task && gr.win_uncovered_bitmap &&
+          task->next_task == sys_winmgr_task) ||
          !IsPixCovered0Cpp(task, x, y);
 }
 
