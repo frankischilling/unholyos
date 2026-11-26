@@ -1,5 +1,6 @@
 GLOBAL CPUStructInit,TaskInit,SET_GS_BASE,SET_FS_BASE,CallModuleMain,CallHolyC0,CallHolyC2
 GLOBAL _MEMCPY,_MEMSET,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_CLAMP_I64
+GLOBAL memcpy
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
 GLOBAL Str2I64HC
@@ -221,7 +222,7 @@ BITS 64
 	POP	RBP
 %endmacro
 
-; The optional fourth argument widens a SysV Bool return for HolyC.
+; The optional fourth argument widens a SysV U8 or Bool return for HolyC.
 %macro HOLYC_CPP 3-4 0
 %1:
 	HC_FRAME_ENTER
@@ -297,7 +298,7 @@ HOLYC_CPP FlushMsgsHC,FlushMsgsCpp,1
 HOLYC_CPP GetMsgHC,GetMsgCpp,4
 HOLYC_CPP InputFilterTaskHC,InputFilterTaskCpp,0
 HOLYC_CPP Char2ScanCodeHC,Char2ScanCodeCpp,2
-HOLYC_CPP ScanCode2CharHC,ScanCode2CharCpp,1
+HOLYC_CPP ScanCode2CharHC,ScanCode2CharCpp,1,1
 HOLYC_CPP KbdTypeMaticHC,KbdTypeMaticCpp,1
 HOLYC_CPP GridInitHC,GridInitCpp,0
 HOLYC_CPP MsSetHC,MsSetCpp,5
@@ -687,6 +688,16 @@ CallHolyC0:
 	POP	R12
 	POP	RBX
 	POP	RBP
+	RET
+
+; System V entry used by the freestanding C++ compiler for aggregate copies.
+; Unlike _MEMCPY, return the original destination and leave argument cleanup
+; to the caller.
+memcpy:
+	MOV	RAX,RDI
+	MOV	RCX,RDX
+	CLD
+	REP MOVSB
 	RET
 
 _MEMCPY:
