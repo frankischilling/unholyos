@@ -1467,6 +1467,7 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/DirContextProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FileStreamProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FileCopyProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/FileOperationsProbe.HC");
     {
       auto run_level = SYS_RUN_LEVEL;
       SYS_RUN_LEVEL |= RLF_DOC;

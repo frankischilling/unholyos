@@ -165,3 +165,24 @@ extern "C" int64_t DirCpp(const char *mask, uint8_t full)
   }
   return count;
 }
+
+extern "C" uint64_t DirMkCpp(const char *filename, int64_t entry_cnt)
+{
+  if (!filename || FileFindCpp(filename, nullptr, FUF_JUST_DIRS))
+    return false;
+  bool res = false;
+  if (auto *dirc = DirContextNewCpp(filename, false, false, false)) {
+    if (*dirc->mask && FileNameChk(dirc->mask)) {
+      auto *path = DirEntryFullName(CurrentTask()->cur_dir, dirc->mask);
+      if (path && dirc->dv->bd->type == BDT_RAM &&
+          !(dirc->dv->bd->flags & BDF_READ_ONLY)) {
+        uint64_t arg = reinterpret_cast<uintptr_t>(filename);
+        PrintCpp("Make Directory:%s\n", 1, &arg);
+        res = RedSeaMkDir(*dirc->dv, path, entry_cnt);
+      }
+      Free(path);
+    }
+    DirContextDelCpp(dirc, true);
+  }
+  return res;
+}

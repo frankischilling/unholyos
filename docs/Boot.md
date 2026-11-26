@@ -104,6 +104,29 @@ transfer to an allocated buffer; the native boot ran it from the disc.
 The boot suite checks the full output on startup and on the disc built
 in the guest.
 
+## RedSea file and directory operations
+
+`FileOperationsProbe.HC` checks preallocated directories, masked copy and
+move, nested tree copies, masked recursive deletion, complete tree removal,
+and preservation of file bytes and timestamps. It checks both the first
+and last allocated blocks of a deleted file in the RedSea bitmap and
+verifies that a read-only RAM drive retains the original file. The two
+tree copies return 9 and 7, including the directories, and the final
+result is `File operations probe FFF`.
+
+The focused build used `make -j4 BUILD=build/ops-check`; the ISO at
+`build/ops-check/file-operations.iso` used the normal loader and kernel,
+`StartOS.HC.Z`, `FileWriteProbe.BIN`, and the exact source fixture
+(SHA-256 `505323d9de4face5e0c6a6bac2c237a4b1d8242aaf4861b34a0da2c271d6d52d`).
+Both this image and the pinned TempleOS distribution ran with QEMU 8.2.2,
+`-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso> -display none`.
+The pinned guest ran the same source through `ExePutS` after GDB restored
+it into an allocated guest buffer. All 1,102 output bytes, including
+copy and deletion messages, matched. The startup and guest-built disc
+tests check this exact trace. The original account and distribution
+scripts that use these functions also require additional account setup,
+applications, and writable drives; they were not run.
+
 ## Building a RedSea ISO in the guest
 
 `RedSeaISO` takes an output filename, a source directory, and an optional
