@@ -1605,7 +1605,8 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   wait_windows({7, 35, 7, 34}, right_pane_geometry);
   set_pointer(51, 99);
   drag(32, 32, {9, 37, 9, 36});
-  set_pointer(307, 299);
+  // The outer pixels of the corner are clear of the reference scroll thumb.
+  set_pointer(311, 303);
   drag(48, 64, {9, 40, 9, 40});
   set_pointer(331, 115);
   drag(-32, 32, {9, 38, 9, 40});

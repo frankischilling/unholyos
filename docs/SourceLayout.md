@@ -354,6 +354,9 @@ right, bottom, and right edges. The held drag keeps its task through
 successive refreshes, using `WinHorz` and `WinVert` for bounds and
 raising the task with `WinToTop` at the start. `WIF_SELF_BORDER`
 and `WIF_FOCUS_TASK_BORDER` gate the gestures and title actions.
+TempleOS checks a scrollbar thumb before the border hit zones.
+The `CCtrl` scrollbar capture path from `Adam/Ctrls/CtrlsA.HC`
+and `Adam/WinMgr.HC` remains pending.
 
 `Adam/DolDoc/DocTerm.cpp` puts `MENU` and `[X]` in the border
 document at the reference positions. The rest of the standard
