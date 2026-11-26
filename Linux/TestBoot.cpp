@@ -64,6 +64,40 @@ struct CBootMedia
       kernel_hash;
 };
 
+static std::string_view RedSeaName(const Bytes &image, size_t entry);
+static size_t RedSeaDirectory(const Bytes &image, uint64_t cluster);
+
+static void VerifyStartDoc(const Bytes &disc, uint64_t root)
+{
+  constexpr size_t blk = 512;
+  auto end = RedSeaDirectory(disc, root);
+  for (size_t entry = root * blk + 128; entry < end; entry += 64) {
+    if (RedSeaName(disc, entry) != "Doc")
+      continue;
+    Check(ReadLE(disc, entry, 2) == 0x810, "Invalid Doc directory attributes");
+    auto doc = ReadLE(disc, entry + 40, 8);
+    auto doc_end = RedSeaDirectory(disc, doc);
+    Check(ReadLE(disc, doc * blk + 64 + 40, 8) == root,
+          "Doc directory has the wrong parent");
+    for (size_t file = doc * blk + 128; file < doc_end; file += 64) {
+      if (RedSeaName(disc, file) != "Start.DD")
+        continue;
+      auto start = ReadLE(disc, file + 40, 8);
+      auto size = ReadLE(disc, file + 48, 8);
+      Check(ReadLE(disc, file, 2) == 0x800 && size == 219 &&
+                start < disc.size() / blk && size <= disc.size() - start * blk,
+            "Invalid Start.DD extent");
+      uint64_t hash = 14695981039346656037ULL;
+      for (size_t i = 0; i < size; i++)
+        hash = (hash ^ disc[start * blk + i]) * 1099511628211ULL;
+      Check(hash == 0x43379D2E29990DF3ULL, "Start.DD differs from TempleOS");
+      return;
+    }
+    break;
+  }
+  throw std::runtime_error("Missing RedSea /Doc/Start.DD");
+}
+
 static CBootMedia VerifyMedia(const fs::path &iso, const fs::path &kernel_path)
 {
   constexpr size_t blk = 512, dvd = 4 * blk, primary = 16 * dvd,
@@ -97,6 +131,7 @@ static CBootMedia VerifyMedia(const fs::path &iso, const fs::path &kernel_path)
         "Invalid RedSea bounds");
   Check(root == drive + bitmap_blocks + 1 && root < disc.size() / blk,
         "Invalid RedSea root");
+  VerifyStartDoc(disc, root);
 
   // TempleOS packs CISOPriDesc and writes the cluster at the record start.
   for (size_t base : {16 * dvd, 18 * dvd}) {
@@ -701,7 +736,7 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
 {
   uint64_t used = 0, count = 0;
   bool kernel = false, hash_del = false, hash_src = false, put_str = false;
-  bool colors = false, rainbow = false;
+  bool colors = false, rainbow = false, os_name = false;
   for (uint64_t i = 0; i < 1024; i += 64) {
     auto buckets = ReadPhysical<64>(vm, table_body + i * 8);
     for (size_t j = 0; j < buckets.size(); j++) {
@@ -741,27 +776,36 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
         Check((hash & 1023) == i + j, "Boot symbol in the wrong bucket");
         if (define) {
           bool color_list = str == "ST_COLORS";
-          Check(color_list || str == "ST_RAINBOW_10", "Unexpected boot definition");
+          bool rainbow_list = str == "ST_RAINBOW_10";
+          bool startup_name = str == "DD_OS_NAME_VERSION";
+          Check(color_list || rainbow_list || startup_name,
+                "Unexpected boot definition");
           constexpr char color_data[] =
               "BLACK\0BLUE\0GREEN\0CYAN\0RED\0PURPLE\0BROWN\0LTGRAY\0DKGRAY\0"
               "LTBLUE\0LTGREEN\0LTCYAN\0LTRED\0LTPURPLE\0YELLOW\0WHITE\0";
           constexpr char rainbow_data[] =
               "BLACK\0BROWN\0RED\0LTRED\0YELLOW\0GREEN\0BLUE\0PURPLE\0LTGRAY\0WHITE\0";
+          constexpr char os_name_data[] = "UnholyOS\0";
           auto def = ReadPhysical<11>(vm, addr);
-          uint64_t entries = color_list ? 16 : 10;
-          uint64_t data_size = color_list ? sizeof(color_data) : sizeof(rainbow_data);
+          uint64_t entries = color_list ? 16 : rainbow_list ? 10 : 1;
+          uint64_t data_size = color_list     ? sizeof(color_data)
+                               : rainbow_list ? sizeof(rainbow_data)
+                                              : sizeof(os_name_data);
           Check(def[10] == entries && def[3] >= 16 && def[8] >= 16 &&
-                    def[9] >= 16, "Invalid boot color definition");
+                    def[9] >= 16,
+                "Invalid boot definition");
           const auto link = ReadPhysical<2>(vm, def[3] - 16);
           const auto data = ReadPhysical<2>(vm, def[8] - 16);
           const auto index = ReadPhysical<2>(vm, def[9] - 16);
           Check(link == std::array<uint64_t, 2>{owner, 24} &&
-                    data == std::array<uint64_t, 2>{owner, (data_size + 23) & ~7ULL} &&
+                    data == std::array<uint64_t, 2>{owner,
+                                                    (data_size + 23) & ~7ULL} &&
                     index == std::array<uint64_t, 2>{owner, 16 + entries * 8},
-                "Invalid boot color definition allocation");
+                "Invalid boot definition allocation");
           used += link[1] + data[1] + index[1];
           colors |= color_list;
-          rainbow |= !color_list;
+          rainbow |= rainbow_list;
+          os_name |= startup_name;
         }
         kernel |= module && str == "/Kernel/Kernel";
         hash_del |= !module && str == "HashDel";
@@ -776,7 +820,8 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
       }
     }
   }
-  Check(kernel && hash_del && hash_src && put_str && colors && rainbow && graphics && winmgr_slot,
+  Check(kernel && hash_del && hash_src && put_str && colors && rainbow &&
+            os_name && graphics && winmgr_slot,
         "Missing boot symbols");
   return used;
 }
@@ -1187,18 +1232,26 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
         "Missing boot text layer address");
   auto addr = std::stoull(match[1].str(), nullptr, 16);
   auto path = dir / "terminal-text.bin";
-  auto wait_text = [&](std::string_view wanted, bool right_pane = false) {
+  auto wait_text = [&](std::string_view wanted, bool right_pane = false,
+                       size_t count = 1, size_t row = 60,
+                       size_t column = std::string_view::npos) {
     for (unsigned attempt = 0; attempt < 60; ++attempt) {
       vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
                  std::to_string(addr) + R"(,"size":19200,"filename":")" +
                  path.string() + R"("}})");
       auto data = FileRead(path);
       Check(data.size() == 80 * 60 * 4, "Incomplete terminal text layer");
+      size_t seen = 0;
       for (size_t y = 0; y < 60; ++y) {
+        if (row != 60 && y != row)
+          continue;
         std::string line;
         for (size_t x = right_pane ? 40 : 0; x < (right_pane ? 80 : 40); ++x)
           line += char(data[(y * 80 + x) * 4]);
-        if (line.find(wanted) != std::string::npos)
+        auto position = line.find(wanted);
+        if (position != std::string::npos &&
+            (column == std::string::npos || position == column) &&
+            ++seen == count)
           return;
       }
       std::this_thread::sleep_for(20ms);
@@ -1227,6 +1280,18 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
         case '>': key("shift-dot"); break;
         case '_': key("shift-minus"); break;
         case ';': key("semicolon"); break;
+        case ':':
+          key("shift-semicolon");
+          break;
+        case '"':
+          key("shift-apostrophe");
+          break;
+        case '/':
+          key("slash");
+          break;
+        case '.':
+          key("dot");
+          break;
         default: {
           const char name[]{ch, 0};
           key(name);
@@ -1246,8 +1311,13 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
     throw std::runtime_error(error);
   };
 
-  wait_text(">");
-  wait_text(">", true);
+  constexpr auto start_body = "Public Domain Operating System";
+  for (bool right_pane : {false, true}) {
+    wait_text("UnholyOS", right_pane, 1, 2, 16);
+    wait_text(start_body, right_pane, 1, 4, 5);
+    wait_text("Help & Index, Quick Start: Cmd line", right_pane, 1, 6, 1);
+    wait_text(">", right_pane);
+  }
   keys({"3", "5", "shift-equal", "8", "backspace", "7", "semicolon", "ret"});
   wait_text("ans=0x0000002A=42");
   keys({"6", "shift-8", "ret", "8", "semicolon", "ret"});
@@ -1294,6 +1364,9 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   std::this_thread::sleep_for(150ms);
   keys({"7", "shift-8", "9", "semicolon", "ret"});
   wait_text("ans=0x0000003F=63");
+  type_cmd("Type(\"::/Doc/Start.DD\");");
+  wait_text(start_body, false, 2);
+  wait_text("ans=0x00000001=1");
 }
 
 static fs::path CaptureGuestFile(CMonitor &vm, const fs::path &dir,

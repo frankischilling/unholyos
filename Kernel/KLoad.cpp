@@ -83,6 +83,7 @@ void ScanCharHC(),ScanKeyHC(),GetKeyHC(),GetCharHC();
 void _HASH_REM_DEL(), SysSymImportsResolveHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
     DocWriteHC();
+void DocReadHC(), DocTypeHC(), TypeHC();
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
 void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC(), DocPutKeyHC();
 void DocLockHC(), DocUnlockHC(), DocEntryRunHC(), DocBottomHC(), DocClearHC(), NowHC();
@@ -752,6 +753,9 @@ bool LoadKernel(CTask &task)
       {"DocSize", reinterpret_cast<uintptr_t>(DocSizeHC)},
       {"DocSave", reinterpret_cast<uintptr_t>(DocSaveHC)},
       {"DocWrite", reinterpret_cast<uintptr_t>(DocWriteHC)},
+      {"DocRead", reinterpret_cast<uintptr_t>(DocReadHC)},
+      {"DocType", reinterpret_cast<uintptr_t>(DocTypeHC)},
+      {"Type", reinterpret_cast<uintptr_t>(TypeHC)},
       {"DocPrint", reinterpret_cast<uintptr_t>(DocPrintHC)},
       {"Doc2PlainText", reinterpret_cast<uintptr_t>(Doc2PlainTextHC)},
       {"DocBinsValidate", reinterpret_cast<uintptr_t>(DocBinsValidateHC)},

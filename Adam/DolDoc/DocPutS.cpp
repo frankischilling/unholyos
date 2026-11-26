@@ -149,3 +149,23 @@ extern "C" CDocEntryBase *DocPutLineCpp(CDoc *doc, CDocEntryBase *entry)
   PutS("\n");
   return entry == &doc->head ? entry : entry->next;
 }
+
+void DocDump(CDoc &doc, int64_t us_delay)
+{
+  CDocLock lock(doc);
+  auto *entry = doc.head.next;
+  while (entry != &doc.head) {
+    CDocEntryBase *end;
+    auto *text = DocScanLineCpp(&doc, entry, nullptr, &end);
+    if (!text)
+      return;
+    PutS(text);
+    Free(text);
+    entry = end;
+    if (entry->Type() == DOCT_NEW_LINE) {
+      PutS("\n");
+      BusyCpp(us_delay);
+      entry = entry->next;
+    }
+  }
+}

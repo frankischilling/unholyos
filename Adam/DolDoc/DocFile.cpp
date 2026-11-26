@@ -60,6 +60,22 @@ extern "C" void DocLoadCpp(CDoc *doc, const uint8_t *src, int64_t size)
   DocRecalc(*doc);
 }
 
+extern "C" CDoc *DocReadCpp(const char *name, int64_t flags)
+{
+  auto *path = FileNameAbs(name ? name : blkdev.tmp_filename, *CurrentTask());
+  auto *doc = DocNewCpp(path, nullptr);
+  if (doc) {
+    doc->flags |= flags;
+    size_t size = 0;
+    auto *src = path ? FileReadCpp(path, &size, &doc->file_attr) : nullptr;
+    if (src && size <= INT64_MAX)
+      DocLoadCpp(doc, src, size);
+    Free(src);
+  }
+  Free(path);
+  return doc;
+}
+
 static bool PlainEntry(const CDocEntryBase &entry)
 {
   return entry.Type() == DOCT_TEXT && !(entry.de_flags & ~DOCG_PLAIN_ENTRY) &&
@@ -175,4 +191,91 @@ extern "C" uint64_t DocWriteCpp(CDoc *doc, uint8_t prompt)
   FileWriteCpp(doc->filename.name, data, size, 0, doc->file_attr);
   Free(data);
   return 1;
+}
+
+static bool DocInsDoc(CDoc &doc, CDoc &source)
+{
+  CDocLock lock_source(source);
+  CDocLock lock(doc);
+  const auto bin_num = doc.cur_bin_num;
+  CDocEntryBase staged{};
+  staged.next = staged.last = &staged;
+  auto discard = [&] {
+    while (staged.next != &staged)
+      DocEntryDel(doc, *staged.next);
+    doc.cur_bin_num = bin_num;
+    return false;
+  };
+  for (auto *entry = source.head.next; entry != &source.head;
+       entry = entry->next) {
+    if (entry->Type() == DOCT_SOFT_NEW_LINE)
+      continue;
+    auto *copy = DocEntryCopy(doc, *entry);
+    if (!copy)
+      return discard();
+    DocEntryInsert(*copy, staged);
+  }
+  if (staged.next != &staged) {
+    auto *first = staged.next;
+    auto *next = first->next;
+    if (!DocInsEntry(doc, *first))
+      return discard();
+    while (next != &staged) {
+      auto *entry = next;
+      next = entry->next;
+      DocEntryInsert(*entry, *doc.cur_entry);
+    }
+  }
+  DocRecalc(doc);
+  return true;
+}
+
+static bool DocTextFile(const char *name)
+{
+  if (!name)
+    return false;
+  const char *base = name;
+  for (auto *p = name; *p; p++)
+    if (*p == '/')
+      base = p + 1;
+  constexpr const char *suffixes[]{".HC", ".HH", ".IN", ".PRJ", ".DD", ".TXT"};
+  for (auto *p = base; *p; p++)
+    if (*p == '.')
+      for (const char *suffix : suffixes) {
+        const char *s = p;
+        while (*suffix && *suffix == *s) {
+          suffix++;
+          s++;
+        }
+        if (!*suffix)
+          return true;
+      }
+  return false;
+}
+
+extern "C" uint64_t DocTypeCpp(CDoc *doc, const char *name,
+                               int64_t trailing_new_lines)
+{
+  if (!doc)
+    doc = DocPut();
+  if (!doc || doc->doc_signature != DOC_SIGNATURE_VAL || !DocTextFile(name))
+    return 0;
+  auto *source = DocReadCpp(name, 0);
+  if (!source)
+    return 0;
+  CDocLock lock(*doc);
+  bool inserted = DocInsDoc(*doc, *source);
+  if (inserted && IsRawCpp())
+    DocDump(*source, 100000);
+  DocDelCpp(source);
+  if (inserted) {
+    for (int64_t i = 0; i < trailing_new_lines; i++)
+      DocPutS(*doc, "\n", 1);
+  }
+  return inserted;
+}
+
+extern "C" uint64_t TypeCpp(const char *name, int64_t trailing_new_lines)
+{
+  return DocTypeCpp(nullptr, name, trailing_new_lines);
 }

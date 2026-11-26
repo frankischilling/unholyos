@@ -19,6 +19,7 @@ void UserStartUp()
     return;
   WinHorzCpp(1, TEXT_COLS - 2, task);
   WinVertCpp(2, TEXT_ROWS - 2, task);
+  TypeCpp("::/Doc/Start.DD", 1);
   task->display_flags |= DISPLAYF_SHOW;
   WinToTopCpp(task, false);
   WinZBufUpdateCpp();

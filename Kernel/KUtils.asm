@@ -17,6 +17,7 @@ GLOBAL PutSHC,PutHexHC
 GLOBAL ExePutSHC,ExeFileHC,StreamPrintHC,StreamExePrintHC
 GLOBAL PutCharsHC,IsRawHC,DefineLstLoadHC,DefineSubHC,DefineMatchHC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
+GLOBAL DocReadHC,DocTypeHC,TypeHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC,DocPutKeyHC
 GLOBAL DocPutHC,DocDisplayHC,DocBorderHC,DocRecalcHC,WinHorzHC,WinVertHC
 GLOBAL WinRefocusHC,WinToTopHC,WinFocusHC,WinTileHorzHC,WinTileVertHC,WinMaxHC
@@ -95,6 +96,7 @@ GLOBAL CmpHC
 EXTERN CmpCpp,ExePutSCpp,ExeFileCpp,StreamPrintCpp,StreamExePrintCpp
 EXTERN PutCharsCpp,PutS,PutHexCpp,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineMatchCpp
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
+EXTERN DocReadCpp,DocTypeCpp,TypeCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp,DocPutKeyCpp
 EXTERN DocPutCpp,DocDisplayCpp,DocBorderCpp,DocRecalcCpp,WinHorzCpp,WinVertCpp
 EXTERN WinRefocusCpp,WinToTopCpp,WinFocusCpp,WinTileHorzCpp,WinTileVertCpp,WinMaxCpp
@@ -403,6 +405,9 @@ HOLYC_CPP DocLoadHC,DocLoadCpp,3
 HOLYC_CPP DocSizeHC,DocSizeCpp,1
 HOLYC_CPP DocSaveHC,DocSaveCpp,2
 HOLYC_CPP DocWriteHC,DocWriteCpp,2
+HOLYC_CPP DocReadHC,DocReadCpp,2
+HOLYC_CPP DocTypeHC,DocTypeCpp,3
+HOLYC_CPP TypeHC,TypeCpp,2
 HOLYC_CPP Doc2PlainTextHC,Doc2PlainTextCpp,2
 HOLYC_CPP DocBinsValidateHC,DocBinsValidateCpp,1
 HOLYC_CPP DocPutLineHC,DocPutLineCpp,2

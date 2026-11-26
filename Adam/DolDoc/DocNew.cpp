@@ -98,6 +98,69 @@ static size_t DocEntryPayload(CDocEntryBase &base, bool discard)
   return bytes;
 }
 
+CDocEntryBase *DocEntryCopy(CDoc &doc, const CDocEntryBase &entry)
+{
+  auto *copy =
+      reinterpret_cast<CDocEntry *>(MAllocIdentCpp(&entry, doc.mem_task));
+  if (!copy)
+    return nullptr;
+  copy->base.next = copy->base.last = &copy->base;
+  copy->base.de_flags = 0;
+  auto dup = [&]<class T>(uint64_t flag, T *&field) {
+    if (!(entry.de_flags & flag))
+      return true;
+    if (field) {
+      field = reinterpret_cast<T *>(MAllocIdentCpp(field, doc.mem_task));
+      if (!field)
+        return false;
+    }
+    copy->base.de_flags |= flag;
+    return true;
+  };
+  bool okay = dup(DOCEF_TAG, copy->base.tag);
+  if (okay && MSize(&entry) >= sizeof(CDocEntry)) {
+    okay = dup(DOCEF_AUX_STR, copy->aux_str) &&
+           dup(DOCEF_DEFINE, copy->define_str) &&
+           dup(DOCEF_HTML_LINK, copy->html_link) &&
+           dup(DOCEF_LEFT_MACRO, copy->left_macro) &&
+           dup(DOCEF_RIGHT_MACRO, copy->right_macro) &&
+           dup(DOCEF_BIN_PTR_LINK, copy->bin_ptr_link) &&
+           dup(DOCEF_REMALLOC_DATA, copy->data);
+    if (okay && (entry.de_flags & DOCEF_HAS_BIN)) {
+      auto *old = copy->bin_data;
+      auto *bin =
+          reinterpret_cast<CDocBin *>(MAllocIdentCpp(old, doc.mem_task));
+      auto *data = old ? MAllocIdentCpp(old->data, doc.mem_task) : nullptr;
+      const auto *title =
+          (entry.de_flags & DOCEF_TAG) ? copy->base.tag : nullptr;
+      auto *tag =
+          title && *title ? StrNew(title, MemTaskHeap(doc.mem_task)) : nullptr;
+      okay = bin && (!old->data || data) && (!title || !*title || tag) &&
+             doc.cur_bin_num < INT32_MAX;
+      if (!okay) {
+        Free(tag);
+        Free(data);
+        Free(bin);
+      } else {
+        bin->data = data;
+        bin->tag = tag;
+        bin->num = doc.cur_bin_num++;
+        bin->use_cnt = 1;
+        QueIns(*bin, *doc.bin_head.last);
+        copy->bin_data = bin;
+        copy->bin_num = bin->num;
+      }
+    }
+  }
+  if (!okay) {
+    DocEntryPayload(copy->base, true);
+    Free(copy);
+    return nullptr;
+  }
+  copy->base.de_flags = entry.de_flags;
+  return &copy->base;
+}
+
 void DocEntryError(CDocEntry &entry)
 {
   DocEntryPayload(entry.base, true);
@@ -120,7 +183,7 @@ void DocEntryDel(CDoc &doc, CDocEntryBase &entry)
   Free(&entry);
 }
 
-static void DocEntryInsert(CDocEntryBase &entry, CDocEntryBase &before)
+void DocEntryInsert(CDocEntryBase &entry, CDocEntryBase &before)
 {
   entry.last = before.last;
   entry.next = &before;

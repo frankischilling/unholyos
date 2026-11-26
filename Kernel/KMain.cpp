@@ -1422,6 +1422,10 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not register color names\r\n");
     return;
   }
+  if (!LoadDocDefines()) {
+    SerialPutS("UnholyOS: Could not register document definitions\r\n");
+    return;
+  }
   if (!GrInit2()) {
     SerialPutS("UnholyOS: Could not allocate graphics device contexts\r\n");
     return;
