@@ -1471,6 +1471,7 @@ void BootProbe()
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32WriteProbe.HC");
     }
     BootFileProgramReport(*adam_task->cur_dv,"/Fat32RejectProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/ArcProbe.HC");
     BootStartupReport(*adam_task->cur_dv);
     BootLexReport(*adam_task->cur_dv);
     BootDirectiveReport(*adam_task->cur_dv);

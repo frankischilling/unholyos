@@ -2,6 +2,8 @@
 
 extern "C" void TestExcept(const CExcept *entry);
 extern "C" [[noreturn]] void SysHlt();
+extern "C" void BreakHC();
+extern "C" void PostMsgCpp(CTask *, int64_t, int64_t, int64_t, int64_t);
 
 static CExcept *ExceptQueue(CTask &task)
 {
@@ -90,4 +92,76 @@ extern "C" [[noreturn]] void ThrowCpp(int64_t tag, uint8_t no_log,
   if (!no_log)
     ReportException(task);
   RethrowHolyC();
+}
+
+extern "C" void BreakCpp()
+{
+  auto *task = CurrentTask();
+  if (task->task_flags & TASKF_BREAK_TO_SHIFT_ESC) {
+    MsgCpp(MSG_KEY_DOWN, CH_SHIFT_ESC, 0x20100000201, 0);
+    return;
+  }
+  task->wake_jiffy = 0;
+  TaskRstAwaitingMsgCpp(task);
+  // Drive and block locks in this kernel never yield while held.
+  FlushMsgsCpp(task);
+  RaiseHolyC(0x6B61657242); // 'Break'
+}
+
+static void BreakTask(CTask *task)
+{
+  if (task == CurrentTask()) {
+    BreakCpp();
+    return;
+  }
+  if (task->task_flags & TASKF_BREAK_TO_SHIFT_ESC) {
+    PostMsgCpp(task, MSG_KEY_DOWN, CH_SHIFT_ESC, 0x20100000201, 0);
+    return;
+  }
+  task->rip = reinterpret_cast<uintptr_t>(BreakHC);
+  task->wake_jiffy = 0;
+  TaskRstAwaitingMsgCpp(task);
+}
+
+extern "C" CTask *BreakFocusUser(CTask *next)
+{
+  if (!(__atomic_fetch_and(&sys_ctrl_alt_flags, ~(1U << 1), __ATOMIC_RELAXED) &
+        (1U << 1)))
+    return next;
+  auto *task = sys_focus_task;
+  if (!TaskValidateCpp(task) || (task->win_inhibit & WIF_SELF_FOCUS))
+    return next;
+  if (__atomic_fetch_and(&task->task_flags, ~TASKF_BREAK_LOCKED, __ATOMIC_RELAXED) &
+      TASKF_BREAK_LOCKED) {
+    __atomic_fetch_or(&task->task_flags, TASKF_PENDING_BREAK, __ATOMIC_RELAXED);
+    return next;
+  }
+  // The scheduler has already saved the running task, even if it is focused.
+  if (task->task_flags & TASKF_BREAK_TO_SHIFT_ESC) {
+    PostMsgCpp(task, MSG_KEY_DOWN, CH_SHIFT_ESC, 0x20100000201, 0);
+    return next;
+  }
+  task->rip = reinterpret_cast<uintptr_t>(BreakHC);
+  task->wake_jiffy = 0;
+  TaskRstAwaitingMsgCpp(task);
+  return task;
+}
+
+extern "C" bool BreakLockCpp(CTask *task)
+{
+  if (!task)
+    task = CurrentTask();
+  return !(__atomic_fetch_or(&task->task_flags, TASKF_BREAK_LOCKED, __ATOMIC_RELAXED) &
+           TASKF_BREAK_LOCKED);
+}
+
+extern "C" bool BreakUnlockCpp(CTask *task)
+{
+  if (!task)
+    task = CurrentTask();
+  auto old = __atomic_fetch_and(&task->task_flags,
+      ~(TASKF_BREAK_LOCKED | TASKF_PENDING_BREAK), __ATOMIC_RELAXED);
+  if (old & TASKF_PENDING_BREAK)
+    BreakTask(task);
+  return (old & TASKF_BREAK_LOCKED) != 0;
 }

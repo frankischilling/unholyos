@@ -3423,6 +3423,15 @@ constexpr std::string_view arrow_output =
     "arrow glyphs 89E961B07EC7F577 0F40B14DF3F0EAC5\n"
     "arrow glyphrop 1 1 1 6 9B053996C61C5E16\n";
 
+constexpr std::string_view arc_output =
+    "arc circle 1 83 8522C8530877871E\n"
+    "arc callback 0 5 409AA16A15CF98DD\n"
+    "arc ellipse 1 78 A59227EF9C0EA666\n"
+    "arc empty 1 1 1 0\n"
+    "arc flat 1 1 1 D7FD42D28F7CAFEC 0F40B14DF3F0EAC5\n"
+    "arc depth 1 1 1 5A41603FA1357905 0CFDDB2F46FF60E4\n"
+    "arc transform 1 1 100 648DEC773C30296A 1535EAD7BE9572E3\n";
+
 constexpr std::string_view task_settings_output =
     "settings layout 392 48 104 388\n"
     "settings push 1 1 1 1 1\n"
@@ -3567,6 +3576,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/MatrixProbe.HC", matrix_output, '1');
     CheckProgramOutput(boot, "/PenProbe.HC", pen_output, '1');
     CheckProgramOutput(boot, "/ArrowProbe.HC", arrow_output, '1');
+    CheckProgramOutput(boot, "/ArcProbe.HC", arc_output, '1');
     CheckProgramOutput(boot, "/TaskSettingsProbe.HC", task_settings_output,
                        '1');
     CheckProgramOutput(boot, "/WinScrollProbe.HC", win_scroll_output, '1');
@@ -3674,6 +3684,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/MatrixProbe.HC", matrix_output, '1');
       CheckProgramOutput(output, "/PenProbe.HC", pen_output, '1');
       CheckProgramOutput(output, "/ArrowProbe.HC", arrow_output, '1');
+      CheckProgramOutput(output, "/ArcProbe.HC", arc_output, '1');
       CheckProgramOutput(output, "/TaskSettingsProbe.HC", task_settings_output,
                          '1');
       CheckProgramOutput(output, "/WinScrollProbe.HC", win_scroll_output, '1');
@@ -4206,10 +4217,16 @@ int main(int argc, char **argv)
   if ((argc == 4 || argc == 5) &&
       (std::string_view(argv[1]) == "--character-graphics" ||
        std::string_view(argv[1]) == "--character-graphics-reference" ||
+       std::string_view(argv[1]) == "--tic-tac-toe" ||
+       std::string_view(argv[1]) == "--tic-tac-toe-reference" ||
+       std::string_view(argv[1]) == "--break" ||
+       std::string_view(argv[1]) == "--break-reference" ||
        std::string_view(argv[1]) == "--database" ||
        std::string_view(argv[1]) == "--database-reference" ||
        std::string_view(argv[1]) == "--form")) {
     bool character = std::string_view(argv[1]).starts_with("--character-graphics");
+    bool tic = std::string_view(argv[1]).starts_with("--tic-tac-toe");
+    bool breaks = std::string_view(argv[1]).starts_with("--break");
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -4219,8 +4236,8 @@ int main(int argc, char **argv)
       fs::create_directories(dir);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
-      if (character)
-        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference);
+      if (character || tic || breaks)
+        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference, tic, breaks);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");
@@ -4331,7 +4348,11 @@ int main(int argc, char **argv)
               << "       " << argv[0]
               << " --digits qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
-              << " --character-graphics[-reference] qemu image.iso [capture-dir]\n";
+              << " --character-graphics[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --tic-tac-toe[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --break[-reference] qemu image.iso [capture-dir]\n";
     return 2;
   }
   try {

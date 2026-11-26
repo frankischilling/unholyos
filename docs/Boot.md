@@ -907,6 +907,71 @@ This covers the tested keyboard, mouse, text-layer and cleanup paths,
 not every map boundary, maze shape, menu action, animation timing, or
 speaker output. No complete framebuffer or audio parity is claimed.
 
+## Circle and ellipse drawing, TicTacToe, and breaks
+
+`ArcProbe.HC` exercises the fixed-point walkers from
+`Adam/Gr/GrMath.HC` and the drawing calls in `GrPrimatives.HC`. The
+same source ran on the pinned TempleOS and UnholyOS guests with QEMU
+8.2.2, PC, `qemu64`, and 512 MiB. Both printed:
+
+```text
+arc circle 1 83 8522C8530877871E
+arc callback 0 5 409AA16A15CF98DD
+arc ellipse 1 78 A59227EF9C0EA666
+arc empty 1 1 1 0
+arc flat 1 1 1 D7FD42D28F7CAFEC 0F40B14DF3F0EAC5
+arc depth 1 1 1 5A41603FA1357905 0CFDDB2F46FF60E4
+arc transform 1 1 100 648DEC773C30296A 1535EAD7BE9572E3
+```
+
+The probe SHA-256 is
+`fe1e9b2833d7251ecb528ab2c795bd0134472752b74befcedee151cd266e7ef9`.
+It checks callback order and early termination, reverse stepping,
+clipping, depth-buffer preservation, thick pens and transformed
+ellipses. The eleven-argument `Ellipse` call also exposed a missing
+stack argument in the HolyC-to-C++ adapter. It now forwards every
+argument beyond the six System V registers on an aligned stack.
+
+Both boot discs include Terry A. Davis's unchanged
+[Demo/Games/TicTacToe.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Games/TicTacToe.HC),
+SHA-256 `2a9e2b00fc87e572d81bbfda190646b75f22b95b331610047e122cb5f1b5034b`.
+The driver uses real mouse movement and button events. It reads the
+compiled board through its guest hash entry, waits for the guest's
+refresh count, and checks that invalid clicks leave the board unchanged.
+It plays a win for each player, checks the resets, sends Ctrl-Alt-C,
+checks the caught exception tag and cleared board, then executes
+another terminal command.
+
+All 14 captured 640×480 drawing buffers were byte-identical between the
+two guests. The regression checks the pinned fingerprints of the
+307×307 board region at each phase. Audio output, frame timing,
+extreme arc parameters, and other sprite shapes are outside this
+comparison.
+
+`BreakProbe.HC` separately tests direct breaks, previous-state returns
+from `BreakLock` and `BreakUnlock`, actual Ctrl-Alt-C while locked,
+pending exception delivery, Shift-Esc conversion and cleanup of the
+exception queue. Both guests reported `Break probe 7F`. Its SHA-256 is
+`f2bddabc37572a13d5988c17aaa2326568a6ad448b0f056827daae3fb9d915c3`.
+The scheduler delivers a break at a saved task context. It does not
+yet preempt arbitrary busy user code or implement the full callback
+registry or debugger. Exception diagnostics still use serial output.
+
+```sh
+make -j4 BUILD=build/gr-arcs
+make BUILD=build/gr-arcs build/gr-arcs/Linux/TestBoot build/gr-arcs/break-test.iso
+build/gr-arcs/Linux/TestBoot --tic-tac-toe qemu-system-x86_64 \
+  build/gr-arcs/unholyos.iso build/gr-arcs/tic-native
+build/gr-arcs/Linux/TestBoot --break qemu-system-x86_64 \
+  build/gr-arcs/break-test.iso build/gr-arcs/break-native
+```
+
+The same driver accepts `--tic-tac-toe-reference` and
+`--break-reference` with the pinned distribution ISO. The latter
+copies the exact probe into allocated guest memory with GDB and
+checks the uploaded bytes before executing it. Native regression
+runs do not require GDB.
+
 ## Arrows, raster text, and the common ancestor demo
 
 Both boot discs include Terry A. Davis's unchanged

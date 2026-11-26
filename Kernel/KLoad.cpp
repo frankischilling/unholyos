@@ -58,6 +58,7 @@ void FileAttrHC(), CopySingleHC();
 void DelHC(),CopyHC(),MoveHC(),CopyTreeHC(),DelTreeHC(),DirMkHC(),ScanFlagsHC();
 void BlkReadHC(), BlkWriteHC();
 void SysTryHC(), SysUntryHC(), ThrowHC(), CallerHC(), PutExceptHC(), YorNHC();
+void BreakHC(), BreakLockHC(), BreakUnlockHC();
 void StrPrintJoinHC(), StrPrintHC(), CatPrintHC(), MStrPrintHC(), PrintHC();
 void PrintErrHC(), PrintWarnHC(), PutCharsHC(), IsRawHC(), DefineLstLoadHC();
 void PutSHC(), PutHexHC();
@@ -87,6 +88,7 @@ void SeedHC(),IsPixCovered0HC(),GrPlot0HC(),GrPeek0HC();
 void GrBlotHC(),GrRectHC(),GrRectBHC(),GrClampHC();
 void GrPlotHC(),GrPeekHC(),GrLineHC(),ClipLineHC();
 void GrFillCircleHC(),GrPlot3BHC(),GrPlot3HC(),GrLine3HC(),DCThickScaleHC();
+void CircleHC(),EllipseHC(),GrCircleHC(),GrEllipseHC(),GrCircle3HC(),GrEllipse3HC(),ArgHC();
 void SpriteSizeHC(),Sprite3HC(),Sprite3BHC(),DocSpriteHC(),SpriteHC();
 void GrBlot3HC(),DCSymmetry3SetHC(),DCReflectHC();
 void GrHLineHC(),GrVLineHC(),GrFillTri0HC(),GrFillPoly3HC(),GrRect3HC();
@@ -676,6 +678,9 @@ bool LoadKernel(CTask &task)
       {"throw", reinterpret_cast<uintptr_t>(ThrowHC)},
       {"Caller", reinterpret_cast<uintptr_t>(CallerHC)},
       {"PutExcept", reinterpret_cast<uintptr_t>(PutExceptHC)},
+      {"Break", reinterpret_cast<uintptr_t>(BreakHC)},
+      {"BreakLock", reinterpret_cast<uintptr_t>(BreakLockHC)},
+      {"BreakUnlock", reinterpret_cast<uintptr_t>(BreakUnlockHC)},
       {"YorN", reinterpret_cast<uintptr_t>(YorNHC)},
       {"StrPrintJoin", reinterpret_cast<uintptr_t>(StrPrintJoinHC)},
       {"StrPrint", reinterpret_cast<uintptr_t>(StrPrintHC)},
@@ -780,6 +785,13 @@ bool LoadKernel(CTask &task)
       {"GrPeek", reinterpret_cast<uintptr_t>(GrPeekHC)},
       {"GrLine", reinterpret_cast<uintptr_t>(GrLineHC)},
       {"GrLine3", reinterpret_cast<uintptr_t>(GrLine3HC)},
+      {"Circle", reinterpret_cast<uintptr_t>(CircleHC)},
+      {"Ellipse", reinterpret_cast<uintptr_t>(EllipseHC)},
+      {"GrCircle", reinterpret_cast<uintptr_t>(GrCircleHC)},
+      {"GrEllipse", reinterpret_cast<uintptr_t>(GrEllipseHC)},
+      {"GrCircle3", reinterpret_cast<uintptr_t>(GrCircle3HC)},
+      {"GrEllipse3", reinterpret_cast<uintptr_t>(GrEllipse3HC)},
+      {"Arg", reinterpret_cast<uintptr_t>(ArgHC)},
       {"DCThickScale", reinterpret_cast<uintptr_t>(DCThickScaleHC)},
       {"ClipLine", reinterpret_cast<uintptr_t>(ClipLineHC)},
       {"Mat4x4MulXYZ", reinterpret_cast<uintptr_t>(Mat4x4MulXYZHC)},
