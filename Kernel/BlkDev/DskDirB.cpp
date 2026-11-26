@@ -149,7 +149,8 @@ extern "C" int64_t DirCpp(const char *mask, uint8_t full)
       PrintCpp("%D %T %0*tX %0*tX ", 6, args);
     } else {
       CDateStruct ds;
-      Date2Struct(ds, entry->datetime);
+      Date2Struct(ds, DateFromBits(DateBits(entry->datetime) +
+                                   DateBits(local_time_offset)));
       const uint64_t args[]{ds.mon, ds.day_of_mon, ds.hour,
                             ds.min, size,          uint64_t(entry->size)};
       PrintCpp("%02d/%02d %02d:%02d %0*tX ", 6, args);

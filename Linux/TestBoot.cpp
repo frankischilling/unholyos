@@ -1420,6 +1420,217 @@ static void DriveSymmetry(CMonitor &vm, const fs::path &screen)
       "Symmetry.HC left strokes on VGA after Escape");
 }
 
+static void DriveDigits(CMonitor &vm, const fs::path &dir,
+                        const std::string &boot)
+{
+  vm.ResetDeadline(30s);
+  std::smatch match;
+  Check(std::regex_search(boot, match, std::regex(R"(text base (0x[0-9a-f]+))")),
+        "Missing boot text layer address");
+  auto addr = std::stoull(match[1].str(), nullptr, 16);
+  auto path = dir / "digits-text.bin";
+  auto key = [&](std::string name) {
+    vm.Hmp("sendkey " + name + " 35");
+    std::this_thread::sleep_for(65ms);
+  };
+  auto type_cmd = [&](std::string_view cmd) {
+    for (char ch : cmd) {
+      if (ch >= 'A' && ch <= 'Z')
+        key("shift-" + std::string(1, char(ch + 'a' - 'A')));
+      else {
+        switch (ch) {
+        case '(':
+          key("shift-9");
+          break;
+        case ')':
+          key("shift-0");
+          break;
+        case ':':
+          key("shift-semicolon");
+          break;
+        case ';':
+          key("semicolon");
+          break;
+        case '"':
+          key("shift-apostrophe");
+          break;
+        case '/':
+          key("slash");
+          break;
+        case '.':
+          key("dot");
+          break;
+        case ',':
+          key("comma");
+          break;
+        default:
+          key(std::string(1, ch));
+          break;
+        }
+      }
+    }
+    key("ret");
+  };
+  Bytes cells;
+  auto read = [&] {
+    vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+               std::to_string(addr) + R"(,"size":19200,"filename":")" +
+               path.string() + R"("}})");
+    cells = FileRead(path);
+    Check(cells.size() == 80 * 60 * 4, "Incomplete Digits text layer");
+  };
+  auto line = [&](size_t y) {
+    std::string result;
+    for (size_t x = 1; x < 79; ++x)
+      result += char(cells[(y * 80 + x) * 4]);
+    return result;
+  };
+  auto find = [&](std::string_view wanted) {
+    for (size_t y = 2; y < 59; ++y) {
+      auto x = line(y).find(wanted);
+      if (x != std::string::npos)
+        return (y * 80 + x + 1) * 4;
+    }
+    return size_t{0};
+  };
+  auto wait = [&](std::string_view wanted, std::string_view also = {}) {
+    for (unsigned i = 0; i < 160; ++i) {
+      read();
+      if (find(wanted) && (also.empty() || find(also)))
+        return;
+      std::this_thread::sleep_for(25ms);
+    }
+    std::string visible;
+    for (size_t y = 2; y < 30; ++y) {
+      for (char ch : line(y))
+        visible += ch >= 32 && ch < 127 ? ch : ' ';
+      visible += '\n';
+    }
+    throw std::runtime_error("Digits missing " + std::string(wanted) + "\n" +
+                             visible);
+  };
+  auto snapshot = [&](const char *phase) {
+    fs::copy_file(path, dir / (std::string("digits-") + phase + ".bin"),
+                  fs::copy_options::overwrite_existing);
+  };
+  constexpr uint8_t rainbow[]{0, 6, 4, 12, 14, 2, 1, 5, 7, 15};
+  auto check_digits = [&](size_t start, std::string_view pattern) {
+    for (size_t i = 0; i < pattern.size(); ++i) {
+      Check(cells[start + i * 4] == uint8_t(pattern[i]),
+            "Digits pattern differs");
+      Check(cells[start + i * 4 + 1] == (0x80 | rainbow[pattern[i] - '0']),
+            "Digits pattern color differs");
+    }
+  };
+  auto check_pattern = [&](std::string_view pattern) {
+    auto length = find("Length:" + std::to_string(pattern.size()));
+    Check(length != 0 && cells[length + 1] == 0x8F, "Digits length differs");
+    check_digits(length + 2 * 80 * 4, pattern);
+  };
+  auto check_hidden = [&](size_t count) {
+    auto length = find("Length:" + std::to_string(count));
+    Check(length && !find("Pattern"), "Digits still displays the pattern");
+    for (size_t i = 0; i < count; ++i) {
+      auto ch = cells[length + 2 * 80 * 4 + i * 4];
+      Check(ch < '0' || ch > '9', "Digits did not hide the answer");
+    }
+  };
+  wait("T:/Home>");
+  constexpr uint64_t adam = 0x100300, last_task = 0x88;
+  const auto winmgr = ReadPhysical<1>(vm, adam + last_task)[0];
+  const auto task = ReadPhysical<1>(vm, winmgr + last_task)[0];
+  const auto doc = ReadPhysical<1>(vm, task + 0x30)[0];
+  auto wait_prompt = [&] {
+    for (unsigned i = 0; i < 160; ++i) {
+      if ((ReadPhysical<1>(vm, task + 0x18, 'w')[0] & 0x218) == 0x218)
+        return;
+      std::this_thread::sleep_for(25ms);
+    }
+    throw std::runtime_error("Digits terminal did not reach its command prompt");
+  };
+  wait_prompt();
+  Check(ReadPhysical<1>(vm, doc + 104)[0] == doc,
+        "Digits terminal cursor is not at the command prompt");
+  type_cmd("WinMax;");
+  wait_prompt();
+  constexpr std::array<uint64_t, 4> maximized{1, 78, 2, 58};
+  bool resized = false;
+  for (unsigned i = 0; i < 160; ++i) {
+    if (ReadPhysical<4>(vm, task + 0x48) == maximized) {
+      resized = true;
+      break;
+    }
+    std::this_thread::sleep_for(25ms);
+  }
+  Check(resized, "Digits terminal did not maximize");
+  wait_prompt();
+  type_cmd("DocClear(,1);Seed(12345);");
+  wait("ans=0x00003039=12345", "T:/Home>");
+  wait_prompt();
+  const auto before = cells[find("T:/Home>") + 1];
+  type_cmd(R"(ExeFile("::/Demo/Games/Digits.HC");)");
+  wait("PRESS A KEY", "colored based on electrical engineering color codes.");
+  snapshot("intro");
+  const auto intro = find("This is a memory game.  Try to remember the digits "
+                          "and enter them.  They are");
+  Check(intro && find("colored based on electrical engineering color codes.") ==
+                      intro + 80 * 4,
+        "Digits introduction did not wrap at the reference word boundary");
+  constexpr const char *names[]{"BLACK", "BROWN", "RED", "LTRED", "YELLOW",
+                                "GREEN", "BLUE", "PURPLE", "LTGRAY", "WHITE"};
+  for (size_t i = 0; i < std::size(names); ++i) {
+    auto legend = std::to_string(i) + ": " + names[i];
+    auto pos = find(legend);
+    Check(pos == intro + (i + 2) * 80 * 4, "Digits rainbow legend differs");
+    for (size_t j = 0; j < legend.size(); ++j)
+      Check(cells[pos + 4 * j + 1] == (0x80 | rainbow[i]),
+            "Digits legend colors differ");
+  }
+  key("spc");
+  wait("Pattern", "PRESS A KEY");
+  check_pattern("4");
+  snapshot("pattern1");
+  key("spc");
+  wait("Guess", "Length:1");
+  check_hidden(1);
+  snapshot("guess1");
+  key("4");
+  wait("Pattern", "Length:2");
+  check_pattern("40");
+  snapshot("pattern2");
+  key("spc");
+  wait("Guess", "Length:2");
+  check_hidden(2);
+  snapshot("guess2");
+  key("4");
+  key("1");
+  wait("Score:2", "PRESS A KEY");
+  const auto score = find("Score:2");
+  check_digits(score - 80 * 4, "41");
+  check_digits(score + 80 * 4, "40");
+  snapshot("score");
+  key("spc");
+  wait("Pattern", "Length:1");
+  check_pattern("9");
+  snapshot("restart");
+  key("spc");
+  wait("Guess", "Length:1");
+  key("esc");
+  wait("T:/Home>");
+  wait_prompt();
+  Check(!find("Guess") && cells[find("T:/Home>") + 1] == before,
+        "Digits did not restore the terminal");
+  snapshot("exit");
+  type_cmd(R"(ExeFile("::/Demo/Games/Digits.HC");)");
+  wait("PRESS A KEY");
+  key("shift-esc");
+  wait("T:/Home>");
+  wait_prompt();
+  Check(!find("PRESS A KEY") && cells[find("T:/Home>") + 1] == before,
+        "Digits did not restore the terminal after Shift-Escape");
+  std::cout << "Digits.HC matched seeded patterns, score, restart and Escape\n";
+}
+
 static void DriveUserTask(CMonitor &vm, const fs::path &dir,
                           const std::string &boot)
 {
@@ -1959,6 +2170,9 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
         "Shading.HC did not restore the terminal geometry");
   wait_text("T:/Home>");
   std::cout << "Shading.HC drew the sphere and accepted a view-angle drag\n";
+
+  // The scrollbar exercise deliberately moves the document's edit cursor.
+  DriveDigits(vm, dir, boot);
 
   vm.ResetDeadline(30s);
   type_cmd("WinHorz(4,27);WinVert(5,18);");
@@ -2710,6 +2924,67 @@ static void DriveFontText(CMonitor &vm,const fs::path &serial)
   vm.WaitSerial(serial,"font restored 1 1\n");
 }
 
+static void DrivePrompts(CMonitor &vm,const fs::path &serial)
+{
+  vm.ResetDeadline(30s);
+  auto retry=[&](std::string_view marker) {
+    auto deadline=Clock::now()+5s;
+    do {
+      auto output=ReadText(serial);
+      auto first=output.find(marker);
+      if (first!=std::string::npos && output.find(marker,first+marker.size())!=std::string::npos)
+        return;
+      std::this_thread::sleep_for(50ms);
+    } while (Clock::now()<deadline);
+    throw std::runtime_error("Prompt did not retry: "+std::string(marker));
+  };
+  auto type=[&](std::string_view input) {
+    auto key=[&](const std::string &name) {
+      vm.Hmp("sendkey "+name+" 30");
+      std::this_thread::sleep_for(70ms);
+    };
+    for (char ch:input) {
+      switch (ch) {
+        case '+': key("shift-equal"); break;
+        case '*': key("shift-8"); break;
+        case '-': key("minus"); break;
+        case '.': key("dot"); break;
+        case '/': key("slash"); break;
+        default: key(std::string(1,ch)); break;
+      }
+    }
+    key("ret");
+  };
+  vm.WaitSerial(serial,"probe int(42):");
+  type("99");
+  retry("probe int(42):");
+  type("-3.75");
+  vm.WaitSerial(serial,"probe float(");
+  type("99");
+  retry("probe float(");
+  type("-2.5+1");
+  vm.WaitSerial(serial,"probe date(");
+  type("1/1/25");
+  retry("probe date(");
+  type("2/29/24");
+  vm.WaitSerial(serial,"Enter int expression(123):");
+  type("2+3*4");
+  vm.WaitSerial(serial,"Enter float expression(");
+  type("1.25*4");
+  vm.WaitSerial(serial,"Name (John):");
+  type("");
+  vm.WaitSerial(serial,"Date (");
+  type("2/29/24");
+  auto output=vm.WaitSerial(serial,"UnholyOS: finished /Demo/Prompt.HC, checks 0x0000000000000001\r\n");
+  for (auto expected:{"prompt conversion -3 17 42\n",
+                      "prompt dates 02/29/24 02/04/24 02/29/24 01/01/25 12/31/25\n",
+                      "probe int result -3\n","probe float result -2\n",
+                      "probe date result 02/29/24\n","Int=14\n","Float=5.00000000e0\n","Name:John\n","Date=02/29/24\n"})
+    Check(output.find(expected)!=std::string::npos,("Prompt result mismatch: "+std::string(expected)).c_str());
+  Check(output.find("UnholyOS: finished /PromptProbe.HC, checks 0x0000000000000001\r\n")!=std::string::npos,
+        "Native prompt probe failed");
+}
+
 static void CheckFontText(const std::string &output)
 {
   CheckProgramOutput(output,"/FontTextProbe.HC",
@@ -2879,6 +3154,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     DriveExceptions(rebuilt, serial);
     DriveScreen(rebuilt, serial);
     DriveFontText(rebuilt,serial);
+    DrivePrompts(rebuilt,serial);
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
     CheckProgramOutput(boot, "/RasterProbe.HC", raster_output, '1');
@@ -2915,6 +3191,11 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/ClassMeta.HC", class_meta_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.HC", last_class_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.BIN.Z", last_class_output, '1');
+    CheckProgramOutput(boot, "/DateOffsetProbe.HC",
+                       "date fraction EE4120D\n"
+                       "date local 02/29/24 00:00:00 utc B47ECC0000000\n"
+                       "date negative 02/29/24 00:00:00 utc B47ED40000000\n"
+                       "Date offset 3FF\n", '1');
     CheckProgramOutput(boot, "/DocBinLinkProbe.HC", "Doc bin links 1F\n", '1');
     CheckProgramOutput(boot, "/SpriteProbe.HC", "sprite bitmap 12546 0 0 4\n",
                        '1');
@@ -2961,6 +3242,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       DriveExceptions(vm, serial);
       DriveScreen(vm, serial);
       DriveFontText(vm,serial);
+      DrivePrompts(vm,serial);
     }
     std::string output = vm.Boot(serial);
     std::string registers = StopAtIdle(vm);
@@ -3015,6 +3297,11 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/ClassMeta.HC", class_meta_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.HC", last_class_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.BIN.Z", last_class_output, '1');
+      CheckProgramOutput(output, "/DateOffsetProbe.HC",
+                         "date fraction EE4120D\n"
+                         "date local 02/29/24 00:00:00 utc B47ECC0000000\n"
+                         "date negative 02/29/24 00:00:00 utc B47ED40000000\n"
+                         "Date offset 3FF\n", '1');
       CheckProgramOutput(output, "/DocBinLinkProbe.HC", "Doc bin links 1F\n",
                          '1');
       CheckProgramOutput(output, "/SpriteProbe.HC", "sprite bitmap 12546 0 0 4\n",
@@ -3457,9 +3744,31 @@ static void TestBoot(const char *qemu, const fs::path &iso,
 
 int main(int argc, char **argv)
 {
+  if ((argc == 4 || argc == 5) && std::string_view(argv[1]) == "--digits") {
+    char path[] = "/tmp/unholyos-digits-XXXXXX";
+    if (argc == 4 && !mkdtemp(path))
+      return 1;
+    fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false);
+      vm.Connect();
+      auto output = vm.Boot(dir / "serial.log");
+      DriveDigits(vm, dir, output);
+      vm.Command(R"({"execute":"quit"})");
+      if (argc == 4)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
   if (argc != 4 && argc != 5) {
     std::cerr << "Usage: " << argv[0]
-              << " qemu image.iso kernel [startup-test.iso]\n";
+              << " qemu image.iso kernel [startup-test.iso]\n"
+              << "       " << argv[0]
+              << " --digits qemu image.iso [capture-dir]\n";
     return 2;
   }
   try {

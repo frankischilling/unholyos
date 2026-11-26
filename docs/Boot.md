@@ -636,6 +636,44 @@ and stack restoration. Pinned TempleOS and UnholyOS drew the same
 menu bar, selected and checked entries, and shortcut callout under
 QEMU 9.2.0 with PC, `qemu64`, and 512 MiB.
 
+## Digits
+
+Both boot discs include Terry A. Davis's unchanged
+[Demo/Games/Digits.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Games/Digits.HC)
+(1,933 bytes, SHA-256
+`d6b6901052ca2bdb6aa92d2c9cd49250bfbf7bb426775dd8c9848c616fd5ba45`).
+Run `ExeFile("::/Demo/Games/Digits.HC");` in the HolyC terminal.
+Press a key to start, memorize the colored digits, and enter them after
+the next prompt. A wrong answer reveals the pattern and score. Escape
+or Shift-Escape returns to the terminal.
+
+With `Seed(12345)` and the same QEMU 8.2.2 PC, `qemu64`, and 512 MiB
+settings, both guests displayed `4`, advanced to `40` after a correct
+answer, showed score 2 and the correct pattern after entering `41`, and
+restarted with `9`. The introduction wraps at the same word boundary.
+All 328 compared nonblank character and color-attribute cells matched
+across the introduction, patterns, guesses, score, restart, and restored
+prompt. The comparison excludes timing-dependent output, cursors, and
+the reference's separate autocomplete window. UnholyOS also passed
+Shift-Escape at the introduction. The two beeps run through the existing
+speaker implementation; their audio was not compared in this test.
+
+The focused check builds and boots the standard disc using:
+
+```sh
+make -j4 BUILD=build/digits-check
+make BUILD=build/digits-check build/digits-check/Linux/TestBoot
+build/digits-check/Linux/TestBoot --digits qemu-system-x86_64 \
+  build/digits-check/unholyos.iso build/digits-check/native
+```
+
+The QEMU driver sends keyboard input and captures the 80×60 text layer
+at each game phase. The same check runs in the startup and guest-built
+ISO suite. The reference run used the pinned distribution disc and
+`-machine pc -cpu qemu64 -m 512 -boot d -cdrom <reference.iso> -display
+none`; QEMU's monitor captured the corresponding text layer after the
+same input sequence.
+
 ## Arrows, raster text, and the common ancestor demo
 
 Both boot discs include Terry A. Davis's unchanged
@@ -838,6 +876,39 @@ boot order, using an allocated guest buffer for the exact source bytes
 and port `0xE9` for output. The startup and guest-built ISO test driver
 also checks all four program outputs. The focused kernel ended its BSS
 at `0x9300b`, below the relocated DVD loader limit of `0x96600`.
+
+## Numeric and date prompts
+
+`Demo/Prompt.HC` retains Terry A. Davis's original bytes. The prompt
+driver enters an out-of-range integer, floating-point value and date,
+then supplies valid values. It runs the original demo and checks its
+integer, float, name default and date results.
+
+`DateOffsetProbe.HC` checks the native calendar ABI, fractional-day
+round trip, RTC offset, local midnight with positive and negative
+offsets, month/year boundaries, relative dates, omitted year, and the
+reference's numeric field narrowing. Both guests produced:
+
+```text
+date fraction EE4120D
+date local 02/29/24 00:00:00 utc B47ECC0000000
+date negative 02/29/24 00:00:00 utc B47ED40000000
+Date offset 3FF
+```
+
+The final bit records the pinned December behavior: `EM(12/1/24)`
+returns December 31, 2024, but `EM(12/1/23)` returns November 29, 2024.
+The reference `LastDayOfMon` uses month zero when advancing the year.
+The native implementation reproduces those observed results without
+indexing outside the calendar arrays.
+
+The focused build used `BUILD=build/date-offset`. The ISO contained
+`StartOS.HC.Z`, compressed `Doc/Start.DD`, Home, and the exact
+`DateOffsetProbe.HC` bytes. The reference executed the same bytes from
+an allocated guest buffer using `ExePutS`, with output captured at
+port `0xE9`. Both guests used QEMU 8.2.2, PC, `qemu64`, 512 MiB, and
+DVD boot. The startup and guest-built ISO tests check the same four
+lines and retain the existing prompt driver.
 
 ## DolDoc windows
 

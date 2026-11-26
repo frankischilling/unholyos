@@ -403,10 +403,8 @@ static void OutUnquote(CPrintOut &out, const char *text, unsigned flags)
 static void OutDateTime(CPrintOut &out, uint64_t value, bool date)
 {
   const CPrintFmt two{2, 0, 0, PRTF_PAD_ZERO};
-  CDate cdt;
-  MemCpy(&cdt, &value, sizeof(cdt));
   CDateStruct ds;
-  Date2Struct(ds, cdt);
+  Date2Struct(ds, DateFromBits(value + DateBits(local_time_offset)));
   int64_t first, second, third;
   char sep;
   if (date) {

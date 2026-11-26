@@ -23,6 +23,7 @@ inline size_t StrLen(const char *str)
 extern "C" int64_t StrCmpCpp(const uint8_t *a, const uint8_t *b);
 extern "C" int64_t Str2I64Cpp(const char *text, int64_t radix,
                               const char **end);
+extern "C" uint64_t Str2DateCpp(const char *src);
 
 inline CTask *CurrentTask()
 {
@@ -148,7 +149,15 @@ extern "C" char *StrPrintJoin(char *dst, const char *fmt, int64_t argc,
                               const uint64_t *argv);
 const CHash *FunSegFind(uintptr_t addr, uint64_t &offset);
 int64_t YearStartDate(int64_t year);
+CDate Struct2Date(const CDateStruct &ds);
+int64_t DayOfWeek(int64_t date);
 void Date2Struct(CDateStruct &ds, CDate cdt);
+int64_t FirstDayOfMon(int64_t date);
+int64_t LastDayOfMon(int64_t date);
+int64_t FirstDayOfYear(int64_t date);
+int64_t LastDayOfYear(int64_t date);
+extern CDate local_time_offset;
+extern uint16_t mon_start_days1[12], mon_start_days2[12];
 extern "C" uint64_t Pow10I64Cpp(int64_t exponent);
 extern "C" uint64_t IsRawCpp();
 extern "C" uint64_t RawCpp(uint8_t enabled);

@@ -538,7 +538,16 @@ directory afterward. `DocPlain.cpp` and `DocBin.cpp` resolve
 `DOCEF_BIN_PTR_LINK` by attachment number or tag. A cyclic link produces
 an error entry. Saving preserves the `BP` reference and omits the
 external binary from the appended data. Graphics-file dispatch through
-`DocGR`, word wrapping, and file-link navigation remain pending.
+`DocGR` and file-link navigation remain pending.
+
+`Adam/DolDoc/DocRecalc.cpp` follows `DocWordWrapDel`, `DocSplitTag`, and
+`DocWordWrapAdd` in `DocRecalc.HC` for ordinary editable text. `$WW,1$`
+enables word wrapping. Text splits at the preceding space when one is
+available within the reference's search range, and the inserted soft
+newline is omitted from serialization. A change in window bounds or
+cursor position permits rejoining the fragments before reflow. Complex
+tag editing and the complete DolDoc wrapping and highlighting rules
+remain pending.
 
 `Compiler/PrsExp.cpp` handles `TK_INS_BIN` as in `PrsExp.HC`. It retains
 the attachment's exact byte length in the generated image and gives
@@ -665,6 +674,30 @@ original database demo and the complete `LastClass.HC` are not yet runnable.
 The kernel header table stores numeric and string defaults in a tagged
 union. This saves space in the boot image while preserving the same
 runtime argument records and the pinned DVD loader address.
+
+## Date and numeric prompts
+
+`Adam/DolDoc/DocGet.cpp` follows `GetI64`, `GetF64`, and `GetDate` in
+`DocGet.HC`. Numeric expressions run through the native compiler and
+retry on failure or an out-of-range result. Blank input returns the
+default even if it lies outside the range. Date input uses the reference
+calendar expression syntax in `Kernel/StrScan.cpp`.
+
+`Kernel/KDate.cpp` shares the reference month tables between
+`Struct2Date`, `Date2Struct`, and the calendar boundary functions.
+`local_time_offset` starts at zero and is exposed as a native `CDate`.
+`Now` converts the RTC's local time to UTC; date expressions calculate
+local calendar boundaries before subtracting the offset. Date/time
+formatting and directory listings add it back before displaying the
+date. The public calendar records and routines are available to HolyC.
+
+The date scanner splits fields before converting numeric prefixes and
+narrows them to the reference record widths. Invalid month indices
+return zero instead of reading outside the month tables. The pinned
+`LastDayOfMon` advances December to month zero; the resulting date is
+reproduced explicitly for common and leap years without an out-of-bounds
+read. CPU fault recovery, full compiler diagnostics, and unordered
+floating-point comparisons remain outside this prompt implementation.
 
 ## HolyC exception statements
 

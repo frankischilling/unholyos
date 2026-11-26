@@ -616,7 +616,8 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
 static bool CmpDateData(CHashTable *table)
 {
   auto *date = CmpKernelClass(table, "CDate", sizeof(CDate));
-  if (!date)
+  auto *ds = CmpKernelClass(table, "CDateStruct", sizeof(CDateStruct));
+  if (!date || !ds)
     return false;
   date->raw_type = RT_I64;
   date->fwd_class = FindType("I64i", table);
@@ -633,7 +634,32 @@ static bool CmpDateData(CHashTable *table)
     Free(day);
     return false;
   }
-  return true;
+  const struct {
+    const char *name;
+    size_t offset;
+  } fields[]{
+      {"sec10000", offsetof(CDateStruct, sec10000)},
+      {"sec100", offsetof(CDateStruct, sec100)},
+      {"sec", offsetof(CDateStruct, sec)},
+      {"min", offsetof(CDateStruct, min)},
+      {"hour", offsetof(CDateStruct, hour)},
+      {"day_of_week", offsetof(CDateStruct, day_of_week)},
+      {"day_of_mon", offsetof(CDateStruct, day_of_mon)},
+      {"mon", offsetof(CDateStruct, mon)},
+      {"year", offsetof(CDateStruct, year)},
+  };
+  for (const auto &field : fields) {
+    auto *name = StrNew(field.name, heap);
+    auto *type = FindType(field.offset == offsetof(CDateStruct, year) ? "I32" : "U8", table);
+    if (!name || !MemberAdd(*ds, name, *type, field.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  auto *u16 = FindType("U16", table);
+  return CmpKernelGlobal(table, "local_time_offset", date, &local_time_offset) &&
+         CmpKernelGlobal(table, "mon_start_days1", u16, mon_start_days1, 12) &&
+         CmpKernelGlobal(table, "mon_start_days2", u16, mon_start_days2, 12);
 }
 
 static bool CmpDirData(CHashTable *table)
@@ -1513,6 +1539,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     HashClassPtr,
     MemberPtr,
     MemberMetaPtr,
+    DateStructPtr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1543,6 +1570,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CHashClass", table) + 1,
       FindType("CMemberLst", table) + 1,
       FindType("CMemberLstMeta", table) + 1,
+      FindType("CDateStruct", table) + 1,
   };
   auto *task = CurrentTask();
   struct [[gnu::packed]] CHeaderArg
@@ -1581,6 +1609,14 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"CAlloc", U8Ptr, FF_RET1, {{"size", I64}, {"mem_task", TaskPtr, true}}},
       {"MAlloc", U8Ptr, FF_RET1, {{"size", I64}, {"mem_task", TaskPtr, true}}, "_MALLOC"},
       {"Now", Date, FF_RET1, {}},
+      {"Struct2Date", Date, FF_RET1, {{"_ds", DateStructPtr}}},
+      {"Date2Struct", U0, FF_RET1, {{"_ds", DateStructPtr}, {"cdt", Date}}},
+      {"YearStartDate", I64, FF_RET1, {{"year", I64}}},
+      {"DayOfWeek", I64, FF_RET1, {{"i", I64}}},
+      {"FirstDayOfMon", I64, FF_RET1, {{"i", I64}}},
+      {"LastDayOfMon", I64, FF_RET1, {{"i", I64}}},
+      {"FirstDayOfYear", I64, FF_RET1, {{"i", I64}}},
+      {"LastDayOfYear", I64, FF_RET1, {{"i", I64}}},
       {"Cd", Bool, FF_RET1, {{"dirname", U8Ptr, true}, {"make_dirs", Bool, true}}},
       {"IsDir", Bool, FF_RET1, {{"dir_name", U8Ptr}}},
       {"Dir", I64, FF_RET1, {{"files_find_mask", U8Ptr, true, 0, "*"}, {"full", Bool, true}}},
@@ -1612,6 +1648,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"mask", U8Ptr}, {"make_mask", Bool, true}, {"make_dirs", Bool, true}, {"no_mask", Bool, true}}},
       {"DirContextDel", U0, FF_RET1, {{"dirc", DirContextPtr}, {"restore", Bool, true, 1}}},
       {"Str2I64", I64, FF_RET1, {{"st", U8Ptr}, {"radix", I64, true, 10}, {"_end_ptr", U8PtrPtr, true}}},
+      {"Str2Date", Date, FF_RET1, {{"src", U8Ptr}}},
       {"SysTry", U0, FF_RET1, {{"catch_start", U8Ptr}, {"untry_start", U8Ptr}}},
       {"SysUntry", U0, FF_RET1, {}},
       {"throw", U0, FF_RET1, {{"ch", I64, true}, {"no_log", Bool, true}}},
@@ -1652,6 +1689,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Sin", F64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_SIN},
       {"SqrI64", I64, FF_INTERNAL, {{"i", I64}}, nullptr, IC_SQR_I64},
       {"Sqrt", F64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_SQRT},
+      {"ToI64", I64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_TO_I64},
+      {"ToF64", F64, FF_INTERNAL, {{"i", I64}}, nullptr, IC_TO_F64},
       {"JobDel", U0, FF_RET1, {{"tmpc", JobPtr}}},
       {"TaskRstAwaitingMsg", U0, FF_RET1, {{"task", TaskPtr, true}}},
       {"TaskExe", JobPtr, FF_RET1, {{"srv", TaskPtr}, {"master", TaskPtr}, {"data", U8Ptr}, {"flags", I64}}},
@@ -1745,6 +1784,15 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {"cur_col", I64Ptr, true}, {"_do_e_end", DocEntryPtrPtr, true}}},
       {"GetStr", U8Ptr, FF_RET1,
        {{"msg", U8Ptr, true}, {"dft", U8Ptr, true}, {"flags", I64, true}}},
+      {"GetI64", I64, FF_RET1,
+       {{"msg", U8Ptr, true}, {"dft", I64, true}, {"lo", I64, true, 0x8000000000000000ULL},
+        {"hi", I64, true, 0x7FFFFFFFFFFFFFFFULL}}},
+      {"GetF64", F64, FF_RET1,
+       {{"msg", U8Ptr, true}, {"dft", F64, true}, {"lo", F64, true, 0xFFEFFFFFFFFFFFFFULL},
+        {"hi", F64, true, 0x7FEFFFFFFFFFFFFFULL}}},
+      {"GetDate", Date, FF_RET1,
+       {{"msg", U8Ptr, true}, {"dft", Date, true, 0x8000000000000000ULL},
+        {"lo", Date, true, 0x8000000000000000ULL}, {"hi", Date, true, 0x7FFFFFFFFFFFFFFFULL}}},
       {"GetS", I64, FF_RET1, {{"buf", U8Ptr}, {"size", I64}, {"allow_ext", Bool, true, 1}}},
       {"UserCmdLine", U0, FF_RET1, {{"dummy", I64, true}}},
       {"DocLock", Bool, FF_RET1, {{"doc", DocPtr}}},
@@ -2136,6 +2184,9 @@ static bool CmpFillHash(CHashTable *table)
   } defines[]{
       {"NULL", "0"}, {"TRUE", "1"}, {"FALSE", "0"}, {"ON", "1"}, {"OFF", "0"},
       {"I64_MAX", "0x7FFFFFFFFFFFFFFF"},
+      {"I64_MIN", "(-0x8000000000000000)"},
+      {"F64_MIN", "(0xFFEFFFFFFFFFFFFF(F64))"},
+      {"F64_MAX", "(0x7FEFFFFFFFFFFFFF(F64))"},
       {"HTT_CLASS", "0x10"}, {"HTT_INTERNAL_TYPE", "0x20"},
       {"HTT_FUN", "0x40"}, {"MLMF_IS_STR", "1"},
       {"pi", "(0x400921FB54442D18(F64))"},

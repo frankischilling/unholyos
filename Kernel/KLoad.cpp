@@ -45,6 +45,7 @@ void FileReadHC(), FileNameAbsHC(), DirNameAbsHC(), DirCurHC(), DirFileHC();
 void CdHC(), IsDirHC(), DirHC(), PutDirLinkHC(), FilesFindHC(), FileFindHC(),
     FilesFindMatchHC(), DirEntryDelHC(), DirEntryDel2HC(), DirTreeDelHC(), DirTreeDel2HC();
 void DirContextNewHC(), DirContextDelHC(), Str2I64HC();
+void Str2DateHC(), GetI64HC(), GetF64HC(), GetDateHC();
 void ExtChgHC(), ExtDftHC();
 void RedSeaISOHC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
@@ -101,6 +102,8 @@ void DocReadHC(), DocTypeHC(), TypeHC();
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
 void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC(), DocPutKeyHC();
 void DocLockHC(), DocUnlockHC(), DocEntryRunHC(), DocBottomHC(), DocClearHC(), NowHC();
+void Struct2DateHC(), Date2StructHC(), YearStartDateHC(), DayOfWeekHC();
+void FirstDayOfMonHC(), LastDayOfMonHC(), FirstDayOfYearHC(), LastDayOfYearHC();
 void DocTermNewHC(), DocGetKeyHC(), DocScanLineHC(), GetStrHC(), GetSHC(), UserCmdLineHC();
 void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
     TextLenAttrStrHC(), TextPrintHC(), TextRectHC(), TextBorderHC(), WinZBufUpdateHC();
@@ -515,6 +518,9 @@ bool LoadKernel(CTask &task)
   static const CKernelExport exports[]{
       {"SYS_COMPILE_TIME", reinterpret_cast<uintptr_t>(SYS_COMPILE_TIME)},
       {"cnts", reinterpret_cast<uintptr_t>(&cnts)},
+      {"local_time_offset", reinterpret_cast<uintptr_t>(&local_time_offset)},
+      {"mon_start_days1", reinterpret_cast<uintptr_t>(mon_start_days1)},
+      {"mon_start_days2", reinterpret_cast<uintptr_t>(mon_start_days2)},
       {"kbd", reinterpret_cast<uintptr_t>(&kbd)},
       {"text", reinterpret_cast<uintptr_t>(&text)},
       {"ms", reinterpret_cast<uintptr_t>(&ms)},
@@ -614,6 +620,7 @@ bool LoadKernel(CTask &task)
       {"DirContextNew", reinterpret_cast<uintptr_t>(DirContextNewHC)},
       {"DirContextDel", reinterpret_cast<uintptr_t>(DirContextDelHC)},
       {"Str2I64", reinterpret_cast<uintptr_t>(Str2I64HC)},
+      {"Str2Date", reinterpret_cast<uintptr_t>(Str2DateHC)},
       {"FileWrite", reinterpret_cast<uintptr_t>(FileWriteHC)},
       {"FSize", reinterpret_cast<uintptr_t>(FSizeHC)},
       {"FOpen", reinterpret_cast<uintptr_t>(FOpenHC)},
@@ -781,6 +788,9 @@ bool LoadKernel(CTask &task)
       {"ScanKey", reinterpret_cast<uintptr_t>(ScanKeyHC)},
       {"GetKey", reinterpret_cast<uintptr_t>(GetKeyHC)},
       {"GetStr", reinterpret_cast<uintptr_t>(GetStrHC)},
+      {"GetI64", reinterpret_cast<uintptr_t>(GetI64HC)},
+      {"GetF64", reinterpret_cast<uintptr_t>(GetF64HC)},
+      {"GetDate", reinterpret_cast<uintptr_t>(GetDateHC)},
       {"GetS", reinterpret_cast<uintptr_t>(GetSHC)},
       {"GetChar", reinterpret_cast<uintptr_t>(GetCharHC)},
       {"Ona2Freq", reinterpret_cast<uintptr_t>(Ona2FreqHC)},
@@ -862,6 +872,14 @@ bool LoadKernel(CTask &task)
       {"DocBottom", reinterpret_cast<uintptr_t>(DocBottomHC)},
       {"DocClear", reinterpret_cast<uintptr_t>(DocClearHC)},
       {"Now", reinterpret_cast<uintptr_t>(NowHC)},
+      {"Struct2Date", reinterpret_cast<uintptr_t>(Struct2DateHC)},
+      {"Date2Struct", reinterpret_cast<uintptr_t>(Date2StructHC)},
+      {"YearStartDate", reinterpret_cast<uintptr_t>(YearStartDateHC)},
+      {"DayOfWeek", reinterpret_cast<uintptr_t>(DayOfWeekHC)},
+      {"FirstDayOfMon", reinterpret_cast<uintptr_t>(FirstDayOfMonHC)},
+      {"LastDayOfMon", reinterpret_cast<uintptr_t>(LastDayOfMonHC)},
+      {"FirstDayOfYear", reinterpret_cast<uintptr_t>(FirstDayOfYearHC)},
+      {"LastDayOfYear", reinterpret_cast<uintptr_t>(LastDayOfYearHC)},
       {"DocNew", reinterpret_cast<uintptr_t>(DocNewHC)},
       {"DocDel", reinterpret_cast<uintptr_t>(DocDelHC)},
       {"DocLoad", reinterpret_cast<uintptr_t>(DocLoadHC)},
