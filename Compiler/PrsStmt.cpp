@@ -32,16 +32,16 @@ static bool PrsClassBody(CCmpCtrl &cc, CHashClass &owner, bool overlay,
       return false;
     do {
       Lex(cc);
-      auto *cls = PrsStars(cc, base);
-      if (!cls || !ClassComplete(*cls) || cc.token != TK_IDENT ||
-          MemberFind(cc.cur_str, &owner))
+      CPrsDeclarator decl;
+      if (!PrsType(cc, *base, decl) || !decl.name || !ClassComplete(*decl.cls) ||
+          MemberFind(decl.name, &owner))
         return false;
+      auto *cls = decl.cls;
       auto offset = overlay ? origin : owner.size;
-      auto *member = MemberAdd(owner, cc.cur_str, *cls, offset);
+      auto *member = MemberAdd(owner, decl.name, *cls, offset);
       if (!member)
         return false;
-      cc.cur_str = nullptr;
-      Lex(cc);
+      decl.Bind(*member);
       if (!PrsArrayDims(cc, member->dim, cls->size))
         return false;
       member->size = cls->size * member->dim.total_cnt;
@@ -114,47 +114,6 @@ static CHashClass *PrsClassDef(CCmpCtrl &cc, bool overlay, bool forward,
   HashSrcFileSetCpp(&cc, &cls->sym, 0);
   Lex(cc);
   return cls;
-}
-
-static bool PrsFunArgs(CCmpCtrl &cc, CHashFun &fun)
-{
-  Lex(cc); // Skip '('.
-  if (cc.token == ')')
-    return true;
-  do {
-    auto *cls = PrsClass(cc);
-    if (!cls)
-      return false;
-    Lex(cc);
-    cls = PrsStars(cc, cls);
-    if (!cls || !TypeSize(ClassRawType(*cls)) || cc.token != TK_IDENT ||
-        fun.arg_cnt >= UINT16_MAX / 8)
-      return false;
-    auto *member = MemberAdd(fun.cls, cc.cur_str, *cls, 16 + 8 * fun.arg_cnt);
-    if (!member)
-      return false;
-    cc.cur_str = nullptr;
-    member->size = 8;
-    ++fun.arg_cnt;
-    if (Lex(cc) == '=') {
-      Lex(cc);
-      auto *machine = LexTypedExpression2Bin(cc, ClassRawType(*cls));
-      if (!machine || (cc.token != ')' && cc.token != ',')) {
-        Free(machine);
-        return false;
-      }
-      auto okay = CmpCall(cc, machine, member->dft_val);
-      Free(machine);
-      if (!okay)
-        return false;
-      member->flags |= MLF_DFT_AVAILABLE;
-    }
-    if (cc.token == ')')
-      return true;
-    if (cc.token != ',')
-      return false;
-    Lex(cc);
-  } while (true);
 }
 
 struct CSwitchCase
@@ -310,16 +269,15 @@ private:
   {
     do {
       Lex(cc);
-      auto *cls = PrsStars(cc, &base);
-      if (Keyword(cc) == KW_NOREG)
-        Lex(cc);
-      if (!cls || !ClassComplete(*cls) || cc.token != TK_IDENT)
+      CPrsDeclarator decl;
+      if (!PrsType(cc, base, decl, 0, true) || !decl.name ||
+          !ClassComplete(*decl.cls))
         return false;
-      auto *member = MemberAdd(fun.cls, cc.cur_str, *cls, 0);
+      auto *cls = decl.cls;
+      auto *member = MemberAdd(fun.cls, decl.name, *cls, 0);
       if (!member)
         return false;
-      cc.cur_str = nullptr;
-      Lex(cc);
+      decl.Bind(*member);
       if (!PrsArrayDims(cc, member->dim, cls->size))
         return false;
       if (is_static) {
@@ -842,18 +800,22 @@ static bool PrsGlobalDecl(CCmpCtrl &cc, CHashGlblVar &var, const CPrsDecl &decl,
   return true;
 }
 
-static bool PrsGlobal(CCmpCtrl &cc, CHashClass &type, char *name,
-                      uint32_t visibility, CAOT *aot, const CPrsDecl &decl)
+static bool PrsGlobal(CCmpCtrl &cc, CPrsDeclarator &parsed, uint32_t visibility,
+                      CAOT *aot, const CPrsDecl &decl)
 {
+  auto &type = *parsed.cls;
   auto *heap = CurrentTask()->data_heap;
   auto *var =
       reinterpret_cast<CHashGlblVar *>(CAlloc(sizeof(CHashGlblVar), heap));
   if (!var || !ClassComplete(type)) {
     Free(var);
-    Free(name);
     return false;
   }
+  auto *name = parsed.TakeName();
   var->sym.hash.str = name;
+  var->fun_ptr = parsed.TakeFun();
+  if (var->fun_ptr)
+    var->flags |= GVF_FUN;
   var->sym.hash.type = HTT_GLBL_VAR | visibility;
   var->var_class = &type;
   if (!PrsArrayDims(cc, var->dim, type.size) ||
@@ -983,19 +945,15 @@ bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
     if (!cc.htc.glbl_hash_table)
       return false;
     for (bool first = true;; first = false) {
-      auto *cls = PrsStars(cc, base);
-      if (!cls || cc.token != TK_IDENT)
+      CPrsDeclarator parsed;
+      if (!PrsType(cc, *base, parsed, flags) || !parsed.name)
         return false;
-      auto *name = const_cast<char *>(cc.cur_str);
-      cc.cur_str = nullptr;
-      Lex(cc);
-      if (first && cc.token == '(')
-        return PrsFun(cc, *cls, name, visibility, flags, aot, decl);
-      if (flags || cc.token == '(') {
-        Free(name);
+      if (!parsed.fun_ptr && first && cc.token == '(')
+        return PrsFun(cc, *parsed.cls, parsed.TakeName(), visibility, flags,
+                      aot, decl);
+      if ((!parsed.fun_ptr && flags) || cc.token == '(')
         return false;
-      }
-      if (!PrsGlobal(cc, *cls, name, visibility, aot, decl))
+      if (!PrsGlobal(cc, parsed, visibility, aot, decl))
         return false;
       if (cc.token == ';') {
         Lex(cc);

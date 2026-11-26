@@ -165,13 +165,13 @@ bool CCodeCtrl::GoToLabelsDefined() const
 }
 
 uint32_t CCodeCtrl::LValue(uint32_t address, CHashClass &cls,
-                           const CArrayDim *dim)
+                           const CArrayDim *dim, const CHashFun *fun_ptr)
 {
   if (address == NO_IC || (dim && cls.ptr_stars_cnt == PTR_STARS_NUM))
     return NO_IC;
   if (dim)
     return Add({0, address, NO_IC, IC_HOLYC_TYPECAST, RT_I64, false, false,
-                true, NO_IC, &cls + 1, dim});
+                true, NO_IC, &cls + 1, dim, fun_ptr});
   return Add({0, address, NO_IC, IC_DEREF, ClassRawType(cls), false, false,
-              true, NO_IC, &cls});
+              true, NO_IC, &cls, nullptr, fun_ptr});
 }

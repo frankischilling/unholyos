@@ -595,6 +595,42 @@ static void BootRasterReport(const CDrv &dv)
   BootFileProgramReport(dv, "/Lines.HC");
 }
 
+static void BootGridReport(const CDrv &dv)
+{
+  auto draw = gr.fp_draw_ms;
+  auto grid = ms_grid;
+  if (!BootFileProgramReport(dv, "/Grid.HC").okay || gr.fp_draw_ms != draw)
+    return;
+  auto *before = reinterpret_cast<const uint8_t *>(&grid);
+  auto *after = reinterpret_cast<const uint8_t *>(&ms_grid);
+  for (size_t i = 0; i < sizeof(grid); ++i)
+    if (before[i] != after[i])
+      return;
+  SerialPutS("UnholyOS: Grid restored the cursor and mouse grid\r\n");
+}
+
+static void BootFunctionPtrReport(const CDrv &dvd, CTask &task)
+{
+  if (!BootFileProgramReport(dvd, "/FunctionPtrProbe.HC").okay)
+    return;
+  auto *ram = MountedDrive('B');
+  if (!ram)
+    return;
+  auto compiled =
+      ExePutS("Cmp(\"::/FunctionPtrProbe.HC\",,\"B:/FunctionPtrProbe.BIN.Z\");",
+              nullptr, 0);
+  if (!compiled.okay || compiled.value)
+    return;
+  constexpr const char *path = "/FunctionPtrProbe.BIN.Z";
+  SerialPutS("UnholyOS: executing /FunctionPtrProbe.BIN.Z\r\n");
+  auto *mod = Load(*ram, path, task, LDF_JUST_LOAD);
+  if (!mod || !LoadPass2(*mod))
+    return;
+  SerialPutS("UnholyOS: finished /FunctionPtrProbe.BIN.Z, checks "
+             "0x0000000000000001\r\n");
+  BootGuestFileReport(*ram, path);
+}
+
 static void BootISOReport(const CDrv &dv)
 {
   auto run = BootFileProgramReport(dv, "/RedSeaISOProbe.HC");
@@ -1481,6 +1517,8 @@ extern "C" void KMainCpp()
     BootRasterReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/CursorProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/CursorExcept.HC");
+    BootFunctionPtrReport(*adam_task->cur_dv, *adam_task);
+    BootGridReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/ScreenProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/PaletteProbe.HC");
     BootSoundReport(*adam_task->cur_dv, *adam_task);

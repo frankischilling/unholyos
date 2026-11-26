@@ -241,6 +241,31 @@ CMemberLst *MemberAdd(CHashClass &owner, const char *name, CHashClass &cls,
 CHashClass *PrsClass(const CCmpCtrl &cc);
 CHashClass *PrsStars(CCmpCtrl &cc, CHashClass *cls);
 CHashClass *PrsClassNew();
+struct CPrsDeclarator
+{
+  CPrsDeclarator() = default;
+  CPrsDeclarator(const CPrsDeclarator &) = delete;
+  CPrsDeclarator &operator=(const CPrsDeclarator &) = delete;
+  ~CPrsDeclarator();
+
+  char *TakeName();
+  CHashFun *TakeFun();
+  void Bind(CMemberLst &member);
+
+  CHashClass *cls = nullptr;
+  const char *name = nullptr;
+  CHashFun *fun_ptr = nullptr;
+};
+
+inline CHashFun *FunPtrBase(CHashFun *fun)
+{
+  return fun ? fun - fun->cls.ptr_stars_cnt : nullptr;
+}
+
+CHashFun *PrsFunPtrNew(CHashClass &result, unsigned stars, uint16_t flags);
+bool PrsType(CCmpCtrl &cc, CHashClass &base, CPrsDeclarator &decl,
+             uint16_t flags = 0, bool local = false, unsigned depth = 0);
+bool PrsFunArgs(CCmpCtrl &cc, CHashFun &fun, unsigned depth = 0);
 bool PrsArrayDims(CCmpCtrl &cc, CArrayDim &dim, size_t item_size);
 bool PrsVarInit(CCmpCtrl &cc, CHashClass &cls, CArrayDim &dim, uint8_t *&data,
                 CHeapCtrl *heap);
@@ -353,6 +378,7 @@ enum CICode : uint8_t
   IC_NOBOUND_SWITCH,
   IC_RET = 0x5B,
   IC_CALL = 0x5C,
+  IC_CALL_INDIRECT,
   IC_ASM = 0x61,
   IC_PUSH = 0x62,
   IC_GET_RFLAGS = 0x6C,
@@ -383,6 +409,8 @@ struct CIntermediateCode
   uint32_t next = NO_IC;
   CHashClass *cls = nullptr;
   const CArrayDim *dim = nullptr;
+  const CHashFun *fun_ptr = nullptr;
+  uint32_t call_target = NO_IC;
 };
 
 class CAsm;
@@ -415,7 +443,8 @@ struct CCodeCtrl
   CCodeLabel *GoToLabelFind(const char *name, bool create = false);
   bool GoToLabelsDefined() const;
   uint32_t LValue(uint32_t address, CHashClass &cls,
-                  const CArrayDim *dim = nullptr);
+                  const CArrayDim *dim = nullptr,
+                  const CHashFun *fun_ptr = nullptr);
   uint32_t Count() const
   {
     return used;

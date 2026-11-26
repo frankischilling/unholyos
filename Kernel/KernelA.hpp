@@ -781,8 +781,8 @@ inline bool FunPopsArgs(const CHashFun &fun)
   auto flags = fun.cls.flags;
   return (flags & (FF_RET1 | FF_ARGPOP)) && !(flags & FF_NOARGPOP);
 }
-constexpr uint64_t MLMF_IS_STR = 1, GVF_IMPORT = 2, GVF_EXTERN = 4, GVF_ALIAS = 16,
-                   GVF_ARRAY = 32;
+constexpr uint64_t MLMF_IS_STR = 1, GVF_FUN = 1, GVF_IMPORT = 2,
+                   GVF_EXTERN = 4, GVF_ALIAS = 16, GVF_ARRAY = 32;
 
 static_assert(sizeof(CMemberLst) == 144 && offsetof(CMemberLst, dim) == 96 &&
               offsetof(CMemberLst, fun_ptr) == 136);

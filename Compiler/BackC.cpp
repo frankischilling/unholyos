@@ -434,25 +434,37 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
       out.Load(RT_I64);
     return true;
   }
-  if (op == IC_CALL) {
+  if (op == IC_CALL || op == IC_CALL_INDIRECT) {
     auto *fun = reinterpret_cast<const CHashFun *>(node.data);
     uint32_t slots = node.right, arg = node.left;
-    bool pad = !((stack_slots + slots) & 1);
+    bool indirect_call = op == IC_CALL_INDIRECT;
+    bool pad = !((stack_slots + slots + indirect_call) & 1);
     if (pad)
       out.StackAdjust(-8);
+    if (indirect_call) {
+      if (!Emit(out, code, node.call_target, depth + 1, stack_slots + pad))
+        return false;
+      out.Bytes(0x50); // Keep the target below the arguments.
+    }
     // Arguments are evaluated and pushed from right to left.
     for (uint32_t pushed = 0; pushed < slots; ++pushed) {
       const auto &push = code[arg];
-      if (!Emit(out, code, push.left, depth + 1, stack_slots + pad + pushed))
+      if (!Emit(out, code, push.left, depth + 1,
+                stack_slots + pad + indirect_call + pushed))
         return false;
       out.Convert(code[push.left].type, push.type);
       out.Bytes(0x50); // PUSH RAX
       arg = push.right;
     }
-    bool indirect = !out.AOT() && (fun->cls.flags & CF_EXTERN);
-    FunAddress(out, *fun, indirect);
-    out.Bytes(0xFF, indirect ? 0x10 : 0xD0); // CALL [RAX] or CALL RAX
-    uint32_t drop = pad + (FunPopsArgs(*fun) ? 0 : slots);
+    if (indirect_call) {
+      out.Bytes(0xFF, 0x94, 0x24); // CALL [RSP+disp32]
+      out.Immediate(8 * slots, 4);
+    } else {
+      bool indirect = !out.AOT() && (fun->cls.flags & CF_EXTERN);
+      FunAddress(out, *fun, indirect);
+      out.Bytes(0xFF, indirect ? 0x10 : 0xD0); // CALL [RAX] or CALL RAX
+    }
+    uint32_t drop = pad + indirect_call + (FunPopsArgs(*fun) ? 0 : slots);
     if (drop)
       out.StackAdjust(8 * drop);
     return true;

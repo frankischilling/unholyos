@@ -274,8 +274,9 @@ and window composition remain pending.
 on-top alias of the composite. `WinFinalUpdate` invokes `DrawMs` before
 packing the frame. Cursor callbacks receive their original HolyC stack
 arguments. A callback exception drops the current frame and releases
-the alias. The compiler exposes the callback slots as addresses.
-General function-pointer declarations and calls remain pending.
+the alias. The compiler attaches the HolyC signatures to the callback
+slots. Terry A. Davis's unchanged `Demo/Graphics/Grid.HC` saves and
+replaces the cursor callback through its original typed declaration.
 
 `DCBlotColor4` in `Adam/Gr/GrAsm.asm` caches eight indexed pixels at a
 time and packs their low four bits into VGA planes. The screen update
@@ -298,6 +299,23 @@ Shift. The keyboard decoder dispatches this shortcut while the rest of
 the reference callback table is pending. The bootstrap still uses a
 zero-filled window coverage map. Per-window DolDoc rendering, the
 mouse grid, menus, and grab-scroll interaction remain pending.
+
+## HolyC function pointers
+
+`Compiler/PrsVar.cpp` follows `PrsType` in `Compiler/PrsVar.HC` for
+parenthesized function-pointer declarations. Local variables, globals,
+record members, and parameters carry their signatures in the existing
+`CHashFun` records. An indirect call uses the same argument conversions
+and defaults as a direct call. `Compiler/BackC.cpp` saves the target
+before evaluating arguments and applies the signature's stack cleanup
+rule. The original backend also uses `IC_CALL_INDIRECT` for this path.
+
+The probe covers fixed signatures, pointer-to-pointer and array access,
+floating-point arguments and results, and caller-pop and callee-pop
+calls. It also rebinds a pointer while evaluating an argument.
+Pointer arithmetic loses the callable signature, as in the pinned
+compiler. Variadic function-pointer declarations, function-pointer casts, and
+relocatable initializers are still pending.
 
 ## Remaining structural work
 

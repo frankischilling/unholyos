@@ -1,6 +1,148 @@
 #include "../Kernel/KernelB.hpp"
 #include "CompilerA.hpp"
 
+CPrsDeclarator::~CPrsDeclarator()
+{
+  Free(const_cast<char *>(name));
+  if (fun_ptr)
+    HashDel(&FunPtrBase(fun_ptr)->cls.sym.hash);
+}
+
+char *CPrsDeclarator::TakeName()
+{
+  auto *result = const_cast<char *>(name);
+  name = nullptr;
+  return result;
+}
+
+CHashFun *CPrsDeclarator::TakeFun()
+{
+  auto *result = fun_ptr;
+  fun_ptr = nullptr;
+  return result;
+}
+
+void CPrsDeclarator::Bind(CMemberLst &member)
+{
+  name = nullptr;
+  if (fun_ptr) {
+    member.flags |= MLF_FUN;
+    member.fun_ptr = TakeFun();
+  }
+}
+
+CHashFun *PrsFunPtrNew(CHashClass &result, unsigned stars, uint16_t flags)
+{
+  auto *fun = reinterpret_cast<CHashFun *>(
+      CAlloc(sizeof(CHashFun) * (stars + 1), CurrentTask()->data_heap));
+  if (!fun)
+    return nullptr;
+  fun->cls.sym.hash.type = HTT_FUN;
+  fun->cls.flags = flags;
+  fun->return_class = &result;
+  for (unsigned i = 1; i <= stars; ++i)
+    fun[i].cls.ptr_stars_cnt = i;
+  return fun + stars;
+}
+
+bool PrsType(CCmpCtrl &cc, CHashClass &base, CPrsDeclarator &decl,
+             uint16_t flags, bool local, unsigned depth)
+{
+  auto *cls = PrsStars(cc, &base);
+  if (!cls || depth == 127)
+    return false;
+  if (local && cc.token == TK_IDENT && cc.hash_entry &&
+      (cc.hash_entry->type & HTT_KEYWORD) &&
+      reinterpret_cast<const CHashGeneric *>(cc.hash_entry)->user_data0 ==
+          KW_NOREG)
+    Lex(cc);
+
+  unsigned stars = 0;
+  if (cc.token == '(') {
+    while (Lex(cc) == '*')
+      if (++stars > PTR_STARS_NUM)
+        return false;
+    if (!stars)
+      return false;
+  }
+  if (cc.token == TK_IDENT) {
+    decl.name = cc.cur_str;
+    cc.cur_str = nullptr;
+    Lex(cc);
+  }
+  decl.cls = cls;
+  if (!stars)
+    return true;
+  if (cc.token != ')' || Lex(cc) != '(' || ClassRawType(*cls) == RT_AGGREGATE)
+    return false;
+
+  decl.fun_ptr = PrsFunPtrNew(*cls, stars, flags);
+  auto *raw = reinterpret_cast<CHashClass *>(
+      HashFind("U0", cc.htc.hash_table_lst, HTT_INTERNAL_TYPE));
+  if (!decl.fun_ptr || !raw)
+    return false;
+  decl.cls = raw + stars;
+  auto &fun = *FunPtrBase(decl.fun_ptr);
+  if (!PrsFunArgs(cc, fun, depth + 1))
+    return false;
+  if (fun.arg_cnt && 8 * fun.arg_cnt <= INT16_MAX)
+    fun.cls.flags |= FF_RET1;
+  Lex(cc);
+  return true;
+}
+
+bool PrsFunArgs(CCmpCtrl &cc, CHashFun &fun, unsigned depth)
+{
+  Lex(cc); // Skip '('.
+  if (cc.token == ')')
+    return true;
+  do {
+    auto *base = PrsClass(cc);
+    if (!base)
+      return false;
+    Lex(cc);
+    CPrsDeclarator decl;
+    if (!PrsType(cc, *base, decl, 0, false, depth) ||
+        !TypeSize(ClassRawType(*decl.cls)) || fun.arg_cnt >= UINT16_MAX / 8)
+      return false;
+    if (!decl.name && (cc.token == ',' || cc.token == ')')) {
+      auto *name = StrNew("_anon_0000", CurrentTask()->data_heap);
+      if (!name)
+        return false;
+      for (unsigned i = 0; i < 4; ++i)
+        name[9 - i] = "0123456789abcdef"[(fun.arg_cnt >> (4 * i)) & 15];
+      decl.name = name;
+    }
+    if (!decl.name)
+      return false;
+    auto *member =
+        MemberAdd(fun.cls, decl.name, *decl.cls, 16 + 8 * fun.arg_cnt);
+    if (!member)
+      return false;
+    decl.Bind(*member);
+    member->size = 8;
+    ++fun.arg_cnt;
+    if (cc.token == '=') {
+      Lex(cc);
+      auto *machine = LexTypedExpression2Bin(cc, ClassRawType(*decl.cls));
+      if (!machine || (cc.token != ')' && cc.token != ',')) {
+        Free(machine);
+        return false;
+      }
+      auto okay = CmpCall(cc, machine, member->dft_val);
+      Free(machine);
+      if (!okay)
+        return false;
+      member->flags |= MLF_DFT_AVAILABLE;
+    }
+    if (cc.token == ')')
+      return true;
+    if (cc.token != ',')
+      return false;
+    Lex(cc);
+  } while (true);
+}
+
 bool PrsArrayDims(CCmpCtrl &cc, CArrayDim &dim, size_t item_size)
 {
   dim.total_cnt = 1;
