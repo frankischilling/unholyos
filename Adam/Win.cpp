@@ -6,6 +6,82 @@
 CWinMgrGlbls winmgr{0, 0, 0, std::bit_cast<uint64_t>(30000.0 / 1001),
                    0, 0, nullptr, false, false, false};
 
+extern "C" bool WinHorzCpp(int64_t left, int64_t right, CTask *task)
+{
+  auto width = static_cast<int64_t>(uint64_t(right) - left);
+  if (!task)
+    task = CurrentTask();
+  if (!TaskValidateCpp(task))
+    return false;
+  if (width < 0)
+    width = 0;
+  if (left >= TEXT_COLS) {
+    left = TEXT_COLS - 1;
+    right = uint64_t(left) + width;
+  }
+  if (right < 0) {
+    right = 0;
+    left = -width;
+  }
+  if (left > right) {
+    if (left > 0)
+      right = left;
+    else
+      left = right;
+  }
+  auto flags = GetRFlags();
+  asm volatile("cli" : : : "memory");
+  bool changed = task->win_left != left || task->win_right != right;
+  if (changed) {
+    task->win_left = left;
+    task->win_right = right;
+    WinDerivedValsUpdate(task);
+    if (task->display_flags & DISPLAYF_SHOW)
+      __atomic_fetch_or(&sys_semas[SEMA_UPDATE_WIN_Z_BUF].flags, 1,
+                        __ATOMIC_RELAXED);
+  }
+  SetRFlags(flags);
+  return changed;
+}
+
+extern "C" bool WinVertCpp(int64_t top, int64_t bottom, CTask *task)
+{
+  auto height = static_cast<int64_t>(uint64_t(bottom) - top);
+  if (!task)
+    task = CurrentTask();
+  if (!TaskValidateCpp(task))
+    return false;
+  if (height < 0)
+    height = 0;
+  if (top >= TEXT_ROWS) {
+    top = TEXT_ROWS - 1;
+    bottom = uint64_t(top) + height;
+  }
+  if (bottom <= 0) {
+    bottom = 1;
+    top = bottom - height;
+  }
+  if (top > bottom) {
+    if (top >= 0)
+      bottom = top;
+    else
+      top = bottom;
+  }
+  auto flags = GetRFlags();
+  asm volatile("cli" : : : "memory");
+  bool changed = task->win_top != top || task->win_bottom != bottom;
+  if (changed) {
+    task->win_top = top;
+    task->win_bottom = bottom;
+    WinDerivedValsUpdate(task);
+    if (task->display_flags & DISPLAYF_SHOW)
+      __atomic_fetch_or(&sys_semas[SEMA_UPDATE_WIN_Z_BUF].flags, 1,
+                        __ATOMIC_RELAXED);
+  }
+  SetRFlags(flags);
+  return changed;
+}
+
 bool WinMsCursorVisible()
 {
   return ms.show && ms_hard.installed;

@@ -29,7 +29,9 @@ struct [[gnu::packed]] CGrGlbls
 };
 
 static_assert(sizeof(CGrGlbls) == 10507 && offsetof(CGrGlbls, dc) == 24 &&
+              offsetof(CGrGlbls, text_base) == 64 &&
               offsetof(CGrGlbls, win_z_buf) == 72 &&
+              offsetof(CGrGlbls, win_uncovered_bitmap) == 88 &&
               offsetof(CGrGlbls, fp_final_scrn_update) == 128 &&
               offsetof(CGrGlbls, fp_draw_ms) == 144 &&
               offsetof(CGrGlbls, fp_draw_grab_ms) == 152 &&

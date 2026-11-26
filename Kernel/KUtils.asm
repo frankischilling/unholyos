@@ -18,6 +18,8 @@ GLOBAL ExePutSHC,ExeFileHC,StreamPrintHC,StreamExePrintHC
 GLOBAL PutCharsHC,IsRawHC,DefineLstLoadHC,DefineSubHC,DefineMatchHC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC
+GLOBAL DocPutHC,DocDisplayHC,DocBorderHC,DocRecalcHC,WinHorzHC,WinVertHC
+GLOBAL TextCharHC,TextLenStrHC,TextLenAttrHC,TextRectHC,TextBorderHC,WinZBufUpdateHC
 GLOBAL RawHC,DbgModeHC,IsDbgModeHC,PutFileLinkHC,PutSrcLinkHC,FixSetHC,AdamErrHC
 GLOBAL tSHC,BusyHC,SleepUntilHC,SleepHC,Ona2FreqHC,Freq2OnaHC,SndHC
 GLOBAL ScrnCastHC,SndRstHC,BeepHC,MuteHC,IsMuteHC
@@ -91,6 +93,8 @@ EXTERN CmpCpp,ExePutSCpp,ExeFileCpp,StreamPrintCpp,StreamExePrintCpp
 EXTERN PutCharsCpp,PutS,PutHexCpp,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineMatchCpp
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp
+EXTERN DocPutCpp,DocDisplayCpp,DocBorderCpp,DocRecalcCpp,WinHorzCpp,WinVertCpp
+EXTERN TextCharCpp,TextLenStrCpp,TextLenAttrCpp,TextRectCpp,TextBorderCpp,WinZBufUpdateCpp
 EXTERN RawCpp,DbgModeCpp,IsDbgModeCpp,PutFileLinkCpp,PutSrcLinkCpp,FixSetCpp,AdamErrCpp
 EXTERN tSCpp,BusyCpp,SleepUntilCpp,SleepCpp,Ona2FreqCpp,Freq2OnaCpp,SndCpp
 EXTERN ScrnCastCpp,SndRstCpp,BeepCpp,MuteCpp,IsMuteCpp
@@ -355,6 +359,18 @@ HOLYC_PRINT StreamExePrintHC,StreamExePrintCpp,1,1
 HOLYC_CPP IsRawHC,IsRawCpp,0
 HOLYC_CPP DefineSubHC,DefineSubCpp,2
 HOLYC_CPP DefineMatchHC,DefineMatchCpp,3
+HOLYC_CPP WinHorzHC,WinHorzCpp,3
+HOLYC_CPP WinVertHC,WinVertCpp,3
+HOLYC_CPP WinZBufUpdateHC,WinZBufUpdateCpp,0
+HOLYC_CPP TextCharHC,TextCharCpp,5
+HOLYC_CPP TextLenStrHC,TextLenStrCpp,6
+HOLYC_CPP TextLenAttrHC,TextLenAttrCpp,5
+HOLYC_CPP TextRectHC,TextRectCpp,5
+HOLYC_CPP TextBorderHC,TextBorderCpp,7
+HOLYC_CPP DocPutHC,DocPutCpp,1
+HOLYC_CPP DocDisplayHC,DocDisplayCpp,1
+HOLYC_CPP DocBorderHC,DocBorderCpp,1
+HOLYC_CPP DocRecalcHC,DocRecalcCpp,2
 HOLYC_CPP DocNewHC,DocNewCpp,2
 HOLYC_CPP DocDelHC,DocDelCpp,1
 HOLYC_CPP DocLoadHC,DocLoadCpp,3

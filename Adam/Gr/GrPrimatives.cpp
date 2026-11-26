@@ -58,7 +58,7 @@ bool GrPixelVisible(const CDC *dc, int64_t x, int64_t y, bool skip_top_task)
     return true;
   auto *task = dc->win_task;
   // The shortcut applies once the window manager has prepared its z-order.
-  return (skip_top_task && gr.win_uncovered_bitmap &&
+  return (skip_top_task && gr.highest_uncovered &&
           task->next_task == sys_winmgr_task) ||
          !IsPixCovered0Cpp(task, x, y);
 }

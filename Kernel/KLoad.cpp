@@ -84,6 +84,9 @@ void _HASH_REM_DEL(), SysSymImportsResolveHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
     DocWriteHC();
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
+void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC();
+void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
+    TextRectHC(), TextBorderHC(), WinZBufUpdateHC();
 void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
 void RawHC(), DbgModeHC(), IsDbgModeHC();
 void tSHC(), BusyHC(), SleepUntilHC(), SleepHC(), Ona2FreqHC(), Freq2OnaHC();
@@ -703,6 +706,21 @@ bool LoadKernel(CTask &task)
       {"DefineLstLoad", reinterpret_cast<uintptr_t>(DefineLstLoadHC)},
       {"DefineSub", reinterpret_cast<uintptr_t>(DefineSubHC)},
       {"DefineMatch", reinterpret_cast<uintptr_t>(DefineMatchHC)},
+      {"WinHorz", reinterpret_cast<uintptr_t>(WinHorzHC)},
+      {"WinVert", reinterpret_cast<uintptr_t>(WinVertHC)},
+      {"WinZBufUpdate", reinterpret_cast<uintptr_t>(WinZBufUpdateHC)},
+      {"TextChar", reinterpret_cast<uintptr_t>(TextCharHC)},
+      {"_TEXT_CHAR", reinterpret_cast<uintptr_t>(TextCharHC)},
+      {"TextLenStr", reinterpret_cast<uintptr_t>(TextLenStrHC)},
+      {"_TEXT_LEN_STR", reinterpret_cast<uintptr_t>(TextLenStrHC)},
+      {"TextLenAttr", reinterpret_cast<uintptr_t>(TextLenAttrHC)},
+      {"_TEXT_LEN_ATTR", reinterpret_cast<uintptr_t>(TextLenAttrHC)},
+      {"TextRect", reinterpret_cast<uintptr_t>(TextRectHC)},
+      {"TextBorder", reinterpret_cast<uintptr_t>(TextBorderHC)},
+      {"DocPut", reinterpret_cast<uintptr_t>(DocPutHC)},
+      {"DocDisplay", reinterpret_cast<uintptr_t>(DocDisplayHC)},
+      {"DocBorder", reinterpret_cast<uintptr_t>(DocBorderHC)},
+      {"DocRecalc", reinterpret_cast<uintptr_t>(DocRecalcHC)},
       {"DocNew", reinterpret_cast<uintptr_t>(DocNewHC)},
       {"DocDel", reinterpret_cast<uintptr_t>(DocDelHC)},
       {"DocLoad", reinterpret_cast<uintptr_t>(DocLoadHC)},

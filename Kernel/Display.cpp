@@ -15,15 +15,23 @@ void WinDerivedValsUpdate(CTask *task)
     task = CurrentTask();
   auto flags = GetRFlags();
   asm volatile("cli" : : : "memory");
-  task->win_width = task->win_right - task->win_left + 1;
-  task->win_height = task->win_bottom - task->win_top + 1;
-  task->pix_left = 8 * task->win_left;
-  task->pix_right = 8 * (task->win_right + 1) - 1;
-  task->pix_width = task->pix_right - task->pix_left + 1;
-  task->pix_top = 8 * task->win_top;
-  task->pix_bottom = 8 * (task->win_bottom + 1) - 1;
-  task->pix_height = task->pix_bottom - task->pix_top + 1;
+  task->win_width = uint64_t(task->win_right) - task->win_left + 1;
+  task->win_height = uint64_t(task->win_bottom) - task->win_top + 1;
+  task->pix_left = 8 * uint64_t(task->win_left);
+  task->pix_right = 8 * (uint64_t(task->win_right) + 1) - 1;
+  task->pix_width = uint64_t(task->pix_right) - task->pix_left + 1;
+  task->pix_top = 8 * uint64_t(task->win_top);
+  task->pix_bottom = 8 * (uint64_t(task->win_bottom) + 1) - 1;
+  task->pix_height = uint64_t(task->pix_bottom) - task->pix_top + 1;
   SetRFlags(flags);
+}
+
+static uint32_t boot_text[TEXT_COLS];
+
+void BootTextLayer()
+{
+  MemCpy(gr.text_base, boot_text, sizeof(boot_text));
+  MemSet(gr.text_base + TEXT_COLS, 0, (TEXT_ROWS - 1) * sizeof(boot_text));
 }
 
 void BootPutS(const char *text)
@@ -31,9 +39,10 @@ void BootPutS(const char *text)
   if (gr.text_base) {
     unsigned col = 0;
     for (; col < TEXT_COLS && text[col]; col++)
-      gr.text_base[col] = (WHITE << 8) | static_cast<uint8_t>(text[col]);
+      boot_text[col] = (WHITE << 8) | static_cast<uint8_t>(text[col]);
     for (; col < TEXT_COLS; col++)
-      gr.text_base[col] = 0;
+      boot_text[col] = 0;
+    BootTextLayer();
     VGAFlush();
     GrUpdateScrn();
     return;

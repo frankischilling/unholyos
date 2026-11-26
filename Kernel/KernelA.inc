@@ -99,3 +99,10 @@
 %define CCPU_SETH_TASK		0x38
 %define CCPU_IDLE_TASK		0x40
 %define CCPU_SWAP_CNT		0x50
+
+%define CTask_WIN_LEFT 0x48
+%define CTask_WIN_RIGHT 0x50
+%define CTask_WIN_TOP 0x58
+%define CTask_WIN_BOTTOM 0x60
+%define CTask_SCROLL_X 0x100
+%define CTask_SCROLL_Y 0x108

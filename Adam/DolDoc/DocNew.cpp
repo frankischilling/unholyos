@@ -42,15 +42,6 @@ CDocLock::~CDocLock()
     DocUnlock(*locked);
 }
 
-CDoc *DocPut()
-{
-  auto *task = CurrentTask();
-  if (task->task_flags & (1 << 5))
-    task = task->parent_task;
-  auto *doc = task ? task->put_doc : nullptr;
-  return doc && doc->doc_signature == DOC_SIGNATURE_VAL ? doc : nullptr;
-}
-
 CDocEntryBase *DocEntryNewBase(CDoc &doc, uint32_t type, uint64_t flags)
 {
   auto *entry = reinterpret_cast<CDocEntryBase *>(
