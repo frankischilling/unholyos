@@ -13,6 +13,8 @@ extern "C" void DocPutKeyCpp(CDoc *doc, int64_t ch, int64_t sc)
   CDocLock lock(*doc);
   if (sc & (SCF_ALT | SCF_KEY_DESC))
     return;
+  if ((doc->flags & DOCF_FORM) && DocFormKey(*doc, ch, sc))
+    return;
   if (!ch) {
     switch (sc & 0x7F) {
     case SC_CURSOR_LEFT:  EdCursorLeft(*doc, sc); break;

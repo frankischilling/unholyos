@@ -277,9 +277,43 @@ build/fat-write/Linux/TestBoot --fat32-write qemu-system-x86_64 \
   build/fat-write/fat32-write-test.iso build/fat-write/fat32-writable.img
 ```
 
-FAT32 mounting is still read-only by default. Stream writes,
-general FAT cache behavior, cross-linked chain repair, and crash recovery
-remain pending. The test does not establish those behaviors.
+FAT32 mounting is still read-only by default. General FAT
+cache behavior, cross-linked chain repair, and crash recovery remain
+pending.
+
+## FAT32 buffered streams
+
+`Fat32StreamProbe.HC` exercises unbounded growth, preallocation, buffered
+updates, seeks, reopening, contiguous streams, and raw compressed-file
+copy. The unchanged probe SHA-256 is
+`41bcff4d80e16aabd99a53ece93d1891650f3b64427da2ecf71e9cdd8e527932`.
+The native and pinned reference guests both report:
+
+```text
+Copying C:/ZIP.BIN.Z to C:/ZIP2.BIN.Z
+FAT32 stream mutation 3F
+FAT32 stream probe 3F
+```
+
+On a cold reboot of each guest's own disk:
+
+```text
+FAT32 persisted streams
+FAT32 stream probe 3F
+```
+
+The reference uses QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512`
+and a writable raw IDE index-0 disk. Its disk SHA-256 after both boots is
+`260f34c49e2f9d5f3add8d0712fbd6939e7bad0f2b942a6cc7a89ad6c634632b`.
+The native test checks complete FAT mirror equality, persistence of the
+entire mutated disk across reboot, and preservation of the input image.
+The two systems' allocation order and timestamps need not be identical.
+
+```sh
+make -j4 BUILD=build/fat-stream test
+build/fat-stream/Linux/TestBoot --fat32-stream qemu-system-x86_64 \
+  build/fat-stream/fat32-stream-test.iso build/fat-stream/fat32-writable.img
+```
 
 ## FAT32 formatting
 
@@ -1118,6 +1152,49 @@ loads the original file and checks the CPU and task report headings and
 live data entries. It observes `LastClass reports 7` before returning to
 the prompt. Report counts and pointer addresses are not expected to match
 because native task reflection and runtime records are still partial.
+
+## Document forms and database
+
+The original demos by Terry A. Davis are copied without changes from the
+pinned TempleOS checkout:
+
+- [Demo/Dsk/DataBase.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Dsk/DataBase.HC), SHA-256
+  `06f38c093a9a3bae9ef5f8a2b00ab8919e251b2eab35034f8bb80c877854985f`.
+- [Demo/DolDoc/Form.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/DolDoc/Form.HC), SHA-256
+  `d12fba94ec869f2becd9580f166e8fce1aa55068320450d93dddd6fec45fecbf`.
+
+The interactive regression mounts a temporary 2,048-block RedSea RAM drive
+as `B:`, sets the home directory to `B:/`, and runs the original database
+from the boot DVD. It enters two accounts, saves an edit to account 7,
+cancels a second overwrite, reads account 7 through the demo, then opens
+the resulting `DataBaseDemo.BIN` using `FOpen` and verifies its 51,200-byte
+size and both records with `FBlkRead`. It checks `Ada / 13 Pine` and
+`Bob / 45 Elm`, including backspace editing of the input fields. No host
+disk is attached to the VM. The database persists in the guest RAM drive
+for this session, not across a reboot.
+
+The original form demo displays four numeric values, a list, a fixed-length
+name, two allocated address strings, a date and a checkbox. The test
+selects Adult, changes the name to Jane, enters `Unit 2` in the empty
+address field, unchecks Check and saves. It compares the reported values
+with the pinned guest, including the unchanged numeric defaults and the
+first address. The list chooser and field content are tested with QEMU
+keyboard events and text-layer captures; full editor chrome and mouse
+behavior are not compared.
+
+Run the native regression with QEMU 8.2.2, `pc`, `qemu64`, 512 MiB:
+
+```sh
+make -j4 BUILD=build/docform
+make BUILD=build/docform build/docform/Linux/TestBoot
+build/docform/Linux/TestBoot --database qemu-system-x86_64 \
+  build/docform/unholyos.iso build/docform/database-native
+```
+
+For the reference replay, use the same driver with `--database-reference`
+and the pinned `TOS_Distro.ISO`. It obtains the reference text-layer address
+from the guest through the QEMU debug port. `make test` runs the native
+regression after the normal boot suite.
 
 ## Numeric and date prompts
 

@@ -669,21 +669,18 @@ preallocation, `w` replacement, `w+` updates, and metadata changes on
 close, including preservation of the original timestamp. The containing
 directory must already exist.
 
-The current slice supports DVD reads, RAM reads and writes, and FAT32
-ATA reads. It rejects
-positive writes to a new stream without a preallocated extent; the
-reference contiguous path would otherwise use cluster zero. A failed
-preallocation preserves the previous file rather than deleting it first.
-Close checks that changes to size stay within the allocated block count
-and that the entry still refers to the same file. FAT32 `FOpen` and
-`FBlkRead` follow allocation chains for reads, including seek and next-block
-operations. An explicit contiguous read requires the `.C` extension; the
-implementation still checks the actual FAT chain to avoid reading unrelated
-sectors. The current reader revalidates and traverses chains on each call;
-it does not reproduce the reference's `FSetClus` cache fields or dirty
-cluster-buffer behavior. FAT32 write streams remain pending; whole-file
-and directory mutations and the ATA block-write path are independently
-tested across cold reboots.
+DVD reads, RedSea RAM streams, and FAT32 ATA streams share this interface.
+RedSea writes still require a preallocated extent. FAT32 noncontiguous
+streams can allocate and extend their cluster chains on demand; preallocated
+and contiguous streams also support bounded writes. `FSetClus` tracks the
+current cluster and flushes a dirty buffer before changing clusters or
+closing. Reads from the current dirty cluster use the buffered data.
+Close commits size and timestamp changes to the directory entry. An
+explicit contiguous FAT32 stream requires the `.C` extension and checks
+the chain before accessing its blocks. FAT32 mutations remain subject to
+the explicitly writable device policy. Concurrent open-stream coherence,
+general truncation, transactional recovery, and full error-path parity
+remain pending.
 
 `Kernel/BlkDev/DskCopy.cpp` follows `CopySingleZ` and `CopySingle` in
 `DskCopy.HC`. Equal filename attributes select the raw block-stream path
@@ -715,8 +712,9 @@ the reference does despite its files-only API comment. A same-drive
 destination inside the resolved source directory is rejected. `ScanFlags`
 in `Kernel/StrB.cpp` uses the file utility flag list from `KDefine.cpp`.
 Read-only devices are refused before mutation. Writable RAM RedSea is the
-fully tested file-tree destination. FAT32 whole-file writes and deletion
-are implemented, while the block-stream copy and tree paths remain pending. Error paths,
+fully tested file-tree destination. FAT32 supports whole-file writes,
+deletion, and block-stream copy. FAT32 tree destinations are enabled but
+still need dedicated recursive workflow coverage. Error paths,
 resident-cache deletion behavior, and restoring a deleted current
 directory are not yet fully matched to TempleOS.
 
@@ -781,11 +779,24 @@ allow the original `Demo/LastClass.HC` to run unchanged. `CTask` reflection
 still covers only the implemented member declarations; native reports
 therefore need not have the reference's number of nested records.
 
-`Adam/DolDoc/DocForm.cpp` implements `DocDataFmt` and the bound scalar
-formats of `DocDataScan` used by class reports. `DocChar`, `DocRecalc`, and
-`DocRun` connect editing, live refresh, and tree expansion to those entries.
-General form construction, list/checkbox binding, and reallocated data
-remain pending; the original database demo is not claimed runnable.
+`Adam/DolDoc/DocForm.cpp` follows `DocForm.HC` for metadata-driven form
+construction, navigation, bound data formatting and scanning, list fields,
+checkboxes, and reallocated string fields. `DocEd.cpp` handles modal editing
+and restores the caller's document and window state. `DocPlain`, `DocPutKey`,
+and `DocRecalc` connect the entries to parsing, input, and rendering.
+The original `Demo/Dsk/DataBase.HC` and `Demo/DolDoc/Form.HC` run unchanged.
+The scan implementation supports the field formats exercised by the demos
+and class reports; general `StrScan` and the full editor status bar, menu,
+undo, and task-end handling remain incomplete. List selection uses a modal
+document in the current task rather than a separate popup task.
+
+`Kernel/BlkDev/DskDirB.cpp` exposes `HomeSet`, and the compiler headers expose
+the existing RAM-drive creation and lookup APIs so the database can write
+to a writable home directory. `Compiler/PrsExp.cpp` accepts address-of on
+array expressions used by the original form's `StrCpy(&fds.name, ...)`.
+`Kernel/KLoad.cpp` exposes the existing `_STRCPY` adapter under its HolyC
+name; the `ToUpper` adapter in `Kernel/StrA.cpp` supplies the reference
+character conversion without the reference compiler's intrinsic lowering.
 
 The kernel header table stores numeric and string defaults in a tagged
 union. This saves space in the boot image while preserving the same

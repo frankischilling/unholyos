@@ -538,6 +538,9 @@ private:
       auto value = Term(depth + 1);
       if (token == '*')
         return Deref(value);
+      // Array expressions already carry the address of their first element.
+      if (value != NO_IC && coc.code[value].dim)
+        return value;
       if (!IsLValue(value))
         return NO_IC;
       const auto node = coc.code[value];
