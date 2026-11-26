@@ -10,6 +10,7 @@ Demo/Graphics/Shading.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Games/Digits.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/ExtChars.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Prompt.HC -text whitespace=cr-at-eol,-blank-at-eol
+Apps/TimeClock/*.HC -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Linux/Fixtures/PromptProbe.HC text eol=lf
 Linux/Fixtures/FileOperationsProbe.HC text eol=lf
 Linux/Fixtures/Fat32ReadProbe.HC text eol=lf
@@ -18,6 +19,9 @@ Linux/Fixtures/AtaWriteProbe.HC text eol=lf
 Linux/Fixtures/AtaWriteRejectProbe.HC text eol=lf
 Linux/Fixtures/DateOffsetProbe.HC text eol=lf
 Demo/ClassMeta.HC -text whitespace=cr-at-eol,-blank-at-eol
+Demo/LastClass.HC -text whitespace=cr-at-eol,-blank-at-eol
+Linux/Fixtures/ClassReportProbe.HC text eol=lf
+Linux/Fixtures/LastClassRun.HC text eol=lf
 Linux/Fixtures/MemberMetaProbe.HC text eol=lf
 Linux/Fixtures/LastClassProbe.HC text eol=lf
 Linux/Fixtures/FontTextProbe.HC text eol=lf
@@ -86,6 +90,9 @@ Linux/Fixtures/Lines.HC -text
 Linux/Fixtures/Grid.HC -text
 Linux/Fixtures/FunctionPtrProbe.HC text eol=lf
 Linux/Fixtures/FileCopyProbe.HC text eol=lf
+Linux/Fixtures/QueueProbe.HC text eol=lf
+Linux/Fixtures/TimeClockProbe.HC text eol=lf
+Linux/Fixtures/TimeClockInputProbe.HC text eol=lf
 Linux/Fixtures/DocFrame.HC text eol=lf
 Linux/Fixtures/DocButton.HC text eol=lf
 Linux/Fixtures/DocCallback.HC text eol=lf

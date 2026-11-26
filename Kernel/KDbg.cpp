@@ -2,6 +2,44 @@
 
 extern "C" [[noreturn]] void SysHlt();
 
+bool ChkPtr(const void *ptr)
+{
+  auto addr = reinterpret_cast<uintptr_t>(ptr);
+  if (addr >= MEM_HEAP_BASE && addr < MEM_MAPPED_SPACE)
+    return (*MemPageTable(addr) & 1) != 0;
+  // Core zero and Adam retain their real records in the fixed boot area.
+  if (addr >= SYS_FIXED_AREA && addr < SYS_FIXED_AREA + sizeof(CSysFixedArea))
+    return true;
+  return MEM_BOOT_BASE <= addr && addr < 0xA0000;
+}
+
+bool ChkPtrRange(const void *ptr, size_t size)
+{
+  auto addr = reinterpret_cast<uintptr_t>(ptr);
+  if (!ChkPtr(ptr) || size > UINTPTR_MAX - addr)
+    return false;
+  if (!size)
+    return true;
+  auto last = addr + size - 1;
+  if (addr < MEM_HEAP_BASE)
+    return addr < 0xA0000 ? last < 0xA0000 :
+           last < SYS_FIXED_AREA + sizeof(CSysFixedArea);
+  if (last >= MEM_MAPPED_SPACE)
+    return false;
+  for (auto page = addr & ~(MEM_PAGE_SIZE - 1);;) {
+    if (!(*MemPageTable(page) & 1))
+      return false;
+    if (last - page < MEM_PAGE_SIZE)
+      return true;
+    page += MEM_PAGE_SIZE;
+  }
+}
+
+extern "C" uint64_t ChkPtrCpp(const void *ptr)
+{
+  return ChkPtr(ptr);
+}
+
 uint8_t *Caller(const uintptr_t *frame, int64_t depth, const CTask &task)
 {
   if (!task.stk || task.stk->stk_size < 16 || depth < 0)

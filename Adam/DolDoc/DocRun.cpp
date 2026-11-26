@@ -22,6 +22,11 @@ extern "C" int64_t DocEntryRunCpp(CDoc *doc, CDocEntryBase *entry,
   const auto &full = reinterpret_cast<const CDocEntry &>(*entry);
   int64_t result = -1;
   bool action = false;
+  if (!exited && (flags & DOCEF_CHECK_COLLAPSABLE)) {
+    entry->de_flags ^= DOCEF_CHECKED_COLLAPSED;
+    doc->flags |= DOCF_DO_FULL_REFRESH;
+    action = true;
+  }
   if (ch == ' ' || ch == '\n') {
     const bool left = ch == ' ';
     auto doc_addr = reinterpret_cast<uintptr_t>(doc);

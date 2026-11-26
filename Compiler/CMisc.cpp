@@ -5,6 +5,8 @@ extern "C" void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
                             const uintptr_t *frame);
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 extern "C" char *DirCurCpp(const CTask *task, void *mem_task);
+extern "C" char *DirFileCpp(const char *dirname, const char *name,
+                            const char *extension);
 
 char *CmdLinePmt()
 {
@@ -82,4 +84,22 @@ extern "C" void StreamPrintCpp(const char *fmt, int64_t argc,
   } else
     stream.error = true;
   Free(text);
+}
+
+extern "C" void StreamDirCpp()
+{
+  auto *task = CurrentTask();
+  auto *cc = task->last_cc;
+  if (cc == reinterpret_cast<CCmpCtrl *>(&task->next_cc))
+    return;
+  auto *file = cc->lex_include_stk;
+  while (file && (file->flags & LFSF_DEFINE))
+    file = file->next;
+  if (file && file->full_name) {
+    if (auto *dirname = DirFileCpp(file->full_name, nullptr, nullptr)) {
+      uint64_t arg = reinterpret_cast<uintptr_t>(dirname);
+      StreamPrintCpp("\"%s\"", 1, &arg, nullptr);
+      Free(dirname);
+    }
+  }
 }

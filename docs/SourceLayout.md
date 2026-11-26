@@ -731,9 +731,25 @@ that require executing or relocating unfinished AOT code remain pending.
 `AsmInit.cpp` exposes the compiler's member and class records for HolyC
 reflection, including `Fs->hash_table`, `HashFind`, and `MemberFind`.
 The records retain their ABI sizes; debugger and external-usage pointers
-are exposed as opaque addresses. The original `Demo/ClassMeta.HC` now runs
-unchanged. `ClassRep`, `ClassRepD`, and `DocForm` remain pending, so the
-original database demo and the complete `LastClass.HC` are not yet runnable.
+are exposed as opaque addresses. The original `Demo/ClassMeta.HC` runs
+unchanged.
+
+`Adam/ADbg.cpp` follows `Adam/ADbg.HC` for `ClassRep2`, `ClassRep`,
+and `ClassRepD`, using the compiler's actual class and member records.
+It reports base classes, nested records, bounded arrays, scalar values,
+and strings. The dynamic report uses bound DolDoc data entries; scalar
+entries refresh from and write back to the reported memory. `Kernel/KDbg.cpp`
+provides pointer validation, including the native fixed boot records for
+the CPU and Adam task. `Gs` and the native `CCPU` member declarations
+allow the original `Demo/LastClass.HC` to run unchanged. `CTask` reflection
+still covers only the implemented member declarations; native reports
+therefore need not have the reference's number of nested records.
+
+`Adam/DolDoc/DocForm.cpp` implements `DocDataFmt` and the bound scalar
+formats of `DocDataScan` used by class reports. `DocChar`, `DocRecalc`, and
+`DocRun` connect editing, live refresh, and tree expansion to those entries.
+General form construction, list/checkbox binding, and reallocated data
+remain pending; the original database demo is not claimed runnable.
 
 The kernel header table stores numeric and string defaults in a tagged
 union. This saves space in the boot image while preserving the same
@@ -762,6 +778,27 @@ return zero instead of reading outside the month tables. The pinned
 reproduced explicitly for common and leap years without an out-of-bounds
 read. CPU fault recovery, full compiler diagnostics, and unordered
 floating-point comparisons remain outside this prompt implementation.
+
+## Queue primitives and source paths
+
+`Compiler/BackC.cpp` emits the queue operations from `BackC.HC` and
+the string-length operation from `Templates.HC`. The compiler keeps the
+reference opcodes for `QueInit`, `QueIns`, `QueInsRev`, `QueRem`, and
+`StrLen`. `CQue` exposes its two actual pointers. `StrCpy` uses the
+existing native `_STRCPY` entry point and HolyC calling convention.
+
+`StreamDir` in `Compiler/CMisc.cpp` obtains the active source directory
+and writes its quoted name to the compile-time stream, as in `CMisc.HC`.
+It skips define-expansion frames to reach the source file. The `__DIR__`
+define invokes it through `#exe`. This is needed by the unchanged
+application loaders rather than a fixed path for any particular app.
+
+`Compiler/AsmInit.cpp` describes the implemented block-device globals
+using the actual `CBlkDevGlbls` fields and array offsets, including
+`home_dir`. Cache pointers remain outside the exposed record members
+until the cache subsystem is implemented. The original `Apps/TimeClock`
+sources use the native queue, date, prompt, and file APIs directly.
+The probes set a temporary RAM home directory and restore it afterward.
 
 ## HolyC exception statements
 
