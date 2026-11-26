@@ -7,7 +7,7 @@ HOSTCXX := g++
 QEMU := qemu-system-x86_64
 HOSTCXXFLAGS := -std=c++20 -O2 -Wall -Wextra -Werror
 
-CXXFLAGS := -std=c++20 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie \
+CXXFLAGS := -std=c++20 -Os -Wall -Wextra -Werror -ffreestanding -fno-pie \
 	-fno-exceptions -fno-rtti -fno-stack-protector -fno-asynchronous-unwind-tables \
 	-mno-red-zone -mgeneral-regs-only -MMD -MP
 

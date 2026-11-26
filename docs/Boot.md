@@ -15,6 +15,15 @@ The [kernel source structure verification](SourceStructureVerification.md)
 records the build and boot checks for the extraction of guest probes from
 `Kernel/KMain.cpp` into `Linux/BootProbe.cpp`.
 
+The freestanding kernel uses `-Os`; the host tools retain `-O2`. The DVD
+loader relocates to physical address `0x96600`, as in the pinned TempleOS
+loader. The kernel and BSS must fit below that address. On GCC 13.3.0 the
+file-stream baseline's kernel shrank from 522,512 to 407,568 bytes without
+changing the loader layout. All nine local QEMU cases passed with `-Os`.
+Clang may emit a System V `memcpy` call for aggregate copies. Its assembly
+entry returns the original destination; the HolyC `_MEMCPY` entry retains
+the reference calling convention and return value.
+
 ## HolyC terminal
 
 Startup opens two DolDoc terminals side by side and focuses the left
