@@ -182,6 +182,52 @@ This is read-side FAT32 support. Formatting, allocation, deletion, and
 other FAT32 writes have not been implemented. No physical drive was
 used for these tests.
 
+## Persistent ATA block writes
+
+`AtaWriteProbe.HC` writes 130 sectors in the unused tail of a disposable
+copy of the FAT32 fixture. It enables the reference's read-only override
+only for the block writes, then restores the device flags. The probe
+checks the complete pattern, a separately addressed sector, both adjacent
+guard sectors, and a zero-length write. Both guests reported:
+
+```text
+ATA wrote pattern
+ATA write probe 3F
+```
+
+After shutting down QEMU and booting again with the same writable raw disk,
+both guests reported:
+
+```text
+ATA persisted pattern
+ATA write probe 3F
+```
+
+The reference ran on the pinned distribution DVD in QEMU 8.2.2 with
+`-machine pc -cpu qemu64 -m 512` and the raw disk attached as IDE index 0.
+As in the read test, the wrapper explicitly mounted C: and executed the
+unchanged probe via `ExePutS`. The source SHA-256 is
+`b9e5da59568ae263833e331d98088268dcf132457ad165f5a6c40badfc2da489`.
+The full 68,699,136-byte reference disk matched the expected image after
+both boots, SHA-256
+`42fc1e42e394c132e02e0dff386094c7210a41cbcfe6630d86b2672588980162`.
+The native test compares every byte of the disk to that same expected
+pattern after each shutdown. It also runs `AtaWriteRejectProbe.HC` (1F),
+checking read-only protection, partition boundaries, and DVD write refusal,
+and preserves the existing FAT32 rejection probe. The original input disk
+is never opened for writing by these tests.
+
+```sh
+make -j4 BUILD=build/ata-check test
+build/ata-check/Linux/TestBoot --ata-write qemu-system-x86_64 \
+  build/ata-check/ata-test.iso build/ata-check/fat32.img
+```
+
+The ATA implementation uses LBA28 PIO and flushes the device write cache.
+It does not yet implement the reference's multi-sector mode, LBA48, retry
+and exception behavior, or general disk caching. FAT32 remains read-only
+by default, and the block test does not establish file-write compatibility.
+
 ## Building a RedSea ISO in the guest
 
 `RedSeaISO` takes an output filename, a source directory, and an optional
