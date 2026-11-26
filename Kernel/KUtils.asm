@@ -1,5 +1,5 @@
 GLOBAL CPUStructInit,TaskInit,SET_GS_BASE,SET_FS_BASE,CallModuleMain,CallHolyC0,CallHolyC2
-GLOBAL _MEMCPY,_MEMSET,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_CLAMP_I64
+GLOBAL _MEMCPY,_MEMSET,_MEMSET_U16,_MEMSET_U32,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_CLAMP_I64
 GLOBAL memcpy,memset
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
@@ -21,6 +21,7 @@ GLOBAL DirEntryDelHC,DirEntryDel2HC,DirTreeDelHC,DirTreeDel2HC
 GLOBAL DirContextNewHC,DirContextDelHC
 GLOBAL FileWriteHC,BlkDevNextFreeSlotHC,BlkDevAddHC,Let2DrvHC,BlkReadHC,BlkWriteHC
 GLOBAL FSizeHC,FOpenHC,FCloseHC,FBlkReadHC,FBlkWriteHC
+GLOBAL FmtHC
 GLOBAL FileAttrHC,CopySingleHC
 GLOBAL DelHC,CopyHC,MoveHC,CopyTreeHC,DelTreeHC,DirMkHC,ScanFlagsHC
 GLOBAL RedSeaISOHC
@@ -56,6 +57,7 @@ GLOBAL MenuPopHC
 GLOBAL ScanCode2KeyNameHC
 GLOBAL WinBorderHC,SettingsPushHC,SettingsPopHC
 GLOBAL DocLockHC,DocUnlockHC,DocEntryRunHC,DocBottomHC,DocClearHC,NowHC
+GLOBAL DocCursorHC,DocHighlightCursorHC,DocScrollHC
 GLOBAL Struct2DateHC,Date2StructHC,YearStartDateHC,DayOfWeekHC
 GLOBAL FirstDayOfMonHC,LastDayOfMonHC,FirstDayOfYearHC,LastDayOfYearHC
 GLOBAL DocTermNewHC,DocGetKeyHC,DocScanLineHC,GetStrHC,GetSHC,UserCmdLineHC
@@ -150,6 +152,7 @@ EXTERN DocMaxCpp,DocDataFmtCpp,DocDataScanCpp
 EXTERN DocFormCpp,DocEdCpp,DocFormFwdCpp,DocFormBwdCpp,ViewCpp,HomeSetCpp,ToUpperCpp
 EXTERN GetI64Cpp,GetF64Cpp,GetDateCpp
 EXTERN FileWriteCpp,BlkDevNextFreeSlotCpp,BlkDevAddCpp,Let2DrvCpp,BlkReadCpp,BlkWriteCpp
+EXTERN FmtCpp
 EXTERN FSizeCpp,FOpenCpp,FCloseCpp,FBlkReadCpp,FBlkWriteCpp
 EXTERN FileAttrCpp,CopySingleCpp
 EXTERN DelCpp,CopyCpp,MoveCpp,CopyTreeCpp,DelTreeCpp,DirMkCpp,ScanFlagsCpp
@@ -186,6 +189,7 @@ EXTERN MenuPopCpp
 EXTERN ScanCode2KeyNameCpp
 EXTERN WinBorderCpp,SettingsPushCpp,SettingsPopCpp
 EXTERN DocLockCpp,DocUnlockCpp,DocEntryRunCpp,DocBottomCpp,DocClearCpp,NowCpp
+EXTERN DocCursorCpp,DocHighlightCursorCpp,DocScrollCpp
 EXTERN Struct2DateCpp,Date2StructCpp,YearStartDateCpp,DayOfWeekCpp
 EXTERN FirstDayOfMonCpp,LastDayOfMonCpp,FirstDayOfYearCpp,LastDayOfYearCpp
 EXTERN DocTermNewCpp,DocGetKeyCpp,DocScanLineCpp,GetStrCpp,GetSCpp,UserCmdLineCpp
@@ -543,6 +547,7 @@ HOLYC_CPP BlkDevAddHC,BlkDevAddCpp,4
 HOLYC_CPP Let2DrvHC,Let2DrvCpp,2
 HOLYC_CPP BlkReadHC,BlkReadCpp,4
 HOLYC_CPP BlkWriteHC,BlkWriteCpp,4
+HOLYC_CPP FmtHC,FmtCpp,4
 HOLYC_CPP SysUntryHC,SysUntryCpp,0
 HOLYC_CPP YorNHC,YorNCpp,0
 HOLYC_CPP PutExceptHC,PutExceptCpp,1
@@ -636,6 +641,9 @@ HOLYC_CPP DocUnlockHC,DocUnlockCpp,1
 HOLYC_CPP DocEntryRunHC,DocEntryRunCpp,4
 HOLYC_CPP DocBottomHC,DocBottomCpp,1
 HOLYC_CPP DocClearHC,DocClearCpp,2
+HOLYC_CPP DocCursorHC,DocCursorCpp,2,1
+HOLYC_CPP DocHighlightCursorHC,DocHighlightCursorCpp,2,1
+HOLYC_CPP DocScrollHC,DocScrollCpp,2,1
 HOLYC_CPP NowHC,NowCpp,0
 HOLYC_CPP Struct2DateHC,Struct2DateCpp,1
 HOLYC_CPP Date2StructHC,Date2StructCpp,2
@@ -802,6 +810,8 @@ _MEMCPY:
 %endmacro
 
 MEMSET _MEMSET,STOSB
+MEMSET _MEMSET_U16,STOSW
+MEMSET _MEMSET_U32,STOSD
 MEMSET _MEMSET_I64,STOSQ
 
 _MEMCMP:

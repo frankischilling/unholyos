@@ -406,6 +406,9 @@ bool RedSeaDirClus(const CDrv &dv, const char *path, size_t count,
                    uint64_t &dir);
 bool RedSeaIsDir(const CDrv &dv, const char *path);
 bool FAT32Init(CDrv &dv);
+bool FAT32Fmt(CDrv &dv, bool quick);
+bool DrvTypeSet(CDrv &dv, uint8_t type, bool write);
+bool BlkWriteZero(CDrv &dv, uint64_t blk, uint64_t cnt);
 bool FAT32FileFind(const CDrv &dv, uint64_t dir, const char *name,
                    bool directory, CRedSeaDirEntry &entry);
 bool FAT32FileRead(const CDrv &dv, const CRedSeaDirEntry &entry, uint64_t pos,

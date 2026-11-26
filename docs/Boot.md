@@ -277,7 +277,7 @@ build/fat-write/Linux/TestBoot --fat32-write qemu-system-x86_64 \
   build/fat-write/fat32-write-test.iso build/fat-write/fat32-writable.img
 ```
 
-FAT32 mounting is still read-only by default. Formatting, general FAT
+FAT32 mounting is still read-only by default. General FAT
 cache behavior, cross-linked chain repair, and crash recovery remain
 pending.
 
@@ -339,6 +339,47 @@ boots is `2a08f393a723838485047df0c2ed2d6c9061ce4dbd7fb692a21fc09ea4d4136f`.
 
 ```sh
 make -j4 BUILD=build/fat-tree test
+```
+
+## FAT32 formatting
+
+`Fat32FormatProbe.HC` writes a sentinel at the partition's final sector,
+quick-formats the volume, checks its empty root and FATs, and confirms
+that the sentinel survived. It writes a file, full-formats the volume,
+checks that the old file and sentinel are gone, and saves a new file.
+The native and pinned reference guests both report:
+
+```text
+FAT32 format mutation 3F
+FAT32 format probe 0F
+```
+
+After a cold reboot of each guest's own disk:
+
+```text
+FAT32 persisted format
+FAT32 format probe 0F
+```
+
+The probe SHA-256 is
+`fc860a08d86c5732346a442b7a43931b50574303cfbe48725ff1e143e9a362a6`.
+The pinned live DVD ran under QEMU 8.2.2 with `-machine pc -cpu qemu64
+-m 512`, explicit `ATAMount`, and a writable raw IDE index-0 fixture copy.
+The reference disk SHA-256 after formatting and after reboot was
+`149fe048dbe1454a446e707524a9428523bfbdd6429d967ad8b4cd159b409959`.
+The native test checks both complete FAT copies, the boot record,
+preservation of all sectors outside the formatted partition except the
+expected MBR partition type and active flag, zeroes throughout the
+remaining data sectors, and persistence of the complete image on reboot.
+On the second native boot the driver also attempts a read-only format
+and declines the default confirmation on a writable volume using actual
+keyboard input. The image must remain unchanged after both refusals.
+Volume serial numbers and file timestamps need not match the reference.
+
+```sh
+make -j4 BUILD=build/fat-format test
+build/fat-format/Linux/TestBoot --fat32-format qemu-system-x86_64 \
+  build/fat-format/fat32-format-test.iso build/fat-format/fat32-writable.img
 ```
 
 ## Building a RedSea ISO in the guest
@@ -912,6 +953,60 @@ ISO suite. The reference run used the pinned distribution disc and
 `-machine pc -cpu qemu64 -m 512 -boot d -cdrom <reference.iso> -display
 none`; QEMU's monitor captured the corresponding text layer after the
 same input sequence.
+
+## Character graphics and Maze
+
+Both boot discs include the unchanged originals by Terry A. Davis:
+
+- [Demo/Games/CharDemo.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Games/CharDemo.HC),
+  SHA-256 `f9aa176f08dcd25f259b17f54638e703029878950fd54973c945d46cf4de217b`.
+- [Demo/Games/Maze.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Games/Maze.HC),
+  SHA-256 `b6701b8e161069668b19585eb071a43cad21bc05c659599dd2186b42c5a6a6c4`.
+
+`MemSetProbe.HC` exercises typed fills of 8-, 16-, 32- and 64-bit
+elements. It checks the end-pointer return value, zero counts, guard
+elements, truncation, the packed text attributes and the previous-state
+return values of `DocCursor`, `DocHighlightCursor` and `DocScroll`.
+The startup test expects `Memory set probe 3FF`.
+
+The focused C++ driver runs the original game sources in a user task.
+With `Seed(12345)`, CharDemo cycles the four water glyphs, pans by one
+pixel at a time, moves 32 pixels in each direction, returns to its
+initial viewport, and regenerates its map on Enter. The test compares
+2,925 packed character/attribute cells per phase with fingerprints
+recorded from the pinned guest. It checks the original font pointer,
+task draw and animation callbacks, cursor and scroll flags, window
+geometry, and panning state after Escape.
+
+For Maze, the driver moves the mouse to pixel (240,416), holds the
+left button while moving across seven cells, and releases it. The
+wall occupies text cells (30,52) through (36,52). Right-click at
+pixel (264,392) starts the solver at (33,49). The path goes down
+to (33,51), around the right end of the wall, and down to the lower
+boundary without overwriting the wall. Enter clears the board and
+Escape restores the terminal. The driver verifies the wall and the
+first eight path cells; the captures also include the VGA framebuffer.
+
+Run the native regression with QEMU 8.2.2, PC, `qemu64` and 512 MiB:
+
+```sh
+make -j4 BUILD=build/character-check
+make BUILD=build/character-check build/character-check/Linux/TestBoot
+build/character-check/Linux/TestBoot --character-graphics qemu-system-x86_64 \
+  build/character-check/unholyos.iso build/character-check/native
+```
+
+To replay against the pinned distribution, invoke the same driver from
+the repository root with `--character-graphics-reference` and the
+reference ISO. It declines installation and the tour, obtains the text
+layer address from the guest's debug port, and uses GDB on local port
+45362 to copy the exact memory-set probe bytes into a guest allocation.
+The original demos execute from the reference DVD. The normal test uses
+QMP over a private socket pair and does not require GDB.
+
+This covers the tested keyboard, mouse, text-layer and cleanup paths,
+not every map boundary, maze shape, menu action, animation timing, or
+speaker output. No complete framebuffer or audio parity is claimed.
 
 ## Arrows, raster text, and the common ancestor demo
 

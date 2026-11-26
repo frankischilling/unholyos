@@ -420,6 +420,15 @@ registry and raw console rendering remain pending.
 `TextLenAttrStr` in `Adam/Gr/GrTextBase.asm` clips packed character
 and attribute cells. `TextPrint` in `GrTextBase.cpp` formats through
 the native variadic bridge and uses the clipped text-layer writer.
+The typed memory fills in `Kernel/KUtils.asm` use the reference
+`REP STOSB/W/D/Q` sequences and return the end pointer. The native
+compiler exposes their typed signatures and packed text attribute
+constants. `Adam/DolDoc/DocRecalcLib.cpp` implements the cursor,
+cursor highlighting, and scrollbar flag setters and returns the
+previous visibility state. The compiler also exposes the task's
+window width and height used by the original `CharDemo.HC` and
+`Maze.HC`. These demos run their own HolyC code and draw callbacks;
+the host driver supplies keyboard and mouse input, not game logic.
 The bootstrap puts its first status line in
 `gr.text_base`. `GrUpdateScrn` calls `gr.fp_final_scrn_update` on an
 on-top alias of the composite. `WinFinalUpdate` invokes `DrawMs` before
@@ -644,6 +653,19 @@ or general corruption-repair facility. There is no persistent FAT cache,
 full filesystem exception parity, or Unicode support. FAT32 mutations
 require an explicitly writable ATA device; the normal mount policy is
 unchanged.
+
+`DskFmt.cpp` follows `DskFmt.HC` for `Fmt` and partition type updates.
+`FAT32Fmt` in `FileSysFAT.cpp` uses the pinned sector-per-cluster
+thresholds, boot record, FSInfo signatures, two FAT copies, and root
+cluster allocation. `BlkWriteZero` in `DskBlk.cpp` clears the metadata
+region for a quick format or the entire partition for a full format.
+The current ATA formatter accepts an existing mounted FAT32 primary
+partition only, checks its extent and excludes overlapping partitions.
+It preserves unrelated MBR bytes. `Fmt` honors confirmation and refuses
+read-only devices; it also supports the existing RAM RedSea formatting
+path. Formatting unmounted partitions, extended partitions, ATA RedSea,
+progress indicators, and complete error and cache behavior remain pending.
+Formatting is destructive and is not transactional.
 
 ## File streams
 

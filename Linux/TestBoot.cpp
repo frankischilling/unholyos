@@ -266,8 +266,10 @@ public:
       if (debugcon)
         execlp(qemu, qemu, "-machine", machine, "-cpu", "qemu64", "-m", memory,
                "-boot", "d", "-cdrom", image.c_str(), "-display", "none",
-               "-monitor", "none", "-serial", serial.c_str(), "-qmp", "stdio",
-               "-debugcon", debug.c_str(), "-no-reboot", static_cast<char *>(nullptr));
+               "-monitor", "none", "-serial", serial.c_str(), "-qmp",
+               "stdio", "-debugcon", debug.c_str(), "-gdb",
+               "tcp:127.0.0.1:45362", "-no-reboot",
+               static_cast<char *>(nullptr));
       if (!disk.empty()) {
         execlp(qemu,qemu,"-machine",machine,"-cpu","qemu64","-m",memory,
                "-boot","d","-cdrom",image.c_str(),"-drive",ata.c_str(),
@@ -1680,6 +1682,80 @@ static void DriveDigits(CMonitor &vm, const fs::path &dir,
   Check(!find("PRESS A KEY") && cells[find("T:/Home>") + 1] == before,
         "Digits did not restore the terminal after Shift-Escape");
   std::cout << "Digits.HC matched seeded patterns, score, restart and Escape\n";
+}
+
+#include "TestCharacterGraphics.hpp"
+
+static void VerifyFormatRefusal(CMonitor &vm, const fs::path &dir,
+                                const std::string &boot)
+{
+  vm.ResetDeadline(45s);
+  std::smatch match;
+  Check(std::regex_search(boot, match, std::regex(R"(text base (0x[0-9a-f]+))")),
+        "Missing format text layer address");
+  auto addr=std::stoull(match[1].str(),nullptr,16);
+  auto path=dir/"format-text.bin";
+  auto wait=[&](std::string_view wanted) {
+    std::string visible;
+    for (unsigned i=0;i<180;i++) {
+      vm.Command(R"({"execute":"pmemsave","arguments":{"val":)"+
+                 std::to_string(addr)+R"(,"size":19200,"filename":")"+
+                 path.string()+R"("}})");
+      auto data=FileRead(path);
+      Check(data.size()==19200,"Incomplete format text layer");
+      visible.clear();
+      for (size_t y=0;y<60;y++) {
+        for (size_t x=0;x<80;x++) {
+          auto c=data[(y*80+x)*4];
+          visible+=c>=32 && c<127?char(c):' ';
+        }
+        visible+='\n';
+      }
+      if (visible.find(wanted)!=std::string::npos) return;
+      std::this_thread::sleep_for(30ms);
+    }
+    throw std::runtime_error("Format missing "+std::string(wanted)+"\n"+visible);
+  };
+  auto key=[&](std::string name) {
+    vm.Hmp("sendkey "+name+" 35");
+    std::this_thread::sleep_for(65ms);
+  };
+  auto cmd=[&](std::string_view command) {
+    for (char c:command) {
+      if (c>='A' && c<='Z') key("shift-"+std::string(1,char(c-'A'+'a')));
+      else switch (c) {
+        case '(': key("shift-9"); break;
+        case ')': key("shift-0"); break;
+        case '\'': key("apostrophe"); break;
+        case '"': key("shift-apostrophe"); break;
+        case ';': key("semicolon"); break;
+        case ':': key("shift-semicolon"); break;
+        case '/': key("slash"); break;
+        case '.': key("dot"); break;
+        case ',': key("comma"); break;
+        case '-': key("minus"); break;
+        case '>': key("shift-dot"); break;
+        case '&': key("shift-7"); break;
+        case '=': key("equal"); break;
+        case '~': key("shift-grave_accent"); break;
+        case '_': key("shift-minus"); break;
+        case ' ': key("spc"); break;
+        default: key(std::string(1,c)); break;
+      }
+    }
+    key("ret");
+  };
+  wait("T:/Home>");
+  cmd("WinMax;DocClear(,1);");
+  cmd("Fmt('C',1,0);");
+  wait("Drive Read Only");
+  cmd("Let2Drv('C',0)->bd->flags&=~BDF_READ_ONLY;");
+  cmd("Fmt('C',1);");
+  wait("ARE YOU SURE (y or n)?");
+  key("n");
+  wait("NO");
+  cmd("FileFind(\"C:/FormatDone.BIN\");");
+  wait("=1");
 }
 
 static void DriveDataBase(CMonitor &vm, const fs::path &dir,
@@ -3634,6 +3710,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/FileOperationsProbe.HC", file_operations_output, '1');
     CheckProgramOutput(boot, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
     CheckProgramOutput(boot, "/ClassMeta.HC", class_meta_output, '1');
+    CheckProgramOutput(boot, "/MemSetProbe.HC", "Memory set probe 3FF\n", '1');
     CheckProgramOutput(boot, "/ClassReportProbe.HC", class_report_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.HC", last_class_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.BIN.Z", last_class_output, '1');
@@ -3745,6 +3822,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/FileOperationsProbe.HC", file_operations_output, '1');
       CheckProgramOutput(output, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
       CheckProgramOutput(output, "/ClassMeta.HC", class_meta_output, '1');
+      CheckProgramOutput(output, "/MemSetProbe.HC", "Memory set probe 3FF\n", '1');
       CheckProgramOutput(output, "/ClassReportProbe.HC", class_report_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.HC", last_class_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.BIN.Z", last_class_output, '1');
@@ -4292,7 +4370,9 @@ int main(int argc, char **argv)
   }
   if (argc==5 && (std::string_view(argv[1])=="--fat32-write" ||
                   std::string_view(argv[1])=="--fat32-stream" ||
-                  std::string_view(argv[1])=="--fat32-tree")) {
+                  std::string_view(argv[1])=="--fat32-tree" ||
+                  std::string_view(argv[1])=="--fat32-format")) {
+    bool format=std::string_view(argv[1])=="--fat32-format";
     bool stream=std::string_view(argv[1])=="--fat32-stream";
     bool tree=std::string_view(argv[1])=="--fat32-tree";
     char path[]="/tmp/unholyos-fat32-write-XXXXXX";
@@ -4300,7 +4380,8 @@ int main(int argc, char **argv)
     fs::path dir=path,disk=dir/"owned.img";
     try {
       auto original=FileRead(argv[4]);
-      constexpr size_t fat1=2080*512,fat2=2593*512,fat_bytes=513*512;
+      size_t fat1=2080*512,fat2=(format?3113:2593)*512,
+             fat_bytes=(format?1033:513)*512;
       Check(original.size()==68699136,"Wrong writable FAT32 geometry");
       fs::copy_file(argv[4],disk);
       auto expected=original;
@@ -4309,6 +4390,7 @@ int main(int argc, char **argv)
         fs::create_directory(run);
         CMonitor vm(argv[2],argv[3],run,"pc","512",false,disk,true);
         vm.Connect();
+        if (format) vm.ResetDeadline(180s);
         auto output=vm.Boot(run/"serial.log");
         if (tree)
           CheckProgramOutput(output,"/Fat32TreeProbe.HC",
@@ -4335,6 +4417,10 @@ int main(int argc, char **argv)
                    "Del R.TXT\nDel PICK\nDel D.TXT\nDel DEEP\nDel C.TXT\n"
                    "Del E.BIN.Z\nDel SUB\nDel EMPTY\nDel A.TXT\nDel B.BIN\nDel OPS\n"
                    "FAT32 tree mutation FF\nFAT32 tree probe 3F\n",'1');
+        else if (format)
+          CheckProgramOutput(output,"/Fat32FormatProbe.HC",
+            pass?"FAT32 persisted format\nFAT32 format probe 0F\n":
+                 "FAT32 format mutation 3F\nFAT32 format probe 0F\n",'1');
         else if (stream)
           CheckProgramOutput(output,"/Fat32StreamProbe.HC",
               pass?"FAT32 persisted streams\nFAT32 stream probe 3F\n":
@@ -4344,13 +4430,12 @@ int main(int argc, char **argv)
             pass?"FAT32 persisted files\nFAT32 file probe FF\n":
                  "Make Directory:C:/Work\nMake Directory:C:/Work/Grow\n"
                  "Make Directory:C:/Work/Empty\nFAT32 mutation 3F\nFAT32 file probe FF\n",'1');
+        if (format && pass) VerifyFormatRefusal(vm,run,output);
         vm.Quit();
         auto actual=FileRead(disk);
         Check(actual.size()==original.size(),"FAT32 image size changed");
         Check(std::equal(actual.begin()+fat1,actual.begin()+fat1+fat_bytes,
                          actual.begin()+fat2),"FAT32 mirrors differ");
-        Check(std::equal(actual.begin(),actual.begin()+2049*512,original.begin()),
-              "FAT32 changed MBR or boot sector");
         if (tree) {
           for (size_t c=0;c<fat_bytes/4;c++) {
             auto link=ReadLE(original,fat1+c*4,4);
@@ -4361,6 +4446,24 @@ int main(int argc, char **argv)
                   "FAT32 tree leaked clusters or changed existing chains");
           }
         }
+        if (format) {
+          auto mbr=original;
+          mbr[446]=0x80;
+          mbr[450]=0x0B;
+          Check(std::equal(actual.begin(),actual.begin()+2048*512,mbr.begin()),
+                "Format changed sectors outside the partition");
+          auto boot=actual.data()+2048*512;
+          Check(boot[0]==0xEB && boot[1]==0x58 && boot[2]==0x90 &&
+                std::string_view(reinterpret_cast<const char *>(boot+3),8)=="MSWIN4.1" &&
+                boot[13]==1 &&
+                boot[16]==2 && boot[510]==0x55 && boot[511]==0xAA,
+                "Incorrect formatted boot sector");
+          // Root and the new file use clusters 2 and 3. Full format zeros
+          // every remaining data sector, not merely the sentinel sector.
+          Check(std::all_of(actual.begin()+4148*512,actual.end(),
+                           [](uint8_t b){return !b;}),"Full format left stale data");
+        } else Check(std::equal(actual.begin(),actual.begin()+2049*512,original.begin()),
+                     "FAT32 changed MBR or boot sector");
         if (pass) Check(actual==expected,"Read-only reboot changed FAT32 bytes");
         else {
           Check(actual!=original,"FAT32 mutations did not reach disk");
@@ -4369,7 +4472,8 @@ int main(int argc, char **argv)
       }
       Check(FileRead(argv[4])==original,"Original FAT32 fixture was modified");
       std::cout<<(tree?"Verified FAT32 fragmented stream, recursive file trees and reclamation\n":
-                  stream?"Verified FAT32 buffered streams, growth, copy and cold reboot\n":
+                         format?"Verified FAT32 quick/full format, partition bounds and cold reboot\n":
+                         stream?"Verified FAT32 buffered streams, growth, copy and cold reboot\n":
                          "Verified FAT32 file and directory mutations, mirrored FATs and cold reboot\n");
       fs::remove_all(dir);
       return 0;
@@ -4380,11 +4484,14 @@ int main(int argc, char **argv)
     }
   }
   if ((argc == 4 || argc == 5) &&
-      (std::string_view(argv[1]) == "--database" ||
+      (std::string_view(argv[1]) == "--character-graphics" ||
+       std::string_view(argv[1]) == "--character-graphics-reference" ||
+       std::string_view(argv[1]) == "--database" ||
        std::string_view(argv[1]) == "--database-reference" ||
        std::string_view(argv[1]) == "--form")) {
-    bool reference = std::string_view(argv[1]) == "--database-reference";
-    char path[] = "/tmp/unholyos-database-XXXXXX";
+    bool character = std::string_view(argv[1]).starts_with("--character-graphics");
+    bool reference = std::string_view(argv[1]).ends_with("-reference");
+    char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
@@ -4392,8 +4499,11 @@ int main(int argc, char **argv)
       fs::create_directories(dir);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
-      DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
-                    std::string_view(argv[1]) == "--form");
+      if (character)
+        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference);
+      else
+        DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
+                      std::string_view(argv[1]) == "--form");
       vm.Command(R"({"execute":"quit"})");
       if (argc == 4)
         fs::remove_all(dir);
@@ -4499,7 +4609,9 @@ int main(int argc, char **argv)
     std::cerr << "Usage: " << argv[0]
               << " qemu image.iso kernel [startup-test.iso]\n"
               << "       " << argv[0]
-              << " --digits qemu image.iso [capture-dir]\n";
+              << " --digits qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --character-graphics[-reference] qemu image.iso [capture-dir]\n";
     return 2;
   }
   try {
