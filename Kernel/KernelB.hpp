@@ -369,7 +369,8 @@ int32_t PCIClassFind(uint32_t class_code, uint16_t index);
 
 uint32_t ATAProbe(const CBlkDev &bd);
 bool ATAReadCapacity(CBlkDev &bd);
-bool ATAReadBytes(const CBlkDev &bd, uint8_t *buf, uint64_t pos, size_t bytes);
+bool ATAReadBytes(CBlkDev &bd, uint8_t *buf, uint64_t pos, size_t bytes);
+bool ATAWriteBytes(CBlkDev &bd, const uint8_t *buf, uint64_t pos, size_t bytes);
 bool ATAPIStartStop(const CBlkDev &bd, bool start);
 bool ATAPIReadCapacity(CBlkDev &bd);
 bool ATAPIReadBlks2(const CBlkDev &bd, uint8_t *buf, uint32_t lba,
@@ -382,8 +383,10 @@ CDrv *BlkDevsInitAll();
 bool BlkDevGlblsInit();
 CDrv *MountedDrive(char letter);
 extern "C" CDrv *Let2DrvCpp(uint8_t letter, uint8_t except);
-bool BlkDevReadBytes(const CBlkDev &bd, uint8_t *buf, uint64_t pos,
+bool BlkDevReadBytes(CBlkDev &bd, uint8_t *buf, uint64_t pos,
                      size_t bytes);
+bool BlkDevWriteBytes(CBlkDev &bd, const uint8_t *buf, uint64_t pos,
+                      size_t bytes);
 uint64_t Now();
 bool ISOInit(CDrv &dv);
 bool RedSeaInit(CDrv &dv);

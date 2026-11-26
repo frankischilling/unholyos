@@ -1350,6 +1350,35 @@ static void BootModuleReport(const CDrv &dv, CTask &task)
   SerialPutS("\r\n");
 }
 
+static void BootATAByteReport(CDrv &dv)
+{
+  if (dv.fs_type!=FSt_FAT32 || dv.drv_offset!=2048 || dv.size!=132130)
+    return;
+  uint64_t pos=(dv.drv_offset+dv.size-131)*BLK_SIZE;
+  uint8_t before[BLK_SIZE*2], after[BLK_SIZE*2];
+  constexpr uint8_t patch[]{1,2,3,4,5,6,7};
+  constexpr size_t offset=BLK_SIZE-3;
+  auto &bd=*dv.bd;
+  auto flags=bd.flags;
+  bool okay=BlkDevReadBytes(bd,before,pos,sizeof(before));
+  if (okay) {
+    bd.flags|=BDF_READ_ONLY_OVERRIDE;
+    okay=BlkDevWriteBytes(bd,patch,pos+offset,sizeof(patch)) &&
+         BlkDevReadBytes(bd,after,pos,sizeof(after));
+    for (size_t i=0;okay && i<sizeof(after);i++)
+      okay=after[i]==(i>=offset && i<offset+sizeof(patch)?patch[i-offset]:before[i]);
+    bool restored=BlkDevWriteBytes(bd,before+offset,pos+offset,sizeof(patch)) &&
+                  BlkDevReadBytes(bd,after,pos,sizeof(after));
+    for (size_t i=0;restored && i<sizeof(after);i++)
+      restored=after[i]==before[i];
+    okay=okay && restored;
+  }
+  bd.flags=flags;
+  SerialPutS("UnholyOS: ATA partial sectors ");
+  SerialPutHex(okay);
+  SerialPutS("\r\n");
+}
+
 void BootProbe()
 {
   SerialPutS("UnholyOS: DVD LBA ");
@@ -1413,8 +1442,12 @@ void BootProbe()
   SerialPutS("\r\n");
   if (adam_task->cur_dv) {
     BootDVDReport(*adam_task->cur_dv);
-    if (MountedDrive('C'))
+    if (MountedDrive('C')) {
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32ReadProbe.HC");
+      if (BootFileProgramReport(*adam_task->cur_dv,"/AtaWriteProbe.HC").okay)
+        BootATAByteReport(*MountedDrive('C'));
+      BootFileProgramReport(*adam_task->cur_dv,"/AtaWriteRejectProbe.HC");
+    }
     BootFileProgramReport(*adam_task->cur_dv,"/Fat32RejectProbe.HC");
     BootStartupReport(*adam_task->cur_dv);
     BootLexReport(*adam_task->cur_dv);

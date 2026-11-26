@@ -1,9 +1,34 @@
 #include "../KernelB.hpp"
 
-constexpr uint8_t ATA_NOP = 0, ATA_PACKET = 0xA0, ATA_ID_DEV = 0xEC;
-constexpr uint8_t ATAS_ERR = 1, ATAS_DRQ = 8, ATAS_DF = 0x20, ATAS_BSY = 0x80;
+constexpr uint8_t ATA_NOP = 0, ATA_READ = 0x20, ATA_WRITE = 0x30,
+                  ATA_PACKET = 0xA0, ATA_FLUSH = 0xE7, ATA_ID_DEV = 0xEC;
+constexpr uint8_t ATAS_ERR = 1, ATAS_DRQ = 8, ATAS_DF = 0x20,
+                  ATAS_DRDY = 0x40, ATAS_BSY = 0x80;
 constexpr uint16_t ATAR0_DATA = 0, ATAR0_FEAT = 1, ATAR0_LCYL = 4,
                    ATAR0_HCYL = 5, ATAR0_SEL = 6, ATAR0_STAT = 7, ATAR0_CMD = 7;
+
+// Both units and all partitions on a controller share its command registers.
+// PIO does not yield to another guest task while the command is in progress.
+static uint64_t ata_channel_flags[2];
+
+class CATAChannelLock
+{
+public:
+  explicit CATAChannelLock(const CBlkDev &bd)
+      : flags(ata_channel_flags[bd.base0==0x170])
+  {
+    while (__atomic_exchange_n(&flags,1,__ATOMIC_ACQUIRE))
+      asm volatile("pause");
+  }
+  ~CATAChannelLock()
+  {
+    __atomic_store_n(&flags,0,__ATOMIC_RELEASE);
+  }
+  CATAChannelLock(const CATAChannelLock &)=delete;
+  CATAChannelLock &operator=(const CATAChannelLock &)=delete;
+private:
+  uint64_t &flags;
+};
 
 static uint64_t ATANow()
 {
@@ -33,6 +58,9 @@ static void ATACmd(const CBlkDev &bd, uint8_t cmd)
 
 static int ATAWait(const CBlkDev &bd, uint64_t deadline, uint8_t mask)
 {
+  // The PIT interrupt counter cannot advance during early mount with IF clear.
+  // Retain a finite polling bound in addition to the clock deadline.
+  unsigned polls=0;
   do {
     for (unsigned i = 0; i < 3; i++) {
       uint8_t status = InU8(bd.base0 + ATAR0_STAT);
@@ -43,7 +71,7 @@ static int ATAWait(const CBlkDev &bd, uint64_t deadline, uint8_t mask)
         return status;
     }
     asm volatile("pause");
-  } while (ATANow() < deadline);
+  } while (++polls<0x200000 && ATANow() < deadline);
   return -1;
 }
 
@@ -89,6 +117,7 @@ static bool ATAGetRes(const CBlkDev &bd, uint64_t deadline, uint8_t *buf,
 
 uint32_t ATAProbe(const CBlkDev &bd)
 {
+  CATAChannelLock lock(bd);
   ATASel(bd);
   uint64_t deadline = ATADeadline(100);
   if (ATAWait(bd, deadline, 0) <= 0)
@@ -111,6 +140,7 @@ uint32_t ATAProbe(const CBlkDev &bd)
 
 bool ATAReadCapacity(CBlkDev &bd)
 {
+  CATAChannelLock lock(bd);
   ATASel(bd);
   uint64_t deadline=ATADeadline(1000);
   if (ATAWait(bd,deadline,0)<=0)
@@ -125,35 +155,48 @@ bool ATAReadCapacity(CBlkDev &bd)
     return false;
   bd.max_blk=(sectors>0x10000000?0x10000000:sectors)-1;
   bd.blk_size=BLK_SIZE;
+  bd.max_reads=bd.max_writes=128;
   return true;
 }
 
-static bool ATAReadBlks(const CBlkDev &bd,uint8_t *buf,uint32_t lba,uint8_t cnt)
+static bool ATABlkSel(const CBlkDev &bd,uint32_t lba,uint8_t cnt,uint64_t deadline)
 {
   if (!cnt || uint64_t(lba)+cnt>0x10000000 ||
       uint64_t(lba)+cnt>uint64_t(bd.max_blk)+1)
     return false;
   ATASel(bd);
-  uint64_t deadline=ATADeadline(1000+uint64_t(cnt)*10);
-  if (ATAWait(bd,deadline,0)<=0)
+  int status=ATAWait(bd,deadline,0);
+  if (status<=0 || (status&ATAS_DRQ) || !(status&ATAS_DRDY))
     return false;
   OutU8(bd.base0+ATAR0_SEL,0xE0 | bd.unit<<4 | (lba>>24));
   OutU8(bd.base0+2,cnt);
   OutU8(bd.base0+3,lba);
   OutU8(bd.base0+4,lba>>8);
   OutU8(bd.base0+5,lba>>16);
-  ATACmd(bd,0x20);
-  if (!ATAGetRes(bd,deadline,buf,size_t(cnt)*BLK_SIZE,BLK_SIZE))
-    return false;
-  __atomic_add_fetch(&blkdev.read_cnt,cnt,__ATOMIC_RELAXED);
   return true;
 }
 
-bool ATAReadBytes(const CBlkDev &bd,uint8_t *buf,uint64_t pos,size_t bytes)
+static bool ATAReadBlks(CBlkDev &bd,uint8_t *buf,uint32_t lba,uint8_t cnt)
 {
+  uint64_t deadline=ATADeadline(1000+uint64_t(cnt)*10);
+  if (!ATABlkSel(bd,lba,cnt,deadline))
+    return false;
+  ATACmd(bd,ATA_READ);
+  if (!ATAGetRes(bd,deadline,buf,size_t(cnt)*BLK_SIZE,BLK_SIZE))
+    return false;
+  __atomic_add_fetch(&blkdev.read_cnt,cnt,__ATOMIC_RELAXED);
+  bd.flags&=~BDF_LAST_WAS_WRITE;
+  return true;
+}
+
+bool ATAReadBytes(CBlkDev &bd,uint8_t *buf,uint64_t pos,size_t bytes)
+{
+  if (bd.max_blk<0 || bd.max_blk>=0x10000000 || bd.blk_size!=BLK_SIZE)
+    return false;
   uint64_t limit=(uint64_t(bd.max_blk)+1)*BLK_SIZE;
   if (pos>limit || bytes>limit-pos)
     return false;
+  CATAChannelLock lock(bd);
   uint8_t sector[BLK_SIZE];
   while (bytes) {
     size_t offset=pos%BLK_SIZE,take;
@@ -177,6 +220,70 @@ bool ATAReadBytes(const CBlkDev &bd,uint8_t *buf,uint64_t pos,size_t bytes)
   return true;
 }
 
+static bool ATAWriteBlks(CBlkDev &bd,const uint8_t *buf,uint32_t lba,uint8_t cnt)
+{
+  uint64_t deadline=ATADeadline(1000+uint64_t(cnt)*10);
+  if (!ATABlkSel(bd,lba,cnt,deadline))
+    return false;
+  ATACmd(bd,ATA_WRITE);
+  bd.flags|=BDF_LAST_WAS_WRITE;
+  uint16_t port=bd.base0+ATAR0_DATA;
+  for (unsigned i=0;i<cnt;i++) {
+    if (!ATAWaitDRQ(bd,deadline))
+      return false;
+    size_t words=BLK_SIZE/2;
+    asm volatile("cld; rep outsw" : "+S"(buf), "+c"(words) : "d"(port) : "memory");
+    // Allow the next sector's BSY/DRQ transition before polling it.
+    for (unsigned j=0;j<4;j++)
+      InU8(bd.base0+ATAR0_STAT);
+  }
+  int status=ATAWait(bd,deadline,0);
+  if (status<=0 || (status&(ATAS_DRQ|ATAS_ERR|ATAS_DF)))
+    return false;
+  __atomic_add_fetch(&blkdev.write_cnt,cnt,__ATOMIC_RELAXED);
+  return true;
+}
+
+bool ATAWriteBytes(CBlkDev &bd,const uint8_t *buf,uint64_t pos,size_t bytes)
+{
+  if (bd.max_blk<0 || bd.max_blk>=0x10000000)
+    return false;
+  uint64_t limit=(uint64_t(bd.max_blk)+1)*BLK_SIZE;
+  if (bd.type!=BDT_ATA || bd.blk_size!=BLK_SIZE ||
+      (bd.flags&BDF_READ_ONLY && !(bd.flags&BDF_READ_ONLY_OVERRIDE)) ||
+      pos>limit || bytes>limit-pos)
+    return false;
+  if (!bytes)
+    return true;
+  CATAChannelLock lock(bd);
+  uint8_t sector[BLK_SIZE];
+  while (bytes) {
+    size_t offset=pos%BLK_SIZE,take;
+    if (!offset && bytes>=BLK_SIZE) {
+      auto cnt=bytes/BLK_SIZE>128?128:bytes/BLK_SIZE;
+      if (!ATAWriteBlks(bd,buf,pos/BLK_SIZE,cnt))
+        return false;
+      take=cnt*BLK_SIZE;
+    } else {
+      if (!ATAReadBlks(bd,sector,pos/BLK_SIZE,1))
+        return false;
+      take=BLK_SIZE-offset;
+      if (take>bytes)
+        take=bytes;
+      MemCpy(sector+offset,buf,take);
+      if (!ATAWriteBlks(bd,sector,pos/BLK_SIZE,1))
+        return false;
+    }
+    pos+=take;
+    buf+=take;
+    bytes-=take;
+  }
+  // Success means the controller has finished writing its cache as well.
+  ATACmd(bd,ATA_FLUSH);
+  int status=ATAWait(bd,ATADeadline(5000),0);
+  return status>0 && !(status&(ATAS_DRQ|ATAS_ERR|ATAS_DF));
+}
+
 static bool ATAPIWritePktWord(const CBlkDev &bd, uint64_t deadline,
                               const uint16_t (&packet)[6])
 {
@@ -198,6 +305,7 @@ static bool ATAPIStartStop(const CBlkDev &bd, uint64_t deadline, bool start)
 
 bool ATAPIStartStop(const CBlkDev &bd, bool start)
 {
+  CATAChannelLock lock(bd);
   return ATAPIStartStop(bd, ATADeadline(5000), start);
 }
 
@@ -212,6 +320,7 @@ static bool ATAPIWaitReady(const CBlkDev &bd, uint64_t deadline)
 
 bool ATAPIReadCapacity(CBlkDev &bd)
 {
+  CATAChannelLock lock(bd);
   uint64_t deadline = ATADeadline(7000);
   ATASel(bd);
   if (ATAWait(bd, deadline, 0) < 0)
@@ -235,6 +344,7 @@ bool ATAPIReadCapacity(CBlkDev &bd)
 bool ATAPIReadBlks2(const CBlkDev &bd, uint8_t *buf, uint32_t lba,
                     uint32_t count)
 {
+  CATAChannelLock lock(bd);
   if (!count || uint64_t{lba} + count - 1 > UINT32_MAX)
     return false;
   uint64_t deadline = ATADeadline(7000 + uint64_t{count} * 4);

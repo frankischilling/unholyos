@@ -1550,6 +1550,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     MemberPtr,
     MemberMetaPtr,
     DateStructPtr,
+    DrivePtr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1581,6 +1582,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CMemberLst", table) + 1,
       FindType("CMemberLstMeta", table) + 1,
       FindType("CDateStruct", table) + 1,
+      FindType("CDrv", table) + 1,
   };
   auto *task = CurrentTask();
   struct [[gnu::packed]] CHeaderArg
@@ -1639,6 +1641,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"filename", U8Ptr}, {"_size", I64Ptr, true}, {"_attr", I64Ptr, true}}},
       {"FileWrite", I64, FF_RET1,
        {{"filename", U8Ptr}, {"fbuf", U8Ptr}, {"size", I64}, {"cdt", Date, true}, {"attr", I64, true}}},
+      {"Let2Drv", DrivePtr, FF_RET1, {{"drv_let", U8, true}, {"except", Bool, true, 1}}},
+      {"BlkRead", Bool, FF_RET1, {{"dv", DrivePtr}, {"buf", U8Ptr}, {"blk", I64}, {"cnt", I64}}},
+      {"BlkWrite", Bool, FF_RET1, {{"dv", DrivePtr}, {"buf", U8Ptr}, {"blk", I64}, {"cnt", I64}}},
       {"FSize", I64, FF_RET1, {{"f", FilePtr}}},
       {"FOpen", FilePtr, FF_RET1, {{"filename", U8Ptr}, {"flags", U8Ptr}, {"cnt", I64, true}}},
       {"FClose", U0, FF_RET1, {{"f", FilePtr}}},
@@ -2244,7 +2249,8 @@ static bool CmpFillHash(CHashTable *table)
       {"CDIR_FILENAME_LEN", "38"}, {"CDIR_SIZE", "64"},
       {"BLK_SIZE_BITS", "9"}, {"BLK_SIZE", "512"},
       {"RS_ATTR_DIR", "0x10"}, {"RS_ATTR_DELETED", "0x100"},
-      {"BDF_READ_ONLY", "4"}, {"RS_ATTR_READ_ONLY", "1"},
+      {"BDF_READ_ONLY", "4"}, {"BDF_READ_ONLY_OVERRIDE", "8"},
+      {"BDF_LAST_WAS_WRITE", "16"}, {"RS_ATTR_READ_ONLY", "1"},
       {"FSt_FAT32", "2"}, {"FSt_REDSEA", "1"},
       {"RS_ATTR_RESIDENT", "0x200"}, {"RS_ATTR_COMPRESSED", "0x400"},
       {"RS_ATTR_CONTIGUOUS", "0x800"},
