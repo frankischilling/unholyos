@@ -593,6 +593,32 @@ static void BootTryReport(const CDrv &dvd, CTask &task)
   BootGuestFileReport(*ram, path);
 }
 
+static void BootVariadicReport(const CDrv &dvd, CTask &task,
+                               const char *source, const char *path,
+                               const char *compile)
+{
+  if (!BootFileProgramReport(dvd, source).okay)
+    return;
+  auto *ram = MountedDrive('B');
+  if (!ram)
+    return;
+  auto compiled = ExePutS(compile, nullptr, 0);
+  if (!compiled.okay || compiled.value)
+    return;
+  SerialPutS("UnholyOS: executing ");
+  SerialPutS(path);
+  SerialPutS("\r\n");
+  auto *mod = Load(*ram, path, task, LDF_JUST_LOAD);
+  bool okay = mod && LoadPass2(*mod);
+  SerialPutS("UnholyOS: finished ");
+  SerialPutS(path);
+  SerialPutS(", checks ");
+  SerialPutHex(okay);
+  SerialPutS("\r\n");
+  if (okay)
+    BootGuestFileReport(*ram, path);
+}
+
 static void BootISOReport(const CDrv &dv)
 {
   auto run = BootFileProgramReport(dv, "/RedSeaISOProbe.HC");
@@ -1420,6 +1446,12 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/CursorProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/CursorExcept.HC");
     BootFunctionPtrReport(*adam_task->cur_dv, *adam_task);
+    BootVariadicReport(*adam_task->cur_dv, *adam_task, "/VariadicProbe.HC",
+                       "/VariadicProbe.BIN.Z",
+                       "Cmp(\"::/VariadicProbe.HC\",,\"B:/VariadicProbe.BIN.Z\");");
+    BootVariadicReport(*adam_task->cur_dv, *adam_task, "/VariadicPtrProbe.HC",
+                       "/VariadicPtrProbe.BIN.Z",
+                       "Cmp(\"::/VariadicPtrProbe.HC\",,\"B:/VariadicPtrProbe.BIN.Z\");");
     BootGridReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/DocFrame.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/DocButton.HC");
