@@ -1134,6 +1134,51 @@ cluster `0x5d`, and `UnholyOS: kernel entered in 64-bit mode`. QMP reported
 the VM running. The screenshot and serial log were captured under `build/`.
 This verifies the clean boot to the current kernel; the desktop is pending.
 
+## TimeClock and queue operations
+
+The original `Apps/TimeClock/Load.HC`, `Install.HC`, and `TimeClk.HC`
+are shipped at their original paths without edits. Their SHA-256 hashes
+match the pinned source: respectively
+`277bbe03345250dcdf1cfc377bbadbad8da437d1b2991596b86acc0bfa137ca8`,
+`302dfcb63c56d2431564876bc8021fd9229809e5024f14d2ef6a82bfb9a5a868`, and
+`ee45adaa0429b22b7484948d081265561e7551acf7eed7cad46f172c185f61dd`.
+
+`QueueProbe.HC` returned `FF` in both guests and in the native guest's
+compiled `.BIN.Z`. It checks the 16-byte queue layout, forward and reverse
+insertion, removal, string copy and length, and `__DIR__` inside a nested
+source file. The reference ran the exact probe through `ExePutS` with its
+source name set to `::/Doc/QueueProbe.HC`.
+
+`TimeClockProbe.HC` loads the original application through `Load.HC`,
+using a fresh writable RedSea RAM drive as the home directory. It checks
+the 33-byte entry layout, exact expanded record bytes and timestamps,
+reloading the queue, and a complete 90-minute session's report. Both
+guests returned `1F` and reported `Week Total:01:30:00` and
+`Already Punched-Out`. The reference reports a missing-file diagnostic on
+the first read of the absent data file; UnholyOS currently returns null
+silently. The native setup also prints its directory creation message.
+These initial setup traces are not identical.
+
+`TimeClockInputProbe.HC` then exercises the original `PunchIn` and
+`PunchOut`. Actual PS/2 keyboard input enters `start`, Enter, `work`,
+Escape, followed by `done`, Escape. Both guests reload four records,
+verify that the last two are an ordered punch-in/punch-out pair with
+timestamps between the before/after readings, and recover the exact
+multiline and single-line descriptions. Both report `TimeClock input 07`.
+The full boot suite checks the deterministic report in the startup
+cases and the rebooted guest-built ISO; the latter also drives the
+interactive prompts. The clock times themselves are not fixed.
+
+For focused verification, build with `make -j4 BUILD=build/time-clock all`.
+Use `Linux/MakeISO` with the built loader and kernel, `--dir Home`,
+`--file Linux/Fixtures/FileWriteProbe.BIN`, both TimeClock fixtures, and
+`--file-at` for each original TimeClock source. The focused image was
+`build/time-clock/app-input-focused.iso`. Both guests ran under QEMU
+8.2.2, PC, `qemu64`, 512 MiB. The native boot log, reference debugcon
+trace, and before/after keyboard screenshots were captured in
+`build/time-clock/`. Persistent hard-disk writes and the complete
+reference file-error diagnostics remain pending.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |
