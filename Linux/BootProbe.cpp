@@ -1400,8 +1400,23 @@ static void BootATAByteReport(CDrv &dv)
   SerialPutS("\r\n");
 }
 
+template <typename T> static bool BootFifoCheck(const CFifo<T> *f, size_t size)
+{
+  return reinterpret_cast<uintptr_t>(f) >= MEM_HEAP_BASE &&
+         MSize(f) >= sizeof(*f) &&
+         reinterpret_cast<uintptr_t>(f->buf) >= MEM_HEAP_BASE &&
+         MSize(f->buf) >= size * sizeof(T) && f->mask == int64_t(size - 1);
+}
+
 void BootProbe()
 {
+  SerialPutS("UnholyOS: PS/2 heap FIFOs ");
+  SerialPutHex(BootFifoCheck(kbd.fifo, 8) &&
+               BootFifoCheck(kbd.fifo2, 0x1000) &&
+               BootFifoCheck(kbd.scan_code_fifo, 0x1000) &&
+               BootFifoCheck(ms_hard.fifo, 8) &&
+               BootFifoCheck(ms_hard.fifo2, 0x1000));
+  SerialPutS("\r\n");
   SerialPutS("UnholyOS: DVD LBA ");
   SerialPutHex(SYS_BOOT_BLK);
   SerialPutS(", source ");

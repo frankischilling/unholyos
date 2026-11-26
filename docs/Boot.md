@@ -20,6 +20,11 @@ loader relocates to physical address `0x96600`, as in the pinned TempleOS
 loader. The kernel and BSS must fit below that address. On GCC 13.3.0 the
 file-stream baseline's kernel shrank from 522,512 to 407,568 bytes without
 changing the loader layout. All nine local QEMU cases passed with `-Os`.
+`Kernel/SerialDev/Mouse.HC:KbdMsInit` allocates the five PS/2 FIFO records
+and their buffers through `FifoU8New` and `FifoI64New` in `Kernel/KDataTypes.HC`.
+UnholyOS now follows that allocation order before installing the device
+handlers. The buffers take 40,976 bytes out of the boot BSS. The boot
+test checks their heap allocation, capacities and the existing input probes.
 Clang may emit a System V `memcpy` call for aggregate copies. Its assembly
 entry returns the original destination; the HolyC `_MEMCPY` entry retains
 the reference calling convention and return value.

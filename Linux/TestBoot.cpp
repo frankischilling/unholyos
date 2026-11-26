@@ -428,6 +428,9 @@ static uint64_t VerifyHandoff(const std::string &output,
       R"(PML4 (0x[0-9a-f]+), heap base (0x[0-9a-f]+), run level (0x[0-9a-f]+))");
   std::smatch match;
   Check(std::regex_search(output, match, handoff), "Missing BIOS DVD handoff");
+  Check(output.find("UnholyOS: PS/2 heap FIFOs 0x0000000000000001\r\n") !=
+            std::string::npos,
+        "PS/2 FIFO buffers are not allocated in the task heap");
   std::array<uint64_t, 9> fields;
   for (size_t i = 0; i < fields.size(); i++)
     fields[i] = std::stoull(match[i + 1].str(), nullptr, 16);
@@ -1141,9 +1144,13 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   Check(raw && ReadPhysical<2>(vm,raw-16)==
                    std::array<uint64_t,2>{expected_data_hc,raw_used},
         "Invalid raw screen image allocation");
+  // Five 32-byte FIFO records, two 8-byte packet buffers, two 4 KiB
+  // byte buffers, and one 32 KiB scan-code buffer, including heap headers.
+  constexpr uint64_t fifo_used = 5 * (32 + 16) + 2 * (8 + 16) +
+                                 2 * (9 * page - 24) + 65 * page - 24;
   const uint64_t boot_used = range_bytes + late_used + symbol_used +
                              drive_used + allocation[1] + graphics_used +
-                             asm_hash_used + raw_used;
+                             asm_hash_used + raw_used + fifo_used;
   auto code = VerifyHeap(vm, adam_hc, code_pool, adam);
   uint64_t code_used = 0x42840 + fault_used + (pool ? 0x5E8 : boot_used);
   uint64_t data_used = boot_used, data_alloced = 0;

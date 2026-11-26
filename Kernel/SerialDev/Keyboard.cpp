@@ -58,11 +58,6 @@ static constexpr uint8_t num_lock_map[]{
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
-static uint8_t packet_buf[8], raw_buf[0x1000];
-static int64_t scan_buf[0x1000];
-static CFifoU8 packet_fifo{packet_buf, 7, 0, 0};
-static CFifoU8 raw_fifo{raw_buf, 0xFFF, 0, 0};
-static CFifoI64 scan_fifo{scan_buf, 0xFFF, 0, 0};
 static bool ready;
 
 static void KbdStageByte(uint8_t raw_byte);
@@ -381,9 +376,6 @@ extern "C" void IRQKbdCpp()
 
 bool KbdInit()
 {
-  kbd.fifo = &packet_fifo;
-  kbd.fifo2 = &raw_fifo;
-  kbd.scan_code_fifo = &scan_fifo;
   auto flags = GetRFlags();
   asm volatile("cli" : : : "memory");
   uint8_t config;
