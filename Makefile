@@ -190,5 +190,6 @@ test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $
 	$(BOOT_TEST) --fat32-stream "$(QEMU)" $(FAT_STREAM_ISO) $(FAT_WRITE_DISK)
 	$(BOOT_TEST) "$(QEMU)" $< $(KERNEL) $(STARTUP_TEST_ISO)
 	$(BOOT_TEST) --database "$(QEMU)" $<
+	$(BOOT_TEST) --database-persistent "$(QEMU)" $< $(FAT_WRITE_DISK)
 
 -include $(CXX_OBJ:.o=.d)

@@ -1155,6 +1155,35 @@ and the pinned `TOS_Distro.ISO`. It obtains the reference text-layer address
 from the guest through the QEMU debug port. `make test` runs the native
 regression after the normal boot suite.
 
+The persistent variant runs the same original database from the DVD with
+the generated writable FAT32 ATA fixture mounted as `C:`. It sets the
+home directory to `C:/`, creates and edits both accounts, cancels the
+overwrite, and checks both accounts in the original UI. A second VM boots
+from the same disk with writes disabled and reads both saved accounts
+again. The host traverses the actual directory and allocation chain and
+compares all 51,200 record bytes, including the unused and cancelled
+records, with the expected record layout. It also checks the mirrored
+FATs, boot sector, unchanged source fixture, and byte-for-byte preservation
+of the mutated image across the read-only reboot.
+
+Both the native and pinned TempleOS guests passed the persistent replay
+under QEMU 8.2.2 (`pc`, `qemu64`, 512 MiB). The source is the unchanged
+`DataBase.HC` identified above. The file data agrees exactly; directory
+timestamps and unused FAT directory fields need not match.
+
+```sh
+make -j4 BUILD=build/database-disk
+make BUILD=build/database-disk build/database-disk/Linux/TestBoot \
+  build/database-disk/fat32-writable.img
+build/database-disk/Linux/TestBoot --database-persistent qemu-system-x86_64 \
+  build/database-disk/unholyos.iso build/database-disk/fat32-writable.img
+```
+
+For the reference, substitute `--database-persistent-reference` and the
+pinned `TOS_Distro.ISO`. An optional final directory retains the disk and
+screen captures. `make test` runs both the native RAM-drive and persistent
+ATA-drive regressions.
+
 ## Numeric and date prompts
 
 `Demo/Prompt.HC` retains Terry A. Davis's original bytes. The prompt

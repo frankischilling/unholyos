@@ -779,7 +779,10 @@ document in the current task rather than a separate popup task.
 
 `Kernel/BlkDev/DskDirB.cpp` exposes `HomeSet`, and the compiler headers expose
 the existing RAM-drive creation and lookup APIs so the database can write
-to a writable home directory. `Compiler/PrsExp.cpp` accepts address-of on
+to a writable home directory. The same unchanged database also writes to
+FAT32 ATA storage through the buffered file-stream APIs, with record
+creation, editing, cancellation, and cold-reboot retrieval tested against
+the pinned guest. `Compiler/PrsExp.cpp` accepts address-of on
 array expressions used by the original form's `StrCpy(&fds.name, ...)`.
 `Kernel/KLoad.cpp` exposes the existing `_STRCPY` adapter under its HolyC
 name; the `ToUpper` adapter in `Kernel/StrA.cpp` supplies the reference

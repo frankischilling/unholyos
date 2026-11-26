@@ -4193,6 +4193,58 @@ static void TestBoot(const char *qemu, const fs::path &iso,
   fs::remove_all(dir);
 }
 
+static void VerifyDatabaseRecords(const Bytes &disk)
+{
+  constexpr size_t fat = 2080 * 512, data = 3102 * 512, cluster_bytes = 1024;
+  constexpr uint32_t eoc = 0x0FFFFFF8;
+  constexpr std::string_view alias = "DATABASEDEM";
+  Check(disk.size() == 68699136, "Wrong database disk geometry");
+  auto offset = [](uint32_t cluster) {
+    Check(cluster >= 2 && cluster < 65538, "Invalid database cluster");
+    return data + cluster * cluster_bytes;
+  };
+  auto next = [&](uint32_t cluster) {
+    return uint32_t(ReadLE(disk, fat + cluster * 4, 4)) & 0x0FFFFFFF;
+  };
+  uint32_t first = 0;
+  std::set<uint32_t> visited;
+  for (uint32_t c = 2; c < eoc && !first; c = next(c)) {
+    size_t begin = offset(c);
+    Check(visited.insert(c).second, "Database root chain loops");
+    for (size_t p = begin; p < begin + cluster_bytes; p += 32) {
+      if (!disk[p]) break;
+      if (disk[p] == 0xE5 || (disk[p + 11] & 0x18) ||
+          !std::equal(alias.begin(), alias.end(), disk.begin() + p))
+        continue;
+      Check(ReadLE(disk, p + 28, 4) == 100 * 512,
+            "Wrong on-disk database size");
+      first = uint32_t(ReadLE(disk, p + 20, 2) << 16 |
+                       ReadLE(disk, p + 26, 2));
+      break;
+    }
+  }
+  Check(first != 0, "Missing on-disk database entry");
+  Bytes actual;
+  visited.clear();
+  uint32_t c = first;
+  for (size_t i = 0; i < 50; ++i) {
+    size_t begin = offset(c);
+    Check(visited.insert(c).second, "Database allocation chain loops");
+    actual.insert(actual.end(), disk.begin() + begin,
+                  disk.begin() + begin + cluster_bytes);
+    c = next(c);
+  }
+  Check(c >= eoc, "Database allocation chain has wrong length");
+  Bytes expected(100 * 512, 0);
+  auto record = [&](size_t n, std::string_view name, std::string_view address) {
+    std::copy(name.begin(), name.end(), expected.begin() + n * 512);
+    std::copy(address.begin(), address.end(), expected.begin() + n * 512 + 32);
+  };
+  record(7, "Ada", "13 Pine");
+  record(8, "Bob", "45 Elm");
+  Check(actual == expected, "Database record bytes differ from saved forms");
+}
+
 int main(int argc, char **argv)
 {
   if ((argc==5 || argc==6) &&
@@ -4222,6 +4274,7 @@ int main(int argc, char **argv)
                          actual.begin()+fat2),"Database FAT mirrors differ");
         Check(std::equal(actual.begin(),actual.begin()+2049*512,original.begin()),
               "Database changed the MBR or boot sector");
+        VerifyDatabaseRecords(actual);
         if (pass) Check(actual==expected,"Reading the saved database changed disk bytes");
         else {
           Check(actual!=original,"Database did not reach the disk");
