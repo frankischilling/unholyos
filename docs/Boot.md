@@ -483,6 +483,21 @@ and UnholyOS with QEMU 9.2.0, PC, `qemu64`, and 512 MiB. The boot suite
 checks those lines at each tested RAM size and after booting the ISO
 built in the guest.
 
+## Rotating polygons
+
+Both boot discs include Terry A. Davis's unchanged
+`Demo/Graphics/3DPoly.HC` from the pinned TempleOS source. Run
+`ExeFile("::/Demo/Graphics/3DPoly.HC");` in a maximized HolyC
+terminal and press Q to exit. The boot suite starts the original
+source and checks that VGA polygon pixels change across frames. It
+sends Q, checks that the prompt returns, and checks that the pixels
+clear. The guest-built ISO goes through the same check.
+
+`MatrixProbe.HC` compares rotation and matrix multiplication,
+a sequence of 64 rotation updates, planar symmetry, and the
+refresh counter and flags. Both guests produced the same six
+trace lines under QEMU 9.2.0 with PC, `qemu64`, and 512 MiB.
+
 ## Depth-buffered spans and polygons
 
 `DepthSpansProbe.HC` checks span counts, depth interpolation, window

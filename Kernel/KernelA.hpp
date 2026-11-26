@@ -358,6 +358,7 @@ enum : size_t
   SEMA_VGA = 14,
   SEMA_UPDATE_WIN_Z_BUF = 15,
   SEMA_MUTE = 17,
+  SEMA_JUST_PUMP_MSGS = 18,
   SEMA_FIX = 20,
   SEMA_SEMAS_NUM = 21,
 };
@@ -917,6 +918,7 @@ constexpr uint64_t DOCF_PLAIN_TEXT = 1, DOCF_PLAIN_TEXT_TABS = 2,
                    DOCF_DBL_DOLLARS = 32, DOCF_COLOR_NAMES = 64,
                    DOCF_BORDER_DOC = 0x100, DOCF_HIDE_CURSOR = 0x800,
                    DOCF_DONT_HIGHLIGHT_CURSOR = 0x1000, DOCF_DONT_SHOW = 0x8000,
+                   DOCF_DO_FULL_REFRESH = 0x200000,
                    DOCF_BREAK_UNLOCKED = 0x400000, DOCF_IN_DOLLAR = 0x200000000;
 constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
                    DOCEF_DEFINE = 8, DOCEF_HTML_LINK = 16, DOCEF_LEFT_EXP = 32,
@@ -1256,6 +1258,7 @@ struct [[gnu::packed]] CWinMgrGlbls
 };
 
 static_assert(sizeof(CWinMgrGlbls) == 59 &&
+              offsetof(CWinMgrGlbls, updates) == 0 &&
               offsetof(CWinMgrGlbls, grab_scroll) == 57);
 
 struct CGridGlbls

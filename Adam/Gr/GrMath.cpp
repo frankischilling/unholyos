@@ -65,6 +65,29 @@ bool Line(CDC *dc, int64_t x1, int64_t y1, int64_t z1, int64_t x2, int64_t y2,
          fp_plot(dc, x2, y2, z2);
 }
 
+extern "C" int64_t *Mat4x4MulMat4x4EquCpp(int64_t *dst, const int64_t *m1,
+                                          const int64_t *m2)
+{
+  const auto scale = F64FromI64(GR_SCALE);
+  for (size_t i = 0; i < 4; i++)
+    for (size_t j = 0; j < 4; j++) {
+      uint64_t sum = 0;
+      for (size_t k = 0; k < 4; k++)
+        sum = F64AddBits(sum, F64MulBits(F64FromI64(m1[k + 4 * j]),
+                                         F64FromI64(m2[i + 4 * k])));
+      dst[i + 4 * j] = F64ToI64(F64DivBits(sum, scale), 0x0C00);
+    }
+  return dst;
+}
+
+extern "C" int64_t *Mat4x4MulMat4x4NewCpp(const int64_t *m1, const int64_t *m2,
+                                          CTask *mem_task)
+{
+  auto *dst =
+      reinterpret_cast<int64_t *>(MAllocCpp(16 * sizeof(int64_t), mem_task));
+  return dst ? Mat4x4MulMat4x4EquCpp(dst, m1, m2) : nullptr;
+}
+
 extern "C" int64_t *Mat4x4EquCpp(int64_t *dst, const int64_t *src)
 {
   MemCpy(dst, src, 16 * sizeof(*dst));
@@ -78,12 +101,91 @@ extern "C" int64_t *Mat4x4NewCpp(const int64_t *src, CTask *mem_task)
   return dst ? Mat4x4EquCpp(dst, src) : nullptr;
 }
 
+static int64_t *Mat4x4Rot(int64_t *m, uint64_t angle, size_t i, size_t j)
+{
+  int64_t r[16], r2[16];
+  Mat4x4IdentEquCpp(r);
+  const auto scale = F64FromI64(GR_SCALE);
+  auto my_cos = F64ToI64(F64MulBits(F64CosBits(angle), scale), 0x0C00);
+  auto my_sin = F64ToI64(F64MulBits(F64SinBits(angle), scale), 0x0C00);
+  r[5 * i] = r[5 * j] = my_cos;
+  r[4 * j + i] = my_sin;
+  r[4 * i + j] = 0 - uint64_t(my_sin);
+  return Mat4x4EquCpp(m, Mat4x4MulMat4x4EquCpp(r2, r, m));
+}
+
+extern "C" int64_t *Mat4x4RotXCpp(int64_t *m, uint64_t angle)
+{
+  return Mat4x4Rot(m, angle, 1, 2);
+}
+
+extern "C" int64_t *Mat4x4RotYCpp(int64_t *m, uint64_t angle)
+{
+  return Mat4x4Rot(m, angle, 2, 0);
+}
+
+extern "C" int64_t *Mat4x4RotZCpp(int64_t *m, uint64_t angle)
+{
+  return Mat4x4Rot(m, angle, 0, 1);
+}
+
+extern "C" int64_t *Mat4x4ScaleCpp(int64_t *m, uint64_t scale)
+{
+  for (size_t i = 0; i < 16; i++)
+    m[i] = F64ToI64(F64MulBits(F64FromI64(m[i]), scale), 0x0C00);
+  return m;
+}
+
+extern "C" int64_t *Mat4x4TranslationEquCpp(int64_t *r, int64_t x, int64_t y,
+                                            int64_t z)
+{
+  r[3] = GrFixed32(x);
+  r[7] = GrFixed32(y);
+  r[11] = GrFixed32(z);
+  r[15] = GR_SCALE;
+  return r;
+}
+
+extern "C" int64_t *Mat4x4TranslationAddCpp(int64_t *r, int64_t x, int64_t y,
+                                            int64_t z)
+{
+  r[3] += uint64_t(GrFixed32(x));
+  r[7] += uint64_t(GrFixed32(y));
+  r[11] += uint64_t(GrFixed32(z));
+  r[15] = GR_SCALE;
+  return r;
+}
+
 void DCTransformPoint(CDC &dc, CD3I64 &p)
 {
   CallHolyC4(
       reinterpret_cast<uintptr_t>(dc.transform),
       reinterpret_cast<uintptr_t>(&dc), reinterpret_cast<uintptr_t>(&p.x),
       reinterpret_cast<uintptr_t>(&p.y), reinterpret_cast<uintptr_t>(&p.z));
+}
+
+extern "C" uint64_t DCSymmetrySetCpp(CDC *dc, int64_t x1, int64_t y1,
+                                     int64_t x2, int64_t y2)
+{
+  if (!dc)
+    dc = gr.dc;
+  if (x1 == x2 && y1 == y2)
+    return false;
+  uint64_t x = uint64_t(y2) - y1, y = uint64_t(x1) - x2;
+  auto &sym = dc->sym;
+  sym.snx = x;
+  sym.sny = y;
+  sym.snz = 0;
+  auto d = F64SqrtBits(F64FromI64(x * x + y * y));
+  if (d) {
+    auto scale = F64DivBits(F64FromI64(GR_SCALE), d);
+    sym.snx = F64ToI64(F64MulBits(F64FromI64(sym.snx), scale), 0x0C00);
+    sym.sny = F64ToI64(F64MulBits(F64FromI64(sym.sny), scale), 0x0C00);
+  }
+  sym.sx = x1;
+  sym.sy = y1;
+  sym.sz = 0;
+  return true;
 }
 
 extern "C" uint64_t DCSymmetry3SetCpp(CDC *dc, int64_t x1, int64_t y1,

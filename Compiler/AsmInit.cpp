@@ -1013,17 +1013,19 @@ static bool CmpDCData(CHashTable *table)
   auto *wm = CmpKernelClass(table, "CWinMgrGlbls", sizeof(CWinMgrGlbls));
   if (!wm)
     return false;
-  constexpr struct
+  const struct
   {
     const char *name;
     size_t offset;
+    CHashClass *type;
   } options[]{
-      {"grab_scroll", offsetof(CWinMgrGlbls, grab_scroll)},
-      {"grab_scroll_closed", offsetof(CWinMgrGlbls, grab_scroll_closed)},
+      {"updates", offsetof(CWinMgrGlbls, updates), i64},
+      {"grab_scroll", offsetof(CWinMgrGlbls, grab_scroll), boolean},
+      {"grab_scroll_closed", offsetof(CWinMgrGlbls, grab_scroll_closed), boolean},
   };
   for (const auto &member : options) {
     auto *name = StrNew(member.name, heap);
-    if (!name || !MemberAdd(*wm, name, *boolean, member.offset)) {
+    if (!name || !MemberAdd(*wm, name, *member.type, member.offset)) {
       Free(name);
       return false;
     }
@@ -1268,6 +1270,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"GrRect3", I64, FF_RET1,
        {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}, {"z", I64}, {"w", I64},
         {"h", I64}}},
+      {"DCSymmetrySet", Bool, FF_RET1,
+       {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"x2", I64},
+        {"y2", I64}}},
       {"DCSymmetry3Set", Bool, FF_RET1,
        {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"z1", I64},
         {"x2", I64}, {"y2", I64}, {"z2", I64}, {"x3", I64}, {"y3", I64},
@@ -1317,7 +1322,20 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"GRWrite", I64, FF_RET1,
        {{"filename", U8Ptr}, {"dc", DCPtr}, {"dcsf_flags", I64, true, DCSF_COMPRESSED}}},
       {"GRRead", DCPtr, FF_RET1, {{"filename", U8Ptr}, {"task", TaskPtr, true}}},
+      {"Mat4x4MulMat4x4Equ", I64Ptr, FF_RET1,
+       {{"dst", I64Ptr}, {"m1", I64Ptr}, {"m2", I64Ptr}}},
+      {"Mat4x4MulMat4x4New", I64Ptr, FF_RET1,
+       {{"m1", I64Ptr}, {"m2", I64Ptr}, {"mem_task", TaskPtr, true}}},
       {"Mat4x4Equ", I64Ptr, FF_RET1, {{"dst", I64Ptr}, {"src", I64Ptr}}},
+      {"Mat4x4RotX", I64Ptr, FF_RET1, {{"m", I64Ptr}, {"\xE9", F64}}},
+      {"Mat4x4RotY", I64Ptr, FF_RET1, {{"m", I64Ptr}, {"\xE9", F64}}},
+      {"Mat4x4RotZ", I64Ptr, FF_RET1, {{"m", I64Ptr}, {"\xE9", F64}}},
+      {"Mat4x4Scale", I64Ptr, FF_RET1, {{"m", I64Ptr}, {"s", F64}}},
+      {"Mat4x4TranslationEqu", I64Ptr, FF_RET1,
+       {{"r", I64Ptr}, {"x", I64}, {"y", I64}, {"z", I64}}},
+      {"Mat4x4TranslationAdd", I64Ptr, FF_RET1,
+       {{"r", I64Ptr}, {"x", I64}, {"y", I64}, {"z", I64}}},
+      {"Refresh", U0, FF_RET1, {{"cnt", I64, true, 1}, {"force", Bool, true}}},
       {"Mat4x4New", I64Ptr, FF_RET1, {{"src", I64Ptr}, {"mem_task", TaskPtr, true}}},
       {"PutKey", U0, FF_RET1, {{"ch", I64, true}, {"sc", I64, true}}},
       {"ScanChar", I64, FF_RET1, {}},
@@ -1564,6 +1582,7 @@ static bool CmpFillHash(CHashTable *table)
       {"LTRED","12"}, {"LTPURPLE","13"}, {"YELLOW","14"}, {"WHITE","15"},
       {"COLORS_NUM","16"},
       {"TRANSPARENT","0xFF"}, {"COLOR_MONO","0xFF"},
+      {"\xE3", "(0x400921FB54442D18(F64))"},
       {"GR_WIDTH","640"}, {"GR_HEIGHT","480"}, {"GR_SCALE","(1<<32)"},
       {"TEXT_COLS","80"}, {"TEXT_ROWS","60"}, {"TASKf_NONTIMER_RAND","14"},
       {"DCF_COMPRESSED","1"}, {"DCF_PALETTE","2"}, {"DCF_NO_TRANSPARENTS","4"},
@@ -1596,6 +1615,7 @@ static bool CmpFillHash(CHashTable *table)
       {"FUF_SCAN_PARENTS", "0x100000"}, {"FUF_FLATTEN_TREE", "0x200000"},
       {"DOCF_DONT_HIGHLIGHT_CURSOR", "0x1000"},
       {"DOCF_DONT_SHOW", "0x8000"},
+      {"DOCF_DO_FULL_REFRESH", "0x200000"}, {"TASKf_IDLE", "3"},
       {"RECALCt_FIND_CURSOR", "1"},
       {"RECALCt_TO_SCRN", "2"},
       {"RECALCF_HAS_CURSOR", "0x100"},

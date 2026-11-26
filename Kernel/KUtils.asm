@@ -59,6 +59,9 @@ GLOBAL DCNewHC,DCDelHC,DCSizeHC,DCDepthBufRstHC
 GLOBAL DCDepthBufAllocHC,DCCopyHC,DCMonoHC,DCColorChgHC
 GLOBAL DCSaveHC,DCLoadHC,GRWriteHC,GRReadHC
 GLOBAL Mat4x4EquHC,Mat4x4NewHC
+GLOBAL Mat4x4MulMat4x4EquHC,Mat4x4MulMat4x4NewHC,Mat4x4RotXHC,Mat4x4RotYHC
+GLOBAL Mat4x4RotZHC,Mat4x4ScaleHC,Mat4x4TranslationEquHC,Mat4x4TranslationAddHC
+GLOBAL DCSymmetrySetHC,RefreshHC
 GLOBAL ScanCharHC,ScanKeyHC,GetKeyHC,GetCharHC
 EXTERN CPUStructInitCpp,TaskInitCpp
 EXTERN SpawnCpp,TaskValidateCpp,SuspendCpp,IsSuspendedCpp,TaskQueInsCpp,TaskQueRemCpp
@@ -88,6 +91,9 @@ EXTERN DCNewCpp,DCDelCpp,DCSizeCpp,DCDepthBufRstCpp
 EXTERN DCDepthBufAllocCpp,DCCopyCpp,DCMonoCpp,DCColorChgCpp
 EXTERN DCSaveCpp,DCLoadCpp,GRWriteCpp,GRReadCpp
 EXTERN Mat4x4EquCpp,Mat4x4NewCpp
+EXTERN Mat4x4MulMat4x4EquCpp,Mat4x4MulMat4x4NewCpp,Mat4x4RotXCpp,Mat4x4RotYCpp
+EXTERN Mat4x4RotZCpp,Mat4x4ScaleCpp,Mat4x4TranslationEquCpp,Mat4x4TranslationAddCpp
+EXTERN DCSymmetrySetCpp,RefreshCpp
 EXTERN ScanCharCpp,ScanKeyCpp,GetKeyCpp,GetCharCpp
 EXTERN MAllocCpp,FreeCpp,MSizeCpp,MSize2Cpp,MHeapCtrlCpp,CAllocCpp,MAllocIdentCpp
 EXTERN StrNewCpp,AStrNewCpp,StrCpyCpp,StrCmpCpp,StrIMatchCpp,StrOccCpp
@@ -307,6 +313,16 @@ HOLYC_CPP DCSaveHC,DCSaveCpp,3
 HOLYC_CPP DCLoadHC,DCLoadCpp,3
 HOLYC_CPP GRWriteHC,GRWriteCpp,3
 HOLYC_CPP GRReadHC,GRReadCpp,2
+HOLYC_CPP Mat4x4MulMat4x4EquHC,Mat4x4MulMat4x4EquCpp,3
+HOLYC_CPP Mat4x4MulMat4x4NewHC,Mat4x4MulMat4x4NewCpp,3
+HOLYC_CPP Mat4x4RotXHC,Mat4x4RotXCpp,2
+HOLYC_CPP Mat4x4RotYHC,Mat4x4RotYCpp,2
+HOLYC_CPP Mat4x4RotZHC,Mat4x4RotZCpp,2
+HOLYC_CPP Mat4x4ScaleHC,Mat4x4ScaleCpp,2
+HOLYC_CPP Mat4x4TranslationEquHC,Mat4x4TranslationEquCpp,4
+HOLYC_CPP Mat4x4TranslationAddHC,Mat4x4TranslationAddCpp,4
+HOLYC_CPP DCSymmetrySetHC,DCSymmetrySetCpp,5
+HOLYC_CPP RefreshHC,RefreshCpp,2
 HOLYC_CPP Mat4x4EquHC,Mat4x4EquCpp,2
 HOLYC_CPP Mat4x4NewHC,Mat4x4NewCpp,2
 HOLYC_CPP PutKeyHC,PutKeyCpp,2

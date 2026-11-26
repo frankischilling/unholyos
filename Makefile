@@ -70,8 +70,9 @@ CMP_PROBES := $(addprefix Linux/Fixtures/,CmpProbeRunner.HC CmpProbe.PRJ CmpProb
 	NullCase.HC SubSwitch.HC SwitchProbe.HC SwitchBuild.HC OpcodeProbe.HC \
 	FixedAsm.HC FixedImage.HC AsmBranchProbe.HC AsmBranchImport.HC BuzzFizz.HC \
 	AsmListingProbe.HC AsmListingScope.HC SchedulerProbe.HC JobProbe.HC SoundProbe.HC SoundRecord.HC \
-	KeyboardProbe.HC MsgLoop.HC MouseProbe.HC PaletteProbe.HC DCProbe.HC RasterProbe.HC Blot3Probe.HC DepthSpansProbe.HC Lines.HC \
+	KeyboardProbe.HC MsgLoop.HC MouseProbe.HC PaletteProbe.HC DCProbe.HC RasterProbe.HC Blot3Probe.HC DepthSpansProbe.HC MatrixProbe.HC Lines.HC \
 	ScreenProbe.HC CursorProbe.HC CursorExcept.HC Grid.HC FunctionPtrProbe.HC DocFrame.HC DocButton.HC DocCallback.HC TryProbe.HC Exceptions.HC DirectoryProbe.HC DirContextProbe.HC DocBinLinkProbe.HC SpriteProbe.HC)
+POLYGON_DEMO := Demo/Graphics/3DPoly.HC
 DOC_BIN_DEMOS := Demo/Graphics/SpritePut.HC Demo/Graphics/SpritePutExt.HC
 DOC_BIN_LINK := Linux/Fixtures/DocBinLink.DD
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
@@ -116,8 +117,9 @@ $(COMPRESS_TEST): Linux/TestCompress.cpp Linux/BootMedia.hpp Kernel/Compress.cpp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ Linux/TestCompress.cpp Kernel/Compress.cpp
 
-$(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC)
-	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home
+$(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(POLYGON_DEMO)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home \
+		--file-at $(POLYGON_DEMO) $(POLYGON_DEMO)
 
 TEST_MODULES := $(MODULE_PROBE) $(MODULE_CALLER) $(RUNTIME_PROBE) $(FILE_READ_PROBE) \
 	$(FILE_WRITE_PROBE) $(EXCEPT_PROBE) $(FORMAT_PROBE) $(HASH_CALLER) $(HASH_PROBE) \
@@ -126,9 +128,9 @@ TEST_MODULES := $(MODULE_PROBE) $(MODULE_CALLER) $(RUNTIME_PROBE) $(FILE_READ_PR
 STARTUP_FILES := $(TEST_MODULES) $(LEX_PROBES) $(DOC_SOURCE_PROBES) \
 	$(PRINT_SOURCE_PROBES) $(STREAM_PROBES) $(ISO_PROBE) $(MEMORY_PROBES) $(CMP_PROBES)
 
-$(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(STARTUP_FILES) $(STARTUP_DOC) $(DOC_BIN_DEMOS) $(DOC_BIN_LINK)
+$(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(STARTUP_FILES) $(STARTUP_DOC) $(DOC_BIN_DEMOS) $(DOC_BIN_LINK) $(POLYGON_DEMO)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(STARTUP_FIXTURE) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(STARTUP_FILES)) \
-		$(foreach demo,$(DOC_BIN_DEMOS),--file-at $(demo) $(demo)) --file-at Demo/Graphics/DocBinLink.DD $(DOC_BIN_LINK)
+		$(foreach demo,$(DOC_BIN_DEMOS) $(POLYGON_DEMO),--file-at $(demo) $(demo)) --file-at Demo/Graphics/DocBinLink.DD $(DOC_BIN_LINK)
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
