@@ -351,6 +351,103 @@ static CHashClass *CmpKernelClass(CHashTable *table, const char *name, size_t si
   return cls;
 }
 
+static bool CmpMemberData(CHashTable *table)
+{
+  auto *hash = CmpKernelClass(table, "CHash", sizeof(CHash));
+  auto *sym = CmpKernelClass(table, "CHashSrcSym", sizeof(CHashSrcSym));
+  auto *ht = CmpKernelClass(table, "CHashTable", sizeof(CHashTable));
+  auto *dim = CmpKernelClass(table, "CArrayDim", sizeof(CArrayDim));
+  auto *meta = CmpKernelClass(table, "CMemberLstMeta", sizeof(CMemberLstMeta));
+  auto *member = CmpKernelClass(table, "CMemberLst", sizeof(CMemberLst));
+  auto *cls = CmpKernelClass(table, "CHashClass", sizeof(CHashClass));
+  auto *fun = CmpKernelClass(table, "CHashFun", sizeof(CHashFun));
+  if (!hash || !sym || !ht || !dim || !meta || !member || !cls || !fun)
+    return false;
+  sym->base_class = hash;
+  cls->base_class = sym;
+  fun->base_class = cls;
+  auto *heap = CurrentTask()->data_heap;
+  auto *i64 = FindType("I64", table);
+  auto *u8 = FindType("U8", table);
+  auto *u32 = FindType("U32", table);
+  auto *u16 = FindType("U16", table);
+  auto *i8 = FindType("I8", table);
+  auto *ptr = u8 + 1;
+  const struct
+  {
+    const char *name;
+    CHashClass *record, *type;
+    size_t offset;
+  } members[]{
+      {"next", hash, hash + 1, offsetof(CHash, next)},
+      {"str", hash, ptr, offsetof(CHash, str)},
+      {"type", hash, u32, offsetof(CHash, type)},
+      {"use_cnt", hash, u32, offsetof(CHash, use_cnt)},
+      {"src_link", sym, ptr, offsetof(CHashSrcSym, src_link)},
+      {"idx", sym, ptr, offsetof(CHashSrcSym, idx)},
+      {"dbg_info", sym, ptr, offsetof(CHashSrcSym, dbg_info)},
+      {"import_name", sym, ptr, offsetof(CHashSrcSym, import_name)},
+      {"ie_lst", sym, ptr, offsetof(CHashSrcSym, ie_lst)},
+      {"next", ht, ht + 1, offsetof(CHashTable, next)},
+      {"mask", ht, i64, offsetof(CHashTable, mask)},
+      {"locked_flags", ht, i64, offsetof(CHashTable, locked_flags)},
+      {"body", ht, hash + 2, offsetof(CHashTable, body)},
+      {"next", dim, dim + 1, offsetof(CArrayDim, next)},
+      {"cnt", dim, i64, offsetof(CArrayDim, cnt)},
+      {"total_cnt", dim, i64, offsetof(CArrayDim, total_cnt)},
+      {"next", meta, meta + 1, offsetof(CMemberLstMeta, next)},
+      {"str", meta, ptr, offsetof(CMemberLstMeta, str)},
+      {"flags", meta, i64, offsetof(CMemberLstMeta, flags)},
+      {"user_data", meta, i64, offsetof(CMemberLstMeta, user_data)},
+      {"next", member, member + 1, offsetof(CMemberLst, next)},
+      {"left", member, member + 1, offsetof(CMemberLst, left)},
+      {"right", member, member + 1, offsetof(CMemberLst, right)},
+      {"left_class_base", member, member + 1, offsetof(CMemberLst, left_class_base)},
+      {"right_class_base", member, member + 1, offsetof(CMemberLst, right_class_base)},
+      {"str", member, ptr, offsetof(CMemberLst, str)},
+      {"member_class", member, cls + 1, offsetof(CMemberLst, member_class)},
+      {"member_class_base", member, cls + 1, offsetof(CMemberLst, member_class_base)},
+      {"meta", member, meta + 1, offsetof(CMemberLst, meta)},
+      {"use_cnt", member, u32, offsetof(CMemberLst, use_cnt)},
+      {"flags", member, u16, offsetof(CMemberLst, flags)},
+      {"reg", member, i8, offsetof(CMemberLst, reg)},
+      {"pad", member, i8, offsetof(CMemberLst, pad)},
+      {"offset", member, i64, offsetof(CMemberLst, offset)},
+      {"size", member, i64, offsetof(CMemberLst, size)},
+      {"dim", member, dim, offsetof(CMemberLst, dim)},
+      {"static_data", member, ptr, offsetof(CMemberLst, static_data)},
+      {"static_data_rip", member, i64, offsetof(CMemberLst, static_data_rip)},
+      {"dft_val", member, i64, offsetof(CMemberLst, dft_val)},
+      {"fun_ptr", member, fun + 1, offsetof(CMemberLst, fun_ptr)},
+      {"size", cls, i64, offsetof(CHashClass, size)},
+      {"neg_offset", cls, i64, offsetof(CHashClass, neg_offset)},
+      {"member_cnt", cls, u32, offsetof(CHashClass, member_cnt)},
+      {"ptr_stars_cnt", cls, u8, offsetof(CHashClass, ptr_stars_cnt)},
+      {"raw_type", cls, u8, offsetof(CHashClass, raw_type)},
+      {"flags", cls, u16, offsetof(CHashClass, flags)},
+      {"member_lst_and_root", cls, member + 1, offsetof(CHashClass, member_lst_and_root)},
+      {"member_class_base_root", cls, member + 1, offsetof(CHashClass, member_class_base_root)},
+      {"last_in_member_lst", cls, member + 1, offsetof(CHashClass, last_in_member_lst)},
+      {"base_class", cls, cls + 1, offsetof(CHashClass, base_class)},
+      {"fwd_class", cls, cls + 1, offsetof(CHashClass, fwd_class)},
+      {"return_class", fun, cls + 1, offsetof(CHashFun, return_class)},
+      {"arg_cnt", fun, u32, offsetof(CHashFun, arg_cnt)},
+      {"pad", fun, u32, offsetof(CHashFun, pad)},
+      {"used_reg_mask", fun, u32, offsetof(CHashFun, used_reg_mask)},
+      {"clobbered_reg_mask", fun, u32, offsetof(CHashFun, clobbered_reg_mask)},
+      {"exe_addr", fun, ptr, offsetof(CHashFun, exe_addr)},
+      {"ext_lst", fun, ptr, offsetof(CHashFun, ext_lst)},
+  };
+  for (const auto &field : members) {
+    auto *name = StrNew(field.name, heap);
+    if (!name || !MemberAdd(*field.record, name, *field.type, field.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool CmpJobData(CHashTable *table, CHashClass *task)
 {
   auto *job = CmpKernelClass(table, "CJob", sizeof(CJob));
@@ -698,6 +795,7 @@ static bool CmpTaskData(CHashTable *table, CHashClass *cls)
       {"win_bottom", i64, offsetof(CTask, win_bottom)},
       {"cur_dir", u8 + 1, offsetof(CTask, cur_dir)},
       {"cur_dv", FindType("CDrv", table) + 1, offsetof(CTask, cur_dv)},
+      {"hash_table", FindType("CHashTable", table) + 1, offsetof(CTask, hash_table)},
       {"parent_task", cls + 1, offsetof(CTask, parent_task)},
       {"next_task", cls + 1, offsetof(CTask, next_task)},
       {"last_task", cls + 1, offsetof(CTask, last_task)},
@@ -1410,6 +1508,11 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     CtrlPtr,
     FilePtr,
     U32Ptr,
+    HashPtr,
+    HashTablePtr,
+    HashClassPtr,
+    MemberPtr,
+    MemberMetaPtr,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1435,22 +1538,40 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CCtrl", table) + 1,
       FindType("CFile", table) + 1,
       FindType("U32", table) + 1,
+      FindType("CHash", table) + 1,
+      FindType("CHashTable", table) + 1,
+      FindType("CHashClass", table) + 1,
+      FindType("CMemberLst", table) + 1,
+      FindType("CMemberLstMeta", table) + 1,
   };
   auto *task = CurrentTask();
+  struct [[gnu::packed]] CHeaderArg
+  {
+    const char *name = nullptr;
+    uint8_t type = 0;
+    bool has_default = false, is_string = false;
+    union [[gnu::packed]] {
+      uint64_t dft_val;
+      const char *dft_str;
+    };
+
+    constexpr CHeaderArg() : dft_val(0) {}
+    constexpr CHeaderArg(const char *name, uint8_t type, bool has_default = false,
+                          uint64_t value = 0)
+        : name(name), type(type), has_default(has_default), dft_val(value) {}
+    constexpr CHeaderArg(const char *name, uint8_t type, bool has_default,
+                          uint64_t, const char *str)
+        : name(name), type(type), has_default(has_default), is_string(true),
+          dft_str(str) {}
+  };
+  static_assert(sizeof(CHeaderArg) == 19);
   static constexpr struct
   {
     const char *name;
     uint8_t result;
     uint16_t flags;
     // Private compiler metadata stays in the DVD-loaded boot image.
-    struct [[gnu::packed]]
-    {
-      const char *name;
-      uint8_t type;
-      bool has_default = false;
-      uint64_t dft_val = 0;
-      const char *dft_str = nullptr;
-    } args[10];
+    CHeaderArg args[10];
     const char *import_name = nullptr;
     uint8_t internal_op = 0;
   } headers[]{
@@ -1493,6 +1614,15 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"PutExcept", U0, FF_RET1, {{"catch_it", Bool, true, 1}}},
       {"YorN", Bool, FF_RET1, {}},
       {"Free", U0, FF_RET1, {{"addr", U8Ptr}}, "_FREE"},
+      {"HashFind", HashPtr, FF_RET1,
+       {{"needle_str", U8Ptr}, {"haystack_table", HashTablePtr}, {"mask", I64},
+        {"instance", I64, true, 1}}, "_HASH_FIND"},
+      {"MemberFind", MemberPtr, FF_RET1,
+       {{"needle_str", U8Ptr}, {"haystack_class", HashClassPtr}}},
+      {"MemberMetaData", I64, FF_RET1,
+       {{"needle_str", U8Ptr}, {"haystack_member_lst", MemberPtr}}},
+      {"MemberMetaFind", MemberMetaPtr, FF_RET1,
+       {{"needle_str", U8Ptr}, {"haystack_member_lst", MemberPtr}}},
       {"StrNew", U8Ptr, FF_RET1,
        {{"buf", U8Ptr}, {"mem_task", TaskPtr, true}}},
       {"StrCmp", I64, FF_RET1, {{"st1", U8Ptr}, {"st2", U8Ptr}}, "_STRCMP"},
@@ -1866,9 +1996,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       }
       if (arg.has_default) {
         member->flags |= MLF_DFT_AVAILABLE;
-        member->dft_val = arg.dft_val;
+        if (!arg.is_string)
+          member->dft_val = arg.dft_val;
       }
-      if (arg.dft_str) {
+      if (arg.is_string) {
         auto *str = StrNew(arg.dft_str, task->data_heap);
         if (!str) {
           HashDel(&fun->cls.sym.hash);
@@ -2011,6 +2142,8 @@ static bool CmpFillHash(CHashTable *table)
   } defines[]{
       {"NULL", "0"}, {"TRUE", "1"}, {"FALSE", "0"}, {"ON", "1"}, {"OFF", "0"},
       {"I64_MAX", "0x7FFFFFFFFFFFFFFF"},
+      {"HTT_CLASS", "0x10"}, {"HTT_INTERNAL_TYPE", "0x20"},
+      {"HTT_FUN", "0x40"}, {"MLMF_IS_STR", "1"},
       {"pi", "(0x400921FB54442D18(F64))"},
       {"BLACK","0"}, {"BLUE","1"}, {"GREEN","2"}, {"CYAN","3"},
       {"RED","4"}, {"PURPLE","5"}, {"BROWN","6"}, {"LTGRAY","7"},
@@ -2195,7 +2328,7 @@ static bool CmpFillHash(CHashTable *table)
     HashAdd(&entry->sym.hash,table);
   }
   auto *task = CmpKernelClass(table, "CTask", sizeof(CTask));
-  return task && CmpRuntimeData(table) && CmpDateData(table) && CmpDirData(table) &&
+  return task && CmpMemberData(table) && CmpRuntimeData(table) && CmpDateData(table) && CmpDirData(table) &&
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) && CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&

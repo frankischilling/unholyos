@@ -867,7 +867,9 @@ inline bool FunPopsArgs(const CHashFun &fun)
 constexpr uint64_t MLMF_IS_STR = 1, GVF_FUN = 1, GVF_IMPORT = 2,
                    GVF_EXTERN = 4, GVF_ALIAS = 16, GVF_ARRAY = 32;
 
-static_assert(sizeof(CMemberLst) == 144 && offsetof(CMemberLst, dim) == 96 &&
+static_assert(sizeof(CMemberLstMeta) == 32 && offsetof(CMemberLstMeta, user_data) == 24);
+static_assert(sizeof(CMemberLst) == 144 && offsetof(CMemberLst, meta) == 64 &&
+              offsetof(CMemberLst, dim) == 96 &&
               offsetof(CMemberLst, fun_ptr) == 136);
 static_assert(sizeof(CHashClass) == 128 && offsetof(CHashClass, flags) == 86 &&
               offsetof(CHashClass, member_lst_and_root) == 88);

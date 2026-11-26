@@ -1,11 +1,13 @@
 GLOBAL CPUStructInit,TaskInit,SET_GS_BASE,SET_FS_BASE,CallModuleMain,CallHolyC0,CallHolyC2
 GLOBAL _MEMCPY,_MEMSET,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_CLAMP_I64
+GLOBAL memcpy
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
 GLOBAL Str2I64HC,Str2DateHC
 GLOBAL GetI64HC,GetF64HC,GetDateHC
 GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
+GLOBAL MemberMetaDataHC,MemberMetaFindHC,MemberFindHC
 GLOBAL HashTableNewHC,HashTypeNumHC,CeilU64HC,Pow10I64HC
 GLOBAL LinkedLstDelHC,LinkedLstSizeHC,QueDelHC
 GLOBAL QueVectU8NewHC,QueVectU8PutHC,QueVectU8GetHC,QueVectU8DelHC
@@ -127,6 +129,7 @@ EXTERN MAllocCpp,FreeCpp,MSizeCpp,MSize2Cpp,MHeapCtrlCpp,CAllocCpp,MAllocIdentCp
 EXTERN StrNewCpp,AStrNewCpp,StrCpyCpp,StrCmpCpp,StrIMatchCpp,StrOccCpp
 EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
 EXTERN HashRemDelCpp,HashValCpp,HashDelCpp,HashTableDelCpp,HashSrcFileSetCpp,SysSymImportsResolveCpp
+EXTERN MemberMetaDataCpp,MemberMetaFindCpp,MemberFindCpp
 EXTERN HashTableNewCpp,HashTypeNumCpp,CeilU64Cpp,Pow10I64Cpp
 EXTERN LinkedLstDelCpp,LinkedLstSizeCpp,QueDelCpp
 EXTERN QueVectU8NewCpp,QueVectU8PutCpp,QueVectU8GetCpp,QueVectU8DelCpp
@@ -450,6 +453,9 @@ HOLYC_CPP HashValHC,HashValCpp,1
 HOLYC_CPP HashDelHC,HashDelCpp,1
 HOLYC_CPP HashTableDelHC,HashTableDelCpp,1
 HOLYC_CPP HashSrcFileSetHC,HashSrcFileSetCpp,3
+HOLYC_CPP MemberMetaDataHC,MemberMetaDataCpp,2
+HOLYC_CPP MemberMetaFindHC,MemberMetaFindCpp,2
+HOLYC_CPP MemberFindHC,MemberFindCpp,2
 HOLYC_CPP SysSymImportsResolveHC,SysSymImportsResolveCpp,2
 HOLYC_CPP HashTableNewHC,HashTableNewCpp,2
 HOLYC_CPP HashTypeNumHC,HashTypeNumCpp,1
@@ -693,6 +699,16 @@ CallHolyC0:
 	POP	R12
 	POP	RBX
 	POP	RBP
+	RET
+
+; System V entry used by the freestanding C++ compiler for aggregate copies.
+; Unlike _MEMCPY, return the original destination and leave argument cleanup
+; to the caller.
+memcpy:
+	MOV	RAX,RDI
+	MOV	RCX,RDX
+	CLD
+	REP MOVSB
 	RET
 
 _MEMCPY:

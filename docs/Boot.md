@@ -15,6 +15,15 @@ The [kernel source structure verification](SourceStructureVerification.md)
 records the build and boot checks for the extraction of guest probes from
 `Kernel/KMain.cpp` into `Linux/BootProbe.cpp`.
 
+The freestanding kernel uses `-Os`; the host tools retain `-O2`. The DVD
+loader relocates to physical address `0x96600`, as in the pinned TempleOS
+loader. The kernel and BSS must fit below that address. On GCC 13.3.0 the
+file-stream baseline's kernel shrank from 522,512 to 407,568 bytes without
+changing the loader layout. All nine local QEMU cases passed with `-Os`.
+Clang may emit a System V `memcpy` call for aggregate copies. Its assembly
+entry returns the original destination; the HolyC `_MEMCPY` entry retains
+the reference calling convention and return value.
+
 ## HolyC terminal
 
 Startup opens two DolDoc terminals side by side and focuses the left
@@ -742,6 +751,71 @@ and grid settings are restored. The first and moved cursor patches
 matched pinned TempleOS across 162 RGB pixels with the same VM settings
 and black background. The boot driver runs the probes again from the
 guest-built ISO.
+
+## Class member metadata
+
+`MemberMetaProbe.HC` checks the ABI sizes and offsets, inherited member
+lookup, array dimensions, adjacent format strings, duplicate metadata,
+zero versus missing values, floating-point bits, and a callable metadata
+address. Both guests reported `Member metadata 7F`.
+
+The original 2,169-byte [ClassMeta.HC by Terry A. Davis](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/ClassMeta.HC)
+is stored unchanged at `Demo/ClassMeta.HC`. Its SHA-256 is
+`940a019dce1872cc8053ca34b718714e8dcde762482c066b44e6d13593c46e3e`.
+Both guests produced these six lines:
+
+```text
+age:44 default:38
+color: default:4
+rank:3 default:3 Admiral
+age:22 default:38 percentile: 54.20
+rank:2 default:5
+serial_num: 55555 default:123456
+```
+
+`LastClassProbe.HC` checks inferred names for class pointers, scalar
+aliases, literals, explicit overrides, omitted arguments, and ordinary
+string defaults. Source execution and guest-compiled `.BIN.Z` execution
+both produced these lines in both guests:
+
+```text
+Lastclass names I64i I64i I64i F64
+Lastclass probe 0F
+```
+
+The reference JIT ran the fixture and original demo with `ExePutS`.
+For the reference AOT run, the fixture body was unchanged and preceded
+by the normal `KernelA.HH` and `CompilerA.HH` includes and these imports:
+
+```hc
+_intern IC_FS CTask *Fs();
+_import _STRCMP I64 StrCmp(U8 *a,U8 *b);
+import U0 Print(U8 *fmt,...);
+```
+
+The pinned AOT compiler starts without those headers. The UnholyOS AOT
+compiler seeds its native declarations directly. The reference also
+issued unused-parameter warnings that the native compiler does not emit.
+Both loaded the resulting module and ran its initializer successfully.
+
+The focused UnholyOS build used the default `-O2` flags and
+`make -j2 build/unholyos.iso build/unholyos-startup-test.iso build/Linux/TestBoot`.
+The test ISO was made with `build/Linux/MakeISO`, the built DVD loader
+and kernel, `Linux/Fixtures/StartOS.HC.Z`, compressed `Doc/Start.DD`,
+the Home directory, `FileWriteProbe.BIN`, and the three sources above.
+It ran under QEMU 8.2.2 using:
+
+```sh
+qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d \
+  -cdrom build/member-focused.iso -display none \
+  -serial file:build/member-focused.log -monitor none -no-reboot
+```
+
+The pinned `TOS_Distro.ISO` ran with the same machine, CPU, memory and
+boot order, using an allocated guest buffer for the exact source bytes
+and port `0xE9` for output. The startup and guest-built ISO test driver
+also checks all four program outputs. The focused kernel ended its BSS
+at `0x9300b`, below the relocated DVD loader limit of `0x96600`.
 
 ## DolDoc windows
 
