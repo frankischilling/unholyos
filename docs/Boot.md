@@ -1103,6 +1103,24 @@ verification uses the regular startup test ISO. Coverage does not yet
 include overlapping windows, probability dithering or the fixed ray
 stack's exhaustion behavior.
 
+`SpriteFloodProbe.HC` exercises both sprite flood-fill elements in a packed
+stream. The boundary-color element uses only the primary color, then restores
+the dither color for the next point. The probe also checks transformed,
+depth-buffered single-element drawing, including restoration of the caller's
+color, flags and brush. The native guest reported `sprite flood 0` before
+dispatch was enabled. Both guests now report `sprite flood F`, with matching
+stream (`95BB364C84E33F56`), single-element bitmap (`026661834AEEFF05`)
+and depth (`66901F20C6B79EE1`) fingerprints. The reference driver uploads
+and verifies all 1,840 source bytes and runs the fixture on the pinned DVD:
+
+```sh
+build/Linux/TestBoot --sprite-flood-reference qemu-system-x86_64 \
+  <reference.iso> build/sprite-flood-reference
+```
+
+Both focused guests use QEMU 8.2.2, PC, `qemu64` and 512 MiB. The regular
+startup and guest-built ISO tests check the same three output lines.
+
 The original [Demo/Graphics/Blot.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Graphics/Blot.HC)
 by Terry A. Davis is included without changes. The imported checkout
 contains 735 bytes (SHA-256

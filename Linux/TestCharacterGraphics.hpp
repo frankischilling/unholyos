@@ -10,12 +10,18 @@ constexpr std::string_view flood_fill_output =
     "fill transform 12 DA390E6207FC8CB5 796135481584641D\n"
     "flood fill 1FF\n";
 
+constexpr std::string_view sprite_flood_output =
+    "sprite flood stream 95BB364C84E33F56\n"
+    "sprite flood single 026661834AEEFF05 66901F20C6B79EE1\n"
+    "sprite flood F\n";
+
 // Uses the same QMP input and physical-memory readers as the boot tests.
 static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
                                    const std::string &boot, bool reference,
                                    bool tic = false, bool breaks = false,
                                    bool screen_capture = false, bool spline = false,
-                                   bool flood_fill = false, bool blot = false)
+                                   bool flood_fill = false, bool blot = false,
+                                   bool sprite_flood = false)
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -291,19 +297,20 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
     Check(FileRead(uploaded) == expected, "Reference probe transfer changed source bytes");
     cmd("ExePutS(cgprobe);Free(cgprobe);");
   };
-  if (flood_fill) {
-    upload(fs::absolute("Linux/Fixtures/FloodFillProbe.HC"));
-    auto cells = wait_text("flood fill 1FF");
+  if (flood_fill || sprite_flood) {
+    upload(fs::absolute(sprite_flood ? "Linux/Fixtures/SpriteFloodProbe.HC"
+                                    : "Linux/Fixtures/FloodFillProbe.HC"));
+    auto cells = wait_text(sprite_flood ? "sprite flood F" : "flood fill 1FF");
     const auto screen = visible(cells);
-    auto lines = flood_fill_output;
+    auto lines = sprite_flood ? sprite_flood_output : flood_fill_output;
     while (!lines.empty()) {
       auto end = lines.find('\n');
       Check(screen.find(lines.substr(0, end)) != std::string::npos,
             "Flood-fill reference output mismatch");
       lines.remove_prefix(end + 1);
     }
-    snapshot("flood-fill");
-    std::cout << flood_fill_output;
+    snapshot(sprite_flood ? "sprite-flood" : "flood-fill");
+    std::cout << (sprite_flood ? sprite_flood_output : flood_fill_output);
     return;
   }
   if (spline) {
