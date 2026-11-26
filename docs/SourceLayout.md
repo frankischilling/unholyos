@@ -366,10 +366,9 @@ coordinate updates, and the horizontal and vertical scrollbar
 callbacks. The HolyC compiler sees both `CCtrl` and `CWinScroll`
 with their reference layouts and callback signatures. DolDoc
 reads pending positions and publishes the document range in its
-screen recalc pass. UnholyOS currently recalculates the full document
-each frame. It follows the visible entry start during a scrollbar
-screen pass, as in `Adam/DolDoc/DocRecalc.HC`. The view-angle control
-from `CtrlsA.HC` remains pending.
+full screen recalc pass. The scrollbar cursor search follows the
+visible entry start, as in `Adam/DolDoc/DocRecalc.HC`. The view-angle
+control from `CtrlsA.HC` remains pending.
 
 `Adam/DolDoc/DocTerm.cpp` puts `MENU` and `[X]` in the border
 document at the reference positions. The rest of the standard
@@ -466,8 +465,13 @@ background, then expands that text layer on the next graphics refresh.
 document accessors. `DocRecalcLib.cpp` draws the display and border
 documents using `RECALCt_TO_SCRN` in `DocRecalc.cpp`. This path handles
 text cells, attributes, tab stops, scrolling offsets, and cursor placement.
-A document locked by another task is retried on a later refresh in the
-cooperative bootstrap.
+As in `DocRecalc.HC`, partial screen passes use cached entry coordinates to
+stop at the bottom of the visible region. Full passes update entry positions,
+cursor coordinates, and scroll ranges. They also consume pending
+scrollbar requests. `WinMgrSleep` measures the frame rate for the full-pass
+interval. `DOCF_DO_FULL_REFRESH` and `DOCF_BWD_MOVEMENT` override that
+interval. A document locked by another task is retried on a later refresh
+in the cooperative bootstrap.
 
 `RECALCt_FIND_CURSOR` finds the closest cell in the laid-out text and
 updates the document cursor. `Adam/WinMgr.cpp` finds the top visible

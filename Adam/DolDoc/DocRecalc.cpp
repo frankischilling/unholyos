@@ -2,6 +2,7 @@
 #include "../Gr/Gr.hpp"
 #include "../Gr/GrExt.hpp"
 #include "../Gr/GrGlbls.hpp"
+#include <bit>
 
 extern "C" void DCRstCpp(CDC *dc);
 
@@ -85,30 +86,36 @@ static uint8_t DocColor(const CDocEntryBase &entry, uint8_t text)
   return (text & 0xF0) | ink;
 }
 
-static void DocScreenCursor(CDoc &doc, const CTask &task)
+static void DocRecalcCursor(CDoc &doc, const CTask &task, bool screen)
 {
-  auto x0 = doc.line_start_col, y0 = doc.top_line_num;
-  if (int64_t(x0) + task.win_width - 1 > doc.max_x)
+  const int64_t sx = screen ? 0 : task.scroll_x / 8;
+  const int64_t sy = screen ? 0 : task.scroll_y / 8;
+  int64_t x0 = doc.line_start_col - sx, y0 = doc.top_line_num - sy;
+  if (x0 + task.win_width - 1 > doc.max_x)
     x0 = doc.max_x - task.win_width + 1;
   if (x0 < doc.min_x)
     x0 = doc.min_x;
-  if (doc.x - int64_t(x0) >= task.win_width)
+  if (doc.x - x0 >= task.win_width)
     x0 = doc.x - task.win_width + 1;
   if (doc.x < x0)
     x0 = doc.x;
-  if (int64_t(y0) + task.win_height - 1 > doc.max_y)
+  if (y0 + task.win_height - 1 > doc.max_y)
     y0 = doc.max_y - task.win_height + 1;
   if (y0 < doc.min_y)
     y0 = doc.min_y;
-  if (doc.y - int64_t(y0) >= task.win_height)
+  if (doc.y - y0 >= task.win_height)
     y0 = doc.y - task.win_height + 1;
   if (doc.y < y0)
     y0 = doc.y;
-  doc.line_start_col = x0;
-  doc.top_line_num = y0;
+  doc.line_start_col = x0 + sx;
+  doc.top_line_num = y0 + sy;
+}
 
-  auto x = doc.x - int64_t(x0) + task.win_left + task.scroll_x / 8;
-  auto y = doc.y - int64_t(y0) + task.win_top + task.scroll_y / 8;
+static void DocScreenCursor(const CDoc &doc, const CTask &task)
+{
+  auto x =
+      doc.x - int64_t(doc.line_start_col) + task.win_left + task.scroll_x / 8;
+  auto y = doc.y - int64_t(doc.top_line_num) + task.win_top + task.scroll_y / 8;
   if (!(doc.flags & DOCF_HIDE_CURSOR) && x >= 0 && x < TEXT_COLS && y >= 0 &&
       y < TEXT_ROWS && x <= task.win_right && y <= task.win_bottom) {
     auto &cell = gr.text_base[y * TEXT_COLS + x];
@@ -116,7 +123,7 @@ static void DocScreenCursor(CDoc &doc, const CTask &task)
   }
 }
 
-static void DocRecalcXY(const CDoc &doc, const CTask &task, uint64_t flags,
+static void DocRecalcXY(CDoc &doc, const CTask &task, uint64_t flags,
                         int64_t len, int64_t margin_right,
                         const CDocSettings &settings, int32_t &x, int32_t &y,
                         int32_t &page_line)
@@ -135,6 +142,7 @@ static void DocRecalcXY(const CDoc &doc, const CTask &task, uint64_t flags,
             : (width + x0 - len) >> 1;
 
   auto old_y = y;
+  doc.flags |= DOCF_BWD_MOVEMENT;
   if (flags & DOCEF_PAGE_REL_Y) {
     if (flags & DOCEF_TOP_Y)
       y -= page_line;
@@ -196,17 +204,25 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     return false;
   CDocLock lock(doc);
   auto *task = doc.win_task;
+  bool full_refresh = true;
+  if (screen) {
+    auto fps_10 =
+        F64ToI64(F64DivBits(winmgr.fps, std::bit_cast<uint64_t>(10.0)), 0x0C00);
+    uint64_t updates_cnt = doc.updates_cnt;
+    doc.updates_cnt = updates_cnt + 1;
+    full_refresh = updates_cnt % (fps_10 + 1) == 0 ||
+                   (doc.flags & (DOCF_DO_FULL_REFRESH | DOCF_BWD_MOVEMENT));
+  }
   const bool border_doc = doc.flags & DOCF_BORDER_DOC;
-  const bool scroll_bars = screen && !border_doc &&
-                           (recalc_flags & RECALCF_HAS_CURSOR) &&
-                           !(doc.flags & DOCF_NO_SCROLL_BARS);
-  if (scroll_bars &&
+  const bool has_cursor = !border_doc && (recalc_flags & RECALCF_HAS_CURSOR);
+  const bool scroll_bars = has_cursor && !(doc.flags & DOCF_NO_SCROLL_BARS);
+  if (full_refresh && has_cursor && task &&
       ((task->horz_scroll.flags | task->vert_scroll.flags) & WSSF_SET_TO_POS)) {
-    if (task->horz_scroll.flags & WSSF_SET_TO_POS) {
+    if (scroll_bars && (task->horz_scroll.flags & WSSF_SET_TO_POS)) {
       doc.line_start_col = task->horz_scroll.pos;
       task->horz_scroll.flags &= ~WSSF_SET_TO_POS;
     }
-    if (task->vert_scroll.flags & WSSF_SET_TO_POS) {
+    if (scroll_bars && (task->vert_scroll.flags & WSSF_SET_TO_POS)) {
       doc.top_line_num = task->vert_scroll.pos;
       task->vert_scroll.flags &= ~WSSF_SET_TO_POS;
     }
@@ -215,13 +231,15 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     find_cursor = true;
   }
   if (screen) {
-    ++doc.updates_cnt;
     if (border_doc)
       doc.line_start_col = doc.top_line_num = 0;
     doc.settings_head.cur_text_attr = doc.settings_head.dft_text_attr =
         border_doc ? task->border_attr : task->text_attr;
   }
   const int64_t x0 = doc.line_start_col, y0 = doc.top_line_num;
+  const int64_t y_plot_bottom =
+      screen ? y0 + task->win_height - 1 - (border_doc ? 0 : task->scroll_y / 8)
+             : 0;
   CDC *sprite_dc = nullptr;
   uint32_t format = 0;
   auto &head = doc.head;
@@ -234,19 +252,25 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
   int32_t x = 0, y = 0, page_line = 0;
   int64_t num_entries = 0;
   int64_t right_margin = task ? task->win_width - 1 : 0;
-  doc.min_x = doc.max_x = doc.min_y = doc.max_y = 0;
+  doc.flags &= ~DOCF_BWD_MOVEMENT;
+  if (full_refresh)
+    doc.min_x = doc.max_x = doc.min_y = doc.max_y = 0;
   for (auto *entry = head.next; entry != &head;) {
     if (entry->Type() == DOCT_CURSOR) {
-      if (!(doc.flags & DOCF_NO_CURSOR)) {
+      if (!find_cursor && !(doc.flags & DOCF_NO_CURSOR)) {
         doc.cur_entry = entry->next;
         doc.cur_col = doc.cur_entry->min_col;
       }
       auto *next = entry->next;
-      DocEntryDel(doc, *entry);
+      if (full_refresh)
+        DocEntryDel(doc, *entry);
+      else if (entry->y > y_plot_bottom)
+        break;
       entry = next;
       continue;
     }
-    while (entry->next != &head && SameText(*entry, *entry->next))
+    while (full_refresh && entry->next != &head &&
+           SameText(*entry, *entry->next))
       if (!JoinText(doc, *entry, *entry->next))
         break;
     ++num_entries;
@@ -259,11 +283,13 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     constexpr auto position = DOCEF_LEFT_X | DOCEF_CENTER_X | DOCEF_RIGHT_X |
                               DOCEF_TOP_Y | DOCEF_CENTER_Y | DOCEF_BOTTOM_Y;
     if (task && (entry->de_flags & position))
-      DocRecalcXY(doc, *task, entry->de_flags, len, right_margin,
-                  settings, x, y, page_line);
-    entry->x = x;
-    entry->y = y;
-    entry->page_line_num = page_line;
+      DocRecalcXY(doc, *task, entry->de_flags, len, right_margin, settings, x,
+                  y, page_line);
+    if (full_refresh) {
+      entry->x = x;
+      entry->y = y;
+      entry->page_line_num = page_line;
+    }
     uint32_t color = uint32_t(DocColor(*entry, settings.cur_text_attr)) << 8;
     entry->type = (entry->type & ~0xFF00u) | color;
     MemCpy(&entry->settings, &settings, sizeof(settings));
@@ -347,6 +373,7 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
       if (++page_line >= settings.page_len)
         page_line = 0;
     } else if (type == DOCT_PAGE_BREAK) {
+      doc.flags |= DOCF_BWD_MOVEMENT;
       x = settings.left_margin + settings.indent;
       y += settings.page_len - page_line;
       page_line = 0;
@@ -377,6 +404,7 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
       auto mask = masks[type - DOCT_BLINK];
       format = full->attr ? format | mask : format & ~mask;
     } else if (type == DOCT_CURSOR_MOVEMENT) {
+      doc.flags |= DOCF_BWD_MOVEMENT;
       x += full->attr;
       y += full->right_exp;
     } else if (type == DOCT_SHIFTED_X) {
@@ -386,42 +414,49 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     } else {
       x += len;
     }
-    if (x > doc.max_x)
-      doc.max_x = x;
-    if (x < doc.min_x)
-      doc.min_x = x;
-    if (y > doc.max_y)
-      doc.max_y = y;
-    if (y < doc.min_y)
-      doc.min_y = y;
+    if (full_refresh) {
+      if (x > doc.max_x)
+        doc.max_x = x;
+      if (x < doc.min_x)
+        doc.min_x = x;
+      if (y > doc.max_y)
+        doc.max_y = y;
+      if (y < doc.min_y)
+        doc.min_y = y;
+    } else if (entry->y > y_plot_bottom)
+      break;
     entry = entry->next;
   }
   if (sprite_dc)
     DCDelCpp(sprite_dc);
-  if (clear_entry) {
-    DocDelToEntry(doc, clear_entry, (clear_entry->de_flags & DOCEF_HOLD) != 0);
-    return DocRecalc(doc, recalc_flags);
-  }
-  if (screen && num_entries - doc.max_entries > 1024 &&
-      DocDelToNum(doc, num_entries - doc.max_entries))
-    return DocRecalc(doc, recalc_flags);
-  head.x = x;
-  head.y = y;
-  head.page_line_num = page_line;
-  MemCpy(&head.settings, &settings, sizeof(settings));
-  if (find_cursor) {
-    doc.cur_entry = best_entry;
-    doc.cur_col = best_col;
-    doc.best_d = best_d;
-  }
-  doc.x = doc.cur_entry->x + doc.cur_col;
-  doc.y = doc.cur_entry->y;
-  if (screen) {
+  if (full_refresh) {
+    if (clear_entry) {
+      DocDelToEntry(doc, clear_entry,
+                    (clear_entry->de_flags & DOCEF_HOLD) != 0);
+      return DocRecalc(doc, recalc_flags);
+    }
+    if (screen && num_entries - doc.max_entries > 1024 &&
+        DocDelToNum(doc, num_entries - doc.max_entries))
+      return DocRecalc(doc, recalc_flags);
+    head.x = x;
+    head.y = y;
+    head.page_line_num = page_line;
+    MemCpy(&head.settings, &settings, sizeof(settings));
+    if (find_cursor) {
+      doc.cur_entry = best_entry;
+      doc.cur_col = best_col;
+      doc.best_d = best_d;
+    }
+    doc.x = doc.cur_entry->x + doc.cur_col;
+    doc.y = doc.cur_entry->y;
     doc.line = int64_t(doc.y) + 1;
     doc.col = int64_t(doc.x) + 1;
-    if (!border_doc && (recalc_flags & RECALCF_HAS_CURSOR))
-      DocScreenCursor(doc, *task);
-    if (scroll_bars) {
+    if (has_cursor && task)
+      DocRecalcCursor(doc, *task, screen);
+  }
+  if (screen && has_cursor) {
+    DocScreenCursor(doc, *task);
+    if (full_refresh && scroll_bars) {
       auto range = [](CWinScroll &s, int64_t min, int64_t max, int64_t pos) {
         if (!(s.flags & WSSF_SET_TO_POS)) {
           s.min = min;
@@ -438,7 +473,7 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
   return true;
 }
 
-extern "C" bool DocRecalcCpp(CDoc *doc, uint64_t recalc_flags)
+extern "C" uint64_t DocRecalcCpp(CDoc *doc, uint64_t recalc_flags)
 {
   return doc && DocRecalc(*doc, recalc_flags);
 }
