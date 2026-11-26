@@ -390,6 +390,15 @@ uint64_t RedSeaAllocClus(const CDrv &dv, uint64_t blocks);
 CDrv *PathDrive(const CTask &task, char letter);
 uint64_t RedSeaFileWrite(CDrv &dv, const char *path, const uint8_t *data,
                          size_t size, uint64_t date, uint16_t attr);
+bool RedSeaStreamPrepare(CDrv &dv, const char *path, CDirEntry &de, int64_t cnt);
+bool RedSeaStreamCommit(CDrv &dv, const char *path, CDirEntry &de, bool new_file);
+extern "C" int64_t FSizeCpp(CFile *f);
+extern "C" CFile *FOpenCpp(const char *filename, const char *flags, int64_t cnt);
+extern "C" void FCloseCpp(CFile *f);
+extern "C" uint64_t FBlkReadCpp(CFile *f, uint8_t *buf, int64_t blk, int64_t cnt);
+extern "C" uint64_t FBlkWriteCpp(CFile *f, const uint8_t *buf, int64_t blk, int64_t cnt);
+extern "C" uint64_t BlkReadCpp(CDrv *dv, uint8_t *buf, int64_t blk, int64_t count);
+extern "C" uint64_t BlkWriteCpp(CDrv *dv, const uint8_t *buf, int64_t blk, int64_t count);
 char *FileNameAbs(const char *name, const CTask &task, uint64_t flags = 0);
 char *DirNameAbs(const char *name, const CTask &task);
 char *PathTrim(const char *name, CHeapCtrl *hc);

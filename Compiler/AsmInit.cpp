@@ -544,7 +544,8 @@ static bool CmpDirData(CHashTable *table)
   auto *entry = CmpKernelClass(table, "CDirEntry", sizeof(CDirEntry));
   auto *context = CmpKernelClass(table, "CDirContext", sizeof(CDirContext));
   auto *drive = CmpKernelClass(table, "CDrv", sizeof(CDrv));
-  if (!entry || !context || !drive)
+  auto *file = CmpKernelClass(table, "CFile", sizeof(CFile));
+  if (!entry || !context || !drive || !file)
     return false;
   auto *heap = CurrentTask()->data_heap;
   auto *i64 = FindType("I64", table);
@@ -575,6 +576,14 @@ static bool CmpDirData(CHashTable *table)
       {"fs_type", drive, FindType("U16", table), offsetof(CDrv, fs_type)},
       {"root_clus", drive, i64, offsetof(CDrv, root_clus)},
       {"size", drive, i64, offsetof(CDrv, size)},
+      {"flags", file, i64, offsetof(CFile, flags)},
+      {"de", file, entry, offsetof(CFile, de)},
+      {"dv", file, drive + 1, offsetof(CFile, dv)},
+      {"fblk_num", file, i64, offsetof(CFile, fblk_num)},
+      {"clus", file, i64, offsetof(CFile, clus)},
+      {"file_clus_num", file, i64, offsetof(CFile, file_clus_num)},
+      {"max_blk", file, i64, offsetof(CFile, max_blk)},
+      {"clus_buf", file, u8 + 1, offsetof(CFile, clus_buf)},
   };
   for (const auto &member : members) {
     auto *name = StrNew(member.name, heap);
@@ -1399,6 +1408,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     MenuPtr,
     MenuEntryPtr,
     CtrlPtr,
+    FilePtr,
     U32Ptr,
   };
   CHashClass *types[]{
@@ -1423,6 +1433,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CMenu", table) + 1,
       FindType("CMenuEntry", table) + 1,
       FindType("CCtrl", table) + 1,
+      FindType("CFile", table) + 1,
       FindType("U32", table) + 1,
   };
   auto *task = CurrentTask();
@@ -1457,6 +1468,13 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"FilesFind", DirEntryPtr, FF_RET1, {{"files_find_mask", U8Ptr}, {"fuf_flags", I64, true}}},
       {"FileFind", Bool, FF_RET1,
        {{"filename", U8Ptr}, {"_de", DirEntryPtr, true}, {"fuf_flags", I64, true}}},
+      {"FSize", I64, FF_RET1, {{"f", FilePtr}}},
+      {"FOpen", FilePtr, FF_RET1, {{"filename", U8Ptr}, {"flags", U8Ptr}, {"cnt", I64, true}}},
+      {"FClose", U0, FF_RET1, {{"f", FilePtr}}},
+      {"FBlkRead", Bool, FF_RET1,
+       {{"f", FilePtr}, {"buf", U8Ptr}, {"blk", I64, true, FFB_NEXT_BLK}, {"cnt", I64, true, 1}}},
+      {"FBlkWrite", Bool, FF_RET1,
+       {{"f", FilePtr}, {"buf", U8Ptr}, {"blk", I64, true, FFB_NEXT_BLK}, {"cnt", I64, true, 1}}},
       {"FilesFindMatch", Bool, FF_RET1,
        {{"_test_name", U8Ptr}, {"files_find_mask", U8Ptr}, {"fuf_flags", I64, true}}},
       {"DirEntryDel", U0, FF_RET1, {{"tmpde", DirEntryPtr}}},
@@ -2017,9 +2035,13 @@ static bool CmpFillHash(CHashTable *table)
       {"DOCF_NO_SCROLL_BARS", "0x2000"}, {"TSF_SAME_SONG", "1"},
       {"CDATE_FREQ", "49710"},
       {"CDIR_FILENAME_LEN", "38"}, {"CDIR_SIZE", "64"},
+      {"BLK_SIZE_BITS", "9"}, {"BLK_SIZE", "512"},
       {"RS_ATTR_DIR", "0x10"}, {"RS_ATTR_DELETED", "0x100"},
       {"RS_ATTR_RESIDENT", "0x200"}, {"RS_ATTR_COMPRESSED", "0x400"},
       {"RS_ATTR_CONTIGUOUS", "0x800"},
+      {"FFB_NEXT_BLK", "0x7FFFFFFFFFFFFFFF"}, {"FF_WRITE", "1"},
+      {"FF_NEW_FILE", "2"}, {"FF_BUF_DIRTY", "4"}, {"FF_NEEDS_WRITE", "8"},
+      {"FF_CONTIGUOUS", "16"}, {"FF_USE_OLD_DATETIME", "32"},
       {"FUF_RECURSE", "1"}, {"FUF_SINGLE", "0x200"},
       {"FUF_JUST_DIRS", "0x400"}, {"FUF_JUST_FILES", "0x800"},
       {"FUF_JUST_TXT", "0x1000"}, {"FUF_JUST_DD", "0x2000"},

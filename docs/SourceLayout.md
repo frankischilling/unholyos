@@ -578,6 +578,25 @@ record to save the task's drive, directory, and mask. `FilesFind`,
 RAM paths and restore the caller's working directory. FAT32,
 `PopUpCd`, and full drive error reporting remain pending.
 
+## File streams
+
+`Kernel/BlkDev/DskCFile.cpp` follows `DskCFile.HC` for `FOpen`,
+`FSize`, `FBlkRead`, `FBlkWrite`, and `FClose`. The native `CFile`
+record and HolyC class share the reference's 168-byte layout. RedSea
+streams use contiguous blocks, including compressed files whose stored
+bytes and final block padding are accessed directly. RAM streams support
+preallocation, `w` replacement, `w+` updates, and metadata changes on
+close, including preservation of the original timestamp. The containing
+directory must already exist.
+
+The current slice supports DVD reads and RAM reads and writes. It rejects
+positive writes to a new stream without a preallocated extent; the
+reference contiguous path would otherwise use cluster zero. A failed
+preallocation preserves the previous file rather than deleting it first.
+Close checks that changes to size stay within the allocated block count
+and that the entry still refers to the same file. FAT32, noncontiguous
+streams, dirty cluster buffers, and ATA writes remain pending.
+
 ## HolyC function pointers
 
 `Compiler/PrsVar.cpp` follows `PrsType` in `Compiler/PrsVar.HC` for

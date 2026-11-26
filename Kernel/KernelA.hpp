@@ -570,6 +570,25 @@ struct CDirEntry
   CDate datetime;
 };
 
+constexpr int64_t FFB_NEXT_BLK = INT64_MAX;
+constexpr int64_t FF_WRITE = 1, FF_NEW_FILE = 2, FF_BUF_DIRTY = 4,
+                  FF_NEEDS_WRITE = 8, FF_CONTIGUOUS = 16,
+                  FF_USE_OLD_DATETIME = 32;
+
+struct CFile
+{
+  int64_t flags;
+  CDirEntry de;
+  CDrv *dv;
+  int64_t fblk_num, clus, file_clus_num, max_blk;
+  uint8_t *clus_buf;
+};
+
+static_assert(sizeof(CFile) == 168 && offsetof(CFile, de) == 8 &&
+              offsetof(CFile, dv) == 120 && offsetof(CFile, fblk_num) == 128 &&
+              offsetof(CFile, clus) == 136 && offsetof(CFile, file_clus_num) == 144 &&
+              offsetof(CFile, max_blk) == 152 && offsetof(CFile, clus_buf) == 160);
+
 struct CDirContext
 {
   CDrv *old_dv, *dv;

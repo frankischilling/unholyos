@@ -48,6 +48,7 @@ void DirContextNewHC(), DirContextDelHC(), Str2I64HC();
 void ExtChgHC(), ExtDftHC();
 void RedSeaISOHC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
+void FSizeHC(), FOpenHC(), FCloseHC(), FBlkReadHC(), FBlkWriteHC();
 void BlkReadHC(), BlkWriteHC();
 void SysTryHC(), SysUntryHC(), ThrowHC(), CallerHC(), PutExceptHC(), YorNHC();
 void StrPrintJoinHC(), StrPrintHC(), CatPrintHC(), MStrPrintHC(), PrintHC();
@@ -608,6 +609,11 @@ bool LoadKernel(CTask &task)
       {"DirContextDel", reinterpret_cast<uintptr_t>(DirContextDelHC)},
       {"Str2I64", reinterpret_cast<uintptr_t>(Str2I64HC)},
       {"FileWrite", reinterpret_cast<uintptr_t>(FileWriteHC)},
+      {"FSize", reinterpret_cast<uintptr_t>(FSizeHC)},
+      {"FOpen", reinterpret_cast<uintptr_t>(FOpenHC)},
+      {"FClose", reinterpret_cast<uintptr_t>(FCloseHC)},
+      {"FBlkRead", reinterpret_cast<uintptr_t>(FBlkReadHC)},
+      {"FBlkWrite", reinterpret_cast<uintptr_t>(FBlkWriteHC)},
       {"RedSeaISO", reinterpret_cast<uintptr_t>(RedSeaISOHC)},
       {"BlkDevNextFreeSlot", reinterpret_cast<uintptr_t>(BlkDevNextFreeSlotHC)},
       {"BlkDevAdd", reinterpret_cast<uintptr_t>(BlkDevAddHC)},
