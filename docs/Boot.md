@@ -574,6 +574,18 @@ scroll request in place and skips a live tag below the viewport. It
 also checks a scheduled full pass, a forced refresh, and a document
 with a backward cursor movement.
 
+## View angles and shading
+
+Run `ExeFile("::/Demo/Graphics/Shading.HC");` to open Terry A. Davis's
+unchanged demo. Move the pointer to change the light source and drag
+the X, Y, and Z sliders to rotate the sphere. Press a key to leave
+the demo and restore the terminal.
+
+The boot suite checks the shaded hemispheres, scale ticks, X slider
+capture, and cleanup. `ViewAnglesProbe.HC` checks the record layout,
+angle snapping and clamping, the three slider callbacks, and the math
+calls used by the demo.
+
 ## Pulldown menus
 
 Run `ExeFile("::/Demo/PullDownMenu.HC");` to open Terry A. Davis's

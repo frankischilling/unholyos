@@ -104,6 +104,7 @@ void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
 void WinRefocusHC(), WinToTopHC(), WinFocusHC(), WinTileHorzHC(), WinTileVertHC(), WinMaxHC();
 void WinScrollNullHC(), WinScrollRestoreHC();
 void CtrlFindUniqueHC(), CtrlInsideHC(), WinScrollsInitHC();
+void ViewAnglesNewHC(), ViewAnglesDelHC(), D3I32NormHC(), AutoCompleteHC();
 void MenuSubEntryFindHC();
 void MenuEntryFindHC();
 void MenuNewHC();
@@ -724,6 +725,7 @@ bool LoadKernel(CTask &task)
       {"DCThickScale", reinterpret_cast<uintptr_t>(DCThickScaleHC)},
       {"ClipLine", reinterpret_cast<uintptr_t>(ClipLineHC)},
       {"Mat4x4MulXYZ", reinterpret_cast<uintptr_t>(Mat4x4MulXYZHC)},
+      {"D3I32Norm", reinterpret_cast<uintptr_t>(D3I32NormHC)},
       {"DCTransform", reinterpret_cast<uintptr_t>(DCTransformHC)},
       {"Mat4x4IdentEqu", reinterpret_cast<uintptr_t>(Mat4x4IdentEquHC)},
       {"Mat4x4IdentNew", reinterpret_cast<uintptr_t>(Mat4x4IdentNewHC)},
@@ -804,6 +806,9 @@ bool LoadKernel(CTask &task)
       {"CtrlFindUnique", reinterpret_cast<uintptr_t>(CtrlFindUniqueHC)},
       {"CtrlInside", reinterpret_cast<uintptr_t>(CtrlInsideHC)},
       {"WinScrollsInit", reinterpret_cast<uintptr_t>(WinScrollsInitHC)},
+      {"ViewAnglesNew", reinterpret_cast<uintptr_t>(ViewAnglesNewHC)},
+      {"ViewAnglesDel", reinterpret_cast<uintptr_t>(ViewAnglesDelHC)},
+      {"AutoComplete", reinterpret_cast<uintptr_t>(AutoCompleteHC)},
       {"MenuSubEntryFind", reinterpret_cast<uintptr_t>(MenuSubEntryFindHC)},
       {"MenuEntryFind", reinterpret_cast<uintptr_t>(MenuEntryFindHC)},
       {"MenuNew", reinterpret_cast<uintptr_t>(MenuNewHC)},

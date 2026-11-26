@@ -2,6 +2,7 @@
 
 CTask *adam_task, *sys_focus_task, *sys_winmgr_task,
     *sys_task_being_scrn_updated;
+CAutoCompleteGlbls ac;
 CBlkDevGlbls blkdev;
 CDbgGlbls dbg;
 CSema sys_semas[SEMA_SEMAS_NUM];

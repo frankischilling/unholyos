@@ -7,6 +7,7 @@ constexpr uint32_t RLF_VGA = 1 << 1;
 constexpr uint32_t RLF_FULL_HEAPS = 1 << 7;
 constexpr uint32_t RLF_INTERRUPTS = 1 << 9;
 constexpr uint32_t RLF_DOC = 1 << 13;
+constexpr uint32_t RLF_AUTO_COMPLETE = 1 << 17;
 
 struct CTask;
 struct CTaskDying;
@@ -1169,6 +1170,13 @@ struct CWinScroll
   uint8_t color, pad[3];
 };
 
+struct CViewAngles
+{
+  int64_t sx, sy, sz;
+  uint64_t ax, ay, az;
+  CColorROPU32 cx, cy, cz, cbd, cbg, cfg;
+};
+
 struct CCtrl
 {
   CCtrl *next, *last;
@@ -1183,6 +1191,10 @@ struct CCtrl
 
 static_assert(sizeof(CWinScroll) == 32 && offsetof(CWinScroll, flags) == 24 &&
               offsetof(CWinScroll, color) == 28);
+static_assert(sizeof(CViewAngles) == 72 &&
+              offsetof(CViewAngles, ax) == 24 &&
+              offsetof(CViewAngles, cx) == 48 &&
+              offsetof(CViewAngles, cfg) == 68);
 static_assert(sizeof(CCtrl) == 160 && offsetof(CCtrl, win_task) == 16 &&
               offsetof(CCtrl, left) == 40 && offsetof(CCtrl, scrn_left) == 72 &&
               offsetof(CCtrl, state) == 104 &&
@@ -1277,6 +1289,25 @@ struct CMsStateGlbls
   bool lb, rb, show, has_wheel, left_dbl, right_dbl, left_down_sent,
        right_down_sent;
 };
+
+struct CHashAC;
+
+constexpr uint64_t ACF_INIT_IN_PROGRESS = 1;
+constexpr int64_t AC_FILLINS_NUM = 10;
+
+struct CAutoCompleteGlbls
+{
+  int64_t num_words;
+  CHashTable *hash_table;
+  uint8_t *cur_word;
+  uint64_t flags;
+  CTask *task;
+  int64_t partial_len, num_fillins, fillin_hits[AC_FILLINS_NUM + 1];
+  CHashAC *fillin_matches[AC_FILLINS_NUM + 1];
+};
+
+static_assert(sizeof(CAutoCompleteGlbls) == 232 &&
+              offsetof(CAutoCompleteGlbls, task) == 32);
 
 struct CWinMgrTimingGlbls;
 

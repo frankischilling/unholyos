@@ -1217,7 +1217,8 @@ static bool CmpCtrlData(CHashTable *table, CHashClass *task)
 {
   auto *ctrl = CmpKernelClass(table, "CCtrl", sizeof(CCtrl));
   auto *scroll = CmpKernelClass(table, "CWinScroll", sizeof(CWinScroll));
-  if (!ctrl || !scroll)
+  auto *view = CmpKernelClass(table, "CViewAngles", sizeof(CViewAngles));
+  if (!ctrl || !scroll || !view)
     return false;
   auto *heap = CurrentTask()->data_heap;
   auto *i64 = FindType("I64", table);
@@ -1226,6 +1227,8 @@ static bool CmpCtrlData(CHashTable *table, CHashClass *task)
   auto *u0 = FindType("U0", table);
   auto *boolean = FindType("Bool", table);
   auto *dc = FindType("CDC", table);
+  auto *f64 = FindType("F64", table);
+  auto *color_rop = FindType("CColorROPU32", table);
   struct
   {
     const char *name;
@@ -1252,6 +1255,18 @@ static bool CmpCtrlData(CHashTable *table, CHashClass *task)
       {"flags", scroll, u32, offsetof(CWinScroll, flags)},
       {"color", scroll, u8, offsetof(CWinScroll, color)},
       {"pad", scroll, u8, offsetof(CWinScroll, pad), 3},
+      {"sx", view, i64, offsetof(CViewAngles, sx)},
+      {"sy", view, i64, offsetof(CViewAngles, sy)},
+      {"sz", view, i64, offsetof(CViewAngles, sz)},
+      {"ax", view, f64, offsetof(CViewAngles, ax)},
+      {"ay", view, f64, offsetof(CViewAngles, ay)},
+      {"az", view, f64, offsetof(CViewAngles, az)},
+      {"cx", view, color_rop, offsetof(CViewAngles, cx)},
+      {"cy", view, color_rop, offsetof(CViewAngles, cy)},
+      {"cz", view, color_rop, offsetof(CViewAngles, cz)},
+      {"cbd", view, color_rop, offsetof(CViewAngles, cbd)},
+      {"cbg", view, color_rop, offsetof(CViewAngles, cbg)},
+      {"cfg", view, color_rop, offsetof(CViewAngles, cfg)},
       {"next_ctrl", task, ctrl + 1, offsetof(CTask, next_ctrl)},
       {"last_ctrl", task, ctrl + 1, offsetof(CTask, last_ctrl)},
       {"horz_scroll", task, scroll, offsetof(CTask, horz_scroll)},
@@ -1367,7 +1382,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     const char *name;
     uint8_t result;
     uint16_t flags;
-    struct
+    // Private compiler metadata stays in the DVD-loaded boot image.
+    struct [[gnu::packed]]
     {
       const char *name;
       uint8_t type;
@@ -1427,6 +1443,12 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Sleep", U0, FF_RET1, {{"mS", I64}}},
       {"Fs", TaskPtr, FF_INTERNAL, {}, nullptr, IC_FS},
       {"GetRFlags", I64, FF_INTERNAL, {}, nullptr, IC_GET_RFLAGS},
+      {"Cos", F64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_COS},
+      {"MaxI64", I64, FF_INTERNAL, {{"n1", I64}, {"n2", I64}}, nullptr, IC_MAX_I64},
+      {"MinI64", I64, FF_INTERNAL, {{"n1", I64}, {"n2", I64}}, nullptr, IC_MIN_I64},
+      {"Sin", F64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_SIN},
+      {"SqrI64", I64, FF_INTERNAL, {{"i", I64}}, nullptr, IC_SQR_I64},
+      {"Sqrt", F64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_SQRT},
       {"JobDel", U0, FF_RET1, {{"tmpc", JobPtr}}},
       {"TaskRstAwaitingMsg", U0, FF_RET1, {{"task", TaskPtr, true}}},
       {"TaskExe", JobPtr, FF_RET1, {{"srv", TaskPtr}, {"master", TaskPtr}, {"data", U8Ptr}, {"flags", I64}}},
@@ -1468,6 +1490,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"CtrlFindUnique", CtrlPtr, FF_RET1, {{"task", TaskPtr}, {"type", I64}}},
       {"CtrlInside", Bool, FF_RET1, {{"c", CtrlPtr}, {"x", I64}, {"y", I64}}},
       {"WinScrollsInit", U0, FF_RET1, {{"task", TaskPtr}}},
+      {"ViewAnglesNew", CtrlPtr, FF_RET1, {{"task", TaskPtr, true}}},
+      {"ViewAnglesDel", U0, FF_RET1, {{"task", TaskPtr, true}}},
+      {"AutoComplete", Bool, FF_RET1, {{"val", Bool, true}}},
       {"MenuSubEntryFind", MenuEntryPtr, FF_RET1, {{"haystack_first", MenuEntryPtr}, {"needle_entry_name", U8Ptr}}},
       {"MenuEntryFind", MenuEntryPtr, FF_RET1, {{"haystack_menu", MenuPtr}, {"needle_full_name", U8Ptr}}},
       {"MenuNew", MenuPtr, FF_RET1, {{"st", U8Ptr}, {"flags", I64, true}, {"task", TaskPtr, true}}},
@@ -1646,6 +1671,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"GRWrite", I64, FF_RET1,
        {{"filename", U8Ptr}, {"dc", DCPtr}, {"dcsf_flags", I64, true, DCSF_COMPRESSED}}},
       {"GRRead", DCPtr, FF_RET1, {{"filename", U8Ptr}, {"task", TaskPtr, true}}},
+      {"D3I32Norm", F64, FF_RET1, {{"p", D3I32Ptr}}},
       {"Mat4x4MulMat4x4Equ", I64Ptr, FF_RET1,
        {{"dst", I64Ptr}, {"m1", I64Ptr}, {"m2", I64Ptr}}},
       {"Mat4x4MulMat4x4New", I64Ptr, FF_RET1,
@@ -1901,6 +1927,7 @@ static bool CmpFillHash(CHashTable *table)
   } defines[]{
       {"NULL", "0"}, {"TRUE", "1"}, {"FALSE", "0"}, {"ON", "1"}, {"OFF", "0"},
       {"I64_MAX", "0x7FFFFFFFFFFFFFFF"},
+      {"pi", "(0x400921FB54442D18(F64))"},
       {"BLACK","0"}, {"BLUE","1"}, {"GREEN","2"}, {"CYAN","3"},
       {"RED","4"}, {"PURPLE","5"}, {"BROWN","6"}, {"LTGRAY","7"},
       {"DKGRAY","8"}, {"LTBLUE","9"}, {"LTGREEN","10"}, {"LTCYAN","11"},
@@ -1963,6 +1990,8 @@ static bool CmpFillHash(CHashTable *table)
       {"CTRLT_WIN_HSCROLL", "1"},
       {"CTRLT_WIN_VSCROLL", "2"},
       {"CTRLT_VIEWING_ANGLES", "3"},
+      {"VIEWANGLES_SPACING", "22"}, {"VIEWANGLES_RANGE", "48"},
+      {"VIEWANGLES_BORDER", "2"}, {"VIEWANGLES_SNAP", "2"},
       {"CTRLF_SHOW", "1"},
       {"CTRLF_BORDER", "2"},
       {"CTRLF_CAPTURE_LEFT_MS", "4"},

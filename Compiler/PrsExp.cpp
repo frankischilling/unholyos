@@ -166,16 +166,26 @@ private:
                       CCallSyntax syntax = CS_NORMAL, uint32_t target = NO_IC)
   {
     if (callee.cls.flags & FF_INTERNAL) {
-      auto opcode = reinterpret_cast<uintptr_t>(callee.exe_addr);
-      if (syntax != CS_NORMAL || !callee.return_class ||
-          (opcode != IC_FS && opcode != IC_GET_RFLAGS))
+      if (syntax != CS_NORMAL || !callee.return_class || callee.arg_cnt > 2)
         return NO_IC;
-      if (Lex(cc) == '(') {
-        if (Lex(cc) != ')')
+      bool paren = Lex(cc) == '(';
+      if (paren)
+        Lex(cc);
+      uint32_t operands[]{NO_IC, NO_IC};
+      for (unsigned i = 0; i < callee.arg_cnt; ++i) {
+        if (i && (cc.token != ',' || Lex(cc) == TK_EOF))
+          return NO_IC;
+        operands[i] = Expression(PREC_ASSIGN + 1, depth + 1);
+        if (operands[i] == NO_IC || !TypeSize(coc.code[operands[i]].type))
+          return NO_IC;
+      }
+      if (paren) {
+        if (cc.token != ')')
           return NO_IC;
         Lex(cc);
       }
-      return Add({0, NO_IC, NO_IC, static_cast<CICode>(opcode),
+      auto opcode = reinterpret_cast<uintptr_t>(callee.exe_addr);
+      return Add({0, operands[0], operands[1], static_cast<CICode>(opcode),
                   ClassRawType(*callee.return_class), false, false, true,
                   NO_IC, callee.return_class});
     }

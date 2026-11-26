@@ -1618,6 +1618,17 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
           << std::setfill('0') << marker;
     wait_text(reply.str(), right_pane);
   };
+  auto move_pointer = [&](int64_t &mouse_x, int64_t &mouse_y, int64_t x,
+                          int64_t y) {
+    while (mouse_x != x || mouse_y != y) {
+      auto dx = std::clamp(x - mouse_x, int64_t(-80), int64_t(80));
+      auto dy = std::clamp(y - mouse_y, int64_t(-80), int64_t(80));
+      MouseMove(vm, dx * 2, dy * 2);
+      std::this_thread::sleep_for(125ms);
+      mouse_x += dx;
+      mouse_y += dy;
+    }
+  };
   auto drag = [&](int dx, int dy, const std::array<uint64_t, 4> &expected) {
     MouseButton(vm, "left", true);
     std::this_thread::sleep_for(125ms);
@@ -1876,6 +1887,70 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   }
   Check(!shape_pixels(tree), "CommonAncestor.HC left the tree on VGA");
 
+  vm.ResetDeadline(40s);
+  const auto shading_window = ReadPhysical<4>(vm, left + win_left);
+  type_cmd("DocClear(,1);");
+  int64_t view_x = 320, view_y = 240;
+  set_pointer(view_x, view_y);
+  type_cmd(R"(ExeFile("::/Demo/Graphics/Shading.HC");)");
+  wait_text("Move mouse to change light source.", false, 1, 60,
+            std::string_view::npos, 250);
+  constexpr uint64_t ctrl_head = 0x398, scrn_bounds = 0x48;
+  const auto head = left + ctrl_head;
+  auto find_view = [&]() -> uint64_t {
+    for (auto c = ReadPhysical<1>(vm, head)[0]; c && c != head;
+         c = ReadPhysical<1>(vm, c)[0])
+      if (ReadPhysical<1>(vm, c + 24)[0] == 3)
+        return c;
+    return 0;
+  };
+  const auto view = find_view();
+  Check(view, "Shading.HC did not create the view-angle control");
+  const auto state = ReadPhysical<1>(vm, view + 104)[0];
+  wait_mem(state, 4, "Shading.HC changed the initial X angle");
+  Check(ReadPhysical<2>(vm, state + 8) == std::array<uint64_t, 2>{14, 12},
+        "Shading.HC changed the initial Y or Z angle");
+  const auto angles_box = ReadPhysical<4>(vm, view + scrn_bounds);
+  Check(angles_box == std::array<uint64_t, 4>{549, 640, 388, 480},
+        "Shading.HC placed the control outside its reference bounds");
+
+  bool sphere = false, ticks = false;
+  for (unsigned i = 0; i < 100 && !(sphere && ticks); ++i) {
+    vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
+               screen.string() + R"("}})");
+    const auto rgb = ReadVGA(screen);
+    size_t red = 0, blue = 0;
+    for (int y = 140; y < 340; ++y)
+      for (int x = 170; x < 470; ++x) {
+        auto p = 3 * (y * 640 + x);
+        const auto r = rgb[p], g = rgb[p + 1], b = rgb[p + 2];
+        red += r >= 128 && r > g + 64 && r > b + 64;
+        blue += b >= 128 && b > r + 64 && b > g + 64;
+      }
+    sphere = red > 1000 && blue > 1000;
+    constexpr auto tick = 3 * (421 * 640 + 569);
+    ticks = rgb[tick] == 0 && rgb[tick + 1] == 0 && rgb[tick + 2] == 0;
+    if (!(sphere && ticks))
+      std::this_thread::sleep_for(25ms);
+  }
+  Check(sphere, "Shading.HC did not draw both shaded hemispheres");
+  Check(ticks, "Shading.HC did not draw the reference scale ticks");
+
+  move_pointer(view_x, view_y, angles_box[0] + 22, angles_box[2] + 33);
+  MouseButton(vm, "left", true);
+  wait_mem(state, 12, "The X angle did not snap on click");
+  MouseMove(vm, 0, 48);
+  wait_mem(state, 36, "The X angle did not track the drag");
+  MouseButton(vm, "left", false);
+  key("q");
+  for (unsigned i = 0; i < 80 && find_view(); ++i)
+    std::this_thread::sleep_for(20ms);
+  Check(!find_view(), "Shading.HC left its control in the queue");
+  Check(ReadPhysical<4>(vm, left + win_left) == shading_window,
+        "Shading.HC did not restore the terminal geometry");
+  wait_text("T:/Home>");
+  std::cout << "Shading.HC drew the sphere and accepted a view-angle drag\n";
+
   vm.ResetDeadline(30s);
   type_cmd("WinHorz(4,27);WinVert(5,18);");
   constexpr std::array<uint64_t, 4> scroll_window{4, 27, 5, 18};
@@ -1920,14 +1995,7 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   auto grab_thumb = [&](uint64_t ctrl) {
     auto box = ReadPhysical<4>(vm, ctrl + ctrl_box);
     int64_t x = box[0] + 3, y = box[2] + 3;
-    while (mouse_x != x || mouse_y != y) {
-      auto dx = std::clamp(x - mouse_x, int64_t(-80), int64_t(80));
-      auto dy = std::clamp(y - mouse_y, int64_t(-80), int64_t(80));
-      MouseMove(vm, dx * 2, dy * 2);
-      std::this_thread::sleep_for(125ms);
-      mouse_x += dx;
-      mouse_y += dy;
-    }
+    move_pointer(mouse_x, mouse_y, x, y);
     MouseButton(vm, "left", true);
     wait_mem(ctrl + ctrl_flags, 23,
              "The scrollbar thumb did not capture the mouse");
@@ -2635,6 +2703,14 @@ constexpr std::string_view doc_refresh_output =
     "refresh forced 4 0\n"
     "refresh backwards 5 0 1\n";
 
+constexpr std::string_view view_angles_output =
+    "view layout 72 24 48 68\n"
+    "view new 1 3 5 91 92\n"
+    "view snap 4 47 0 0.523599 6.152286 0.000000\n"
+    "view choices 12 36 24\n"
+    "view gone 1\n"
+    "view math 1 -1 22 16 7 -4 73\n";
+
 constexpr std::string_view menu_output =
     "menu layout 40 80 32 72\n"
     "menu stack 1 1 1\n"
@@ -2749,6 +2825,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/ScrollControlsProbe.HC", scroll_controls_output,
                        '1');
     CheckProgramOutput(boot, "/DocRefreshProbe.HC", doc_refresh_output, '1');
+    CheckProgramOutput(boot, "/ViewAnglesProbe.HC", view_angles_output, '1');
     CheckProgramOutput(boot, "/MenuProbe.HC", menu_output, '1');
     CheckProgramOutput(boot, "/CursorProbe.HC", cursor_output, '1');
     CheckProgramOutput(boot, "/CursorExcept.HC", "cursor exception 1\n", '1');
@@ -2831,6 +2908,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/ScrollControlsProbe.HC", scroll_controls_output,
                          '1');
       CheckProgramOutput(output, "/DocRefreshProbe.HC", doc_refresh_output, '1');
+      CheckProgramOutput(output, "/ViewAnglesProbe.HC", view_angles_output, '1');
       CheckProgramOutput(output, "/MenuProbe.HC", menu_output, '1');
       CheckProgramOutput(output, "/CursorProbe.HC", cursor_output, '1');
       CheckProgramOutput(output, "/CursorExcept.HC", "cursor exception 1\n",

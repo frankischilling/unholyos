@@ -72,6 +72,8 @@ void WinMsUpdate();
 bool WinGrabScrollInput();
 bool WinMenuInput();
 bool WinMsCursorVisible();
+extern CAutoCompleteGlbls ac;
+extern "C" uint64_t AutoCompleteCpp(uint8_t val);
 alignas(8) extern CWinMgrGlbls winmgr;
 int64_t WinQueIPMsgs(bool que);
 extern "C" void GridInitCpp();

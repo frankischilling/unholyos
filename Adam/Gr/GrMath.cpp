@@ -265,6 +265,12 @@ extern "C" void DCReflectCpp(CDC *dc, int64_t *_x, int64_t *_y, int64_t *_z)
   }
 }
 
+extern "C" uint64_t D3I32NormCpp(const CD3I32 *p)
+{
+  uint64_t x = int64_t(p->x), y = int64_t(p->y), z = int64_t(p->z);
+  return F64SqrtBits(F64FromI64(x * x + y * y + z * z));
+}
+
 constexpr unsigned CC_LEFT = 1, CC_RIGHT = 2, CC_TOP = 4, CC_BOTTOM = 8;
 
 extern "C" uint64_t ClipLineCpp(int64_t *_x1, int64_t *_y1, int64_t *_x2,
