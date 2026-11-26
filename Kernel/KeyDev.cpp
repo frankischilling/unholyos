@@ -56,3 +56,12 @@ void CtrlAltF(int64_t)
   text.font=text.aux_font;
   text.aux_font=font;
 }
+
+extern "C" {
+uint32_t sys_ctrl_alt_flags;
+}
+
+void CtrlAltC(int64_t)
+{
+  __atomic_fetch_or(&sys_ctrl_alt_flags, 1U << 1, __ATOMIC_RELAXED);
+}

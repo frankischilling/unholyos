@@ -10,6 +10,7 @@ Demo/Graphics/Shading.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Games/Digits.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Games/Maze.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Games/CharDemo.HC -text whitespace=cr-at-eol,-blank-at-eol
+Demo/Games/TicTacToe.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Snd/OhGreat.HC -text whitespace=cr-at-eol,-blank-at-eol
 Linux/Fixtures/MemSetProbe.HC text eol=lf
 Demo/ExtChars.HC -text whitespace=cr-at-eol,-blank-at-eol
@@ -95,6 +96,8 @@ Linux/Fixtures/DepthSpansProbe.HC text eol=lf
 Linux/Fixtures/MatrixProbe.HC text eol=lf
 Linux/Fixtures/PenProbe.HC text eol=lf
 Linux/Fixtures/ArrowProbe.HC text eol=lf
+Linux/Fixtures/ArcProbe.HC text eol=lf
+Linux/Fixtures/BreakProbe.HC text eol=lf
 Linux/Fixtures/TaskSettingsProbe.HC text eol=lf
 Linux/Fixtures/Lines.HC -text
 Linux/Fixtures/Grid.HC -text

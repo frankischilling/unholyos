@@ -1840,6 +1840,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     DrvPtr,
     SndPtr,
     DatePtr,
+    PlotFn,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -1912,7 +1913,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     uint8_t result;
     uint16_t flags;
     // Private compiler metadata stays in the DVD-loaded boot image.
-    CHeaderArg args[10];
+    CHeaderArg args[11];
     const char *import_name = nullptr;
     uint8_t internal_op = 0;
   } headers[]{
@@ -1984,6 +1985,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"throw", U0, FF_RET1, {{"ch", I64, true}, {"no_log", Bool, true}}},
       {"Caller", U8Ptr, FF_RET1, {{"num", I64, true, 1}}},
       {"PutExcept", U0, FF_RET1, {{"catch_it", Bool, true, 1}}},
+      {"Break", U0, FF_RET1, {}},
+      {"BreakLock", Bool, FF_RET1, {{"task", TaskPtr, true}}},
+      {"BreakUnlock", Bool, FF_RET1, {{"task", TaskPtr, true}}},
       {"YorN", Bool, FF_RET1, {}},
       {"Free", U0, FF_RET1, {{"addr", U8Ptr}}, "_FREE"},
       {"HashFind", HashPtr, FF_RET1,
@@ -2265,6 +2269,33 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"z1", I64},
         {"x2", I64}, {"y2", I64}, {"z2", I64}, {"step", I64, true, 1},
         {"start", I64, true}}},
+      {"Circle", Bool, FF_RET1,
+       {{"aux_data", U8Ptr}, {"cx", I64}, {"cy", I64}, {"cz", I64},
+        {"radius", I64}, {"fp_plot", PlotFn}, {"step", I64, true, 1},
+        {"start_radians", F64, true}, {"len_radians", F64, true, 0x401921FB54442D18}}},
+      {"Ellipse", Bool, FF_RET1,
+       {{"aux_data", U8Ptr}, {"cx", I64}, {"cy", I64}, {"cz", I64},
+        {"x_radius", I64}, {"y_radius", I64}, {"fp_plot", PlotFn},
+        {"rot_angle", F64, true}, {"step", I64, true, 1}, {"start_radians", F64, true},
+        {"len_radians", F64, true, 0x401921FB54442D18}}},
+      {"GrCircle", Bool, FF_RET1,
+       {{"dc", DCPtr, true}, {"cx", I64}, {"cy", I64}, {"radius", I64},
+        {"step", I64, true, 1}, {"start_radians", F64, true},
+        {"len_radians", F64, true, 0x401921FB54442D18}}},
+      {"GrEllipse", Bool, FF_RET1,
+       {{"dc", DCPtr, true}, {"cx", I64}, {"cy", I64}, {"x_radius", I64},
+        {"y_radius", I64}, {"rot_angle", F64, true}, {"step", I64, true, 1},
+        {"start_radians", F64, true}, {"len_radians", F64, true, 0x401921FB54442D18}}},
+      {"GrCircle3", Bool, FF_RET1,
+       {{"dc", DCPtr, true}, {"cx", I64}, {"cy", I64}, {"cz", I64}, {"radius", I64},
+        {"step", I64, true, 1}, {"start_radians", F64, true},
+        {"len_radians", F64, true, 0x401921FB54442D18}}},
+      {"GrEllipse3", Bool, FF_RET1,
+       {{"dc", DCPtr, true}, {"cx", I64}, {"cy", I64}, {"cz", I64},
+        {"x_radius", I64}, {"y_radius", I64}, {"rot_angle", F64, true},
+        {"step", I64, true, 1}, {"start_radians", F64, true},
+        {"len_radians", F64, true, 0x401921FB54442D18}}},
+      {"Arg", F64, FF_RET1, {{"x", F64}, {"y", F64}}},
       {"DCThickScale", U0, FF_RET1, {{"dc", DCPtr, true}}},
       {"ClipLine", Bool, FF_RET1,
        {{"_x1", I64Ptr}, {"_y1", I64Ptr}, {"_x2", I64Ptr}, {"_y2", I64Ptr},
@@ -2417,6 +2448,17 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     for (const auto &arg : header.args) {
       if (!arg.name)
         break;
+      if (arg.type == PlotFn) {
+        const char *names[]{"aux", "x", "y", "z"};
+        CHashClass *signature[]{types[U8Ptr], types[I64], types[I64], types[I64]};
+        if (!CmpKernelCallback(table, fun->cls, arg.name, 16 + 8 * fun->arg_cnt,
+                               *types[Bool], 4, names, signature)) {
+          HashDel(&fun->cls.sym.hash);
+          return false;
+        }
+        ++fun->arg_cnt;
+        continue;
+      }
       auto *name = StrNew(arg.name, task->data_heap);
       auto *member = name ? MemberAdd(fun->cls, name, *types[arg.type],
                                       16 + 8 * fun->arg_cnt)
@@ -2598,6 +2640,7 @@ static bool CmpFillHash(CHashTable *table)
       {"SPT_POLYPT","9"}, {"SPT_LINE","10"}, {"SPT_POLYLINE","11"},
       {"SPT_RECT","12"}, {"SPT_BITMAP","23"}, {"SPT_ARROW","26"},
       {"TEXT_COLS","80"}, {"TEXT_ROWS","60"}, {"TASKf_NONTIMER_RAND","14"},
+      {"TASKf_BREAK_LOCKED","10"}, {"TASKf_PENDING_BREAK","11"}, {"TASKf_BREAK_TO_SHIFT_ESC","12"},
       {"ATTRF_BLINK","0x10000000"}, {"ATTRF_INVERT","0x20000000"},
       {"ATTRF_SEL","0x40000000"}, {"ATTRF_UNDERLINE","0x80000000"},
       {"ATTRf_BLINK","28"}, {"ATTRf_INVERT","29"},

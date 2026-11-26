@@ -1483,7 +1483,9 @@ static_assert(sizeof(CJobCtrl) == 0x28 && offsetof(CJobCtrl, next_done) == 0x10 
 constexpr uint32_t TASKF_KILL_TASK = 1 << 1, TASKF_SUSPENDED = 1 << 2,
                    TASKF_IDLE = 1 << 3, TASKF_CMD_LINE_PMT = 1 << 4,
                    TASKF_INPUT_FILTER_TASK = 1 << 5, TASKF_FILTER_INPUT = 1 << 6,
-                   TASKF_AWAITING_MSG = 1 << 9, TASKF_NONTIMER_RAND = 1 << 14;
+                   TASKF_AWAITING_MSG = 1 << 9, TASKF_BREAK_LOCKED = 1 << 10,
+                   TASKF_PENDING_BREAK = 1 << 11, TASKF_BREAK_TO_SHIFT_ESC = 1 << 12,
+                   TASKF_NONTIMER_RAND = 1 << 14;
 constexpr int64_t DYING_JIFFIES = JIFFY_FREQ / 5;
 
 struct [[gnu::may_alias]] CTaskDying

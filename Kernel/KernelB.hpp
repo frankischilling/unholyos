@@ -94,6 +94,7 @@ extern "C" uint64_t F64AddBits(uint64_t a, uint64_t b);
 extern "C" uint64_t F64SqrtBits(uint64_t value);
 extern "C" uint64_t F64SinBits(uint64_t value);
 extern "C" uint64_t F64CosBits(uint64_t value);
+extern "C" uint64_t F64ArgBits(uint64_t x, uint64_t y);
 void IntEntrySet(unsigned irq, void (*handler)(), uint16_t type = 0xE,
                  uint16_t dpl = 0);
 uint64_t GetTSC();
@@ -192,6 +193,10 @@ extern "C" void RefreshCpp(int64_t cnt, uint8_t force);
 extern "C" void GrScaleZoomCpp(uint64_t scale);
 void CtrlAltZ(int64_t sc);
 void CtrlAltF(int64_t sc);
+void CtrlAltC(int64_t sc);
+extern "C" uint32_t sys_ctrl_alt_flags;
+extern "C" void BreakCpp();
+extern "C" CTask *BreakFocusUser(CTask *next);
 bool WinMgrInit();
 extern uint64_t sys_font_std[256],sys_font_cyrillic[256];
 void WinDerivedValsUpdate(CTask *task);

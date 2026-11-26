@@ -281,6 +281,32 @@ extern "C" uint64_t GrLineCpp(CDC *dc, int64_t x1, int64_t y1, int64_t x2,
   return res;
 }
 
+extern "C" bool GrCircleCpp(CDC *dc, int64_t cx, int64_t cy, int64_t radius,
+                            int64_t step, uint64_t start, uint64_t length)
+{
+  if (!dc)
+    dc = gr.dc;
+  auto *db = dc->depth_buf;
+  dc->depth_buf = nullptr;
+  auto res = Circle(dc, cx, cy, 0, radius, GrLinePlot, step, start, length);
+  dc->depth_buf = db;
+  return res;
+}
+
+extern "C" bool GrEllipseCpp(CDC *dc, int64_t cx, int64_t cy, int64_t xr,
+                             int64_t yr, uint64_t rotation, int64_t step,
+                             uint64_t start, uint64_t length)
+{
+  if (!dc)
+    dc = gr.dc;
+  auto *db = dc->depth_buf;
+  dc->depth_buf = nullptr;
+  auto res = Ellipse(dc, cx, cy, 0, xr, yr, GrLinePlot, rotation, step, start,
+                     length);
+  dc->depth_buf = db;
+  return res;
+}
+
 static int64_t GrLineFat3(CDC *dc, const CD3I64 &p1, const CD3I64 &p2,
                           int64_t width, int64_t start)
 {
@@ -387,6 +413,59 @@ extern "C" bool GrLine3Cpp(CDC *dc, int64_t x1, int64_t y1, int64_t z1,
     res |= GrLine3Pass(dc, p1, p2, step, start);
   dc->flags |= was_transform | was_symmetry;
   return res;
+}
+
+extern "C" bool GrEllipse3Cpp(CDC *dc, int64_t cx, int64_t cy, int64_t cz,
+                              int64_t xr, int64_t yr, uint64_t rotation,
+                              int64_t step, uint64_t start, uint64_t length)
+{
+  if (!dc)
+    dc = gr.dc;
+  if (!(dc->flags & DCF_TRANSFORMATION))
+    return Ellipse(dc, cx, cy, cz, xr, yr, GrPlot3Cpp, rotation, step, start,
+                   length);
+
+  dc->flags &= ~DCF_TRANSFORMATION;
+  CD3I64 center{cx, cy, cz}, origin{};
+  DCTransformPoint(*dc, center);
+  DCTransformPoint(*dc, origin);
+  auto c = F64CosBits(rotation), s = F64SinBits(rotation);
+  xr = uint64_t(xr) << 16;
+  yr = uint64_t(yr) << 16;
+  auto mul = [](int64_t radius, uint64_t angle) {
+    return F64ToI64(F64MulBits(F64FromI64(radius), angle), 0x0C00);
+  };
+  CD3I64 p1{mul(xr, c), mul(xr, s), 0}, p2{-mul(yr, s), mul(yr, c), 0};
+  auto polar = [&](CD3I64 p, uint64_t &mag, uint64_t &arg) {
+    DCTransformPoint(*dc, p);
+    auto x = F64FromI64(uint64_t(p.x) - origin.x);
+    auto y = F64FromI64(uint64_t(p.y) - origin.y);
+    mag = F64SqrtBits(F64AddBits(F64MulBits(x, x), F64MulBits(y, y)));
+    arg = F64ArgBits(x, y);
+  };
+  uint64_t m1, arg1, m2, arg2;
+  polar(p1, m1, arg1);
+  polar(p2, m2, arg2);
+  constexpr uint64_t sign = 1ULL << 63;
+  m2 = F64MulBits(m2, F64SinBits(F64AddBits(arg2, arg1 ^ sign)) & ~sign);
+  auto scale = F64FromI64(0x10000);
+  auto res = Ellipse(dc, center.x, center.y, center.z,
+                     F64ToI64(F64DivBits(m1, scale), 0x0C00),
+                     F64ToI64(F64DivBits(m2, scale), 0x0C00), GrPlot3Cpp,
+                     arg1 ^ sign, step, start, length);
+  dc->flags |= DCF_TRANSFORMATION;
+  return res;
+}
+
+extern "C" bool GrCircle3Cpp(CDC *dc, int64_t cx, int64_t cy, int64_t cz,
+                             int64_t radius, int64_t step, uint64_t start,
+                             uint64_t length)
+{
+  if (!dc)
+    dc = gr.dc;
+  if (dc->flags & DCF_TRANSFORMATION)
+    return GrEllipse3Cpp(dc, cx, cy, cz, radius, radius, 0, step, start, length);
+  return Circle(dc, cx, cy, cz, radius, GrPlot3Cpp, step, start, length);
 }
 
 static int64_t GrBlot3Distance(const CD3I64 &delta)
