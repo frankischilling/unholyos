@@ -1,7 +1,8 @@
 %include "Kernel/KernelA.inc"
 
-GLOBAL SysTryHC,ThrowHC,CallerHC,TestExcept,RaiseHolyC,CallHolyC0Checked
-EXTERN SysTryCpp,SysUntryCpp,ThrowCpp,CallerCpp,CallHolyC0
+GLOBAL SysTryHC,ThrowHC,CallerHC,TestExcept,RaiseHolyC
+GLOBAL CallHolyC0Checked,CallHolyC1Checked
+EXTERN SysTryCpp,SysUntryCpp,ThrowCpp,CallerCpp,CallHolyC0,CallHolyC1
 
 SECTION .text
 BITS 64
@@ -122,7 +123,8 @@ TakeExcept:
 	MOV	RSP,[RAX+CExcept_RSP]
 	JMP	QWORD [RAX+CExcept_HNDLR_UNTRY]
 
-CallHolyC0Checked:
+%macro CALL_HOLYC_CHECKED 3
+%1:
 	PUSH	RBP
 	MOV	RBP,RSP
 	PUSH	RBX
@@ -137,8 +139,13 @@ CallHolyC0Checked:
 	PUSH	RAX
 	CALL	SysTryHC
 	MOV	RDI,R12
-	CALL	CallHolyC0
+%if %3
+	MOV	RSI,R13
+%endif
+	CALL	%2
+%if !%3
 	MOV	[R13],RAX
+%endif
 	MOV	R12D,1
 	JMP	.cleanup
 .catch:
@@ -157,5 +164,9 @@ CallHolyC0Checked:
 	POP	RBX
 	POP	RBP
 	RET
+%endmacro
+
+CALL_HOLYC_CHECKED CallHolyC0Checked,CallHolyC0,0
+CALL_HOLYC_CHECKED CallHolyC1Checked,CallHolyC1,1
 
 SECTION .note.GNU-stack noalloc noexec nowrite progbits

@@ -15,10 +15,7 @@ struct [[gnu::packed]] CGrGlbls
   int64_t highest_uncovered;
   uint16_t *vga_text_cache;
   int64_t pan_text_x, pan_text_y;
-  void (*fp_final_scrn_update)(CDC *dc);
-  void (*fp_wall_paper)(CTask *task);
-  void (*fp_draw_ms)(CDC *dc, int64_t x, int64_t y);
-  void (*fp_draw_grab_ms)(CDC *dc, int64_t x, int64_t y, uint8_t closed);
+  uintptr_t fp_final_scrn_update, fp_wall_paper, fp_draw_ms, fp_draw_grab_ms;
   uint8_t *empty_sprite;
   CDC *pen_brushes[GR_PEN_BRUSHES_NUM],
       *collision_pen_brushes[GR_PEN_BRUSHES_NUM],
@@ -33,6 +30,9 @@ struct [[gnu::packed]] CGrGlbls
 
 static_assert(sizeof(CGrGlbls) == 10507 && offsetof(CGrGlbls, dc) == 24 &&
               offsetof(CGrGlbls, win_z_buf) == 72 &&
+              offsetof(CGrGlbls, fp_final_scrn_update) == 128 &&
+              offsetof(CGrGlbls, fp_draw_ms) == 144 &&
+              offsetof(CGrGlbls, fp_draw_grab_ms) == 152 &&
               offsetof(CGrGlbls, pen_brushes) == 168 &&
               offsetof(CGrGlbls, scrn_zoom) == 10480);
 

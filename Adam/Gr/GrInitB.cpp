@@ -1,6 +1,8 @@
 #include "../../Kernel/KernelB.hpp"
 #include "GrGlbls.hpp"
 
+extern "C" void DrawStdMsHC(), WinFinalUpdateHC();
+
 static bool GrSetUpTables()
 {
   for (unsigned i = 1; i <= GR_SCRN_ZOOM_MAX; i++) {
@@ -67,6 +69,8 @@ bool GrInit2()
   gr.scrn_image = dc[4];
   gr.zoomed_dc = dc[5];
   gr.zoomed_dc->flags |= DCF_SCRN_BITMAP;
+  gr.fp_draw_ms = reinterpret_cast<uintptr_t>(DrawStdMsHC);
+  gr.fp_final_scrn_update = reinterpret_cast<uintptr_t>(WinFinalUpdateHC);
   auto *task = CurrentTask();
   task->win_left = task->win_top = 0;
   task->win_right = TEXT_COLS - 1;

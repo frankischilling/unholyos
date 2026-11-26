@@ -250,6 +250,8 @@ static uint64_t KbdBuildSC(uint8_t raw_byte, uint8_t &last_raw_byte,
     }
     if ((flags & (SCF_CTRL | SCF_ALT)) == (SCF_CTRL | SCF_ALT)) {
       auto ch = ScanCode2CharCpp(code);
+      if (ch == 'z' && sys_winmgr_task)
+        CtrlAltZ(sc | flags);
       if (code == 1 || code == 0x0F || ('a' <= ch && ch <= 'z'))
         new_key = 0;
     }
@@ -355,7 +357,7 @@ extern "C" void KbdMsService()
     KbdHndlr();
   KbdMsgsQue();
   MsHardHndlr();
-  WinMsUpdate();
+  WinMsInput();
   WinQueIPMsgs(true);
   SetRFlags(flags);
 }

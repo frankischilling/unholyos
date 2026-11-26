@@ -12,10 +12,39 @@ static void GrFixZoomScale()
     gr.scrn_zoom = 1;
   if (gr.scrn_zoom > GR_SCRN_ZOOM_MAX)
     gr.scrn_zoom = GR_SCRN_ZOOM_MAX;
+  if (gr.scrn_zoom == 1) {
+    gr.sx = gr.sy = 0;
+    return;
+  }
   auto xmax = GR_WIDTH - GR_WIDTH / gr.scrn_zoom;
   auto ymax = GR_HEIGHT - GR_HEIGHT / gr.scrn_zoom;
   gr.sx = (gr.sx < 0 ? 0 : gr.sx > xmax ? xmax : gr.sx) & ~7LL;
   gr.sy = gr.sy < 0 ? 0 : gr.sy > ymax ? ymax : gr.sy;
+}
+
+extern "C" void GrScaleZoomCpp(uint64_t scale)
+{
+  if (!gr.zoomed_dc)
+    return;
+  auto old = F64FromI64(gr.scrn_zoom);
+  gr.scrn_zoom = F64ToI64(F64MulBits(old, scale), 0x0C00);
+  GrFixZoomScale();
+
+  auto ratio = F64DivBits(old, F64FromI64(gr.scrn_zoom));
+  ms.scale.x = F64MulBits(ms.scale.x, ratio);
+  ms.scale.y = F64MulBits(ms.scale.y, ratio);
+  ms.scale.z = F64MulBits(ms.scale.z, ratio);
+  auto offset = [ratio](int64_t pos, int64_t old_offset) {
+    constexpr uint64_t sign = uint64_t{1} << 63;
+    auto delta = F64MulBits(F64FromI64(uint64_t(pos) - old_offset), ratio);
+    return F64ToI64(F64AddBits(F64FromI64(pos), delta ^ sign), 0x0C00);
+  };
+  ms.offset.x = offset(ms.pos.x, ms.offset.x);
+  ms.offset.y = offset(ms.pos.y, ms.offset.y);
+  ms.offset.z = offset(ms.pos.z, ms.offset.z);
+  gr.sx = ms.pos.x - (gr.zoomed_dc->width >> 1) / gr.scrn_zoom;
+  gr.sy = ms.pos.y - (gr.zoomed_dc->height >> 1) / gr.scrn_zoom;
+  GrFixZoomScale();
 }
 
 static void GrZoomInScrn()
@@ -168,8 +197,12 @@ static void GrUpdateTextModeText(bool blink)
   auto *dst =
       reinterpret_cast<volatile uint16_t *>(dev.uncached_alias + 0xB8000);
   const bool flush = GrTakeVGAFlush();
-  for (size_t i = 0; i < TEXT_COLS * 25; i++) {
+  const auto cursor =
+      WinMsCursorVisible() ? ms.pos_text.x + ms.pos_text.y * TEXT_COLS : -1;
+  for (int64_t i = 0; i < TEXT_COLS * 25; i++) {
     auto ch = gr.text_base[i];
+    if (i == cursor)
+      ch ^= 0x7F00;
     uint16_t cell =
         (ch & 0xFF) | (static_cast<uint16_t>(TextAttr(ch, blink) & 0x7F) << 8);
     if (flush || gr.vga_text_cache[i] != cell)
@@ -210,15 +243,29 @@ void GrUpdateScrn()
 {
   const bool blink =
       (__atomic_load_n(&cnts.jiffies, __ATOMIC_RELAXED) * 5 / JIFFY_FREQ) & 1;
-  if (!(SYS_RUN_LEVEL & RLF_VGA)) {
+  const bool graphics = SYS_RUN_LEVEL & RLF_VGA;
+  if (graphics) {
+    auto view = GrTextView();
+    GrUpdateTextBG(view, blink);
+    GrUpdateTextFG(view, blink);
+    DCBlotColor8(gr.dc2, gr.dc);
+  }
+
+  if (sys_winmgr_task && gr.fp_final_scrn_update) {
+    if (auto *dc = DCAliasCpp(gr.dc2, CurrentTask())) {
+      dc->flags |= DCF_ON_TOP;
+      bool drawn = CallHolyC1Checked(gr.fp_final_scrn_update,
+                                     reinterpret_cast<uintptr_t>(dc));
+      DCDelCpp(dc);
+      if (!drawn)
+        return;
+    }
+  }
+
+  if (!graphics) {
     GrUpdateTextModeText(blink);
     return;
   }
-
-  auto view = GrTextView();
-  GrUpdateTextBG(view, blink);
-  GrUpdateTextFG(view, blink);
-  DCBlotColor8(gr.dc2, gr.dc);
   DCBlotColor4(gr.dc1->body, gr.dc2->body, gr.dc_cache->body,
                gr.dc2->height * gr.dc2->width_internal >> 3);
   GrUpdateVGAGraphics();

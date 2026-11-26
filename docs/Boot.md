@@ -437,6 +437,24 @@ all 3,168 pixels in each of the normal and changed color strips and
 all 12,672 pixels in the 2× region.
 The reference's desktop remains visible around the probe.
 
+## Cursor and zoom
+
+`make -j4 test BUILD=build/cursor` drives `CursorProbe.HC` and checks
+the 640×480 VGA frame at each stop. It checks the default arrow, XOR
+colors for left and right mouse buttons, hiding the cursor, a custom
+HolyC drawing callback, and dispatch to the grab-cursor callback.
+The probe sends Ctrl+Alt+Z, moves the pointer outside the zoomed view,
+and checks recentering and fractional zoom. A separate probe throws
+from a HolyC cursor callback and checks that the refresh task recovers.
+Both probes run again after booting the guest-built ISO.
+
+On matching QEMU 9.2.0 PC guests, 900 pixels matched pinned TempleOS
+across the normal, left, right, hidden, custom, and 2× regions. The
+recentered 2× cursor matched its shape and location across 400 pixels
+on the two desktops' backgrounds. The bootstrap tests grab-cursor
+dispatch by setting the grab flags directly. TempleOS resets those
+flags in its interactive window loop.
+
 ## PC speaker and recorded sound events
 
 `make -j4 test BUILD=build/pc-speaker` builds
@@ -517,7 +535,7 @@ This verifies the clean boot to the current kernel; the desktop is pending.
 | Memory | `Kernel/Mem/PageTables.HC`, `BlkPool.HC`, `MAllocFree.HC` | Initial identity map, code and data pools, and early heap allocation. Heap allocation and freeing, the 32-bit device range list, and the uncached device alias are active. |
 | Tasking and CPUs | `Kernel/KTask.HC`, `Sched.HC`, `MultiProc.HC` | Core 0 runs Adam, the idle task, and spawned tasks with cooperative switching and PIT wakeups. Starting additional CPUs remains pending. |
 | Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. Persistent writes and FAT32 are pending. |
-| Graphics | `Kernel/Display.HC`, `Adam/Gr/GrScrn.HC` | VGA text and graphics composition, 16-color palette, zoom, and a scheduled refresh task |
+| Graphics | `Kernel/Display.HC`, `Adam/Gr/GrScrn.HC` | VGA text and graphics composition, 16-color palette, cursor, zoom, and a scheduled refresh task |
 | Input and sound | `Kernel/SerialDev/Keyboard.HC`, `Mouse.HC`, `Message.HC`, `Kernel/KMisc.HC` | PS/2 keyboard and mouse messages, PC speaker tones, and queued sound recording. Desktop input controls and AU output remain pending. |
-| Desktop and system tools | `StartOS.HC`, `Adam/MakeAdam.HC`, `Adam/WinMgr.HC`, `Adam/DolDoc`, `Apps` | The refresh task presents Adam's layers. Per-window DolDoc rendering, cursor composition, and the interactive desktop remain pending. |
+| Desktop and system tools | `StartOS.HC`, `Adam/MakeAdam.HC`, `Adam/WinMgr.HC`, `Adam/DolDoc`, `Apps` | The refresh task presents Adam's layers. Per-window DolDoc rendering and the interactive desktop remain pending. |
 | HolyC | `Compiler/CMain.HC`, `Lex.HC`, `Prs*.HC`, `Back*.HC`, `Kernel/KLoad.HC` | Source execution with `ExeFile` and `ExePutS`, compile-time streams, plain and DolDoc tokenization, scalar expressions and functions, typed pointers, packed classes, unions, fixed arrays and their initializers, print calls, and TOSB module generation and loading for supported source. Full language support and native kernel compilation remain pending. |

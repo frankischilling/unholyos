@@ -1392,6 +1392,78 @@ static void DriveLines(CMonitor &vm, const fs::path &serial)
         "Lines.HC did not clear its bitmap on exit");
 }
 
+struct CCursorPhase
+{
+  const char *name, *key;
+  size_t x, y, zoom;
+  std::array<uint8_t, 3> bg, fg;
+  size_t box_w, box_h;
+};
+
+static void DriveCursor(CMonitor &vm, const fs::path &serial)
+{
+  constexpr std::array<uint8_t, 3> blue{0, 0, 168}, yellow{255, 255, 87},
+      cyan{0, 168, 168}, purple{168, 0, 168}, black{}, white{255, 255, 255};
+  constexpr CCursorPhase phases[]{
+      {"normal", "n", 160, 128, 1, blue, yellow, 0, 0},
+      {"left", "l", 172, 136, 1, blue, cyan, 0, 0},
+      {"right", "r", 184, 142, 1, blue, purple, 0, 0},
+      {"hidden", "h", 184, 142, 1, blue, blue, 0, 0},
+      {"custom", "c", 160, 128, 1, blue, yellow, 5, 4},
+      {"grab", "g", 160, 128, 1, blue, yellow, 3, 4},
+      {"shortcut", "ctrl-alt-z", 0, 0, 0, {}, {}, 0, 0},
+      {"zoom", "z", 320, 240, 2, blue, yellow, 0, 0},
+      {"recenter", "m", 324, 240, 2, black, white, 0, 0},
+  };
+
+  for (const auto &phase : phases) {
+    vm.WaitSerial(serial, std::string("cursor ") + phase.name + "\n");
+    if (phase.zoom) {
+      auto path =
+          serial.parent_path() / (std::string("cursor-") + phase.name + ".ppm");
+      vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
+                 path.string() + R"("}})");
+      const auto image = ReadVGA(path);
+      for (size_t y = 0; y < 10 * phase.zoom; ++y)
+        for (size_t x = 0; x < 10 * phase.zoom; ++x) {
+          auto px = x / phase.zoom, py = y / phase.zoom;
+          const bool cursor = phase.box_w
+                                  ? px < phase.box_w && py < phase.box_h
+                                  : (px == py && px <= 8) || (!px && py <= 4) ||
+                                        (!py && px <= 4);
+          const auto &color = cursor ? phase.fg : phase.bg;
+          auto offset = ((phase.y + y) * 640 + phase.x + x) * 3;
+          if (!std::equal(color.begin(), color.end(), image.begin() + offset))
+            throw std::runtime_error(
+                std::string("The VGA cursor differs during ") + phase.name);
+        }
+    }
+    vm.Command(
+        R"({"execute":"human-monitor-command","arguments":{"command-line":"sendkey )" +
+        std::string(phase.key) + R"( 65"}})");
+  }
+}
+
+constexpr std::string_view cursor_output =
+    "cursor normal\n"
+    "cursor left\n"
+    "cursor right\n"
+    "cursor hidden\n"
+    "cursor custom\n"
+    "cursor grab\n"
+    "cursor shortcut\n"
+    "cursor zoom state 2 0 8 3FE0000000000000 3FE0000000000000 "
+    "3FE0000000000000 80 64 8\n"
+    "cursor zoom\n"
+    "cursor zoom state 2 168 150 3FE0000000000000 3FE0000000000000 "
+    "3FE0000000000000 80 64 8\n"
+    "cursor recenter\n"
+    "cursor zoom state 3 224 190 3FD5555555555555 3FD5555555555555 "
+    "3FD5555555555555 163 132 10\n"
+    "cursor zoom state 1 0 0 3FF0000000000000 3FF0000000000000 "
+    "3FF0000000000000 -171 -144 -2\n"
+    "cursor done\n";
+
 static void DriveScreen(CMonitor &vm, const fs::path &serial)
 {
   constexpr std::array<std::array<uint8_t, 3>, 16> colors{{
@@ -1527,10 +1599,13 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     DriveKeyboard(rebuilt, serial);
     DriveMouse(rebuilt, serial);
     DriveLines(rebuilt, serial);
+    DriveCursor(rebuilt, serial);
     DriveScreen(rebuilt, serial);
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
     CheckProgramOutput(boot, "/RasterProbe.HC", raster_output, '1');
+    CheckProgramOutput(boot, "/CursorProbe.HC", cursor_output, '1');
+    CheckProgramOutput(boot, "/CursorExcept.HC", "cursor exception 1\n", '1');
     CheckProgramOutput(boot, "/ScreenProbe.HC", screen_output, '1');
     auto registers = StopAtIdle(rebuilt);
     VerifyHandoff(boot, media, registers);
@@ -1558,6 +1633,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       DriveKeyboard(vm, serial);
       DriveMouse(vm, serial);
       DriveLines(vm, serial);
+      DriveCursor(vm, serial);
       DriveScreen(vm, serial);
     }
     std::string output = vm.Boot(serial);
@@ -1575,6 +1651,9 @@ static void TestBoot(const char *qemu, const fs::path &iso,
     if (startup) {
       CheckProgramOutput(output, "/DCProbe.HC", dc_output, '1');
       CheckProgramOutput(output, "/RasterProbe.HC", raster_output, '1');
+      CheckProgramOutput(output, "/CursorProbe.HC", cursor_output, '1');
+      CheckProgramOutput(output, "/CursorExcept.HC", "cursor exception 1\n",
+                         '1');
       CheckProgramOutput(output, "/ScreenProbe.HC", screen_output, '1');
       CheckProgramOutput(output, "/PaletteProbe.HC",
                          "palette tables 8 AAAA55550000 777777777777 12 BROWN LTRED\n"

@@ -63,7 +63,10 @@ void MsHardStageByte(uint8_t raw_byte);
 bool MsHardDrvrInstall();
 void MsInit();
 void MsHardHndlr();
+void WinMsInput();
 void WinMsUpdate();
+bool WinMsCursorVisible();
+extern CWinMgrGlbls winmgr;
 int64_t WinQueIPMsgs(bool que);
 extern "C" void GridInitCpp();
 extern "C" void MsSetCpp(int64_t x, int64_t y, int64_t z, int64_t l, int64_t r);
@@ -106,7 +109,12 @@ extern "C" [[noreturn]] void RaiseHolyC(uint64_t tag);
 [[noreturn]] void RethrowHolyC();
 extern "C" uint64_t CallHolyC0(const uint8_t *entry);
 extern "C" bool CallHolyC0Checked(const uint8_t *entry, uint64_t *result);
+extern "C" bool CallHolyC1Checked(uintptr_t function, uint64_t arg1);
 extern "C" int64_t CallHolyC2(uintptr_t function, uint64_t arg1, uint64_t arg2);
+extern "C" int64_t CallHolyC3(uintptr_t function, uint64_t arg1, uint64_t arg2,
+                              uint64_t arg3);
+extern "C" int64_t CallHolyC4(uintptr_t function, uint64_t arg1, uint64_t arg2,
+                              uint64_t arg3, uint64_t arg4);
 
 constexpr uint64_t STR_PRINT_ERROR = 0x746E697250727453;    // StrPrint
 constexpr uint64_t UNDEF_DEFINE_ERROR = 0x6665446665646E55; // UndefDef
@@ -130,12 +138,15 @@ bool GrPaletteInit();
 void GrPaletteIndicesSet();
 bool GrInit2();
 void GrUpdateScrn();
+extern "C" void GrScaleZoomCpp(uint64_t scale);
+void CtrlAltZ(int64_t sc);
 bool WinMgrInit();
 extern const uint64_t sys_font_std[256];
 void WinDerivedValsUpdate(CTask *task);
 extern "C" uint64_t RandU16Cpp();
 extern "C" CDC *DCNewCpp(int64_t width, int64_t height, CTask *task,
                          uint8_t null_bitmap);
+extern "C" CDC *DCAliasCpp(CDC *dc, CTask *task);
 extern "C" void DCDelCpp(CDC *dc);
 extern "C" void DCFillCpp(CDC *dc, uint32_t val);
 extern "C" void GrPaletteGetCpp(CBGR48 *bgr48);
