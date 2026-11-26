@@ -54,6 +54,7 @@ extern "C" CTaskSettings *SettingsPushCpp(CTask *task, int64_t flags)
   tmpse->border_attr = task->border_attr;
   tmpse->border_src = task->border_src;
   tmpse->border = !(task->display_flags & DISPLAYF_NO_BORDER);
+  tmpse->autocomplete = TaskValidateCpp(ac.task);
 
   tmpse->next = task->next_settings;
   task->next_settings = tmpse;
@@ -86,6 +87,7 @@ static void SettingsPop2(CTask *task, const CTaskSettings *tmpse)
   task->title_src = tmpse->title_src;
   StrCpyCpp(reinterpret_cast<char *>(task->task_title),
             reinterpret_cast<const char *>(tmpse->task_title));
+  AutoCompleteCpp(tmpse->autocomplete);
   GrPaletteSetCpp(tmpse->palette);
   SndCpp(0);
 }

@@ -28,7 +28,9 @@ GLOBAL WinRefocusHC,WinToTopHC,WinFocusHC,WinTileHorzHC,WinTileVertHC,WinMaxHC
 GLOBAL WinScrollNullHC,WinScrollRestoreHC
 GLOBAL CtrlFindUniqueHC
 GLOBAL CtrlInsideHC
-GLOBAL WinScrollsInitHC
+GLOBAL WinScrollsInitHC,ViewAnglesNewHC,ViewAnglesDelHC
+GLOBAL DrawViewAnglesCtrlHC,UpdateDerivedViewAnglesCtrlHC,LeftClickViewAnglesHC
+GLOBAL D3I32NormHC,AutoCompleteHC
 GLOBAL WinDerivedScrollValsUpdateHC
 GLOBAL DrawWinScrollHC
 GLOBAL LeftClickHWinScrollHC
@@ -145,7 +147,9 @@ EXTERN WinRefocusCpp,WinToTopCpp,WinFocusCpp,WinTileHorzCpp,WinTileVertCpp,WinMa
 EXTERN WinScrollNullCpp,WinScrollRestoreCpp
 EXTERN CtrlFindUniqueCpp
 EXTERN CtrlInsideCpp
-EXTERN WinScrollsInitCpp
+EXTERN WinScrollsInitCpp,ViewAnglesNewCpp,ViewAnglesDelCpp
+EXTERN DrawViewAnglesCtrlCpp,UpdateDerivedViewAnglesCtrlCpp,LeftClickViewAnglesCpp
+EXTERN D3I32NormCpp,AutoCompleteCpp
 EXTERN WinDerivedScrollValsUpdateCpp
 EXTERN DrawWinScrollCpp
 EXTERN LeftClickHWinScrollCpp
@@ -355,6 +359,7 @@ HOLYC_CPP GrLine3HC,GrLine3Cpp,9,1
 HOLYC_CPP DCThickScaleHC,DCThickScaleCpp,1
 HOLYC_CPP ClipLineHC,ClipLineCpp,8
 HOLYC_CPP Mat4x4MulXYZHC,Mat4x4MulXYZCpp,4
+HOLYC_CPP D3I32NormHC,D3I32NormCpp,1
 HOLYC_CPP DCTransformHC,DCTransformCpp,4
 HOLYC_CPP Mat4x4IdentEquHC,Mat4x4IdentEquCpp,1
 HOLYC_CPP Mat4x4IdentNewHC,Mat4x4IdentNewCpp,1
@@ -521,6 +526,12 @@ HOLYC_CPP DrawWinScrollHC,DrawWinScrollCpp,2
 HOLYC_CPP LeftClickHWinScrollHC,LeftClickHWinScrollCpp,4
 HOLYC_CPP LeftClickVWinScrollHC,LeftClickVWinScrollCpp,4
 HOLYC_CPP WheelChangeWinScrollHC,WheelChangeWinScrollCpp,2
+HOLYC_CPP ViewAnglesNewHC,ViewAnglesNewCpp,1
+HOLYC_CPP ViewAnglesDelHC,ViewAnglesDelCpp,1
+HOLYC_CPP AutoCompleteHC,AutoCompleteCpp,1
+HOLYC_CPP DrawViewAnglesCtrlHC,DrawViewAnglesCtrlCpp,2
+HOLYC_CPP UpdateDerivedViewAnglesCtrlHC,UpdateDerivedViewAnglesCtrlCpp,1
+HOLYC_CPP LeftClickViewAnglesHC,LeftClickViewAnglesCpp,4
 HOLYC_CPP MenuSubEntryFindHC,MenuSubEntryFindCpp,2
 HOLYC_CPP MenuEntryFindHC,MenuEntryFindCpp,2
 HOLYC_CPP MenuNewHC,MenuNewCpp,3

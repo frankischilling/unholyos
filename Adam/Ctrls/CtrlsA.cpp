@@ -7,6 +7,8 @@ constexpr int64_t FONT_WIDTH = 8, FONT_HEIGHT = 8;
 extern "C" void WinDerivedScrollValsUpdateHC(), DrawWinScrollHC();
 extern "C" void LeftClickHWinScrollHC(), LeftClickVWinScrollHC();
 extern "C" void WheelChangeWinScrollHC();
+extern "C" void DrawViewAnglesCtrlHC(), UpdateDerivedViewAnglesCtrlHC();
+extern "C" void LeftClickViewAnglesHC();
 
 extern "C" CCtrl *CtrlFindUniqueCpp(CTask *task, int64_t type)
 {
@@ -216,4 +218,154 @@ extern "C" void WinScrollsInitCpp(CTask *task)
     QueIns(*c, *task->last_ctrl);
   }
   CtrlsUpdate(task);
+}
+
+constexpr int64_t VIEWANGLES_SPACING = 22, VIEWANGLES_RANGE = 48,
+                  VIEWANGLES_BORDER = 2, VIEWANGLES_SNAP = 2;
+
+extern "C" void DrawViewAnglesCtrlCpp(CDC *dc, CCtrl *c)
+{
+  auto *s = static_cast<CViewAngles *>(c->state);
+  const int64_t width = VIEWANGLES_SPACING * 4 + 3;
+  const int64_t height = VIEWANGLES_SPACING * 2 + VIEWANGLES_RANGE;
+  dc->color = s->cbd;
+  GrRectCpp(dc, c->left, c->top, width, height);
+  dc->color = s->cbg;
+  GrRectCpp(dc, c->left + VIEWANGLES_BORDER, c->top + VIEWANGLES_BORDER,
+            width - 2 * VIEWANGLES_BORDER, height - 2 * VIEWANGLES_BORDER);
+  dc->color = s->cfg;
+  const int64_t axis_top = c->top + VIEWANGLES_SPACING;
+  const int64_t axis_bottom = axis_top + VIEWANGLES_RANGE - 1;
+  for (int64_t axis = 0; axis < 3; ++axis) {
+    int64_t x = c->left + VIEWANGLES_SPACING + axis * (VIEWANGLES_SPACING + 1);
+    GrLineCpp(dc, x, axis_top, x, axis_bottom, 1, 0);
+  }
+  for (int64_t i = 1; i <= VIEWANGLES_RANGE; i += 2 * VIEWANGLES_SNAP) {
+    int64_t j = 2 - (i / 3 & 1), y = c->bottom - VIEWANGLES_SPACING - i;
+    for (int64_t axis = 0; axis < 3; ++axis) {
+      int64_t x =
+          c->left + VIEWANGLES_SPACING + axis * (VIEWANGLES_SPACING + 1);
+      GrLineCpp(dc, x - j, y, x + j, y, 1, 0);
+    }
+  }
+
+  const CColorROPU32 colors[]{s->cx, s->cy, s->cz};
+  const int64_t positions[]{s->sx, s->sy, s->sz};
+  const char *labels[]{"X", "Y", "Z"};
+  for (int64_t axis = 0; axis < 3; ++axis) {
+    int64_t x = c->left + VIEWANGLES_SPACING + axis * (VIEWANGLES_SPACING + 1);
+    dc->color = colors[axis];
+    GrPrintCpp(dc, x - FONT_WIDTH / 2, axis_top - (1 + FONT_HEIGHT),
+               labels[axis], 0, nullptr);
+    int64_t pos = positions[axis];
+    uint64_t degrees = pos * 360 / VIEWANGLES_RANGE;
+    GrPrintCpp(dc, x - 3 * FONT_WIDTH / 2, axis_bottom + 4, "%3d", 1, &degrees);
+    int64_t y = pos > VIEWANGLES_RANGE / 2 ? pos - VIEWANGLES_RANGE / 2
+                                           : pos + VIEWANGLES_RANGE / 2;
+    y = axis_bottom - y;
+    GrRectCpp(dc, x - 3, y - 2, 7, 5);
+    dc->color.c0.color ^= 8;
+    GrRectCpp(dc, x - 2, y - 1, 5, 3);
+  }
+}
+
+extern "C" void UpdateDerivedViewAnglesCtrlCpp(CCtrl *c)
+{
+  auto *s = static_cast<CViewAngles *>(c->state);
+  c->left = c->win_task->pix_width - (VIEWANGLES_SPACING * 4 + 3);
+  c->right = c->left + VIEWANGLES_SPACING * 4 + 3;
+  c->top =
+      c->win_task->pix_height - (VIEWANGLES_SPACING * 2 + VIEWANGLES_RANGE);
+  c->bottom = c->top + VIEWANGLES_SPACING * 2 + VIEWANGLES_RANGE;
+  auto snap = [](int64_t pos) {
+    pos -= pos % VIEWANGLES_SNAP;
+    return pos < 0 ? 0 : pos >= VIEWANGLES_RANGE ? VIEWANGLES_RANGE - 1 : pos;
+  };
+  s->sx = snap(s->sx);
+  s->sy = snap(s->sy);
+  s->sz = snap(s->sz);
+  auto angle = [](int64_t pos) {
+    constexpr uint64_t two_pi = 0x401921FB54442D18;
+    return F64DivBits(F64MulBits(F64FromI64(pos), two_pi),
+                      F64FromI64(VIEWANGLES_RANGE));
+  };
+  s->ax = angle(s->sx);
+  s->ay = angle(s->sy);
+  s->az = angle(s->sz);
+}
+
+extern "C" void LeftClickViewAnglesCpp(CCtrl *c, int64_t x, int64_t y, bool)
+{
+  auto *s = static_cast<CViewAngles *>(c->state);
+  int64_t i = VIEWANGLES_RANGE - 1 - (y - (c->top + VIEWANGLES_SPACING));
+  if (i >= VIEWANGLES_RANGE / 2)
+    i -= VIEWANGLES_RANGE / 2;
+  else
+    i += VIEWANGLES_RANGE / 2;
+  if (x < c->left + (c->right - c->left) / 3)
+    s->sx = i;
+  else if (x < c->left + 2 * (c->right - c->left) / 3)
+    s->sy = i;
+  else
+    s->sz = i;
+  if (c->update_derived_vals)
+    CallHolyC1Checked(c->update_derived_vals, reinterpret_cast<uintptr_t>(c));
+}
+
+extern "C" CCtrl *ViewAnglesNewCpp(CTask *task)
+{
+  if (!task)
+    task = CurrentTask();
+  if (auto *c = CtrlFindUniqueCpp(task, CTRLT_VIEWING_ANGLES))
+    return c;
+  auto *s = reinterpret_cast<CViewAngles *>(
+      CAlloc(sizeof(CViewAngles), task->data_heap));
+  if (!s)
+    return nullptr;
+  auto *c = reinterpret_cast<CCtrl *>(
+      CAlloc(sizeof(CCtrl), CurrentTask()->data_heap));
+  if (!c) {
+    Free(s);
+    return nullptr;
+  }
+  s->cbd.c0.color = BLUE;
+  s->cbg.c0.color = LTBLUE;
+  s->cfg.c0.color = BLACK;
+  s->cx.c0.color = LTGREEN;
+  s->cy.c0.color = GREEN;
+  s->cz.c0.color = LTGREEN;
+  c->win_task = task;
+  c->flags = CTRLF_SHOW | CTRLF_CAPTURE_LEFT_MS;
+  c->type = CTRLT_VIEWING_ANGLES;
+  c->state = s;
+  c->draw_it = reinterpret_cast<uintptr_t>(DrawViewAnglesCtrlHC);
+  c->left_click = reinterpret_cast<uintptr_t>(LeftClickViewAnglesHC);
+  c->update_derived_vals =
+      reinterpret_cast<uintptr_t>(UpdateDerivedViewAnglesCtrlHC);
+  auto flags = GetRFlags();
+  asm volatile("cli" : : : "memory");
+  QueIns(*c, *task->last_ctrl);
+  WinDerivedValsUpdate(task);
+  CtrlsUpdate(task);
+  if (task->display_flags & DISPLAYF_SHOW)
+    __atomic_fetch_or(&sys_semas[SEMA_UPDATE_WIN_Z_BUF].flags, 1,
+                      __ATOMIC_RELAXED);
+  SetRFlags(flags);
+  return c;
+}
+
+extern "C" void ViewAnglesDelCpp(CTask *task)
+{
+  if (!task)
+    task = CurrentTask();
+  auto flags = GetRFlags();
+  asm volatile("cli" : : : "memory");
+  auto *c = CtrlFindUniqueCpp(task, CTRLT_VIEWING_ANGLES);
+  if (c)
+    QueRem(*c);
+  SetRFlags(flags);
+  if (c) {
+    Free(c->state);
+    Free(c);
+  }
 }

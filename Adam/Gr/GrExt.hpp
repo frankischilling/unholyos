@@ -69,6 +69,9 @@ extern "C" bool GrLine3Cpp(CDC *dc, int64_t x1, int64_t y1, int64_t z1,
                            int64_t x2, int64_t y2, int64_t z2, int64_t step,
                            int64_t start);
 
+extern "C" int64_t GrPrintCpp(CDC *dc, int64_t x, int64_t y, const char *fmt,
+                              int64_t argc, const uint64_t *argv);
+
 inline uint64_t AbsI64(int64_t n)
 {
   return n < 0 ? -static_cast<uint64_t>(n) : n;

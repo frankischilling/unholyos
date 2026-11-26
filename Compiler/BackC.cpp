@@ -426,6 +426,18 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     out.Immediate(0, 4);
     return true;
   }
+  if (op == IC_MIN_I64 || op == IC_MAX_I64) {
+    if (!Emit(out, code, node.right, depth + 1, stack_slots))
+      return false;
+    out.Convert(code[node.right].type, RT_I64);
+    out.Bytes(0x50); // PUSH RAX
+    if (!Emit(out, code, node.left, depth + 1, stack_slots + 1))
+      return false;
+    out.Convert(code[node.left].type, RT_I64);
+    out.Bytes(0x59, 0x48, 0x39, 0xC8); // POP RCX / CMP RAX,RCX
+    out.Bytes(0x48, 0x0F, op == IC_MIN_I64 ? 0x4F : 0x4C, 0xC1);
+    return true;
+  }
   if (op == IC_ADDR) {
     const auto &fun = *reinterpret_cast<const CHashFun *>(node.data);
     bool indirect = !out.AOT() && (fun.cls.flags & CF_EXTERN);
@@ -569,6 +581,22 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
   if (!Emit(out, code, node.left, depth + 1, stack_slots))
     return false;
   auto left = code[node.left].type;
+  if (op == IC_SQR_I64) {
+    out.Convert(left, RT_I64);
+    out.Bytes(0x48, 0x0F, 0xAF, 0xC0); // IMUL RAX,RAX
+    return true;
+  }
+  if (op == IC_SQRT || op == IC_SIN || op == IC_COS) {
+    out.Bytes(0x50); // PUSH RAX
+    if (left == RT_F64)
+      out.FloatMem(0xDD, 0, 0); // FLD
+    else
+      out.FloatMem(0xDF, 5, 0); // FILD
+    out.Bytes(0xD9, op == IC_SQRT ? 0xFA : op == IC_SIN ? 0xFE : 0xFF);
+    out.FloatMem(0xDD, 3, 0); // FSTP
+    out.Bytes(0x58); // POP RAX
+    return true;
+  }
   if (op == IC_DEREF) {
     if (!TypeSize(node.type))
       return false;

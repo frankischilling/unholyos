@@ -271,8 +271,12 @@ The HolyC adapters extend narrow RNG returns through RAX. The public
 `DCSymmetrySet` in `GrMath.HC`. Rotations multiply in the reference
 order and store 32.32 matrix elements. `Kernel/KMathA.asm` uses the
 x87 sine and cosine instructions from the HolyC templates. The
-compiler registers the CP437 π define with the reference binary64
-value.
+compiler registers both names for the reference binary64 value of pi.
+`Compiler/PrsExp.cpp` and `Compiler/BackC.cpp` translate the math intrinsics
+`Sin`, `Cos`, `Sqrt`, `SqrI64`, `MinI64`, and `MaxI64` using the opcodes
+declared in `Kernel/KernelB.HH` and emitted by `Compiler/OptPass789A.HC`.
+`D3I32Norm` follows `Adam/Gr/GrMath.HC` and returns binary64 through the
+HolyC ABI.
 
 `Refresh` in `Adam/WinMgr.cpp` waits on the window manager's completed
 frame count. It follows `Refresh` in `WinMgr.HC` for forced wakes,
@@ -367,8 +371,13 @@ callbacks. The HolyC compiler sees both `CCtrl` and `CWinScroll`
 with their reference layouts and callback signatures. DolDoc
 reads pending positions and publishes the document range in its
 full screen recalc pass. The scrollbar cursor search follows the
-visible entry start, as in `Adam/DolDoc/DocRecalc.HC`. The view-angle
-control from `CtrlsA.HC` remains pending.
+visible entry start, as in `Adam/DolDoc/DocRecalc.HC`.
+
+The same control queue hosts the X, Y, and Z sliders from `CtrlsA.HC`.
+`ViewAnglesNew` creates one per task and `ViewAnglesDel` unlinks it.
+`CViewAngles` follows the 72-byte record in `Kernel/KernelA.HH`. The
+slider rounds to a multiple of two before clamping, and its drawing
+preserves HolyC's precedence in the scale tick expression.
 
 `Adam/DolDoc/DocTerm.cpp` puts `MENU` and `[X]` in the border
 document at the reference positions. The rest of the standard
@@ -383,8 +392,10 @@ and its callback types come from `Kernel/KernelA.HH`. Settings form a
 stack for each task and cover the directory, draw and end callbacks,
 song and animation tasks, window bounds and attributes, document
 flags, and palette. The pop applies the screen settings again after a
-forced refresh. Active autocomplete restoration depends on the
-remaining autocomplete task implementation.
+forced refresh. It saves whether autocomplete has a live task and
+passes that setting to `AutoComplete` on pop. `Adam/AutoComplete/ACTask.cpp`
+can turn off an existing task and raise an enabled one. Dictionary
+initialization, task creation, and completion results remain pending.
 
 `WinBorder` in `Adam/Win.cpp` preserves the one-cell geometry changes
 and previous-state return from `Win.HC`. `GrUpdateTaskWin` in
