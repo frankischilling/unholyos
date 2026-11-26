@@ -1303,12 +1303,12 @@ static void MouseButton(CMonitor &vm, const char *name, bool down)
       name + R"(","down":)" + (down ? "true" : "false") + R"(}}]}})");
 }
 
-static void ControlKey(CMonitor &vm, bool down)
+static void KeyboardKey(CMonitor &vm, const char *name, bool down)
 {
   vm.Command(
       std::string(
-          R"({"execute":"input-send-event","arguments":{"events":[{"type":"key","data":{"key":{"type":"qcode","data":"ctrl"},"down":)") +
-      (down ? "true" : "false") + R"(}}]}})");
+          R"({"execute":"input-send-event","arguments":{"events":[{"type":"key","data":{"key":{"type":"qcode","data":")") +
+      name + R"("},"down":)" + (down ? "true" : "false") + R"(}}]}})");
 }
 
 static void DriveSymmetry(CMonitor &vm, const fs::path &screen)
@@ -1657,7 +1657,63 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   std::cout
       << "Symmetry.HC drew both reflections, disabled symmetry, and exited\n";
 
+  vm.ResetDeadline(24s);
+  type_cmd("DocClear(,1);");
+  type_cmd("MsSet(8,0);ms.show=FALSE;");
+  type_cmd(R"(ExeFile("::/Demo/PullDownMenu.HC");)");
+  wait_text("A pull-down menu will appear", false, 1, 60,
+            std::string_view::npos, 200);
+  auto wait_menu = [&](int x, int y, std::array<uint8_t, 3> color) {
+    for (unsigned i = 0; i < 60; i++) {
+      vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
+                 screen.string() + R"("}})");
+      const auto rgb = ReadVGA(screen);
+      if (std::equal(color.begin(), color.end(),
+                     rgb.begin() + (y * 640 + x) * 3))
+        return;
+      std::this_thread::sleep_for(25ms);
+    }
+    throw std::runtime_error("PullDownMenu.HC menu highlight differs");
+  };
+  constexpr std::array<uint8_t, 3> yellow{255, 255, 87};
+  wait_menu(38, 3, yellow);
+  MouseButton(vm, "left", true);
+  std::this_thread::sleep_for(125ms);
+  MouseMove(vm, 176, 36);
+  wait_menu(126, 18, yellow);
+  MouseButton(vm, "left", false);
+  wait_text("Option # 1");
+
+  auto nav_key = [&](const char *name, bool down) {
+    KeyboardKey(vm, name, down);
+    std::this_thread::sleep_for(125ms);
+  };
+  auto navigate = [&](const char *name) {
+    nav_key(name, true);
+    nav_key(name, false);
+  };
+  nav_key("meta_l", true);
+  navigate("right");
+  navigate("right");
+  navigate("down");
+  navigate("down");
+  navigate("down");
+  wait_menu(126, 26, yellow);
+  nav_key("meta_l", false);
+  wait_text("Option # 2");
+
+  nav_key("meta_l", true);
+  navigate("down");
+  navigate("down");
+  navigate("down");
+  wait_menu(38, 26, yellow);
+  nav_key("meta_l", false);
+  wait_text("Cmd:2 ARG1:1C ARG2:201");
+  std::cout
+      << "PullDownMenu.HC selected commands by mouse and keyboard and exited\n";
+
   vm.ResetDeadline(30s);
+  type_cmd("DocClear(,1);");
   type_cmd("MsSet(320,240);ms.show=FALSE;");
   type_cmd("Seed(12345);");
   type_cmd(R"(ExeFile("::/Demo/Graphics/CommonAncestor.HC");)");
@@ -1667,7 +1723,7 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
 
   constexpr uint64_t scroll_x = 0x100, scroll_y = 0x108, scroll_z = 0x110;
   vm.ResetDeadline(10s);
-  ControlKey(vm, true);
+  KeyboardKey(vm, "ctrl", true);
   std::this_thread::sleep_for(125ms);
   MouseButton(vm, "left", true);
   std::this_thread::sleep_for(125ms);
@@ -1710,7 +1766,7 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   wait_mem(left + scroll_z, 0, "Ctrl-right did not reset the depth pan");
   Check(wait_tree(0, 0), "Ctrl-right did not restore the tree");
   MouseButton(vm, "right", false);
-  ControlKey(vm, false);
+  KeyboardKey(vm, "ctrl", false);
   key("q");
   wait_text("T:/Home>");
   for (unsigned i = 0; i < 60; i++) {
@@ -2391,6 +2447,14 @@ constexpr std::string_view win_scroll_output =
     "scroll cleared 0 0 0\n"
     "scroll restored 48 -24 3\n";
 
+constexpr std::string_view menu_output =
+    "menu layout 40 80 32 72\n"
+    "menu stack 1 1 1\n"
+    "menu open Open -2 79 0\n"
+    "menu item Item 1 17 123\n"
+    "menu base 1 1\n"
+    "menu restore 1\n";
+
 constexpr std::string_view pen_output =
     "pen tables 6B9F06DB42815298 29C67144FDAE53A0\n"
     "pen flat 230CA4FC4A9D5ED8 400E0001\n"
@@ -2494,6 +2558,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/TaskSettingsProbe.HC", task_settings_output,
                        '1');
     CheckProgramOutput(boot, "/WinScrollProbe.HC", win_scroll_output, '1');
+    CheckProgramOutput(boot, "/MenuProbe.HC", menu_output, '1');
     CheckProgramOutput(boot, "/CursorProbe.HC", cursor_output, '1');
     CheckProgramOutput(boot, "/CursorExcept.HC", "cursor exception 1\n", '1');
     CheckProgramOutput(boot, "/FunctionPtrProbe.HC", function_ptr_output, '1');
@@ -2572,6 +2637,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/TaskSettingsProbe.HC", task_settings_output,
                          '1');
       CheckProgramOutput(output, "/WinScrollProbe.HC", win_scroll_output, '1');
+      CheckProgramOutput(output, "/MenuProbe.HC", menu_output, '1');
       CheckProgramOutput(output, "/CursorProbe.HC", cursor_output, '1');
       CheckProgramOutput(output, "/CursorExcept.HC", "cursor exception 1\n",
                          '1');

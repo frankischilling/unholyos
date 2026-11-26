@@ -1,5 +1,6 @@
 #include "../Kernel/KernelB.hpp"
 #include "Gr/GrGlbls.hpp"
+#include "Menu.hpp"
 
 #include <bit>
 
@@ -300,6 +301,7 @@ static void DrawMs(CDC *dc)
   auto flags = GetRFlags();
   asm volatile("cli" : : : "memory");
   auto x = ms.pos.x, y = ms.pos.y;
+  WinMenuPointer(x, y);
   auto color = ms.lb ? LTPURPLE : ms.rb ? LTCYAN : BLACK;
   SetRFlags(flags);
   if (!WinMsCursorVisible() || !(SYS_RUN_LEVEL & RLF_VGA) || !gr.fp_draw_ms)
@@ -316,6 +318,10 @@ static void DrawMs(CDC *dc)
 
 extern "C" void WinFinalUpdateCpp(CDC *dc)
 {
+  if (winmgr.show_menu)
+    DrawMenu(dc);
+  else
+    sys_cur_submenu_entry = nullptr;
   DrawMs(dc);
 }
 

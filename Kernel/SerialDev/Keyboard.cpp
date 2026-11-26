@@ -196,6 +196,99 @@ extern "C" uint8_t ScanCode2CharCpp(int64_t sc)
   return code < 0x50 ? table[code] : 0;
 }
 
+extern "C" char *ScanCode2KeyNameCpp(int64_t sc)
+{
+  char buf[32]{};
+  auto append = [&](const char *text) { StrCpyCpp(buf + StrLen(buf), text); };
+  if (sc & SCF_CTRL)
+    append("CTRL ");
+  if (sc & SCF_ALT)
+    append("ALT ");
+  if (sc & SCF_SHIFT)
+    append("SHIFT ");
+  if (sc & SCF_NO_SHIFT)
+    append("      ");
+
+  if (auto ch = ScanCode2CharCpp(sc & 255)) {
+    const char *name = nullptr;
+    switch (ch) {
+    case '\n':
+      name = "ENTER";
+      break;
+    case CH_BACKSPACE:
+      name = "BACKSPACE";
+      break;
+    case '\t':
+      name = "TAB";
+      break;
+    case CH_ESC:
+      name = "ESC";
+      break;
+    case CH_SHIFT_ESC:
+      name = "SHIFT_ESC";
+      break;
+    case CH_SHIFT_SPACE:
+      name = "SHIFT_SPACE";
+      break;
+    case ' ':
+      name = "SPACE";
+      break;
+    case 29:
+    case 30:
+      name = "";
+      break;
+    }
+    if (name)
+      append(name);
+    else if (ch < ' ')
+      buf[StrLen(buf)] = ch - 1 + 'a';
+    else if (char_bmp_printable[ch / 32] & (1U << (ch % 32)))
+      buf[StrLen(buf)] = ch;
+  } else {
+    constexpr struct
+    {
+      uint8_t code;
+      const char *name;
+    } keys[]{
+        {0x0E, "BACK"},
+        {SC_CAPS, "CAPS"},
+        {SC_NUM, "NUM"},
+        {SC_SCROLL, "SCROLL"},
+        {SC_CURSOR_UP, "UP"},
+        {SC_CURSOR_DOWN, "DOWN"},
+        {SC_CURSOR_LEFT, "LEFT"},
+        {SC_CURSOR_RIGHT, "RIGHT"},
+        {SC_PAGE_UP, "PAGE_UP"},
+        {SC_PAGE_DOWN, "PAGE_DOWN"},
+        {SC_HOME, "HOME"},
+        {SC_END, "END"},
+        {SC_INS, "INS"},
+        {SC_DELETE, "DELETE"},
+        {0x3B, "F1"},
+        {0x3C, "F2"},
+        {0x3D, "F3"},
+        {0x3E, "F4"},
+        {0x3F, "F5"},
+        {0x40, "F6"},
+        {0x41, "F7"},
+        {0x42, "F8"},
+        {0x43, "F9"},
+        {0x44, "F10"},
+        {0x57, "F11"},
+        {0x58, "F12"},
+        {SC_GUI, "WINDOWS"},
+        {0xAA, "PRTSCRN1"},
+        {0xB7, "PRTSCRN2"},
+    };
+    for (const auto &key : keys)
+      if (key.code == (sc & 255)) {
+        append(key.name);
+        break;
+      }
+  }
+  return StrNew(buf, CurrentTask()->data_heap);
+}
+
 static uint64_t KbdBuildSC(uint8_t raw_byte, uint8_t &last_raw_byte,
                            uint64_t last_sc)
 {
@@ -357,8 +450,8 @@ extern "C" void KbdMsService()
     KbdHndlr();
   MsHardHndlr();
   WinMsInput();
-  // Capture the grab before either input queue can see the button press.
-  if (WinGrabScrollInput())
+  // Capture menu and grab gestures before queuing application input.
+  if (WinMenuInput() || WinGrabScrollInput())
     kbd.scan_code_fifo->out_ptr = kbd.scan_code_fifo->in_ptr;
   else
     KbdMsgsQue();

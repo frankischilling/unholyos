@@ -70,6 +70,7 @@ void MsHardHndlr();
 void WinMsInput();
 void WinMsUpdate();
 bool WinGrabScrollInput();
+bool WinMenuInput();
 bool WinMsCursorVisible();
 alignas(8) extern CWinMgrGlbls winmgr;
 int64_t WinQueIPMsgs(bool que);

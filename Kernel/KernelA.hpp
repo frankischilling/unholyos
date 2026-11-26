@@ -73,8 +73,8 @@ struct CDC;
 struct CExcept;
 struct CBpt;
 struct CCtrl;
-struct CMenu;
 struct CTaskSettings;
+struct CMenu;
 struct CMathODE;
 struct CJob;
 struct CCmpCtrl;
@@ -1184,12 +1184,13 @@ constexpr uint32_t SCF_E0_PREFIX = 1 << 7, SCF_KEY_UP = 1 << 8,
                    SCF_CAPS = 1 << 12, SCF_NUM = 1 << 13, SCF_SCROLL = 1 << 14,
                    SCF_NEW_KEY = 1 << 15, SCF_MS_L_DOWN = 1 << 16,
                    SCF_MS_R_DOWN = 1 << 17, SCF_DELETE = 1 << 18, SCF_INS = 1 << 19,
-                   SCF_KEY_DESC = 1U << 31;
+                   SCF_NO_SHIFT = 1U << 30, SCF_KEY_DESC = 1U << 31;
 constexpr uint8_t SC_ENTER = 0x1C, SC_SHIFT = 0x2A, SC_CTRL = 0x1D,
                   SC_ALT = 0x38, SC_CAPS = 0x3A, SC_NUM = 0x45,
-                  SC_SCROLL = 0x46, SC_HOME = 0x47, SC_CURSOR_LEFT = 0x4B,
-                  SC_CURSOR_RIGHT = 0x4D, SC_END = 0x4F, SC_INS = 0x52,
-                  SC_DELETE = 0x53;
+                  SC_SCROLL = 0x46, SC_HOME = 0x47, SC_CURSOR_UP = 0x48,
+                  SC_PAGE_UP = 0x49, SC_CURSOR_LEFT = 0x4B, SC_CURSOR_RIGHT = 0x4D,
+                  SC_END = 0x4F, SC_CURSOR_DOWN = 0x50, SC_PAGE_DOWN = 0x51,
+                  SC_INS = 0x52, SC_DELETE = 0x53, SC_GUI = 0xDB;
 constexpr int64_t GSF_SHIFT_ESC_EXIT = 1, GSF_WITH_NEW_LINE = 2;
 
 template <typename T> struct CFifo
@@ -1378,6 +1379,31 @@ struct CTask
 };
 
 constexpr int64_t TSF_SAME_SONG = 1;
+
+struct CMenuEntry
+{
+  CMenuEntry *next, *sub;
+  char name[32];
+  int64_t msg_code, arg1, arg2;
+  bool checked, dir, pad[6];
+};
+
+struct CMenu
+{
+  CMenu *next;
+  CMenuEntry *sub;
+  CTask *task;
+  int64_t flags;
+  uint8_t attr, pad[7];
+};
+
+static_assert(sizeof(CMenuEntry) == 80 &&
+              offsetof(CMenuEntry, name) == 16 &&
+              offsetof(CMenuEntry, msg_code) == 48 &&
+              offsetof(CMenuEntry, checked) == 72 &&
+              offsetof(CMenuEntry, dir) == 73);
+static_assert(sizeof(CMenu) == 40 && offsetof(CMenu, sub) == 8 &&
+              offsetof(CMenu, task) == 16 && offsetof(CMenu, attr) == 32);
 
 struct CTaskSettings
 {
