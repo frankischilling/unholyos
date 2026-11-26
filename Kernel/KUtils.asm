@@ -224,7 +224,7 @@ BITS 64
 	POP	RBP
 %endmacro
 
-; The optional fourth argument widens a SysV Bool return for HolyC.
+; The optional fourth argument widens a SysV U8 or Bool return for HolyC.
 %macro HOLYC_CPP 3-4 0
 %1:
 	HC_FRAME_ENTER
@@ -300,7 +300,7 @@ HOLYC_CPP FlushMsgsHC,FlushMsgsCpp,1
 HOLYC_CPP GetMsgHC,GetMsgCpp,4
 HOLYC_CPP InputFilterTaskHC,InputFilterTaskCpp,0
 HOLYC_CPP Char2ScanCodeHC,Char2ScanCodeCpp,2
-HOLYC_CPP ScanCode2CharHC,ScanCode2CharCpp,1
+HOLYC_CPP ScanCode2CharHC,ScanCode2CharCpp,1,1
 HOLYC_CPP KbdTypeMaticHC,KbdTypeMaticCpp,1
 HOLYC_CPP GridInitHC,GridInitCpp,0
 HOLYC_CPP MsSetHC,MsSetCpp,5
