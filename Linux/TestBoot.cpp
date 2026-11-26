@@ -255,6 +255,14 @@ public:
         _exit(126);
       close(fd[1]);
       close(err);
+      if (debugcon && !disk.empty()) {
+        execlp(qemu, qemu, "-machine", machine, "-cpu", "qemu64", "-m", memory,
+               "-boot", "d", "-cdrom", image.c_str(), "-drive", ata.c_str(),
+               "-display", "none", "-monitor", "none", "-serial", serial.c_str(),
+               "-qmp", "stdio", "-debugcon", debug.c_str(), "-no-reboot",
+               static_cast<char *>(nullptr));
+        _exit(127);
+      }
       if (debugcon)
         execlp(qemu, qemu, "-machine", machine, "-cpu", "qemu64", "-m", memory,
                "-boot", "d", "-cdrom", image.c_str(), "-display", "none",
@@ -1676,7 +1684,8 @@ static void DriveDigits(CMonitor &vm, const fs::path &dir,
 
 static void DriveDataBase(CMonitor &vm, const fs::path &dir,
                           const std::string &boot, bool reference = false,
-                          bool form_only = false)
+                          bool form_only = false, bool persistent = false,
+                          bool reboot = false)
 {
   vm.ResetDeadline(150s);
   uint64_t addr = 0;
@@ -1707,6 +1716,8 @@ static void DriveDataBase(CMonitor &vm, const fs::path &dir,
         case ',': key("comma"); break;
         case '=': key("equal"); break;
         case '+': key("shift-equal"); break;
+        case '&': key("shift-7"); break;
+        case '|': key("shift-backslash"); break;
         case '*': key("shift-8"); break;
         case ' ': key("spc"); break;
         case '-': key("minus"); break;
@@ -1783,12 +1794,26 @@ static void DriveDataBase(CMonitor &vm, const fs::path &dir,
   cmd("WinMax;DocClear(,1);");
   std::this_thread::sleep_for(250ms);
   if (!form_only) {
+  if (persistent) {
+    if (reference)
+      cmd("ATAMount('C',BDT_ATA,0x1F0,0x3F4,0);");
+    cmd("Let2Drv('C',0)->drv_let;");
+    wait("=67");
+    if (!reboot)
+      cmd("Let2Drv('C',0)->bd->flags&=~BDF_READ_ONLY;");
+    else
+      cmd("Let2Drv('C',0)->bd->flags|=BDF_READ_ONLY;");
+    cmd(R"(HomeSet("C:/");)");
+  } else {
   cmd("CBlkDev *dbd=BlkDevNextFreeSlot('B',BDT_RAM);");
   cmd("dbd->max_blk=2047;");
   cmd("BlkDevAdd(dbd,,0,1);HomeSet(\"B:/\");");
   cmd("Let2Drv('B',0)->drv_let;");
   wait("=66");
+  }
   wait("T:/Home>");
+  if (persistent)
+    cmd("DocClear(,1);");
   cmd(R"(ExeFile("::/Demo/Dsk/DataBase.HC");)");
   wait("Read acct, Write acct");
   auto write = [&](const char *account, const char *name, const char *address,
@@ -1809,20 +1834,31 @@ static void DriveDataBase(CMonitor &vm, const fs::path &dir,
     wait("Read acct, Write acct");
     std::this_thread::sleep_for(200ms);
   };
-  write("7", "Ada", "12 Pine", true);
-  write("7", "Ada", "13 Pine", true);
-  write("7", "Eve", "99 Oak", false);
-  write("8", "Bob", "45 Elm", true);
+  if (!reboot) {
+    write("7", "Ada", "12 Pine", true);
+    write("7", "Ada", "13 Pine", true);
+    write("7", "Eve", "99 Oak", false);
+    write("8", "Bob", "45 Elm", true);
+  }
   key("r");
   wait("Acct #");
   key("7");
   key("ret");
   wait("Ada", "13 Pine");
   snap("read");
+  if (persistent) {
+    key("r");
+    wait("Acct #");
+    key("8");
+    key("ret");
+    wait("Bob", "45 Elm");
+    snap("read-second");
+  }
   key("shift-esc");
   wait("T:/Home>");
   // Verify complete file size and the two saved records through the native API.
-  cmd(R"(CFile *dbf=FOpen("B:/DataBaseDemo.BIN","r");)");
+  cmd(persistent ? R"(CFile *dbf=FOpen("C:/DataBaseDemo.BIN","r");)" :
+                   R"(CFile *dbf=FOpen("B:/DataBaseDemo.BIN","r");)");
   cmd("FSize(dbf);");
   wait("51200");
   cmd("U8 dbbuf[512];FBlkRead(dbf,dbbuf,7);");
@@ -1834,8 +1870,13 @@ static void DriveDataBase(CMonitor &vm, const fs::path &dir,
   cmd(R"(FClose(dbf);HomeSet("T:/Home");)");
   wait("T:/Home>");
   snap("saved");
-  std::cout << "DataBase.HC saved two records, edited one, cancelled an overwrite and read both records\n";
+  if (reboot)
+    std::cout << "DataBase.HC reopened both records after a cold reboot\n";
+  else
+    std::cout << "DataBase.HC saved two records, edited one, cancelled an overwrite and read both records\n";
   }
+
+  if (persistent) return;
 
   cmd("DocClear(,1);");
   cmd(R"(ExeFile("::/Demo/DolDoc/Form.HC");)");
@@ -4154,6 +4195,48 @@ static void TestBoot(const char *qemu, const fs::path &iso,
 
 int main(int argc, char **argv)
 {
+  if ((argc==5 || argc==6) &&
+      (std::string_view(argv[1])=="--database-persistent" ||
+       std::string_view(argv[1])=="--database-persistent-reference")) {
+    const bool reference=std::string_view(argv[1]).ends_with("-reference");
+    char path[]="/tmp/unholyos-database-disk-XXXXXX";
+    if (argc==5 && !mkdtemp(path)) return 1;
+    fs::path dir=argc==6?fs::absolute(argv[5]):fs::path(path),disk=dir/"owned.img";
+    try {
+      fs::create_directories(dir);
+      auto original=FileRead(argv[4]);
+      constexpr size_t fat1=2080*512,fat2=2593*512,fat_bytes=513*512;
+      Check(original.size()==68699136,"Wrong database FAT32 fixture geometry");
+      fs::copy_file(argv[4],disk);
+      auto expected=original;
+      for (unsigned pass=0;pass<2;pass++) {
+        auto run=dir/(pass?"reboot":"write");
+        fs::create_directory(run);
+        CMonitor vm(argv[2],argv[3],run,"pc","512",false,disk,true,reference);
+        vm.Connect();
+        DriveDataBase(vm,run,reference?"":vm.Boot(run/"serial.log"),reference,false,true,pass!=0);
+        vm.Quit();
+        auto actual=FileRead(disk);
+        Check(actual.size()==original.size(),"Database disk size changed");
+        Check(std::equal(actual.begin()+fat1,actual.begin()+fat1+fat_bytes,
+                         actual.begin()+fat2),"Database FAT mirrors differ");
+        Check(std::equal(actual.begin(),actual.begin()+2049*512,original.begin()),
+              "Database changed the MBR or boot sector");
+        if (pass) Check(actual==expected,"Reading the saved database changed disk bytes");
+        else {
+          Check(actual!=original,"Database did not reach the disk");
+          expected=std::move(actual);
+        }
+      }
+      Check(FileRead(argv[4])==original,"Original database disk was modified");
+      std::cout<<"Verified original DataBase.HC persistent records and cold reboot\n";
+      if (argc==5) fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr<<error.what()<<'\n'<<"Evidence: "<<dir<<'\n';
+      return 1;
+    }
+  }
   if (argc==5 && std::string_view(argv[1])=="--fat32-write") {
     char path[]="/tmp/unholyos-fat32-write-XXXXXX";
     if (!mkdtemp(path)) return 1;
