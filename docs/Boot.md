@@ -315,6 +315,32 @@ build/fat-stream/Linux/TestBoot --fat32-stream qemu-system-x86_64 \
   build/fat-stream/fat32-stream-test.iso build/fat-stream/fat32-writable.img
 ```
 
+## FAT32 fragmented streams and recursive file trees
+
+`Fat32TreeProbe.HC` forces a fragmented stream by allocating a separate
+file between two writes. It checks the complete file, random block seeks,
+the blocker, nested directories, masked copy and move, recursive copy,
+rejection of a destination inside the source, masked deletion, and
+restoration of the current directory. The native and pinned TempleOS
+guests produce identical operation traces ending in:
+
+```text
+FAT32 tree mutation FF
+FAT32 tree probe 3F
+```
+
+After a cold reboot both report `FAT32 persisted tree` and
+`FAT32 tree probe 3F`. The two FAT mirrors are compared in their entirety;
+the first native and reference FAT tables also match byte for byte.
+Only the four expected new cluster allocations survive the deletion of
+the copied trees. The original fixture and the post-mutation image are
+unchanged by the second boot. The reference disk SHA-256 after both
+boots is `2a08f393a723838485047df0c2ed2d6c9061ce4dbd7fb692a21fc09ea4d4136f`.
+
+```sh
+make -j4 BUILD=build/fat-tree test
+```
+
 ## Building a RedSea ISO in the guest
 
 `RedSeaISO` takes an output filename, a source directory, and an optional
@@ -1392,7 +1418,7 @@ reference file-error diagnostics remain pending.
 | Interrupts and timers | `Kernel/KInts.HC`, `Kernel/KMain.HC`, `Kernel/KMisc.HC` | Both IDT stages, PIC setup, PIT ticks, HPET, the initial TSC calibration sample, and boot fault diagnostics. Debugger recovery is pending. |
 | Memory | `Kernel/Mem/PageTables.HC`, `BlkPool.HC`, `MAllocFree.HC` | Initial identity map, code and data pools, and early heap allocation. Heap allocation and freeing, the 32-bit device range list, and the uncached device alias are active. |
 | Tasking and CPUs | `Kernel/KTask.HC`, `Sched.HC`, `MultiProc.HC` | Core 0 runs Adam, the idle task, and spawned tasks with cooperative switching and PIT wakeups. Starting additional CPUs remains pending. |
-| Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `FileSysFAT.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. ATA block writes and explicitly enabled FAT32 whole-file and directory mutations persist across cold boots. Formatting and FAT32 write streams remain pending. |
+| Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `FileSysFAT.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. ATA block writes, explicitly enabled FAT32 file and directory mutations, and buffered streams persist across cold boots. FAT32 recursive file operations and cluster reclamation are tested. Formatting remains pending. |
 | Graphics | `Kernel/Display.HC`, `Adam/Gr/GrScrn.HC` | VGA text and graphics composition, 16-color palette, cursor, zoom, and a scheduled refresh task |
 | Input and sound | `Kernel/SerialDev/Keyboard.HC`, `Mouse.HC`, `Message.HC`, `Kernel/KMisc.HC` | PS/2 keyboard and mouse messages, PC speaker tones, and queued sound recording. Desktop input controls and AU output remain pending. |
 | Desktop and system tools | `StartOS.HC`, `Adam/MakeAdam.HC`, `Adam/WinMgr.HC`, `Adam/DolDoc`, `Apps` | The refresh task draws visible DolDoc text and borders. The full editor and interactive desktop remain pending. |

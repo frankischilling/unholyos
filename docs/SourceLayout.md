@@ -698,10 +698,10 @@ counts one for each visited directory, including the destination root, as
 the reference does despite its files-only API comment. A same-drive
 destination inside the resolved source directory is rejected. `ScanFlags`
 in `Kernel/StrB.cpp` uses the file utility flag list from `KDefine.cpp`.
-Read-only devices are refused before mutation. Writable RAM RedSea is the
-fully tested file-tree destination. FAT32 supports whole-file writes,
-deletion, and block-stream copy. FAT32 tree destinations are enabled but
-still need dedicated recursive workflow coverage. Error paths,
+Read-only devices are refused before mutation. Writable RAM RedSea and
+explicitly writable FAT32 ATA destinations have recursive file-tree
+coverage. The FAT32 probe checks masked copy, move, nested trees, deletion,
+fragmented stream growth, and reclamation across cold boots. Error paths,
 resident-cache deletion behavior, and restoring a deleted current
 directory are not yet fully matched to TempleOS.
 
