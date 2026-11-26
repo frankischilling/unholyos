@@ -82,7 +82,7 @@ CLASS_META_DEMO := Demo/ClassMeta.HC
 DOC_BIN_DEMOS := Demo/Graphics/SpritePut.HC Demo/Graphics/SpritePutExt.HC
 DOC_BIN_LINK := Linux/Fixtures/DocBinLink.DD
 QUEUE_PROBE := Linux/Fixtures/QueueProbe.HC
-TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC
+TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInputProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 
 .PHONY: all run test

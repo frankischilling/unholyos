@@ -687,7 +687,8 @@ static bool CmpDirData(CHashTable *table)
   auto *drive = CmpKernelClass(table, "CDrv", sizeof(CDrv));
   auto *bd = CmpKernelClass(table, "CBlkDev", sizeof(CBlkDev));
   auto *file = CmpKernelClass(table, "CFile", sizeof(CFile));
-  if (!entry || !context || !drive || !bd || !file)
+  auto *glbls = CmpKernelClass(table, "CBlkDevGlbls", sizeof(CBlkDevGlbls));
+  if (!entry || !context || !drive || !bd || !file || !glbls)
     return false;
   auto *heap = CurrentTask()->data_heap;
   auto *i64 = FindType("I64", table);
@@ -697,6 +698,7 @@ static bool CmpDirData(CHashTable *table)
     const char *name;
     CHashClass *record, *type;
     size_t offset;
+      size_t count = 0;
   } members[]{
       {"next", entry, entry + 1, offsetof(CDirEntry, next)},
       {"parent", entry, entry + 1, offsetof(CDirEntry, parent)},
@@ -706,7 +708,7 @@ static bool CmpDirData(CHashTable *table)
       {"user_data2", entry, i64, offsetof(CDirEntry, user_data2)},
       {"start", entry, FindType("U0", table), offsetof(CDirEntry, attr)},
       {"attr", entry, FindType("U16", table), offsetof(CDirEntry, attr)},
-      {"name", entry, u8, offsetof(CDirEntry, name)},
+      {"name", entry, u8, offsetof(CDirEntry, name), CDIR_FILENAME_LEN},
       {"clus", entry, i64, offsetof(CDirEntry, clus)},
       {"size", entry, i64, offsetof(CDirEntry, size)},
       {"datetime", entry, FindType("CDate", table), offsetof(CDirEntry, datetime)},
@@ -731,6 +733,25 @@ static bool CmpDirData(CHashTable *table)
       {"file_clus_num", file, i64, offsetof(CFile, file_clus_num)},
       {"max_blk", file, i64, offsetof(CFile, max_blk)},
       {"clus_buf", file, u8 + 1, offsetof(CFile, clus_buf)},
+      {"blkdevs", glbls, bd + 1, offsetof(CBlkDevGlbls, blkdevs)},
+      {"dft_iso_filename", glbls, u8 + 1, offsetof(CBlkDevGlbls, dft_iso_filename)},
+      {"dft_iso_c_filename", glbls, u8 + 1, offsetof(CBlkDevGlbls, dft_iso_c_filename)},
+      {"tmp_filename", glbls, u8 + 1, offsetof(CBlkDevGlbls, tmp_filename)},
+      {"home_dir", glbls, u8 + 1, offsetof(CBlkDevGlbls, home_dir)},
+      {"cache_size", glbls, i64, offsetof(CBlkDevGlbls, cache_size)},
+      {"read_cnt", glbls, i64, offsetof(CBlkDevGlbls, read_cnt)},
+      {"write_cnt", glbls, i64, offsetof(CBlkDevGlbls, write_cnt)},
+      {"drvs", glbls, drive + 1, offsetof(CBlkDevGlbls, drvs)},
+      {"let_to_drv", glbls, drive + 1, offsetof(CBlkDevGlbls, let_to_drv), 32},
+      {"mount_ide_auto_cnt", glbls, i64, offsetof(CBlkDevGlbls, mount_ide_auto_cnt)},
+      {"ins_base0", glbls, i64, offsetof(CBlkDevGlbls, ins_base0)},
+      {"ins_base1", glbls, i64, offsetof(CBlkDevGlbls, ins_base1)},
+      {"boot_drv_let", glbls, u8, offsetof(CBlkDevGlbls, boot_drv_let)},
+      {"first_hd_drv_let", glbls, u8, offsetof(CBlkDevGlbls, first_hd_drv_let)},
+      {"first_dvd_drv_let", glbls, u8, offsetof(CBlkDevGlbls, first_dvd_drv_let)},
+      {"dvd_boot_is_good", glbls, FindType("Bool", table), offsetof(CBlkDevGlbls, dvd_boot_is_good)},
+      {"ins_unit", glbls, FindType("Bool", table), offsetof(CBlkDevGlbls, ins_unit)},
+      {"pad", glbls, FindType("Bool", table), offsetof(CBlkDevGlbls, pad), 3},
   };
   for (const auto &member : members) {
     auto *name = StrNew(member.name, heap);
@@ -740,19 +761,19 @@ static bool CmpDirData(CHashTable *table)
       Free(name);
       return false;
     }
-    if (member.record == entry && member.offset == offsetof(CDirEntry, name)) {
+    if (member.count) {
       auto *axis =
           reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
       if (!axis)
         return false;
-      axis->cnt = CDIR_FILENAME_LEN;
+      axis->cnt = member.count;
       axis->total_cnt = 1;
       m->dim.next = axis;
-      m->dim.total_cnt = CDIR_FILENAME_LEN;
-      m->size = CDIR_FILENAME_LEN;
+      m->dim.total_cnt = member.count;
+      m->size = member.count * member.type->size;
     }
   }
-  return true;
+  return CmpKernelGlobal(table, "blkdev", glbls, &blkdev);
 }
 
 static CHashClass *CmpExceptData(CHashTable *table)

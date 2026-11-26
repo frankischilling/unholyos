@@ -85,6 +85,7 @@ Linux/Fixtures/FunctionPtrProbe.HC text eol=lf
 Linux/Fixtures/FileCopyProbe.HC text eol=lf
 Linux/Fixtures/QueueProbe.HC text eol=lf
 Linux/Fixtures/TimeClockProbe.HC text eol=lf
+Linux/Fixtures/TimeClockInputProbe.HC text eol=lf
 Linux/Fixtures/DocFrame.HC text eol=lf
 Linux/Fixtures/DocButton.HC text eol=lf
 Linux/Fixtures/DocCallback.HC text eol=lf
