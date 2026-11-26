@@ -645,6 +645,19 @@ full filesystem exception parity, or Unicode support. FAT32 mutations
 require an explicitly writable ATA device; the normal mount policy is
 unchanged.
 
+`DskFmt.cpp` follows `DskFmt.HC` for `Fmt` and partition type updates.
+`FAT32Fmt` in `FileSysFAT.cpp` uses the pinned sector-per-cluster
+thresholds, boot record, FSInfo signatures, two FAT copies, and root
+cluster allocation. `BlkWriteZero` in `DskBlk.cpp` clears the metadata
+region for a quick format or the entire partition for a full format.
+The current ATA formatter accepts an existing mounted FAT32 primary
+partition only, checks its extent and excludes overlapping partitions.
+It preserves unrelated MBR bytes. `Fmt` honors confirmation and refuses
+read-only devices; it also supports the existing RAM RedSea formatting
+path. Formatting unmounted partitions, extended partitions, ATA RedSea,
+progress indicators, and complete error and cache behavior remain pending.
+Formatting is destructive and is not transactional.
+
 ## File streams
 
 `Kernel/BlkDev/DskCFile.cpp` follows `DskCFile.HC` for `FOpen`,

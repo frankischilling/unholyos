@@ -1829,6 +1829,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"filename", U8Ptr}, {"fbuf", U8Ptr}, {"size", I64}, {"cdt", Date, true}, {"attr", I64, true}}},
       {"Let2Drv", DrivePtr, FF_RET1, {{"drv_let", U8, true}, {"except", Bool, true, 1}}},
       {"BlkRead", Bool, FF_RET1, {{"dv", DrivePtr}, {"buf", U8Ptr}, {"blk", I64}, {"cnt", I64}}},
+      {"Fmt", U0, FF_RET1, {{"drv_let", U8}, {"quick", Bool, true, 1},
+                     {"confirm", Bool, true, 1}, {"type", I64, true, FSt_FAT32}}},
       {"BlkWrite", Bool, FF_RET1, {{"dv", DrivePtr}, {"buf", U8Ptr}, {"blk", I64}, {"cnt", I64}}},
       {"FSize", I64, FF_RET1, {{"f", FilePtr}}},
       {"FOpen", FilePtr, FF_RET1, {{"filename", U8Ptr}, {"flags", U8Ptr}, {"cnt", I64, true}}},
