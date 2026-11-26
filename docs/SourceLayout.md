@@ -612,9 +612,16 @@ allocation chains. DOS modification timestamps convert to `CDate`.
 PIO; `DskAddDev.cpp` recognizes validated primary MBR FAT32 partitions
 on ATA devices. DVD startup probes the primary IDE master for these
 partitions and assigns free drive letters starting at `C:`. The ATA
-device is marked read-only. `DskBlk.cpp` dispatches reads to that device.
-Extended partitions, general automatic IDE discovery, LBA48, disk caches,
-and physical-sector sizes other than 512 bytes remain pending.
+device is marked read-only. `DskBlk.cpp` dispatches reads and protected
+block writes to that device. `DskATA.cpp` implements `ATABlkSel` and
+`ATAWriteBlks` using LBA28 PIO sector transfers, with channel-wide
+serialization, bounded status polling, and a cache flush. The byte-range
+helper preserves untouched bytes of partial sectors. Raw writes require
+the device to be writable or `BDF_READ_ONLY_OVERRIDE` to be set; the
+default read-only mount remains in effect for filesystem mutations.
+Extended partitions, general automatic IDE discovery, LBA48, multiple
+mode, disk caches, and physical-sector sizes other than 512 bytes remain
+pending.
 
 The generic path and lookup helpers in `DskFile.cpp` dispatch to either
 filesystem; directory contexts, `Cd`, masks, recursive listings, whole-file
@@ -649,8 +656,8 @@ operations. An explicit contiguous read requires the `.C` extension; the
 implementation still checks the actual FAT chain to avoid reading unrelated
 sectors. The current reader revalidates and traverses chains on each call;
 it does not reproduce the reference's `FSetClus` cache fields or dirty
-cluster-buffer behavior. FAT32 mutations, ATA writes, and write streams
-remain pending.
+cluster-buffer behavior. FAT32 mutations and write streams remain pending;
+the ATA block-write path is independently tested across a cold reboot.
 
 `Kernel/BlkDev/DskCopy.cpp` follows `CopySingleZ` and `CopySingle` in
 `DskCopy.HC`. Equal filename attributes select the raw block-stream path
@@ -682,7 +689,7 @@ the reference does despite its files-only API comment. A same-drive
 destination inside the resolved source directory is rejected. `ScanFlags`
 in `Kernel/StrB.cpp` uses the file utility flag list from `KDefine.cpp`.
 Read-only devices are refused before mutation. Writable RAM RedSea is the
-implemented destination; ATA and FAT32 writes are pending. Error paths,
+implemented file destination; FAT32 writes are pending. Error paths,
 resident-cache deletion behavior, and restoring a deleted current
 directory are not yet fully matched to TempleOS.
 

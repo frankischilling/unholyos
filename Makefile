@@ -50,6 +50,8 @@ FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
 FAT_TEST_ISO := $(BUILD)/fat32-test.iso
 FAT_PROBES := Linux/Fixtures/Fat32ReadProbe.HC Linux/Fixtures/Fat32RejectProbe.HC
+ATA_TEST_ISO := $(BUILD)/ata-test.iso
+ATA_PROBES := Linux/Fixtures/AtaWriteProbe.HC Linux/Fixtures/AtaWriteRejectProbe.HC
 STARTUP_FIXTURE := Linux/Fixtures/StartOS.HC.Z
 STARTUP_DOC := Doc/Start.DD
 MODULE_PROBE := Linux/Fixtures/LoadProbe.BIN
@@ -143,6 +145,9 @@ $(FAT_INVALID_DISK): $(FAT_TOOL)
 $(FAT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_PROBES)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(FAT_PROBES))
 
+$(ATA_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_PROBES) $(ATA_PROBES)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(FAT_PROBES) $(ATA_PROBES))
+
 $(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home \
 		$(foreach demo,$(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES),--file-at $(demo) $(demo))
@@ -161,10 +166,11 @@ $(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(STARTU
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK)
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO)
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_DISK) valid
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_INVALID_DISK) invalid
+	$(BOOT_TEST) --ata-write "$(QEMU)" $(ATA_TEST_ISO) $(FAT_DISK)
 	$(BOOT_TEST) "$(QEMU)" $< $(KERNEL) $(STARTUP_TEST_ISO)
 	$(BOOT_TEST) --character-graphics "$(QEMU)" $<
 
