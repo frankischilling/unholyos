@@ -268,8 +268,9 @@ the same order as `GrBitMap4ToBitMap8` in `GrBitMap.HC`. `DCScrnCapture`
 in `GrDC.cpp` copies either the displayed (possibly zoomed) screen or the
 unzoomed composite. `GrComposites.cpp` carries `GRScrnCaptureWrite` and
 `GRScrnCaptureRead`, including the current VGA palette on write and the
-equivalent raster operation on read. Movie capture and playback remain
-pending.
+equivalent raster operation on read. Its HolyC adapter widens the SysV
+Boolean return to preserve the reference's full-register TRUE and FALSE.
+Movie capture and playback remain pending.
 
 `GrInit2` allocates the six screen contexts. The persistent `gr.dc`
 starts transparent with `DCF_SCRN_BITMAP | DCF_ON_TOP`. The context

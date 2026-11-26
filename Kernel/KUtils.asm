@@ -493,7 +493,7 @@ HOLYC_CPP DCLoadHC,DCLoadCpp,3
 HOLYC_CPP GRWriteHC,GRWriteCpp,3
 HOLYC_CPP GRReadHC,GRReadCpp,2
 HOLYC_CPP DCScrnCaptureHC,DCScrnCaptureCpp,2
-HOLYC_CPP GRScrnCaptureReadHC,GRScrnCaptureReadCpp,4
+HOLYC_CPP GRScrnCaptureReadHC,GRScrnCaptureReadCpp,4,1
 HOLYC_CPP GRScrnCaptureWriteHC,GRScrnCaptureWriteCpp,2
 HOLYC_CPP Mat4x4MulMat4x4EquHC,Mat4x4MulMat4x4EquCpp,3
 HOLYC_CPP Mat4x4MulMat4x4NewHC,Mat4x4MulMat4x4NewCpp,3

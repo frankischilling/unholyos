@@ -2129,21 +2129,30 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
     throw std::runtime_error(error);
   };
   // QMP acknowledges injection, not delivery through the guest PS/2 driver.
-  // Resolve the exported mouse state and wait for the input to be consumed.
-  auto mouse_state = [&]() {
-    uint64_t e801 = ReadPhysical<1>(vm, 0x7C40, 'h')[0];
-    uint64_t table = 0x100000 + e801 * 1024 - 0x4400 + 0x28;
-    constexpr uint64_t hash = ('m' * 2 + 's') & 1023;
-    auto entry = ReadPhysical<1>(vm, table + hash * 8)[0];
-    for (unsigned i = 0; entry && i < 1024; ++i) {
-      auto header = ReadPhysical<3>(vm, entry);
-      if (static_cast<uint32_t>(header[2]) == 0x08000001 &&
-          ReadPhysical<3>(vm, header[1], 'b') ==
-              std::array<uint64_t, 3>{'m', 's', 0})
-        return ReadPhysical<1>(vm, entry + 64)[0];
-      entry = header[0];
+  // Resolve exported state to observe input delivery and completed refreshes.
+  auto guest_state = [&]<size_t N>(const char (&name)[N], uint64_t task) {
+    uint64_t hash = 0;
+    std::array<uint64_t, N> expected{};
+    for (size_t i = 0; i < N - 1; ++i) {
+      expected[i] = static_cast<uint8_t>(name[i]);
+      hash = (hash << 1) + (hash >> 63) + expected[i];
     }
-    throw std::runtime_error("Missing exported mouse state");
+    hash += (hash >> 16) + ((hash >> 15) & 1);
+    auto table = ReadPhysical<1>(vm, task + 0x3D0)[0];
+    for (unsigned t = 0; table && t < 32; ++t) {
+      const auto fields = ReadPhysical<4>(vm, table);
+      auto entry = ReadPhysical<1>(vm, fields[3] + (hash & fields[1]) * 8)[0];
+      for (unsigned i = 0; entry && i < 1024; ++i) {
+        auto header = ReadPhysical<3>(vm, entry);
+        auto type = static_cast<uint32_t>(header[2]);
+        if ((type == 0x08000001 || type == 0x01000008) &&
+            ReadPhysical<N>(vm, header[1], 'b') == expected)
+          return ReadPhysical<1>(vm, entry + (type == 0x08000001 ? 64 : 120))[0];
+        entry = header[0];
+      }
+      table = fields[0];
+    }
+    throw std::runtime_error(std::string("Missing guest state: ") + name);
   };
 
   constexpr auto start_body = "Public Domain Operating System";
@@ -2450,7 +2459,7 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   Check(shape_pixels(tree) > 800, "CommonAncestor.HC did not draw the tree");
 
   constexpr uint64_t scroll_x = 0x100, scroll_y = 0x108, scroll_z = 0x110;
-  const auto mouse = mouse_state();
+  const auto mouse = guest_state("ms", left);
   constexpr uint64_t mouse_lb = 160;
   auto wait_button = [&](bool down) {
     for (unsigned i = 0; i < 100; ++i) {
@@ -2649,42 +2658,92 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   auto horz = ReadPhysical<1>(vm, left + next_ctrl)[0];
   auto vert = ReadPhysical<1>(vm, horz)[0];
   const auto doc = ReadPhysical<1>(vm, left + put_doc)[0];
-  auto wait_view = [&](uint64_t offset, uint64_t expected, const char *error) {
+  const auto refresh_count = guest_state("winmgr", left);
+  const auto vert_state = ReadPhysical<1>(vm, vert + 0x68)[0];
+  auto wait_scroll = [&](auto ready, const char *error) {
     for (unsigned i = 0; i < 80; ++i) {
-      if (ReadPhysical<1>(vm, doc + offset, 'w')[0] == expected)
+      if (ready())
         return;
       std::this_thread::sleep_for(20ms);
     }
-    throw std::runtime_error(error);
+    const auto xy = ReadPhysical<2>(vm, mouse);
+    const auto box = ReadPhysical<4>(vm, vert + ctrl_box);
+    const auto state = ReadPhysical<3>(vm, vert_state);
+    const auto geometry = ReadPhysical<4>(vm, left + win_left);
+    std::ostringstream detail;
+    detail << error << "; mouse=" << xy[0] << ',' << xy[1]
+           << " left=" << ReadPhysical<1>(vm, mouse + mouse_lb, 'b')[0]
+           << " top=" << ReadPhysical<1>(vm, doc + top_line, 'w')[0]
+           << " column=" << ReadPhysical<1>(vm, doc + line_start, 'w')[0]
+           << " vertical min/pos/max=" << state[0] << ',' << state[1] << ',' << state[2]
+           << " box=" << box[0] << ',' << box[1] << ',' << box[2] << ',' << box[3]
+           << " flags=" << ReadPhysical<1>(vm, vert + ctrl_flags)[0]
+           << " window=" << geometry[0] << ',' << geometry[1] << ','
+           << geometry[2] << ',' << geometry[3]
+           << " refresh=" << ReadPhysical<1>(vm, refresh_count)[0];
+    throw std::runtime_error(detail.str());
+  };
+  auto wait_view = [&](uint64_t offset, uint64_t expected, const char *error) {
+    wait_scroll([&] { return ReadPhysical<1>(vm, doc + offset, 'w')[0] == expected; },
+                error);
+  };
+  auto wait_refresh = [&] {
+    const auto previous = ReadPhysical<1>(vm, refresh_count)[0];
+    wait_scroll([&] { return ReadPhysical<1>(vm, refresh_count)[0] != previous; },
+                "The window manager did not finish a refresh");
+  };
+  auto wait_pointer = [&](int64_t x, int64_t y) {
+    wait_scroll([&] {
+      return ReadPhysical<2>(vm, mouse) ==
+             std::array<uint64_t, 2>{uint64_t(x), uint64_t(y)};
+    }, "Guest mouse did not reach the scrollbar target");
   };
   wait_view(top_line, 48, "The scrollbar document did not start at its end");
   MouseButton(vm, "wheel-up", true);
   MouseButton(vm, "wheel-up", false);
   wait_view(top_line, 47, "A wheel notch did not scroll one line");
+  // The document changes before CtrlsUpdate publishes the screen rectangle.
+  // Grab the thumb only after a completed refresh at its new position.
+  wait_refresh();
+  wait_scroll([&] {
+    return ReadPhysical<3>(vm, vert_state) == std::array<uint64_t, 3>{0, 47, 48} &&
+           ReadPhysical<4>(vm, vert + ctrl_box) ==
+               std::array<uint64_t, 4>{224, 231, 145, 152};
+  }, "The vertical thumb rectangle did not reflect the wheel scroll");
 
   int64_t mouse_x = 160, mouse_y = 104;
+  wait_pointer(mouse_x, mouse_y);
   auto grab_thumb = [&](uint64_t ctrl) {
     auto box = ReadPhysical<4>(vm, ctrl + ctrl_box);
     int64_t x = box[0] + 3, y = box[2] + 3;
     move_pointer(mouse_x, mouse_y, x, y);
+    wait_pointer(x, y);
+    wait_scroll([&] { return ReadPhysical<4>(vm, ctrl + ctrl_box) == box; },
+                "The scrollbar thumb moved before capture");
     MouseButton(vm, "left", true);
-    wait_mem(ctrl + ctrl_flags, 23,
-             "The scrollbar thumb did not capture the mouse");
+    wait_button(true);
+    wait_scroll([&] { return ReadPhysical<1>(vm, ctrl + ctrl_flags)[0] == 23; },
+                "The scrollbar thumb did not capture the mouse");
   };
   grab_thumb(vert);
   MouseMove(vm, 0, -100);
   mouse_y -= 50;
+  wait_pointer(mouse_x, mouse_y);
   wait_view(top_line, 27, "The vertical thumb did not scroll the document");
   MouseButton(vm, "left", false);
+  wait_button(false);
   wait_mem(vert + ctrl_flags, 7, "The vertical thumb did not release");
   Check(ReadPhysical<4>(vm, left + win_left) == scroll_window,
         "The vertical thumb resized the window");
 
+  wait_refresh();
   grab_thumb(horz);
   MouseMove(vm, 96, 0);
+  wait_pointer(mouse_x + 48, mouse_y);
   wait_mem(horz + 40, 64, "The horizontal thumb did not move");
   wait_text("CDEFGH", false, 1, 5, 4, 120);
   MouseButton(vm, "left", false);
+  wait_button(false);
   wait_mem(horz + ctrl_flags, 7, "The horizontal thumb did not release");
   wait_text("27 ABC", false, 1, 5, 4, 120);
   wait_view(line_start, 0, "The cursor did not restore the viewport");
@@ -3765,7 +3824,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     auto boot = rebuilt.Boot(serial);
     CheckProgramOutput(boot, "/DCProbe.HC", dc_output, '1');
     CheckProgramOutput(boot, "/BitmapDiffProbe.HC", "bitmap diff 7F E76D01B74919B2D4\n", '1');
-    CheckProgramOutput(boot, "/CaptureProbe.HC", "capture probe 3F\n", '1');
+    CheckProgramOutput(boot, "/CaptureProbe.HC", "capture probe 7F\n", '1');
     CheckProgramOutput(boot, "/RasterProbe.HC", raster_output, '1');
     CheckProgramOutput(boot, "/Blot3Probe.HC", blot3_output, '1');
     CheckProgramOutput(boot, "/DepthSpansProbe.HC", depth_spans_output, '1');
@@ -3880,7 +3939,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
     if (startup) {
       CheckProgramOutput(output, "/DCProbe.HC", dc_output, '1');
       CheckProgramOutput(output, "/BitmapDiffProbe.HC", "bitmap diff 7F E76D01B74919B2D4\n", '1');
-      CheckProgramOutput(output, "/CaptureProbe.HC", "capture probe 3F\n", '1');
+      CheckProgramOutput(output, "/CaptureProbe.HC", "capture probe 7F\n", '1');
       CheckProgramOutput(output, "/RasterProbe.HC", raster_output, '1');
       CheckProgramOutput(output, "/Blot3Probe.HC", blot3_output, '1');
       CheckProgramOutput(output, "/DepthSpansProbe.HC", depth_spans_output, '1');

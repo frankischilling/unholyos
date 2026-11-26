@@ -17,7 +17,7 @@ U0 CaptureProbe()
   CDC *dc=DCAlias,*backup=DCCopy(gr.dc),*normal,*zoomed,*plain,*loaded;
   CDC *dst=DCNew(32,8);
   I64 i,j,zoom=gr.scrn_zoom,sx=gr.sx,sy=gr.sy;
-  I64 mx=ms.pos.x,my=ms.pos.y,result=0,size;
+  I64 mx=ms.pos.x,my=ms.pos.y,result=0,size,success,missing;
   CBGR48 saved[COLORS_NUM],expected;
   GrPaletteGet(saved);
   dc->flags&=~DCF_SCRN_BITMAP;
@@ -55,9 +55,13 @@ U0 CaptureProbe()
   if (size>0 && CapturePixels(loaded,324,244,1) && loaded->palette[RED]==expected)
     result|=16;
   dst->color=RED;
-  if (GRScrnCaptureRead("B:/CaptureProbe",dst,-324,-244) &&
+  success=GRScrnCaptureRead("B:/CaptureProbe",dst,-324,-244);
+  if (success==TRUE &&
       dst->color==ROP_EQU && CapturePixels(dst,0,0,1))
     result|=32;
+  missing=GRScrnCaptureRead("B:/CaptureProbeMissing",dst);
+  if (missing==FALSE)
+    result|=64;
   MemCpy(gr.dc->body,backup->body,gr.dc->width_internal*gr.dc->height);
   gr.scrn_zoom=zoom;
   gr.sx=sx;
