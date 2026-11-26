@@ -46,6 +46,8 @@ void CdHC(), IsDirHC(), DirHC(), PutDirLinkHC(), FilesFindHC(), FileFindHC(),
     FilesFindMatchHC(), DirEntryDelHC(), DirEntryDel2HC(), DirTreeDelHC(), DirTreeDel2HC();
 void DirContextNewHC(), DirContextDelHC(), Str2I64HC();
 void Str2DateHC(), GetI64HC(), GetF64HC(), GetDateHC();
+void Str2F64HC(), ChkPtrHC(), ClassRep2HC(), ClassRepHC(), ClassRepDHC();
+void DocMaxHC(), DocDataFmtHC(), DocDataScanHC();
 void ExtChgHC(), ExtDftHC();
 void RedSeaISOHC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
@@ -60,6 +62,7 @@ void PutSHC(), PutHexHC();
 void PUT_HEX_U64(), PUT_HEX_U32(), PUT_HEX_U16(), PUT_HEX_U8(), PUT_CHARS(),
     PUT_STR();
 void CmpHC(), ExePutSHC(), ExeFileHC(), StreamPrintHC(), StreamExePrintHC();
+void StreamDirHC();
 void DefineSubHC(), DefineMatchHC();
 void HashValHC(), HashDelHC(), HashTableDelHC(), HashSrcFileSetHC();
 void MemberMetaDataHC(), MemberMetaFindHC(), MemberFindHC();
@@ -575,6 +578,7 @@ bool LoadKernel(CTask &task)
       {"_STRCMP", reinterpret_cast<uintptr_t>(_STRCMP)},
       {"StrCmp", reinterpret_cast<uintptr_t>(_STRCMP)},
       {"_STRCPY", reinterpret_cast<uintptr_t>(_STRCPY)},
+      {"StrCpy", reinterpret_cast<uintptr_t>(_STRCPY)},
       {"_STRIMATCH", reinterpret_cast<uintptr_t>(_STRIMATCH)},
       {"StrOcc", reinterpret_cast<uintptr_t>(StrOccHC)},
       {"_HASH_ADD", reinterpret_cast<uintptr_t>(_HASH_ADD)},
@@ -629,6 +633,14 @@ bool LoadKernel(CTask &task)
       {"DirContextDel", reinterpret_cast<uintptr_t>(DirContextDelHC)},
       {"Str2I64", reinterpret_cast<uintptr_t>(Str2I64HC)},
       {"Str2Date", reinterpret_cast<uintptr_t>(Str2DateHC)},
+      {"Str2F64", reinterpret_cast<uintptr_t>(Str2F64HC)},
+      {"ChkPtr", reinterpret_cast<uintptr_t>(ChkPtrHC)},
+      {"ClassRep2", reinterpret_cast<uintptr_t>(ClassRep2HC)},
+      {"ClassRep", reinterpret_cast<uintptr_t>(ClassRepHC)},
+      {"ClassRepD", reinterpret_cast<uintptr_t>(ClassRepDHC)},
+      {"DocMax", reinterpret_cast<uintptr_t>(DocMaxHC)},
+      {"DocDataFmt", reinterpret_cast<uintptr_t>(DocDataFmtHC)},
+      {"DocDataScan", reinterpret_cast<uintptr_t>(DocDataScanHC)},
       {"FileWrite", reinterpret_cast<uintptr_t>(FileWriteHC)},
       {"FSize", reinterpret_cast<uintptr_t>(FSizeHC)},
       {"FOpen", reinterpret_cast<uintptr_t>(FOpenHC)},
@@ -820,6 +832,7 @@ bool LoadKernel(CTask &task)
       {"Cmp", reinterpret_cast<uintptr_t>(CmpHC)},
       {"ExeFile", reinterpret_cast<uintptr_t>(ExeFileHC)},
       {"StreamPrint", reinterpret_cast<uintptr_t>(StreamPrintHC)},
+      {"StreamDir", reinterpret_cast<uintptr_t>(StreamDirHC)},
       {"StreamExePrint", reinterpret_cast<uintptr_t>(StreamExePrintHC)},
       {"IsRaw", reinterpret_cast<uintptr_t>(IsRawHC)},
       {"Raw", reinterpret_cast<uintptr_t>(RawHC)},

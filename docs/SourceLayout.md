@@ -592,9 +592,39 @@ by the short listing. `Cd` visits each path component and retains the
 valid prefix when a component fails. `DskDirContext.cpp` ports
 `DirContextNew` and `DirContextDel`, using the native `CDirContext`
 record to save the task's drive, directory, and mask. `FilesFind`,
-`FileFind`, and `IsDir` use those contexts to resolve RedSea DVD and
-RAM paths and restore the caller's working directory. FAT32,
-`PopUpCd`, and full drive error reporting remain pending.
+`FileFind`, and `IsDir` use those contexts to resolve RedSea DVD,
+RAM, and mounted read-only FAT32 paths and restore the caller's working
+directory. `PopUpCd` and full drive error reporting remain pending.
+
+## FAT32 reads
+
+`Kernel/BlkDev/FileSysFAT.cpp` follows `FileSysFAT.HC` for `FAT32Init`,
+`FATFromName`, `FATNameXSum`, `DirLongNameFill`, `FAT32CDirFill`,
+`FAT32FileFind`, `FAT32FileRead`, and `FAT32FilesFind`. The disk structures
+in `KernelA.hpp` retain the reference's 512-byte boot and FSInfo sectors
+and 32-byte directory records. Mounting checks the partition extent,
+sector and cluster sizes, FAT capacity, root cluster, and FSInfo
+signatures before exposing the volume. Cluster numbers map to the data
+area starting at cluster 2. Reads reject invalid, cyclic, and short
+allocation chains. DOS modification timestamps convert to `CDate`.
+
+`DskATA.cpp` now reads ATA IDENTIFY capacity and LBA28 sectors using
+PIO; `DskAddDev.cpp` recognizes validated primary MBR FAT32 partitions
+on ATA devices. DVD startup probes the primary IDE master for these
+partitions and assigns free drive letters starting at `C:`. The ATA
+device is marked read-only. `DskBlk.cpp` dispatches reads to that device.
+Extended partitions, general automatic IDE discovery, LBA48, disk caches,
+and physical-sector sizes other than 512 bytes remain pending.
+
+The generic path and lookup helpers in `DskFile.cpp` dispatch to either
+filesystem; directory contexts, `Cd`, masks, recursive listings, whole-file
+reads, and parent search use the same native `CDirEntry` ABI. Names follow
+the reference's case-sensitive lookup and limited long-name support:
+ASCII VFAT names of up to 25 characters, validated sequence and checksum,
+or the short name when no supported valid long name is present. The
+short alias of a valid long name is not an alternate lookup, matching
+the pinned reader. Unicode conversion, longer VFAT names, active FAT
+selection other than FAT 0, and complete error diagnostics remain pending.
 
 ## File streams
 
@@ -607,13 +637,20 @@ preallocation, `w` replacement, `w+` updates, and metadata changes on
 close, including preservation of the original timestamp. The containing
 directory must already exist.
 
-The current slice supports DVD reads and RAM reads and writes. It rejects
+The current slice supports DVD reads, RAM reads and writes, and FAT32
+ATA reads. It rejects
 positive writes to a new stream without a preallocated extent; the
 reference contiguous path would otherwise use cluster zero. A failed
 preallocation preserves the previous file rather than deleting it first.
 Close checks that changes to size stay within the allocated block count
-and that the entry still refers to the same file. FAT32, noncontiguous
-streams, dirty cluster buffers, and ATA writes remain pending.
+and that the entry still refers to the same file. FAT32 `FOpen` and
+`FBlkRead` follow allocation chains for reads, including seek and next-block
+operations. An explicit contiguous read requires the `.C` extension; the
+implementation still checks the actual FAT chain to avoid reading unrelated
+sectors. The current reader revalidates and traverses chains on each call;
+it does not reproduce the reference's `FSetClus` cache fields or dirty
+cluster-buffer behavior. FAT32 mutations, ATA writes, and write streams
+remain pending.
 
 `Kernel/BlkDev/DskCopy.cpp` follows `CopySingleZ` and `CopySingle` in
 `DskCopy.HC`. Equal filename attributes select the raw block-stream path
@@ -645,7 +682,7 @@ the reference does despite its files-only API comment. A same-drive
 destination inside the resolved source directory is rejected. `ScanFlags`
 in `Kernel/StrB.cpp` uses the file utility flag list from `KDefine.cpp`.
 Read-only devices are refused before mutation. Writable RAM RedSea is the
-implemented destination; ATA and FAT32 changes are pending. Error paths,
+implemented destination; ATA and FAT32 writes are pending. Error paths,
 resident-cache deletion behavior, and restoring a deleted current
 directory are not yet fully matched to TempleOS.
 
@@ -696,9 +733,25 @@ that require executing or relocating unfinished AOT code remain pending.
 `AsmInit.cpp` exposes the compiler's member and class records for HolyC
 reflection, including `Fs->hash_table`, `HashFind`, and `MemberFind`.
 The records retain their ABI sizes; debugger and external-usage pointers
-are exposed as opaque addresses. The original `Demo/ClassMeta.HC` now runs
-unchanged. `ClassRep`, `ClassRepD`, and `DocForm` remain pending, so the
-original database demo and the complete `LastClass.HC` are not yet runnable.
+are exposed as opaque addresses. The original `Demo/ClassMeta.HC` runs
+unchanged.
+
+`Adam/ADbg.cpp` follows `Adam/ADbg.HC` for `ClassRep2`, `ClassRep`,
+and `ClassRepD`, using the compiler's actual class and member records.
+It reports base classes, nested records, bounded arrays, scalar values,
+and strings. The dynamic report uses bound DolDoc data entries; scalar
+entries refresh from and write back to the reported memory. `Kernel/KDbg.cpp`
+provides pointer validation, including the native fixed boot records for
+the CPU and Adam task. `Gs` and the native `CCPU` member declarations
+allow the original `Demo/LastClass.HC` to run unchanged. `CTask` reflection
+still covers only the implemented member declarations; native reports
+therefore need not have the reference's number of nested records.
+
+`Adam/DolDoc/DocForm.cpp` implements `DocDataFmt` and the bound scalar
+formats of `DocDataScan` used by class reports. `DocChar`, `DocRecalc`, and
+`DocRun` connect editing, live refresh, and tree expansion to those entries.
+General form construction, list/checkbox binding, and reallocated data
+remain pending; the original database demo is not claimed runnable.
 
 The kernel header table stores numeric and string defaults in a tagged
 union. This saves space in the boot image while preserving the same
@@ -727,6 +780,27 @@ return zero instead of reading outside the month tables. The pinned
 reproduced explicitly for common and leap years without an out-of-bounds
 read. CPU fault recovery, full compiler diagnostics, and unordered
 floating-point comparisons remain outside this prompt implementation.
+
+## Queue primitives and source paths
+
+`Compiler/BackC.cpp` emits the queue operations from `BackC.HC` and
+the string-length operation from `Templates.HC`. The compiler keeps the
+reference opcodes for `QueInit`, `QueIns`, `QueInsRev`, `QueRem`, and
+`StrLen`. `CQue` exposes its two actual pointers. `StrCpy` uses the
+existing native `_STRCPY` entry point and HolyC calling convention.
+
+`StreamDir` in `Compiler/CMisc.cpp` obtains the active source directory
+and writes its quoted name to the compile-time stream, as in `CMisc.HC`.
+It skips define-expansion frames to reach the source file. The `__DIR__`
+define invokes it through `#exe`. This is needed by the unchanged
+application loaders rather than a fixed path for any particular app.
+
+`Compiler/AsmInit.cpp` describes the implemented block-device globals
+using the actual `CBlkDevGlbls` fields and array offsets, including
+`home_dir`. Cache pointers remain outside the exposed record members
+until the cache subsystem is implemented. The original `Apps/TimeClock`
+sources use the native queue, date, prompt, and file APIs directly.
+The probes set a temporary RAM home directory and restore it afterward.
 
 ## HolyC exception statements
 

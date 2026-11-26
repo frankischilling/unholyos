@@ -46,7 +46,7 @@ extern "C" CDirContext *DirContextNewCpp(const char *name, uint8_t make_mask,
   auto *buf = text;
   auto select = [&](uint8_t letter) {
     auto *drive = Let2DrvCpp(letter, false);
-    if (!drive || drive->fs_type != FSt_REDSEA)
+    if (!drive || !ReadableFS(*drive))
       return false;
     if (drive == task.cur_dv)
       return true;
@@ -60,7 +60,7 @@ extern "C" CDirContext *DirContextNewCpp(const char *name, uint8_t make_mask,
   if (valid && *buf == '~')
     valid = select('~');
   dirc->dv = task.cur_dv;
-  valid = valid && dirc->dv && dirc->dv->fs_type == FSt_REDSEA;
+  valid = valid && dirc->dv && ReadableFS(*dirc->dv);
   if (valid) {
     if (no_mask) {
       dirc->mask = StrNew("", heap);

@@ -5,14 +5,18 @@ static CDirEntry *FilesFind2(CDrv &dv, const char *dir, const char *mask,
 {
   uint64_t clus, parent;
   size_t size = StrLen(dir);
-  if (!RedSeaDirClus(dv, dir + 2, size - 2, clus))
+  if (!Name2DirClus(dv, dir + 2, size - 2, clus))
     return nullptr;
   while (size > 3 && dir[size - 1] != '/')
     size--;
-  if (!RedSeaDirClus(dv, dir + 2, size - 2, parent))
+  if (!Name2DirClus(dv, dir + 2, size - 2, parent))
     return nullptr;
   CDirEntry *res = nullptr;
-  if (!RedSeaFilesFind(dv, clus, parent, dir, mask, flags, nullptr, res) ||
+  uint64_t dir_size;
+  bool okay=dv.fs_type==FSt_FAT32?
+      FAT32FilesFind(dv,clus,dir,mask,flags,nullptr,res,dir_size):
+      RedSeaFilesFind(dv,clus,parent,dir,mask,flags,nullptr,res);
+  if (!okay ||
       !DirFilesSort(res, false)) {
     DirTreeDelCpp(res);
     return nullptr;
@@ -67,12 +71,12 @@ static bool FileFind2(const char *path, CDirEntry *res, uint64_t flags,
       break;
     uint64_t clus;
     CRedSeaDirEntry de;
-    if (!RedSeaDirClus(*dirc->dv, task.cur_dir, StrLen(task.cur_dir), clus))
+    if (!Name2DirClus(*dirc->dv, task.cur_dir, StrLen(task.cur_dir), clus))
       break;
     if ((!(flags & FUF_JUST_FILES) &&
-         RedSeaFileFind(*dirc->dv, clus, dirc->mask, true, de)) ||
+         FsFileFind(*dirc->dv, clus, dirc->mask, true, de)) ||
         (!(flags & FUF_JUST_DIRS) &&
-         RedSeaFileFind(*dirc->dv, clus, dirc->mask, false, de))) {
+         FsFileFind(*dirc->dv, clus, dirc->mask, false, de))) {
       found = true;
       if (res) {
         auto *cwd = DirCurCpp(nullptr, nullptr);

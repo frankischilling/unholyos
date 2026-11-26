@@ -1,10 +1,17 @@
 #include "../Compress.hpp"
 #include "../KernelB.hpp"
 
-bool RedSeaDirClus(const CDrv &dv, const char *path, size_t count,
+bool FsFileFind(const CDrv &dv,uint64_t dir,const char *name,bool directory,
+                CRedSeaDirEntry &entry)
+{
+  return dv.fs_type==FSt_FAT32?FAT32FileFind(dv,dir,name,directory,entry):
+                              RedSeaFileFind(dv,dir,name,directory,entry);
+}
+
+bool Name2DirClus(const CDrv &dv, const char *path, size_t count,
                    uint64_t &dir)
 {
-  if (!count || *path != '/' || dv.fs_type != FSt_REDSEA)
+  if (!count || *path != '/' || !ReadableFS(dv))
     return false;
   dir = dv.root_clus;
   for (size_t pos = 1; pos < count;) {
@@ -22,11 +29,22 @@ bool RedSeaDirClus(const CDrv &dv, const char *path, size_t count,
     MemCpy(name, path + start, len);
     name[len] = 0;
     CRedSeaDirEntry entry;
-    if (!RedSeaFileFind(dv, dir, name, true, entry))
+    if (!FsFileFind(dv, dir, name, true, entry))
       return false;
     dir = entry.clus;
   }
   return true;
+}
+
+bool RedSeaDirClus(const CDrv &dv,const char *path,size_t count,uint64_t &dir)
+{
+  return dv.fs_type==FSt_REDSEA && Name2DirClus(dv,path,count,dir);
+}
+
+bool FsIsDir(const CDrv &dv,const char *path)
+{
+  uint64_t dir;
+  return Name2DirClus(dv,path,StrLen(path),dir);
 }
 
 bool RedSeaIsDir(const CDrv &dv, const char *path)
@@ -53,8 +71,8 @@ static bool FindInParents(const CDrv &dv, const char *path, const char *name,
       parent--;
     } while (parent > 1 && path[parent - 1] != '/');
     uint64_t dir;
-    if (RedSeaDirClus(dv, path, parent, dir) &&
-        RedSeaFileFind(dv, dir, name, false, entry)) {
+    if (Name2DirClus(dv, path, parent, dir) &&
+        FsFileFind(dv, dir, name, false, entry)) {
       prefix = parent;
       return true;
     }
@@ -62,17 +80,17 @@ static bool FindInParents(const CDrv &dv, const char *path, const char *name,
   return false;
 }
 
-bool RedSeaFileLookup(const CDrv &dv, const char *path, bool alternate,
+bool FsFileLookup(const CDrv &dv, const char *path, bool alternate,
                       bool scan_parents, CRedSeaDirEntry &entry, size_t &prefix)
 {
   prefix = PathFileOffset(path);
   auto *name = path + prefix;
   size_t len = StrLen(name);
   uint64_t dir;
-  if (!len || !RedSeaDirClus(dv, path, prefix, dir))
+  if (!len || !Name2DirClus(dv, path, prefix, dir))
     return false;
   bool exact = len < CDIR_FILENAME_LEN;
-  if (exact && RedSeaFileFind(dv, dir, name, false, entry))
+  if (exact && FsFileFind(dv, dir, name, false, entry))
     return true;
 
   char alt[CDIR_FILENAME_LEN]{};
@@ -85,12 +103,18 @@ bool RedSeaFileLookup(const CDrv &dv, const char *path, bool alternate,
       alt[len] = '.';
       alt[len + 1] = 'Z';
     }
-    if (*alt && RedSeaFileFind(dv, dir, alt, false, entry))
+    if (*alt && FsFileFind(dv, dir, alt, false, entry))
       return true;
   }
   return scan_parents &&
          ((exact && FindInParents(dv, path, name, prefix, entry)) ||
           (*alt && FindInParents(dv, path, alt, prefix, entry)));
+}
+
+bool RedSeaFileLookup(const CDrv &dv,const char *path,bool alternate,
+                      bool scan_parents,CRedSeaDirEntry &entry,size_t &prefix)
+{
+  return dv.fs_type==FSt_REDSEA && FsFileLookup(dv,path,alternate,scan_parents,entry,prefix);
 }
 
 static uint8_t *ExpandBuf(const uint8_t *data, size_t size, size_t &expanded,
@@ -116,7 +140,7 @@ static uint8_t *ExpandBuf(const uint8_t *data, size_t size, size_t &expanded,
   return res;
 }
 
-static uint8_t *RedSeaReadFound(const CDrv &dv, const CRedSeaDirEntry &entry,
+static uint8_t *FileReadFound(const CDrv &dv, const CRedSeaDirEntry &entry,
                                 CHeapCtrl *hc, bool block_storage)
 {
   if (entry.size > SIZE_MAX - BLK_SIZE ||
@@ -128,7 +152,9 @@ static uint8_t *RedSeaReadFound(const CDrv &dv, const CRedSeaDirEntry &entry,
   auto *data = MAlloc(storage + 1, hc);
   if (!data)
     return nullptr;
-  if (!RedSeaFileRead(dv, entry, 0, data, entry.size)) {
+  bool okay=dv.fs_type==FSt_FAT32?FAT32FileRead(dv,entry,0,data,entry.size):
+                                 RedSeaFileRead(dv,entry,0,data,entry.size);
+  if (!okay) {
     Free(data);
     return nullptr;
   }
@@ -153,9 +179,9 @@ uint8_t *FileRead(const CDrv &dv, const char *path, size_t &size, CHeapCtrl *hc)
   size = 0;
   CRedSeaDirEntry entry;
   size_t prefix;
-  if (!RedSeaFileLookup(dv, path, true, false, entry, prefix))
+  if (!FsFileLookup(dv, path, true, false, entry, prefix))
     return nullptr;
-  auto *data = RedSeaReadFound(dv, entry, hc, false);
+  auto *data = FileReadFound(dv, entry, hc, false);
   if (!data)
     return nullptr;
   size = entry.size;
@@ -241,8 +267,8 @@ extern "C" uint8_t *FileReadCpp(const char *filename, size_t *out_size,
       const auto *dv = PathDrive(task, path[0]);
       CRedSeaDirEntry entry;
       size_t prefix;
-      if (dv && RedSeaFileLookup(*dv, path + 2, true, true, entry, prefix) &&
-          (data = RedSeaReadFound(*dv, entry, hc, true))) {
+      if (dv && FsFileLookup(*dv, path + 2, true, true, entry, prefix) &&
+          (data = FileReadFound(*dv, entry, hc, true))) {
         size = entry.size;
         attr = FileAttrCpp(entry.name, entry.attr);
         if (alt && (attr & RS_ATTR_RESIDENT)) {
@@ -275,7 +301,7 @@ extern "C" uint64_t FileWriteCpp(const char *filename, const uint8_t *data,
   if (!path)
     return 0;
   auto *dv = *path && path[1] == ':' ? PathDrive(task, path[0]) : nullptr;
-  if (!dv || dv->bd->type != BDT_RAM || (dv->bd->flags & BDF_READ_ONLY)) {
+  if (!dv || dv->fs_type!=FSt_REDSEA || dv->bd->type != BDT_RAM || (dv->bd->flags & BDF_READ_ONLY)) {
     Free(path);
     return 0;
   }

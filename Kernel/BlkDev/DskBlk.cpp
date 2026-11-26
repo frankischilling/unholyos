@@ -5,6 +5,8 @@ bool BlkDevReadBytes(const CBlkDev &bd, uint8_t *buf, uint64_t pos,
 {
   if (bd.type == BDT_ATAPI)
     return ATAPIReadBytes(bd, buf, pos, bytes);
+  if (bd.type == BDT_ATA)
+    return ATAReadBytes(bd, buf, pos, bytes);
   if (bd.type != BDT_RAM || !bd.RAM_dsk || bd.max_blk < 0 ||
       uint64_t(bd.max_blk) >= SIZE_MAX / BLK_SIZE)
     return false;

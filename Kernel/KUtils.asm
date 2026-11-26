@@ -1,9 +1,11 @@
 GLOBAL CPUStructInit,TaskInit,SET_GS_BASE,SET_FS_BASE,CallModuleMain,CallHolyC0,CallHolyC2
 GLOBAL _MEMCPY,_MEMSET,_MEMSET_U16,_MEMSET_U32,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_CLAMP_I64
-GLOBAL memcpy
+GLOBAL memcpy,memset
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
 GLOBAL Str2I64HC,Str2DateHC
+GLOBAL Str2F64HC,ChkPtrHC,ClassRep2HC,ClassRepHC,ClassRepDHC
+GLOBAL DocMaxHC,DocDataFmtHC,DocDataScanHC
 GLOBAL GetI64HC,GetF64HC,GetDateHC
 GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
@@ -24,7 +26,7 @@ GLOBAL RedSeaISOHC
 GLOBAL SysUntryHC,PutExceptHC,YorNHC
 GLOBAL StrPrintJoinHC,StrPrintHC,CatPrintHC,MStrPrintHC,PrintHC,PrintErrHC,PrintWarnHC
 GLOBAL PutSHC,PutHexHC
-GLOBAL ExePutSHC,ExeFileHC,StreamPrintHC,StreamExePrintHC
+GLOBAL ExePutSHC,ExeFileHC,StreamPrintHC,StreamExePrintHC,StreamDirHC
 GLOBAL PutCharsHC,IsRawHC,DefineLstLoadHC,DefineSubHC,DefineMatchHC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
 GLOBAL DocReadHC,DocTypeHC,TypeHC
@@ -143,6 +145,8 @@ EXTERN FileReadCpp,FileNameAbsCpp,DirNameAbsCpp,DirCurCpp,DirFileCpp,ExtChgCpp,E
 EXTERN CdCpp,IsDirCpp,DirCpp,PutDirLinkCpp,FilesFindCpp,FileFindCpp,FilesFindMatchCpp
 EXTERN DirEntryDelCpp,DirEntryDel2Cpp,DirTreeDelCpp,DirTreeDel2Cpp
 EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp,Str2DateCpp
+EXTERN Str2F64Cpp,ChkPtrCpp,ClassRep2Cpp,ClassRepCpp,ClassRepDCpp
+EXTERN DocMaxCpp,DocDataFmtCpp,DocDataScanCpp
 EXTERN GetI64Cpp,GetF64Cpp,GetDateCpp
 EXTERN FileWriteCpp,BlkDevNextFreeSlotCpp,BlkDevAddCpp,Let2DrvCpp,BlkReadCpp,BlkWriteCpp
 EXTERN FSizeCpp,FOpenCpp,FCloseCpp,FBlkReadCpp,FBlkWriteCpp
@@ -152,7 +156,7 @@ EXTERN RedSeaISOCpp
 EXTERN SysUntryCpp,PutExceptCpp,YorNCpp
 EXTERN StrPrintJoin,CatPrintCpp,MStrPrintCpp,PrintCpp,PrintErrCpp,PrintWarnCpp
 GLOBAL CmpHC
-EXTERN CmpCpp,ExePutSCpp,ExeFileCpp,StreamPrintCpp,StreamExePrintCpp
+EXTERN CmpCpp,ExePutSCpp,ExeFileCpp,StreamPrintCpp,StreamExePrintCpp,StreamDirCpp
 EXTERN PutCharsCpp,PutS,PutHexCpp,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineMatchCpp
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocReadCpp,DocTypeCpp,TypeCpp
@@ -503,6 +507,14 @@ HOLYC_CPP DirContextNewHC,DirContextNewCpp,4
 HOLYC_CPP DirContextDelHC,DirContextDelCpp,2
 HOLYC_CPP Str2I64HC,Str2I64Cpp,3
 HOLYC_CPP Str2DateHC,Str2DateCpp,1
+HOLYC_CPP Str2F64HC,Str2F64Cpp,2
+HOLYC_CPP ChkPtrHC,ChkPtrCpp,1
+HOLYC_CPP ClassRep2HC,ClassRep2Cpp,8
+HOLYC_CPP ClassRepHC,ClassRepCpp,5
+HOLYC_CPP ClassRepDHC,ClassRepDCpp,5
+HOLYC_CPP DocMaxHC,DocMaxCpp,1
+HOLYC_CPP DocDataFmtHC,DocDataFmtCpp,3
+HOLYC_CPP DocDataScanHC,DocDataScanCpp,2
 HOLYC_CPP FileWriteHC,FileWriteCpp,5
 HOLYC_CPP FSizeHC,FSizeCpp,1
 HOLYC_CPP FOpenHC,FOpenCpp,3
@@ -541,6 +553,7 @@ HOLYC_CPP ExePutSHC,ExePutSCpp,4
 HOLYC_CPP CmpHC,CmpCpp,4
 HOLYC_CPP ExeFileHC,ExeFileCpp,2
 HOLYC_PRINT StreamPrintHC,StreamPrintCpp,1,1
+HOLYC_CPP StreamDirHC,StreamDirCpp,0
 HOLYC_PRINT StreamExePrintHC,StreamExePrintCpp,1,1
 HOLYC_CPP IsRawHC,IsRawCpp,0
 HOLYC_CPP DefineSubHC,DefineSubCpp,2
@@ -739,6 +752,17 @@ memcpy:
 	MOV	RCX,RDX
 	CLD
 	REP MOVSB
+	RET
+
+; System V memset takes a byte value in ESI and returns the original pointer.
+; Keep the HolyC _MEMSET entry and its advanced-pointer return unchanged.
+memset:
+	MOV	R8,RDI
+	MOV	EAX,ESI
+	MOV	RCX,RDX
+	CLD
+	REP STOSB
+	MOV	RAX,R8
 	RET
 
 _MEMCPY:

@@ -495,6 +495,27 @@ static CExeResult BootFileProgramReport(const CDrv &dv, const char *path)
   return run;
 }
 
+static void BootTimeClockReport(const CDrv &dvd)
+{
+  CRedSeaDirEntry entry;
+  size_t prefix;
+  if (!MountedDrive('B') ||
+      !RedSeaFileLookup(dvd,"/TimeClockProbe.HC",false,false,entry,prefix))
+    return;
+  auto *task=CurrentTask();
+  auto *saved_dir=DirCurCpp(task,task);
+  auto *home=StrNew("B:/",task->data_heap);
+  if (saved_dir && home) {
+    auto *saved_home=blkdev.home_dir;
+    blkdev.home_dir=home;
+    BootFileProgramReport(dvd,"/TimeClockProbe.HC");
+    blkdev.home_dir=saved_home;
+    CdCpp(saved_dir,false);
+  }
+  Free(home);
+  Free(saved_dir);
+}
+
 static void BootGuestFileReport(const CDrv &ram, const char *path)
 {
   CRedSeaDirEntry entry;
@@ -620,10 +641,27 @@ static void BootVariadicReport(const CDrv &dvd, CTask &task,
     BootGuestFileReport(*ram, path);
 }
 
+extern "C" CBlkDev *BlkDevNextFreeSlotCpp(uint8_t letter, int64_t type);
+extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole,
+                               uint8_t make_free);
+
 static void BootISOReport(const CDrv &dv)
 {
+  CRedSeaDirEntry entry;
+  size_t prefix;
+  auto *source = MountedDrive('B');
+  if (!source || !RedSeaFileLookup(dv, "/RedSeaISOProbe.HC", false, false,
+                                  entry, prefix))
+    return;
+
+  // Keep the fixed-size file-operation test drive intact. Reserve space for
+  // both source volumes plus the ISO headers and directory/bitmap overhead.
+  auto *bd = BlkDevNextFreeSlotCpp('A', BDT_RAM);
+  bd->max_blk = dv.size + source->size + 1024 - 1;
+  if (BlkDevAddCpp(bd, INT64_MIN, false, true) != 1)
+    return;
   auto run = BootFileProgramReport(dv, "/RedSeaISOProbe.HC");
-  if (auto *ram = MountedDrive('B'); ram && run.okay) {
+  if (auto *ram = MountedDrive('A'); ram && run.okay) {
     BootGuestFileReport(*ram, "/GuestBuild.ISO.C");
     BootGuestFileReport(*ram, "/GuestData.ISO.C");
   }
@@ -1396,6 +1434,9 @@ void BootProbe()
   SerialPutS("\r\n");
   if (adam_task->cur_dv) {
     BootDVDReport(*adam_task->cur_dv);
+    if (MountedDrive('C'))
+      BootFileProgramReport(*adam_task->cur_dv,"/Fat32ReadProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv,"/Fat32RejectProbe.HC");
     BootStartupReport(*adam_task->cur_dv);
     BootLexReport(*adam_task->cur_dv);
     BootDirectiveReport(*adam_task->cur_dv);
@@ -1436,6 +1477,7 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/MemberMetaProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/MemSetProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ClassMeta.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/ClassReportProbe.HC");
     BootVariadicReport(*adam_task->cur_dv, *adam_task, "/LastClassProbe.HC",
                        "/LastClassProbe.BIN.Z",
                        "Cmp(\"::/LastClassProbe.HC\",,\"B:/LastClassProbe.BIN.Z\");");
@@ -1468,6 +1510,10 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/DirContextProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FileStreamProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FileCopyProbe.HC");
+    BootVariadicReport(*adam_task->cur_dv, *adam_task, "/Doc/QueueProbe.HC",
+                       "/QueueProbe.BIN.Z",
+                       "Cmp(\"::/Doc/QueueProbe.HC\",,\"B:/QueueProbe.BIN.Z\");");
+    BootTimeClockReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/FileOperationsProbe.HC");
     {
       auto run_level = SYS_RUN_LEVEL;

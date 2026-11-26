@@ -222,7 +222,7 @@ static_assert(sizeof(CBinFile) == BIN_HEADER_SIZE &&
 constexpr unsigned BOOT_SRC_DVD = 4;
 constexpr uint32_t BDT_NULL = 0, BDT_RAM = 1, BDT_ATA = 2,
                    BDT_ISO_FILE_READ = 3, BDT_ISO_FILE_WRITE = 4, BDT_ATAPI = 5;
-constexpr uint16_t FSt_REDSEA = 1;
+constexpr uint16_t FSt_REDSEA = 1, FSt_FAT32 = 2;
 constexpr uint8_t MBR_PT_REDSEA = 0x88;
 constexpr uint32_t BD_SIGNATURE_VAL = 0x56534442;  // BDSV
 constexpr uint32_t DRV_SIGNATURE_VAL = 0x56535644; // DVSV
@@ -561,6 +561,56 @@ struct CRedSeaBoot
   uint8_t code[462];
   uint16_t signature2;
 };
+
+struct [[gnu::packed]] CFAT32Boot
+{
+  uint8_t jump_and_nop[3], oem_name[8];
+  uint16_t bytes_per_sect;
+  uint8_t sects_per_clus;
+  uint16_t reserved_sects;
+  uint8_t copies_of_fat;
+  uint16_t max_root_dir_entries, old_sects_in_drv;
+  uint8_t media_desc;
+  uint16_t old_sects_per_fat, sects_per_track, num_heads;
+  uint32_t hidden_sects, sects, sects_per_fat;
+  uint16_t flags, version;
+  uint32_t root_clus;
+  uint16_t file_system_info_sect, backup_boot_sect;
+  uint8_t reserved[12], log_drv_num, unused, ext_signature;
+  uint32_t serial_num;
+  uint8_t vol_name[11], fat_name[8], code[420];
+  uint16_t signature;
+};
+
+struct [[gnu::packed]] CFAT32FileInfoSect
+{
+  uint32_t signature1;
+  uint8_t unknown[480];
+  uint32_t signature2, free_clus, most_recently_alloced;
+  uint8_t reserved[12];
+  uint32_t signature3;
+};
+
+struct [[gnu::packed]] CFAT32DirEntry
+{
+  uint8_t name[11], attr, NTres, CrtTimeTenth;
+  uint16_t CrtTime, CrtDate, LstAccDate, clus_hi, WrtTime, WrtDate, clus_lo;
+  uint32_t size;
+};
+
+struct [[gnu::packed]] CFAT32DirEntryLong
+{
+  uint8_t ord;
+  uint16_t name1[5];
+  uint8_t attr, type, xsum;
+  uint16_t name2[6], zero, name3[2];
+};
+
+static_assert(sizeof(CFAT32Boot)==512 && offsetof(CFAT32Boot,root_clus)==44 &&
+              offsetof(CFAT32Boot,signature)==510);
+static_assert(sizeof(CFAT32FileInfoSect)==512 && sizeof(CFAT32DirEntry)==32 &&
+              offsetof(CFAT32DirEntry,WrtTime)==22 &&
+              sizeof(CFAT32DirEntryLong)==32);
 
 struct CRedSeaDirEntry
 {
@@ -968,7 +1018,13 @@ constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
                    DOCEF_ESC = 1ull << 37, DOCEF_QUIT = 1ull << 38,
                    DOCEF_FROM_START = 1ull << 39, DOCEF_HAS_BORDER = 1ull << 40,
                    DOCEF_SOLID_BORDER = 1ull << 41, DOCEF_BORDER_PLOT = 1ull << 42,
-                   DOCEF_REMALLOC_DATA = 1ull << 48, DOCEF_HOLD = 1ull << 51,
+                   DOCEF_CHECKED_COLLAPSED = 1ull << 43,
+                   DOCEF_CHECK_COLLAPSABLE = 1ull << 44,
+                   DOCEF_REFRESH_DATA = 1ull << 45,
+                   DOCEF_UPDATE_DATA = 1ull << 46,
+                   DOCEF_DEREF_DATA = 1ull << 47,
+                   DOCEF_REMALLOC_DATA = 1ull << 48,
+                   DOCEF_HAS_TERMINATOR = 1ull << 49, DOCEF_HOLD = 1ull << 51,
                    DOCEF_TREE = 1ull << 52,
                    DOCEF_LST = 1ull << 53, DOCEF_SKIP = 1ull << 54,
                    DOCEF_FILTER_SKIP = 1ull << 57, DOCEF_NO_CLICK_ON = 1ull << 58,
@@ -983,6 +1039,7 @@ constexpr uint32_t RECALCt_NORMAL = 0, RECALCt_FIND_CURSOR = 1,
                    RECALCt_TO_SCRN = 2, RECALCG_MASK = 0xFF,
                    RECALCF_HAS_CURSOR = 0x100;
 constexpr int64_t DOC_DFT = INT32_MIN;
+constexpr int64_t DOCM_CANCEL = -1;
 
 struct CDocSettings
 {

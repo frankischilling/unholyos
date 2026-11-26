@@ -23,7 +23,11 @@ inline size_t StrLen(const char *str)
 extern "C" int64_t StrCmpCpp(const uint8_t *a, const uint8_t *b);
 extern "C" int64_t Str2I64Cpp(const char *text, int64_t radix,
                               const char **end);
+extern "C" uint64_t Str2F64Cpp(const char *text, const char **end);
 extern "C" uint64_t Str2DateCpp(const char *src);
+bool ChkPtr(const void *ptr);
+bool ChkPtrRange(const void *ptr, size_t size);
+extern "C" uint64_t ChkPtrCpp(const void *ptr);
 
 inline CTask *CurrentTask()
 {
@@ -368,6 +372,8 @@ uint32_t PCIReadU32(uint8_t bus, uint8_t device, uint8_t function, uint8_t reg);
 int32_t PCIClassFind(uint32_t class_code, uint16_t index);
 
 uint32_t ATAProbe(const CBlkDev &bd);
+bool ATAReadCapacity(CBlkDev &bd);
+bool ATAReadBytes(const CBlkDev &bd, uint8_t *buf, uint64_t pos, size_t bytes);
 bool ATAPIStartStop(const CBlkDev &bd, bool start);
 bool ATAPIReadCapacity(CBlkDev &bd);
 bool ATAPIReadBlks2(const CBlkDev &bd, uint8_t *buf, uint32_t lba,
@@ -396,6 +402,25 @@ bool RedSeaFileLookup(const CDrv &dv, const char *path, bool alternate,
 bool RedSeaDirClus(const CDrv &dv, const char *path, size_t count,
                    uint64_t &dir);
 bool RedSeaIsDir(const CDrv &dv, const char *path);
+bool FAT32Init(CDrv &dv);
+bool FAT32FileFind(const CDrv &dv, uint64_t dir, const char *name,
+                   bool directory, CRedSeaDirEntry &entry);
+bool FAT32FileRead(const CDrv &dv, const CRedSeaDirEntry &entry, uint64_t pos,
+                   uint8_t *buf, size_t bytes);
+bool FAT32FilesFind(CDrv &dv, uint64_t clus, const char *directory,
+                    const char *mask, uint64_t flags, CDirEntry *parent,
+                    CDirEntry *&res, uint64_t &dir_size);
+bool FAT32ReadBlocks(CFile &f, uint8_t *buf, uint64_t blk, uint64_t cnt);
+inline bool ReadableFS(const CDrv &dv)
+{
+  return dv.fs_type==FSt_REDSEA || dv.fs_type==FSt_FAT32;
+}
+bool Name2DirClus(const CDrv &dv, const char *path, size_t count, uint64_t &dir);
+bool FsIsDir(const CDrv &dv, const char *path);
+bool FsFileFind(const CDrv &dv, uint64_t dir, const char *name,
+                bool directory, CRedSeaDirEntry &entry);
+bool FsFileLookup(const CDrv &dv, const char *path, bool alternate,
+                   bool scan_parents, CRedSeaDirEntry &entry, size_t &prefix);
 uint64_t RedSeaAllocClus(const CDrv &dv, uint64_t blocks);
 CDrv *PathDrive(const CTask &task, char letter);
 uint64_t RedSeaFileWrite(CDrv &dv, const char *path, const uint8_t *data,

@@ -111,13 +111,68 @@ extern "C" CBlkDev *BlkDevNextFreeSlotCpp(uint8_t letter, int64_t type)
   RaiseHolyC(0x7665446B6C42); // BlkDev
 }
 
-extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t, uint8_t,
+static int64_t BlkDevAddATA(CBlkDev *bd,int64_t prt_num,bool whole_drv)
+{
+  if (whole_drv || bd->first_drv_let<'C' || bd->first_drv_let>'L' ||
+      !bd->base0 || bd->unit>1)
+    return 0;
+  CBlkDev device;
+  MemCpy(&device,bd,sizeof(device));
+  if (ATAProbe(device)!=BDT_ATA || !ATAReadCapacity(device))
+    return 0;
+  uint8_t mbr[BLK_SIZE];
+  if (!ATAReadBytes(device,mbr,0,sizeof(mbr)) || mbr[510]!=0x55 || mbr[511]!=0xAA)
+    return 0;
+  int64_t res=0,num=0;
+  char letter=device.first_drv_let;
+  for (unsigned i=0;i<4;i++) {
+    auto *p=mbr+446+16*i;
+    if (!p[4])
+      continue;
+    auto current=num++;
+    if ((prt_num>=0 && current!=prt_num) ||
+        (p[4]!=0x0B && p[4]!=0x0C && p[4]!=0x1B && p[4]!=0x1C))
+      continue;
+    uint32_t offset,size;
+    MemCpy(&offset,p+8,sizeof(offset));
+    MemCpy(&size,p+12,sizeof(size));
+    if (!offset || !size || uint64_t(offset)+size>uint64_t(device.max_blk)+1)
+      continue;
+    while (letter<='L' && MountedDrive(letter))
+      letter++;
+    if (letter>'L')
+      break;
+    CDrv drive{};
+    drive.bd=&device;
+    drive.drv_offset=offset;
+    drive.size=size;
+    drive.prt_num=current;
+    drive.drv_let=letter;
+    if (!FAT32Init(drive))
+      continue;
+    drive.dv_signature=DRV_SIGNATURE_VAL;
+    drive.bd=bd;
+    MemCpy(blkdev.let_to_drv[letter-'A'],&drive,sizeof(drive));
+    res++;
+    letter++;
+  }
+  if (res) {
+    device.bd_signature=BD_SIGNATURE_VAL;
+    device.flags|=BDF_INITIALIZED | BDF_READ_ONLY;
+    MemCpy(bd,&device,sizeof(device));
+  }
+  return res;
+}
+
+extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole_drv,
                                 uint8_t make_free)
 {
   CMemLock lock(mount_flags);
   unsigned slot = 0;
   while (slot < BLKDEVS_NUM && bd != blkdev.blkdevs + slot)
     slot++;
+  if (slot!=BLKDEVS_NUM && bd->bd_signature!=BD_SIGNATURE_VAL && bd->type==BDT_ATA)
+    return BlkDevAddATA(bd,prt_num,whole_drv);
   if (slot == BLKDEVS_NUM || bd->bd_signature == BD_SIGNATURE_VAL ||
       bd->type != BDT_RAM || bd->first_drv_let < 'A' ||
       bd->first_drv_let > 'B' || bd->drv_offset < 0 ||
@@ -216,5 +271,14 @@ CDrv *BlkDevsInitAll()
   drive->drv_let = dvd->first_drv_let;
   drive->dv_signature = DRV_SIGNATURE_VAL;
   blkdev.dvd_boot_is_good = true;
+  // Discover the primary legacy IDE disk without touching its contents.
+  if (dvd->base0!=0x1F0 || dvd->unit!=0) {
+    if (auto *disk=BlkDevNextFreeSlot('C',BDT_ATA)) {
+      disk->base0=0x1F0;
+      disk->base1=0x3F4;
+      disk->unit=0;
+      BlkDevAddCpp(disk,INT64_MIN,false,false);
+    }
+  }
   return drive;
 }

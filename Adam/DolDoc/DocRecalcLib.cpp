@@ -1,5 +1,16 @@
 #include "DolDoc.hpp"
 
+extern "C" int64_t DocMaxCpp(int64_t entries)
+{
+  if (auto *doc = DocPut()) {
+    CDocLock lock(*doc);
+    auto old = doc->max_entries;
+    doc->max_entries = entries;
+    return old;
+  }
+  return 0;
+}
+
 bool DocDelToNum(CDoc &doc, int64_t count)
 {
   bool removed = false;
