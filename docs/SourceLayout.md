@@ -420,6 +420,15 @@ registry and raw console rendering remain pending.
 `TextLenAttrStr` in `Adam/Gr/GrTextBase.asm` clips packed character
 and attribute cells. `TextPrint` in `GrTextBase.cpp` formats through
 the native variadic bridge and uses the clipped text-layer writer.
+The typed memory fills in `Kernel/KUtils.asm` use the reference
+`REP STOSB/W/D/Q` sequences and return the end pointer. The native
+compiler exposes their typed signatures and packed text attribute
+constants. `Adam/DolDoc/DocRecalcLib.cpp` implements the cursor,
+cursor highlighting, and scrollbar flag setters and returns the
+previous visibility state. The compiler also exposes the task's
+window width and height used by the original `CharDemo.HC` and
+`Maze.HC`. These demos run their own HolyC code and draw callbacks;
+the host driver supplies keyboard and mouse input, not game logic.
 The bootstrap puts its first status line in
 `gr.text_base`. `GrUpdateScrn` calls `gr.fp_final_scrn_update` on an
 on-top alias of the composite. `WinFinalUpdate` invokes `DrawMs` before

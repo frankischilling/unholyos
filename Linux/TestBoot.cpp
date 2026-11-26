@@ -218,7 +218,8 @@ class CMonitor
 {
 public:
   CMonitor(const char *qemu, const fs::path &iso, const fs::path &dir,
-           const char *machine, const char *memory, bool secondary_slave)
+           const char *machine, const char *memory, bool secondary_slave,
+           bool debugcon = false)
       : deadline(Clock::now() + 30s)
   {
     std::string image = fs::absolute(iso).string();
@@ -231,6 +232,7 @@ public:
     drive += ",if=ide,index=3,media=cdrom";
     std::string serial = "file:" + (dir / "serial.log").string();
     std::string log = (dir / "qemu.log").string();
+    std::string debug = "file:" + (dir / "debugcon.bin").string();
 
     int fd[2];
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, fd) < 0)
@@ -244,6 +246,13 @@ public:
         _exit(126);
       close(fd[1]);
       close(err);
+      if (debugcon)
+        execlp(qemu, qemu, "-machine", machine, "-cpu", "qemu64", "-m", memory,
+               "-boot", "d", "-cdrom", image.c_str(), "-display", "none",
+               "-monitor", "none", "-serial", serial.c_str(), "-qmp",
+               "stdio", "-debugcon", debug.c_str(), "-gdb",
+               "tcp:127.0.0.1:45362", "-no-reboot",
+               static_cast<char *>(nullptr));
       execlp(qemu, qemu, "-machine", machine, "-cpu", "qemu64", "-m", memory,
              "-boot", "d", secondary_slave ? "-drive" : "-cdrom",
              secondary_slave ? drive.c_str() : image.c_str(), "-display",
@@ -1635,6 +1644,8 @@ static void DriveDigits(CMonitor &vm, const fs::path &dir,
         "Digits did not restore the terminal after Shift-Escape");
   std::cout << "Digits.HC matched seeded patterns, score, restart and Escape\n";
 }
+
+#include "TestCharacterGraphics.hpp"
 
 static void DriveUserTask(CMonitor &vm, const fs::path &dir,
                           const std::string &boot)
@@ -3250,6 +3261,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/FileOperationsProbe.HC", file_operations_output, '1');
     CheckProgramOutput(boot, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
     CheckProgramOutput(boot, "/ClassMeta.HC", class_meta_output, '1');
+    CheckProgramOutput(boot, "/MemSetProbe.HC", "Memory set probe 3FF\n", '1');
     CheckProgramOutput(boot, "/LastClassProbe.HC", last_class_output, '1');
     CheckProgramOutput(boot, "/LastClassProbe.BIN.Z", last_class_output, '1');
     CheckProgramOutput(boot, "/DateOffsetProbe.HC",
@@ -3357,6 +3369,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/FileOperationsProbe.HC", file_operations_output, '1');
       CheckProgramOutput(output, "/MemberMetaProbe.HC", "Member metadata 7F\n", '1');
       CheckProgramOutput(output, "/ClassMeta.HC", class_meta_output, '1');
+      CheckProgramOutput(output, "/MemSetProbe.HC", "Memory set probe 3FF\n", '1');
       CheckProgramOutput(output, "/LastClassProbe.HC", last_class_output, '1');
       CheckProgramOutput(output, "/LastClassProbe.BIN.Z", last_class_output, '1');
       CheckProgramOutput(output, "/DateOffsetProbe.HC",
@@ -3806,6 +3819,29 @@ static void TestBoot(const char *qemu, const fs::path &iso,
 
 int main(int argc, char **argv)
 {
+  if ((argc == 4 || argc == 5) &&
+      (std::string_view(argv[1]) == "--character-graphics" ||
+       std::string_view(argv[1]) == "--character-graphics-reference")) {
+    bool reference = std::string_view(argv[1]) == "--character-graphics-reference";
+    char path[] = "/tmp/unholyos-character-XXXXXX";
+    if (argc == 4 && !mkdtemp(path))
+      return 1;
+    fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, reference);
+      vm.Connect();
+      DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
+                             reference);
+      vm.Command(R"({"execute":"quit"})");
+      if (argc == 4)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
   if ((argc == 4 || argc == 5) && std::string_view(argv[1]) == "--digits") {
     char path[] = "/tmp/unholyos-digits-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -3830,7 +3866,9 @@ int main(int argc, char **argv)
     std::cerr << "Usage: " << argv[0]
               << " qemu image.iso kernel [startup-test.iso]\n"
               << "       " << argv[0]
-              << " --digits qemu image.iso [capture-dir]\n";
+              << " --digits qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --character-graphics[-reference] qemu image.iso [capture-dir]\n";
     return 2;
   }
   try {
