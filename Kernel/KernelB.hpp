@@ -232,26 +232,68 @@ void FifoI64Del(CFifoI64 *f);
 
 template <typename T> inline int64_t FifoCnt(const CFifo<T> &f)
 {
-  return (f.in_ptr - f.out_ptr) & f.mask;
+  uint64_t flags;
+  asm volatile("pushfq; popq %0; cli" : "=r"(flags) : : "memory");
+  int64_t res = f.out_ptr > f.in_ptr
+                    ? f.mask + 1 - (f.out_ptr - f.in_ptr)
+                    : f.in_ptr - f.out_ptr;
+  SetRFlags(flags);
+  return res;
 }
 
 template <typename T> inline bool FifoIns(CFifo<T> &f, T value)
 {
+  uint64_t flags;
+  asm volatile("pushfq; popq %0; cli" : "=r"(flags) : : "memory");
   auto next = (f.in_ptr + 1) & f.mask;
-  if (next == f.out_ptr)
+  if (next == f.out_ptr) {
+    SetRFlags(flags);
     return false;
+  }
   f.buf[f.in_ptr] = value;
   f.in_ptr = next;
+  SetRFlags(flags);
+  return true;
+}
+
+template <typename T> inline bool FifoRem(CFifo<T> &f, T *value)
+{
+  uint64_t flags;
+  asm volatile("pushfq; popq %0; cli" : "=r"(flags) : : "memory");
+  if (f.in_ptr == f.out_ptr) {
+    SetRFlags(flags);
+    return false;
+  }
+  *value = f.buf[f.out_ptr];
+  f.out_ptr = (f.out_ptr + 1) & f.mask;
+  SetRFlags(flags);
   return true;
 }
 
 template <typename T> inline bool FifoRem(CFifo<T> &f, T &value)
 {
-  if (f.in_ptr == f.out_ptr)
+  return FifoRem(f, &value);
+}
+
+template <typename T> inline bool FifoPeek(const CFifo<T> &f, T *value)
+{
+  uint64_t flags;
+  asm volatile("pushfq; popq %0; cli" : "=r"(flags) : : "memory");
+  if (f.in_ptr == f.out_ptr) {
+    SetRFlags(flags);
     return false;
-  value = f.buf[f.out_ptr];
-  f.out_ptr = (f.out_ptr + 1) & f.mask;
+  }
+  *value = f.buf[f.out_ptr];
+  SetRFlags(flags);
   return true;
+}
+
+template <typename T> inline void FifoFlush(CFifo<T> &f)
+{
+  uint64_t flags;
+  asm volatile("pushfq; popq %0; cli" : "=r"(flags) : : "memory");
+  f.out_ptr = f.in_ptr;
+  SetRFlags(flags);
 }
 
 template <typename T> void QueInit(T *&next, T *&last)
