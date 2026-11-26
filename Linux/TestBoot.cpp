@@ -1988,6 +1988,23 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
     }
     throw std::runtime_error(error);
   };
+  // QMP acknowledges injection, not delivery through the guest PS/2 driver.
+  // Resolve the exported mouse state and wait for the input to be consumed.
+  auto mouse_state = [&]() {
+    uint64_t e801 = ReadPhysical<1>(vm, 0x7C40, 'h')[0];
+    uint64_t table = 0x100000 + e801 * 1024 - 0x4400 + 0x28;
+    constexpr uint64_t hash = ('m' * 2 + 's') & 1023;
+    auto entry = ReadPhysical<1>(vm, table + hash * 8)[0];
+    for (unsigned i = 0; entry && i < 1024; ++i) {
+      auto header = ReadPhysical<3>(vm, entry);
+      if (static_cast<uint32_t>(header[2]) == 0x08000001 &&
+          ReadPhysical<3>(vm, header[1], 'b') ==
+              std::array<uint64_t, 3>{'m', 's', 0})
+        return ReadPhysical<1>(vm, entry + 64)[0];
+      entry = header[0];
+    }
+    throw std::runtime_error("Missing exported mouse state");
+  };
 
   constexpr auto start_body = "Public Domain Operating System";
   for (bool right_pane : {false, true}) {
@@ -2291,11 +2308,21 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   Check(shape_pixels(tree) > 800, "CommonAncestor.HC did not draw the tree");
 
   constexpr uint64_t scroll_x = 0x100, scroll_y = 0x108, scroll_z = 0x110;
+  const auto mouse = mouse_state();
+  constexpr uint64_t mouse_lb = 160;
+  auto wait_button = [&](bool down) {
+    for (unsigned i = 0; i < 100; ++i) {
+      if (ReadPhysical<1>(vm, mouse + mouse_lb, 'b')[0] == uint64_t(down))
+        return;
+      std::this_thread::sleep_for(20ms);
+    }
+    throw std::runtime_error("Guest did not consume the left button transition");
+  };
   vm.ResetDeadline(10s);
   KeyboardKey(vm, "ctrl", true);
   std::this_thread::sleep_for(125ms);
   MouseButton(vm, "left", true);
-  std::this_thread::sleep_for(125ms);
+  wait_button(true);
   MouseMove(vm, 98, 70);
   wait_mem(left + scroll_x, 48, "Ctrl-left drag did not pan horizontally");
   wait_mem(left + scroll_y, 32, "Ctrl-left drag did not pan vertically");
@@ -2314,14 +2341,17 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   };
   Check(wait_tree(48, 32), "The tree did not move with the window pan");
   MouseButton(vm, "left", false);
-  std::this_thread::sleep_for(125ms);
+  wait_button(false);
+  const auto before_move = ReadPhysical<2>(vm, mouse);
   MouseMove(vm, 20, 16);
-  std::this_thread::sleep_for(125ms);
+  wait_mem(mouse, before_move[0] + 10, "Released mouse did not move horizontally");
+  wait_mem(mouse + 8, before_move[1] + 8, "Released mouse did not move vertically");
+  Check(wait_tree(48, 32), "The released mouse moved the tree");
   Check(ReadPhysical<2>(vm, left + scroll_x) == std::array<uint64_t, 2>{48, 32},
         "The pan changed after releasing the left button");
 
   MouseButton(vm, "left", true);
-  std::this_thread::sleep_for(125ms);
+  wait_button(true);
   MouseMove(vm, -114, -80);
   wait_mem(left + scroll_x, uint64_t(-16),
            "Negative horizontal pan was not snapped");
@@ -2329,6 +2359,7 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
            "Negative vertical pan was not snapped");
   Check(wait_tree(-16, -8), "The tree did not move to the negative pan");
   MouseButton(vm, "left", false);
+  wait_button(false);
   MouseButton(vm, "right", true);
   wait_mem(left + scroll_x, 0, "Ctrl-right did not reset the horizontal pan");
   wait_mem(left + scroll_y, 0, "Ctrl-right did not reset the vertical pan");
