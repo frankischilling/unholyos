@@ -6,6 +6,8 @@
 
 extern "C" void DCRstCpp(CDC *dc);
 
+static constexpr uint64_t DOCF_WORD_WRAP = DOCEF_WORD_WRAP;
+
 static bool SameText(const CDocEntryBase &a, const CDocEntryBase &b)
 {
   return a.Type() == DOCT_TEXT && b.Type() == DOCT_TEXT && a.tag && b.tag &&
@@ -30,6 +32,86 @@ static bool JoinText(CDoc &doc, CDocEntryBase &entry, CDocEntryBase &next)
   entry.tag = both;
   DocEntryDel(doc, next);
   return true;
+}
+
+static void DocWordWrapDel(CDoc &doc, CDocEntryBase &entry, bool same_win)
+{
+  while (entry.next != &doc.head) {
+    auto *next = entry.next;
+    if (!same_win && next->Type() == DOCT_SOFT_NEW_LINE) {
+      if (doc.cur_entry == next) {
+        doc.cur_entry = next->next;
+        doc.cur_col = doc.cur_entry->min_col;
+      }
+      DocEntryDel(doc, *next);
+    } else if (!SameText(entry, *next) || !JoinText(doc, entry, *next))
+      break;
+  }
+}
+
+static CDocEntryBase *DocSplitTag(CDoc &doc, CDocEntryBase &entry, size_t i)
+{
+  auto *suffix = DocEntryNewBase(doc, entry.type, entry.de_flags);
+  auto *newline = DocEntryNewBase(
+      doc, DOCT_SOFT_NEW_LINE | (entry.type & 0xFFFFFF00),
+      entry.de_flags & ~DOCEF_TAG);
+  auto *heap = MemTaskHeap(doc.mem_task);
+  auto *tail = suffix ? StrNew(entry.tag + i, heap) : nullptr;
+  if (!suffix || !newline || !tail) {
+    Free(tail);
+    Free(suffix);
+    Free(newline);
+    return nullptr;
+  }
+  suffix->tag = tail;
+  suffix->max_col = StrLen(tail);
+  entry.tag[i] = 0;
+  entry.max_col = i;
+  DocEntryInsert(*suffix, *entry.next);
+  DocEntryInsert(*newline, *suffix);
+  if (doc.cur_entry == &entry && doc.cur_col >= int64_t(i)) {
+    doc.cur_entry = suffix;
+    doc.cur_col -= i;
+  }
+  return newline;
+}
+
+static CDocEntryBase *DocWordWrapAdd(CDoc &doc, CDocEntryBase &entry,
+                                    uint32_t &len, int64_t right_margin,
+                                    int64_t x, int64_t left_margin)
+{
+  int64_t i = right_margin + 1 - x;
+  // Keep the last column free for the cursor at the end of editable text.
+  if (entry.Type() == DOCT_TEXT && !(entry.de_flags & ~DOCG_PLAIN_ENTRY)) {
+    if ((doc.cur_entry == entry.next &&
+         doc.cur_col == int64_t(entry.next->min_col)) ||
+        (doc.cur_entry == &entry && doc.cur_col == i))
+      --i;
+    if (int64_t(len) > i) {
+      for (int64_t j = i; j > 8 - (x + 1 - left_margin) && j >= 0; --j)
+        if (entry.tag[j] == ' ' || entry.tag[j] == CH_SHIFT_SPACE) {
+          i = j + 1;
+          break;
+        }
+      if (i > 0 && i < len && DocSplitTag(doc, entry, i)) {
+        len = i;
+        return nullptr;
+      }
+    }
+    if (int64_t(len) == i)
+      return nullptr;
+  }
+  if (int64_t(len) >= i && entry.last != &doc.head &&
+      entry.last->Type() != DOCT_SOFT_NEW_LINE &&
+      entry.last->Type() != DOCT_NEW_LINE &&
+      entry.last->Type() != DOCT_CURSOR_MOVEMENT) {
+    auto *newline = DocEntryNewBase(
+        doc, DOCT_SOFT_NEW_LINE | (entry.type & 0xFFFFFF00), DOCEF_WORD_WRAP);
+    if (newline)
+      DocEntryInsert(*newline, entry);
+    return newline;
+  }
+  return nullptr;
 }
 
 static void DocSetColor(CDocSettings &settings, int64_t attr, uint8_t type)
@@ -252,7 +334,13 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
   int32_t x = 0, y = 0, page_line = 0;
   int64_t num_entries = 0;
   int64_t right_margin = task ? task->win_width - 1 : 0;
-  doc.flags &= ~DOCF_BWD_MOVEMENT;
+  const bool same_win = task && doc.old_win_left == task->win_left &&
+                        doc.old_win_right == task->win_right &&
+                        doc.old_win_top == task->win_top &&
+                        doc.old_win_bottom == task->win_bottom &&
+                        doc.old_cur_entry == doc.cur_entry &&
+                        doc.old_cur_col == doc.cur_col;
+  doc.flags &= ~(DOCF_BWD_MOVEMENT | DOCF_WORD_WRAP);
   if (full_refresh)
     doc.min_x = doc.max_x = doc.min_y = doc.max_y = 0;
   for (auto *entry = head.next; entry != &head;) {
@@ -269,13 +357,9 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
       entry = next;
       continue;
     }
-    while (full_refresh && entry->next != &head &&
-           SameText(*entry, *entry->next))
-      if (!JoinText(doc, *entry, *entry->next))
-        break;
-    ++num_entries;
+    if (full_refresh)
+      DocWordWrapDel(doc, *entry, same_win);
     auto type = entry->Type();
-    const auto *full = reinterpret_cast<const CDocEntry *>(entry);
     if ((entry->de_flags & (DOCEF_TAG_CB | DOCEF_DEFINE)) &&
         !(entry->de_flags & (DOCEF_LST | DOCEF_SKIP | DOCEF_FILTER_SKIP)))
       DocRefreshTag(doc, *entry);
@@ -285,6 +369,18 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     if (task && (entry->de_flags & position))
       DocRecalcXY(doc, *task, entry->de_flags, len, right_margin, settings, x,
                   y, page_line);
+    if (full_refresh && task && len && (doc.flags & DOCF_WORD_WRAP)) {
+      if (auto *newline = DocWordWrapAdd(doc, *entry, len, right_margin, x,
+                                         settings.left_margin)) {
+        entry = newline;
+        type = DOCT_SOFT_NEW_LINE;
+        len = 0;
+      }
+    }
+    const auto *full = reinterpret_cast<const CDocEntry *>(entry);
+    ++num_entries;
+    entry->de_flags = (entry->de_flags & ~DOCEF_WORD_WRAP) |
+                      (doc.flags & DOCF_WORD_WRAP);
     if (full_refresh) {
       entry->x = x;
       entry->y = y;
@@ -399,6 +495,11 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
       x = settings.left_margin + settings.indent;
     } else if (type >= DOCT_FOREGROUND && type <= DOCT_DFT_BACKGROUND) {
       DocSetColor(settings, full->attr, type);
+    } else if (type == DOCT_WORD_WRAP) {
+      if (full->attr)
+        doc.flags |= DOCF_WORD_WRAP;
+      else
+        doc.flags &= ~DOCF_WORD_WRAP;
     } else if (type >= DOCT_BLINK && type <= DOCT_UNDERLINE) {
       constexpr uint32_t masks[]{ATTRF_BLINK, ATTRF_INVERT, ATTRF_UNDERLINE};
       auto mask = masks[type - DOCT_BLINK];
@@ -453,6 +554,14 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     doc.col = int64_t(doc.x) + 1;
     if (has_cursor && task)
       DocRecalcCursor(doc, *task, screen);
+    if (task) {
+      doc.old_win_left = task->win_left;
+      doc.old_win_right = task->win_right;
+      doc.old_win_top = task->win_top;
+      doc.old_win_bottom = task->win_bottom;
+      doc.old_cur_entry = doc.cur_entry;
+      doc.old_cur_col = doc.cur_col;
+    }
   }
   if (screen && has_cursor) {
     DocScreenCursor(doc, *task);
