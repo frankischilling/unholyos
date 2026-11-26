@@ -771,7 +771,8 @@ static bool PrsFun(CCmpCtrl &cc, CHashClass &type, char *name,
     return false;
   }
   Lex(cc);
-  if (fun->arg_cnt && 8 * fun->arg_cnt <= INT16_MAX)
+  if (fun->arg_cnt && 8 * fun->arg_cnt <= INT16_MAX &&
+      !(fun->cls.flags & FF_DOT_DOT_DOT))
     fun->cls.flags |= FF_RET1;
   if (decl.mode >= 0) {
     if (PrsFunDecl(cc, *fun, decl, aot))

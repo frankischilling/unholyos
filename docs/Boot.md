@@ -699,6 +699,23 @@ member and parameter declarations, default arguments, pointer arrays,
 nested calls, and both stack cleanup conventions. The pinned guest
 faulted while running this stress probe.
 
+`VariadicProbe.HC` and `VariadicPtrProbe.HC` exercise native variadic
+definitions, default arguments, empty and nonempty argument lists, raw
+floating-point and pointer values, writable `argc` and `argv`, recursion,
+right-to-left evaluation, and repeated direct and indirect calls. Both
+fixtures ran from source and guest-compiled `.BIN.Z` files in QEMU 8.2.2
+with PC, `qemu64`, and 512 MiB. All six result lines matched the pinned
+TempleOS guest running the same source. TempleOS also warned that `argc`
+was unused in `VaRaw`; UnholyOS did not emit that warning.
+
+The focused build used `BUILD=build/variadic-check` and the ISO
+`build/variadic-check/variadic-aot.iso`, containing the two fixtures,
+`StartOS.HC.Z`, and `FileWriteProbe.BIN` to mount the RAM drive. The VM
+command was `qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d
+-cdrom build/variadic-check/variadic-aot.iso -display none -serial
+file:build/variadic-check/aot.log -monitor none -no-reboot`. The startup
+and guest-built ISO tests also check the six lines in both execution modes.
+
 `Linux/Fixtures/Grid.HC` contains the original 672 bytes of Terry A.
 Davis's [Grid demo](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Graphics/Grid.HC).
 QEMU sends PS/2 motion to move the 5×5 cursor to a new grid cell. A
