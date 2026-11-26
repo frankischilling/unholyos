@@ -1597,8 +1597,6 @@ static bool CmpClassReportData(CHashTable *table, CHashClass &task)
       {"last_input_filter_task", &task, &task + 1, offsetof(CTask, last_input_filter_task)},
       {"next_sibling_task", &task, &task + 1, offsetof(CTask, next_sibling_task)},
       {"last_sibling_task", &task, &task + 1, offsetof(CTask, last_sibling_task)},
-      {"win_width", &task, i64, offsetof(CTask, win_width)},
-      {"win_height", &task, i64, offsetof(CTask, win_height)},
       {"rip", &task, i64, offsetof(CTask, rip)},
       {"rflags", &task, i64, offsetof(CTask, rflags)},
       {"rsp", &task, i64, offsetof(CTask, rsp)},
