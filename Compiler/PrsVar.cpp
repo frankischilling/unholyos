@@ -85,9 +85,49 @@ bool PrsType(CCmpCtrl &cc, CHashClass &base, CPrsDeclarator &decl,
   auto &fun = *FunPtrBase(decl.fun_ptr);
   if (!PrsFunArgs(cc, fun, depth + 1))
     return false;
-  if (fun.arg_cnt && 8 * fun.arg_cnt <= INT16_MAX)
+  if (fun.arg_cnt && 8 * fun.arg_cnt <= INT16_MAX &&
+      !(fun.cls.flags & FF_DOT_DOT_DOT))
     fun.cls.flags |= FF_RET1;
   Lex(cc);
+  return true;
+}
+
+static bool PrsDotDotDot(CCmpCtrl &cc, CHashFun &fun)
+{
+  if (Lex(cc) != ')')
+    return false;
+  auto *i64 = reinterpret_cast<CHashClass *>(
+      HashFind("I64i", cc.htc.hash_table_lst, HTT_INTERNAL_TYPE));
+  if (!i64)
+    return false;
+  fun.cls.flags |= FF_DOT_DOT_DOT;
+
+  auto *heap = CurrentTask()->data_heap;
+  auto offset = 16 + 8 * fun.arg_cnt;
+  auto *name = StrNew("argc", heap);
+  auto *member = name ? MemberAdd(fun.cls, name, *i64, offset) : nullptr;
+  if (!member) {
+    Free(name);
+    return false;
+  }
+  member->flags = MLF_DOT_DOT_DOT;
+  --fun.cls.member_cnt; // Only explicitly declared arguments are counted.
+
+  name = StrNew("argv", heap);
+  member = name ? MemberAdd(fun.cls, name, *i64, offset + 8) : nullptr;
+  if (!member) {
+    Free(name);
+    return false;
+  }
+  member->flags = MLF_DOT_DOT_DOT;
+  --fun.cls.member_cnt;
+  auto *dim = reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+  if (!dim)
+    return false;
+  // The reference uses an arbitrary array bound; actual slots follow argc.
+  member->dim.total_cnt = dim->cnt = 127;
+  dim->total_cnt = 1;
+  member->dim.next = dim;
   return true;
 }
 
@@ -97,6 +137,8 @@ bool PrsFunArgs(CCmpCtrl &cc, CHashFun &fun, unsigned depth)
   if (cc.token == ')')
     return true;
   do {
+    if (cc.token == TK_ELLIPSIS)
+      return PrsDotDotDot(cc, fun);
     auto *base = PrsClass(cc);
     if (!base)
       return false;

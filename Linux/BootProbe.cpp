@@ -480,7 +480,8 @@ static void BootPrintReport(const CDrv &dv, const char *path)
 static CExeResult BootFileProgramReport(const CDrv &dv, const char *path)
 {
   CRedSeaDirEntry entry;
-  if (!RedSeaFileFind(dv, dv.root_clus, path + 1, false, entry))
+  size_t prefix;
+  if (!RedSeaFileLookup(dv,path,false,false,entry,prefix))
     return {};
   SerialPutS("UnholyOS: executing ");
   SerialPutS(path);
@@ -591,6 +592,32 @@ static void BootTryReport(const CDrv &dvd, CTask &task)
   SerialPutS("UnholyOS: finished /TryProbe.BIN.Z, checks "
              "0x0000000000000001\r\n");
   BootGuestFileReport(*ram, path);
+}
+
+static void BootVariadicReport(const CDrv &dvd, CTask &task,
+                               const char *source, const char *path,
+                               const char *compile)
+{
+  if (!BootFileProgramReport(dvd, source).okay)
+    return;
+  auto *ram = MountedDrive('B');
+  if (!ram)
+    return;
+  auto compiled = ExePutS(compile, nullptr, 0);
+  if (!compiled.okay || compiled.value)
+    return;
+  SerialPutS("UnholyOS: executing ");
+  SerialPutS(path);
+  SerialPutS("\r\n");
+  auto *mod = Load(*ram, path, task, LDF_JUST_LOAD);
+  bool okay = mod && LoadPass2(*mod);
+  SerialPutS("UnholyOS: finished ");
+  SerialPutS(path);
+  SerialPutS(", checks ");
+  SerialPutHex(okay);
+  SerialPutS("\r\n");
+  if (okay)
+    BootGuestFileReport(*ram, path);
 }
 
 static void BootISOReport(const CDrv &dv)
@@ -1364,6 +1391,8 @@ void BootProbe()
   SerialPutHex(cnts.HPET_freq ? HPET() : 0);
   SerialPutS(", text base ");
   SerialPutHex(reinterpret_cast<uintptr_t>(gr.text_base));
+  SerialPutS(", raw screen ");
+  SerialPutHex(reinterpret_cast<uintptr_t>(text.raw_scrn_image));
   SerialPutS("\r\n");
   if (adam_task->cur_dv) {
     BootDVDReport(*adam_task->cur_dv);
@@ -1420,6 +1449,12 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/CursorProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/CursorExcept.HC");
     BootFunctionPtrReport(*adam_task->cur_dv, *adam_task);
+    BootVariadicReport(*adam_task->cur_dv, *adam_task, "/VariadicProbe.HC",
+                       "/VariadicProbe.BIN.Z",
+                       "Cmp(\"::/VariadicProbe.HC\",,\"B:/VariadicProbe.BIN.Z\");");
+    BootVariadicReport(*adam_task->cur_dv, *adam_task, "/VariadicPtrProbe.HC",
+                       "/VariadicPtrProbe.BIN.Z",
+                       "Cmp(\"::/VariadicPtrProbe.HC\",,\"B:/VariadicPtrProbe.BIN.Z\");");
     BootGridReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/DocFrame.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/DocButton.HC");
@@ -1445,6 +1480,14 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/Exceptions.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ScreenProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/PaletteProbe.HC");
+    if (BootFileProgramReport(*adam_task->cur_dv,"/FontTextProbe.HC").okay) {
+      auto glyph=text.font[255];
+      BootFileProgramReport(*adam_task->cur_dv,"/Demo/ExtChars.HC");
+      SerialPutS("UnholyOS: extended character glyph ");
+      SerialPutHex(text.font[255]);
+      SerialPutS("\r\n");
+      text.font[255]=glyph;
+    }
     BootSoundReport(*adam_task->cur_dv, *adam_task);
     BootFileProgramReport(*adam_task->cur_dv, "/AsmListingScope.HC");
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);

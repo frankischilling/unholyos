@@ -153,7 +153,7 @@ static void GrUpdateTextFG(const CTextView &view, bool blink)
         gr.text_base + (view.src_y + row) * TEXT_COLS + view.src_x;
     for (int64_t col = 0; col < view.cols; col++) {
       auto ch = src[col];
-      auto bits = sys_font_std[static_cast<uint8_t>(ch)];
+      auto bits=text.font[static_cast<uint8_t>(ch)];
       if (ch & ATTRF_UNDERLINE)
         bits |= 0xFF00000000000000ULL;
       if (!bits)

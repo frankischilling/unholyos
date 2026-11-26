@@ -92,6 +92,7 @@ void IntEntrySet(unsigned irq, void (*handler)(), uint16_t type = 0xE,
                  uint16_t dpl = 0);
 uint64_t GetTSC();
 extern CKbdStateGlbls kbd;
+extern CTextGlbls text;
 extern CMsHardStateGlbls ms_hard, ms_hard_last;
 extern CMsStateGlbls ms, ms_last, old_ms;
 extern CGridGlbls ms_grid;
@@ -176,8 +177,9 @@ extern "C" void WinScrollRestoreCpp(CTask *task, CD3I64 *s);
 extern "C" void RefreshCpp(int64_t cnt, uint8_t force);
 extern "C" void GrScaleZoomCpp(uint64_t scale);
 void CtrlAltZ(int64_t sc);
+void CtrlAltF(int64_t sc);
 bool WinMgrInit();
-extern const uint64_t sys_font_std[256];
+extern uint64_t sys_font_std[256],sys_font_cyrillic[256];
 void WinDerivedValsUpdate(CTask *task);
 bool StartUpTasks();
 extern "C" uint64_t RandU16Cpp();

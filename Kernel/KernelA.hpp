@@ -1277,6 +1277,21 @@ static_assert(sizeof(CKbdStateGlbls) == 130 &&
               offsetof(CKbdStateGlbls, fifo) == 40 &&
               offsetof(CKbdStateGlbls, down_bitmap) == 64 &&
               offsetof(CKbdStateGlbls, irqs_working) == 129);
+
+struct [[gnu::packed]] CTextGlbls
+{
+  int64_t raw_col,raw_flags;
+  uint8_t *raw_scrn_image;
+  int64_t rows,cols;
+  uint64_t *font,*aux_font;
+  uint8_t *vga_alias,*vga_text_alias;
+  uint8_t border_chars[16];
+};
+static_assert(sizeof(CTextGlbls)==88 &&
+              offsetof(CTextGlbls,font)==40 &&
+              offsetof(CTextGlbls,aux_font)==48 &&
+              offsetof(CTextGlbls,border_chars)==72);
+
 struct CD3I64
 {
   int64_t x, y, z;
