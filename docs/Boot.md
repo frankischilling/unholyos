@@ -526,6 +526,21 @@ fixture produced six matching trace lines in both guests under QEMU
 also ran the same 1,273 bytes of `Box.HC`, animated the box, and returned
 to the prompt on Q.
 
+## Mouse symmetry demo
+
+Both boot discs include Terry A. Davis's unchanged
+`Demo/Graphics/Symmetry.HC`. Run `ExeFile("::/Demo/Graphics/Symmetry.HC");`
+in the HolyC terminal. Left-drag draws a stroke and its reflection.
+Right-drag changes the axis and leaves it visible in red. A stationary
+right-click disables reflection. Escape erases the drawing and restores
+the terminal window.
+
+On pinned TempleOS and UnholyOS, a sequence of PS/2 mouse events produced
+the same strokes and axis pixels under QEMU 9.2.0 with PC, `qemu64`,
+and 512 MiB. The boot suite checks the default axis, a user-drawn axis,
+the single stroke after disabling reflection, and cleanup on Escape
+on the standard ISO and the one built in the guest.
+
 ## Depth-buffered spans and polygons
 
 `DepthSpansProbe.HC` checks span counts, depth interpolation, window

@@ -1279,13 +1279,29 @@ static_assert(sizeof(CMsStateGlbls) == 168 &&
               offsetof(CMsStateGlbls, lb) == 160);
 static_assert(sizeof(CGridGlbls) == 80 && offsetof(CGridGlbls, x) == 8);
 
-constexpr uint32_t WIF_SELF_FOCUS = 1, WIF_SELF_MS_L = 1 << 3,
-                   WIF_SELF_MS_R = 1 << 5, WIF_SELF_DOC = 1 << 10,
-                   WIF_SELF_KEY_DESC = 1 << 12,
+constexpr uint32_t WIF_SELF_FOCUS = 1 << 0, WIF_SELF_CTRLS = 1 << 2,
+                   WIF_SELF_MS_L = 1 << 3, WIF_SELF_MS_R = 1 << 5,
+                   WIF_SELF_MS_WHEEL = 1 << 7, WIF_SELF_BORDER = 1 << 8,
+                   WIF_SELF_GRAB_SCROLL = 1 << 9, WIF_SELF_DOC = 1 << 10,
+                   WIF_SELF_ODE = 1 << 11, WIF_SELF_KEY_DESC = 1 << 12,
+                   WIF_FOCUS_TASK_MENU = 1 << 17,
+                   WIF_FOCUS_TASK_CTRLS = 1 << 18,
                    WIF_FOCUS_TASK_MS_L = 1 << 19,
                    WIF_FOCUS_TASK_MS_L_D = 1 << 20,
                    WIF_FOCUS_TASK_MS_R = 1 << 21,
-                   WIF_FOCUS_TASK_MS_R_D = 1 << 22;
+                   WIF_FOCUS_TASK_MS_R_D = 1 << 22,
+                   WIF_FOCUS_TASK_MS_WHEEL = 1 << 23,
+                   WIF_FOCUS_TASK_BORDER = 1 << 24,
+                   WIF_FOCUS_TASK_GRAB_SCROLL = 1 << 25;
+
+constexpr uint32_t WIG_DBL_CLICK =
+    WIF_FOCUS_TASK_MS_L_D | WIF_FOCUS_TASK_MS_R_D;
+constexpr uint32_t WIG_TASK_DFT = WIF_FOCUS_TASK_MENU | WIG_DBL_CLICK |
+                                  (0xFFFF - WIF_SELF_DOC - WIF_SELF_ODE);
+constexpr uint32_t WIG_NO_FOCUS_TASK_DFT = WIG_TASK_DFT - WIF_SELF_BORDER -
+                                           WIF_SELF_MS_L - WIF_SELF_MS_R -
+                                           WIG_DBL_CLICK;
+constexpr uint32_t WIG_USER_TASK_DFT = WIF_SELF_KEY_DESC;
 
 static_assert(sizeof(CJob) == 0x70 && offsetof(CJob, aux1) == 0x48 &&
               offsetof(CJob, master_task) == 0x68);

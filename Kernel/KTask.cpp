@@ -77,7 +77,7 @@ static void UserTaskCont()
 extern "C" void UserCmdLineCpp(int64_t)
 {
   auto *task = CurrentTask();
-  task->win_inhibit = WIF_SELF_KEY_DESC;
+  task->win_inhibit = WIG_USER_TASK_DFT;
   UserStartUp();
   if (DocPut())
     UserTaskCont();
@@ -140,7 +140,7 @@ extern "C" CTask *TaskInitCpp(CTask *task, size_t stk_size)
       task->next_input_filter_task = task->last_input_filter_task = task;
   task->task_num = sys_num_spawned_tasks++;
   task->rflags = 0x200;
-  task->win_inhibit = 0x52F3FF;
+  task->win_inhibit = WIG_TASK_DFT;
   task->next_child_task = task->last_child_task = reinterpret_cast<CTask *>(
       reinterpret_cast<uintptr_t>(&task->next_child_task) -
       offsetof(CTask, next_sibling_task));

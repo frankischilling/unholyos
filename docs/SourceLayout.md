@@ -323,6 +323,14 @@ callback, including the original endpoint rules.
 `SPT_THICK` and restores the caller's width. Point and line elements
 use the 3D primitives, including their packed variants.
 
+## Window input masks
+
+The HolyC compiler exposes the `WIf_` bit indices, `WIF_` masks, and
+`WIG_` groups from `Kernel/KernelA.HH`. `TaskInit` sets `WIG_TASK_DFT`,
+and `UserCmdLine` switches to `WIG_USER_TASK_DFT`, as in `KTask.HC`.
+`Demo/Graphics/Symmetry.HC` uses the same mask expression as the
+reference to receive left and right mouse drags while drawing.
+
 ## Task settings and drawing callbacks
 
 `Adam/TaskSettings.cpp` follows `SettingsPush`, `SettingsPop2`, and
