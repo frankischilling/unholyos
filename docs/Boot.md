@@ -11,6 +11,10 @@ The C++20 host tools build the RedSea image and check it against the kernel buil
 
 `make test` also builds `build/unholyos-startup-test.iso` with the original `StartOS.HC.Z`, compiler fixtures, and eleven TOSB module fixtures. The guest asks for `/StartOS.HC` through `FileRead` and reports the length and checksum of the expanded bytes. At 512 MiB, 3 GiB, and 4.5 GiB, the test scans the lexer fixtures, compiles and runs scalar HolyC expressions and functions, compiles and runs the original `Demo/Print.HC` from source, and runs the compiled modules from the RedSea DVD. `build/unholyos.iso` is the standard boot image.
 
+The [kernel source structure verification](SourceStructureVerification.md)
+records the build and boot checks for the extraction of guest probes from
+`Kernel/KMain.cpp` into `Linux/BootProbe.cpp`.
+
 ## HolyC terminal
 
 Startup opens two DolDoc terminals side by side and focuses the left

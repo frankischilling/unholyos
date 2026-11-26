@@ -23,7 +23,7 @@ Preserve the spelling and case of the reference directories and basenames. Use `
 
 Use `Kernel`, including its capital K, in the filesystem, include paths, and build definitions. An existing Windows checkout can retain an older lowercase directory name even when Git tracks the correct case. Check actual directory names when preparing a Linux build.
 
-`Linux/` holds C++ host support and verification programs. `Linux/Fixtures/` holds HolyC source and binary inputs. `Kernel/SerialDev/Serial.cpp` and `SerialBoot.asm` provide serial diagnostics without a matching reference file. `Adam/DolDoc/DolDoc.hpp` and `Kernel/Compress.hpp` are additional C++ declarations. These additions support the translation and its tests; they do not represent completed TempleOS subsystems.
+`Linux/` holds C++ host support and verification programs. `Linux/BootProbe.cpp` runs inside the guest and contains the boot reports and fixture checks consumed by the host's `TestBoot.cpp`. Its declaration is in `Linux/BootProbe.hpp`. The Makefile lists it separately in `GUEST_TEST_SRC` and compiles it with the freestanding guest flags. `Linux/Fixtures/` holds HolyC source and binary inputs. `Kernel/SerialDev/Serial.cpp` and `SerialBoot.asm` provide serial diagnostics without a matching reference file. `Adam/DolDoc/DolDoc.hpp` and `Kernel/Compress.hpp` are additional C++ declarations. These additions support the translation and its tests; they do not represent completed TempleOS subsystems.
 
 ## Structure and style
 
@@ -601,7 +601,11 @@ returning from a catch body. That path is outside the tested scope.
 
 ## Remaining structural work
 
-`Kernel/KMain.cpp` contains guest verification routines for boot records, file access, compiler behavior, and runtime modules. The reference `Kernel/KMain.HC` concentrates on initialization and startup. Those probes remain a structural difference and should move into a separate verification component as the runtime startup path develops.
+`Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. The probes and their serial output belong to `Linux/BootProbe.cpp`; their bodies and execution order are preserved. [Verification evidence](SourceStructureVerification.md) records the source comparison, build, artifact hashes, and QEMU results.
+
+Startup remains partial. The current kernel initializes several Adam subsystems directly. The reference loads the compiler and executes `StartOS.HC`, which includes `Adam/MakeAdam.HC`. Matching that startup path requires further compiler and runtime work. The probe extraction does not establish startup parity.
+
+The [development milestones](Development.md) define completion in the required order: full rewrite, full compatibility, bootstrap, then self-hosting. Host GCC or Clang and NASM support the current development builds.
 
 The guest's `RedSeaISO` follows the sizing and directory-copy steps from
 `Adam/Opt/Boot/DskISORedSea.HC` and `Adam/ABlkDev/ADskA.HC`. The current

@@ -36,8 +36,9 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Adam/DolDoc/DocChar.cpp Adam/DolDoc/DocPutKey.cpp Adam/DolDoc/DocRun.cpp \
 	Adam/DolDoc/DocGet.cpp Adam/DolDoc/DocTerm.cpp HomeSys.cpp \
 	Adam/Opt/Boot/DskISORedSea.cpp
+GUEST_TEST_SRC := Linux/BootProbe.cpp
 ASM_OBJ := $(ASM_SRC:%.asm=$(BUILD)/%.asm.o)
-CXX_OBJ := $(CXX_SRC:%.cpp=$(BUILD)/%.o)
+CXX_OBJ := $(CXX_SRC:%.cpp=$(BUILD)/%.o) $(GUEST_TEST_SRC:%.cpp=$(BUILD)/%.o)
 KERNEL := $(BUILD)/0000Boot/0000Kernel.BIN.C
 LOADER := $(BUILD)/Adam/Opt/Boot/BootDVD.BIN
 ISO := $(BUILD)/unholyos.iso
