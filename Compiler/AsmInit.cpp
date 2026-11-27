@@ -780,7 +780,8 @@ static bool CmpDirData(CHashTable *table)
   auto *file = CmpKernelClass(table, "CFile", sizeof(CFile));
   auto *glbls = CmpKernelClass(table, "CBlkDevGlbls", sizeof(CBlkDevGlbls));
   auto *cache = CmpKernelClass(table, "CCacheBlk", sizeof(CCacheBlk));
-  if (!cache) return false;
+  auto *free_lst = CmpKernelClass(table,"CFreeLst",sizeof(CFreeLst));
+  if (!cache || !free_lst) return false;
   if (!entry || !context || !drive || !bd || !file || !glbls)
     return false;
   auto *heap = CurrentTask()->data_heap;
@@ -829,6 +830,12 @@ static bool CmpDirData(CHashTable *table)
       {"fat_blk_dirty", drive, i64, offsetof(CDrv, fat_blk_dirty)},
       {"cur_fat_blk_num", drive, i64, offsetof(CDrv, cur_fat_blk_num)},
       {"cur_fat_blk", drive, FindType("U32", table) + 1, offsetof(CDrv, cur_fat_blk)},
+      {"next_free", drive, free_lst+1, offsetof(CDrv,next_free)},
+      {"last_free", drive, free_lst+1, offsetof(CDrv,last_free)},
+      {"next", free_lst, free_lst+1, offsetof(CFreeLst,next)},
+      {"last", free_lst, free_lst+1, offsetof(CFreeLst,last)},
+      {"start", free_lst, i64, offsetof(CFreeLst,start)},
+      {"size", free_lst, i64, offsetof(CFreeLst,size)},
       {"lock_fwding", bd, bd + 1, offsetof(CBlkDev, lock_fwding)},
       {"locked_flags", bd, i64, offsetof(CBlkDev, locked_flags)},
       {"bd_signature", bd, FindType("U32", table), offsetof(CBlkDev, bd_signature)},
@@ -2198,6 +2205,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"FAT32FreeClus", U0, FF_RET1, {{"dv", DrvPtr}, {"c", I64}}},
       {"RedSeaAllocClus", I64, FF_RET1, {{"dv", DrvPtr}, {"cnt", I64}}},
       {"RedSeaFreeClus", U0, FF_RET1, {{"dv", DrvPtr}, {"c", I64}, {"cnt", I64}}},
+      {"RedSeaFreeFreeLst", U0, FF_RET1, {{"dv", DrvPtr}}},
+      {"RedSeaFreeLstBuild", U0, FF_RET1, {{"dv", DrvPtr}}},
+      {"RedSeaValidate", Bool, FF_RET1, {{"drv_let", U8}}},
+      {"RedSeaFmt", U0, FF_RET1, {{"drv_let", U8}, {"quick", Bool, true, 1}}},
       {"FAT32DirNew", Bool, FF_RET1, {{"dv", DrvPtr}, {"cur_dir", U8Ptr}, {"tmpde", DirEntryPtr}, {"free_old_chain", Bool, true, 1}}},
       {"RedSeaDirNew", Bool, FF_RET1, {{"dv", DrvPtr}, {"cur_dir", U8Ptr}, {"tmpde", DirEntryPtr}, {"free_old_chain", Bool, true, 1}}},
       {"DirNew", Bool, FF_RET1, {{"dv", DrvPtr}, {"cur_dir", U8Ptr}, {"tmpde", DirEntryPtr}, {"free_old_chain", Bool, true, 1}}},
@@ -2857,6 +2868,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"StreamPrint", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
       {"StreamDir", U0, FF_RET1, {}},
       {"StreamExePrint", I64, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
+      {"RedSeaISO9660", U0, FF_RET1, {{"iso_filename", U8Ptr}, {"drv_let", U8}}},
       {"RedSeaISO",
        I64,
        FF_RET1,
@@ -3133,7 +3145,7 @@ static bool CmpFillHash(CHashTable *table)
       {"DOCF_NO_SCROLL_BARS", "0x2000"}, {"TSF_SAME_SONG", "1"},
       {"CDATE_FREQ", "49710"},
       {"STR_LEN", "144"}, {"CDIR_FILENAME_LEN", "38"}, {"CDIR_SIZE", "64"},
-      {"BLK_SIZE_BITS", "9"}, {"BLK_SIZE", "512"},
+      {"BLK_SIZE_BITS", "9"}, {"BLK_SIZE", "512"}, {"DVD_BLK_SIZE", "2048"},
       {"BDT_NULL", "0"}, {"BDT_RAM", "1"}, {"BDT_ATA", "2"},
       {"BDT_ISO_FILE_READ", "3"}, {"BDT_ISO_FILE_WRITE", "4"}, {"BDT_ATAPI", "5"},
       {"BDT_TYPES_NUM", "6"}, {"DRVS_NUM", "26"}, {"BLKDEVS_NUM", "26"},

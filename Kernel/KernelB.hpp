@@ -471,6 +471,7 @@ bool ATAIdentifyRecord(CBlkDev &bd);
 bool ATAReadBytes(CBlkDev &bd, uint8_t *buf, uint64_t pos, size_t bytes);
 bool ATAWriteBytes(CBlkDev &bd, const uint8_t *buf, uint64_t pos, size_t bytes);
 bool ATAPIStartStop(const CBlkDev &bd, bool start);
+bool ATAPIPreventRemoval(const CBlkDev &bd, bool prevent);
 bool ATAPIReadCapacity(CBlkDev &bd);
 bool ATAPIReadBlks2(const CBlkDev &bd, uint8_t *buf, uint32_t lba,
                     uint32_t count);
@@ -505,7 +506,14 @@ void BlkDevDelete(CBlkDev &bd,uint8_t *keep_ram=nullptr);
 uint8_t *BlkDevOwnedRAM(const CBlkDev *bd);
 void BlkDevReleaseRAM(CBlkDev &bd,uint8_t *keep_ram);
 bool BlkDevSameBacking(const CBlkDev &a,const CBlkDev &b);
+bool BlkDevImageDependsOn(const CBlkDev &image,const CBlkDev &parent);
 bool BlkDevImageBacking(const CBlkDev *bd);
+bool BlkDevRegistered(const CBlkDev *bd);
+bool BlkDevImageChain(const CBlkDev &bd,bool write=false);
+bool BlkDevImageCanWrite(const CBlkDev *bd);
+bool BlkDevMediaPin(CBlkDev &bd);
+void BlkDevMediaUnpin(CBlkDev &bd);
+bool BlkDevMediaPinned(const CBlkDev &bd);
 bool DrvHasImageDependents(const CDrv &dv);
 extern "C" uint64_t BlkDevLockCpp(CBlkDev *bd);
 extern "C" uint64_t BlkDevUnlockCpp(CBlkDev *bd,uint8_t rst);
@@ -558,6 +566,8 @@ bool DrvFATCacheInit(CDrv &dv);
 void DrvFATCacheDrop(CDrv &dv);
 void DrvFATCacheReset(CDrv &dv);
 void DrvFATCacheResetDevice(CBlkDev *bd,bool controller=false);
+bool DrvFreeListValid(CDrv &dv);
+void DrvFreeListClear(CDrv &dv);
 bool DrvFATRead(const CDrv &dv,uint64_t index,void *buf,size_t offset,size_t bytes);
 bool DrvFATWriteAllowed(CBlkDev *bd,uint64_t pos,size_t bytes,const CDrv *origin=nullptr);
 bool DrvFATWriteAllowedImage(CBlkDev *bd,uint64_t pos,size_t bytes,const CDrv *origin);
@@ -593,6 +603,11 @@ uint64_t Now();
 bool ISOInit(CDrv &dv);
 bool RedSeaInit(CDrv &dv);
 bool RedSeaFormatRAM(CDrv &dv, size_t root_blocks);
+bool RedSeaFormatDrive(CDrv &dv,bool quick);
+extern "C" uint64_t RedSeaValidateCpp(uint8_t drv_let);
+extern "C" void RedSeaFmtCpp(uint8_t drv_let,uint8_t quick);
+extern "C" void RedSeaFreeFreeLstCpp(CDrv *dv);
+extern "C" void RedSeaFreeLstBuildCpp(CDrv *dv);
 bool RedSeaFileFind(const CDrv &dv, uint64_t dir, const char *name,
                     bool directory, CRedSeaDirEntry &entry);
 bool RedSeaFileRead(const CDrv &dv, const CRedSeaDirEntry &entry, uint64_t pos,
@@ -633,7 +648,7 @@ inline bool ReadableFS(const CDrv &dv)
 }
 inline bool WritableFS(const CDrv &dv)
 {
-  return dv.bd && !(dv.bd->flags&BDF_READ_ONLY) && !BlkDevImageBacking(dv.bd) &&
+  return dv.bd && BlkDevImageCanWrite(dv.bd) && !BlkDevImageBacking(dv.bd) &&
          ((dv.fs_type==FSt_REDSEA &&
            (dv.bd->type==BDT_RAM || dv.bd->type==BDT_ISO_FILE_WRITE)) ||
           (dv.fs_type==FSt_FAT32 && dv.bd->type==BDT_ATA));
@@ -658,7 +673,15 @@ bool RedSeaStreamCommit(CDrv &dv, const char *path, CDirEntry &de, bool new_file
 extern "C" int64_t FSizeCpp(CFile *f);
 extern "C" CFile *FOpenCpp(const char *filename, const char *flags, int64_t cnt);
 CFile *FOpenImageRead(const char *absolute,CDrv *backing);
-CFile *FOpenImageWrite(const char *absolute,CDrv *backing,int64_t cnt);
+struct CImageMountUndo
+{
+  CRedSeaDirEntry old{};
+  uint8_t *data=nullptr;
+  bool existed=false,prepared=false,rollback_failed=false;
+};
+CFile *FOpenImageWrite(const char *absolute,CDrv *backing,int64_t cnt,
+                       CImageMountUndo &undo);
+bool FDiscardImageWrite(CFile *f,CImageMountUndo &undo);
 void FCloseImage(CFile *f);
 bool FImageByteRange(const CFile &f,uint64_t pos,size_t bytes,uint64_t &physical);
 bool FImageReadBytes(CFile *f,uint8_t *buf,uint64_t pos,size_t bytes);

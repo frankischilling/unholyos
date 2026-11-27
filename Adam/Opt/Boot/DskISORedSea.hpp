@@ -18,4 +18,5 @@ enum CDvdExtentResult
 CDvdExtent DvdExtent(size_t clus,size_t size);
 void RedSeaISO9660(uint8_t *disc,uint32_t iso_size,uint32_t root_clus);
 bool RedSeaISO9660Write(CDrv &dv);
+extern "C" void RedSeaISO9660Cpp(const char *iso_filename,uint8_t drv_let);
 CDvdExtentResult RedSeaISO9660Stage1(uint8_t *loader,const CDvdExtent &extent);

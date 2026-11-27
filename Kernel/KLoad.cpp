@@ -142,7 +142,7 @@ void DrvRepHC();
 void BlkDevChkHC();
 void Let2BlkDevHC();
 void UnmountHC(),MountFileHC();
-void RedSeaISOHC();
+void RedSeaISOHC(),RedSeaISO9660HC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
 void FSizeHC(), FOpenHC(), FCloseHC(), FBlkReadHC(), FBlkWriteHC();
 void FileAttrHC(), CopySingleHC();
@@ -160,6 +160,7 @@ void FAT32AllocContiguousClusHC();
 void FAT32FreeClusHC();
 void RedSeaAllocClusHC();
 void RedSeaFreeClusHC();
+void RedSeaFreeFreeLstHC(),RedSeaFreeLstBuildHC(),RedSeaValidateHC(),RedSeaFmtHC();
 void FAT32DirNewHC();
 void RedSeaDirNewHC();
 void DirNewHC();
@@ -1082,6 +1083,7 @@ bool LoadKernel(CTask &task)
       {"DirMk", reinterpret_cast<uintptr_t>(DirMkHC)},
       {"ScanFlags", reinterpret_cast<uintptr_t>(ScanFlagsHC)},
       {"RedSeaISO", reinterpret_cast<uintptr_t>(RedSeaISOHC)},
+      {"RedSeaISO9660", reinterpret_cast<uintptr_t>(RedSeaISO9660HC)},
       {"BlkDevNextFreeSlot", reinterpret_cast<uintptr_t>(BlkDevNextFreeSlotHC)},
       {"BlkDevAdd", reinterpret_cast<uintptr_t>(BlkDevAddHC)},
       {"Let2Drv", reinterpret_cast<uintptr_t>(Let2DrvHC)},
@@ -1099,6 +1101,10 @@ bool LoadKernel(CTask &task)
       {"FAT32FreeClus", reinterpret_cast<uintptr_t>(FAT32FreeClusHC)},
       {"RedSeaAllocClus", reinterpret_cast<uintptr_t>(RedSeaAllocClusHC)},
       {"RedSeaFreeClus", reinterpret_cast<uintptr_t>(RedSeaFreeClusHC)},
+      {"RedSeaFreeFreeLst", reinterpret_cast<uintptr_t>(RedSeaFreeFreeLstHC)},
+      {"RedSeaFreeLstBuild", reinterpret_cast<uintptr_t>(RedSeaFreeLstBuildHC)},
+      {"RedSeaValidate", reinterpret_cast<uintptr_t>(RedSeaValidateHC)},
+      {"RedSeaFmt", reinterpret_cast<uintptr_t>(RedSeaFmtHC)},
       {"FAT32DirNew", reinterpret_cast<uintptr_t>(FAT32DirNewHC)},
       {"RedSeaDirNew", reinterpret_cast<uintptr_t>(RedSeaDirNewHC)},
       {"DirNew", reinterpret_cast<uintptr_t>(DirNewHC)},

@@ -25,14 +25,17 @@ part of the full rewrite.
   not included by `MakeBlkDev.HC`; `KernelA.HH` marks `FSt_ISO9660`
   unsupported. Preserve that active-build distinction rather than
   enabling a general ISO9660 filesystem. Fixed-size contiguous read-only
-  and writable RedSea file-backed devices are implemented; the guest ISO
-  builder still needs the reference's mounted-image workflow.
+  and writable RedSea file-backed devices are implemented, including
+  contiguous FAT32 files, nested images, optical backing pins, and
+  the mounted-image guest ISO builder.
   `DskCache.cpp` now supplies the block cache and drive and device
   locking use task ownership. `DskClus.cpp` supplies cluster traversal, allocation,
   reads and writes, and `DirNew` publishes RedSea and FAT32 directory
-  entries. Drive and device deletion, enabling/disabling, and initial
+  entries. RedSea retains the reference free-extent queue and uses its
+  best-fit selection. Drive and device deletion, enabling/disabling, and initial
   disk-change handling are implemented; complete chain ownership,
-  error recovery, general open-stream lifetime, removable-media
+  recovery after persistent hardware I/O errors, general open-stream lifetime,
+  extended and unmounted partitions, persistent FSInfo ownership, removable-media
   behavior and multi-CPU locking still need work.
   `DskCluster.HC` is present in the reference tree but not included by
   its `MakeBlkDev.HC`; the active cluster implementation is `DskClus.HC`.
