@@ -10,6 +10,10 @@ extern "C" CCPU *CPUStructInitCpp(int64_t num, CCPU *cpu, CTask *seth_task)
   cpu->next_dying = cpu->last_dying =
       reinterpret_cast<CTaskDying *>(&cpu->next_dying);
   cpu->seth_task = seth_task;
+  if (!num) {
+    cpu_structs = cpu;
+    mp_cnt = 1;
+  }
   return cpu;
 }
 

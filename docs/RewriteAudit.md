@@ -10,7 +10,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 68 | 8 |
 | `Compiler` | 33 | 33 | 0 |
-| `Adam` | 132 | 47 | 85 |
+| `Adam` | 132 | 48 | 84 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 22 | 181 |
 
@@ -90,6 +90,11 @@ part of the full rewrite.
   pools, complete heap-controller fields and the free-list arrays.
   Single- and separate-heap checks exercise its allocation accounting,
   membership traversal and lock/interrupt restoration.
+- Original `Adam/TaskRep.HC` traverses live CPU and task records with
+  the native allocator's counters. The shared probe checks recursive
+  task ordering, rendered report contents, interrupt restoration and
+  child cleanup. CPU enumeration currently covers the initialized boot
+  CPU; SMP startup and execution of the report's Kill links are pending.
 - Move remaining Adam initialization to the guest startup path after
   compiler support permits the original project and startup files.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal

@@ -837,6 +837,10 @@ bool LoadKernel(CTask &task)
   };
   static const CKernelExport exports[]{
       {"SYS_COMPILE_TIME", reinterpret_cast<uintptr_t>(SYS_COMPILE_TIME)},
+      {"SYS_CPU_STRUCTS", reinterpret_cast<uintptr_t>(&cpu_structs)},
+      {"SYS_MP_CNT", reinterpret_cast<uintptr_t>(&mp_cnt)},
+      {"cpu_structs", reinterpret_cast<uintptr_t>(&cpu_structs)},
+      {"mp_cnt", reinterpret_cast<uintptr_t>(&mp_cnt)},
       {"cnts", reinterpret_cast<uintptr_t>(&cnts)},
       {"local_time_offset", reinterpret_cast<uintptr_t>(&local_time_offset)},
       {"mon_start_days1", reinterpret_cast<uintptr_t>(mon_start_days1)},

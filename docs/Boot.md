@@ -4028,6 +4028,33 @@ uses a shared port. These checks cover the non-debug heap layout on
 one CPU; they do not establish remote `HeapRep` presentation, debug
 heap integrity checking, or SMP allocator parity.
 
+## Original Adam task reporting
+
+`Adam/TaskRep.HC` retains its original 814 bytes (SHA-256
+`1a3ab2132d3ec547604ee743e7c505c97057998be1470a5e43ac61add77ddfa8`).
+The probe includes the unchanged memory and task-report sources.
+It spawns a parent and child, saves the report from a real DolDoc,
+checks CPU ownership, task ordering, the child address in its Kill
+link, actual allocation and flag values, restoration of the interrupt
+flag, and eventual task cleanup.
+
+`AdamTaskProbe.HC` (1771 bytes, SHA-256
+`cf95cff0c4304f1bde4ebfa7929dc0594a4f16c8f2e6f6774ebcea2f80011f36`)
+produces `Adam tasks FF` in GCC and Clang native JIT builds and on
+the pinned TempleOS distribution. Both AOT builds compile with result
+0, report the same mask and load with result 1. The host verifies
+the original source bytes inside the test media.
+
+```sh
+make -j6 test-adam-task
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-adam-task
+build/Linux/TestBoot --adam-task-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/adam-task-reference
+```
+
+This exercises single-CPU task reporting, not SMP initialization or
+execution of the interactive Kill links.
+
 ## Nested images, FAT32 backing, and mounted ISO generation
 
 The shared `NestedRedSeaProbe.HC`, `RedSeaFreeListProbe.HC`, and `Fat32ImageProbe.HC` fixtures run on

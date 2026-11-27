@@ -413,6 +413,8 @@ using CExt = int64_t (*)(...);
 
 extern CTask *adam_task, *sys_focus_task, *sys_winmgr_task,
     *sys_task_being_scrn_updated;
+extern CCPU *cpu_structs;
+extern int64_t mp_cnt;
 extern CBlkDevGlbls blkdev;
 extern CDbgGlbls dbg;
 extern CSema sys_semas[SEMA_SEMAS_NUM];

@@ -140,6 +140,11 @@ ADAM_MEM_PROBE := Linux/Fixtures/AdamMemProbe.HC
 ADAM_MEM_AOT_PROBE := Linux/Fixtures/AdamMemAOTProbe.HC
 ADAM_MEM_TEST_ISO := $(BUILD)/adam-mem-test.iso
 ADAM_MEM_AOT_TEST_ISO := $(BUILD)/adam-mem-aot-test.iso
+ADAM_TASK_SOURCE := Adam/TaskRep.HC
+ADAM_TASK_PROBE := Linux/Fixtures/AdamTaskProbe.HC
+ADAM_TASK_AOT_PROBE := Linux/Fixtures/AdamTaskAOTProbe.HC
+ADAM_TASK_TEST_ISO := $(BUILD)/adam-task-test.iso
+ADAM_TASK_AOT_TEST_ISO := $(BUILD)/adam-task-aot-test.iso
 UASM_PROBES := $(addprefix Linux/Fixtures/,UAsmProbe.HC UAsmNativeProbe.HC)
 UASM_TEST_ISO := $(BUILD)/uasm-test.iso
 UASM_AOT_PROBE := Linux/Fixtures/UAsmAOTProbe.HC
@@ -479,6 +484,12 @@ $(ADAM_MEM_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_
 $(ADAM_MEM_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_SOURCE) $(ADAM_MEM_PROBE) $(ADAM_MEM_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file-at Adam/AMem.HC $(ADAM_MEM_SOURCE) --file $(ADAM_MEM_PROBE) --file $(ADAM_MEM_AOT_PROBE)
 
+$(ADAM_TASK_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_SOURCE) $(ADAM_TASK_SOURCE) $(ADAM_TASK_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file-at Adam/AMem.HC $(ADAM_MEM_SOURCE) --file-at Adam/TaskRep.HC $(ADAM_TASK_SOURCE) --file $(ADAM_TASK_PROBE)
+
+$(ADAM_TASK_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_SOURCE) $(ADAM_TASK_SOURCE) $(ADAM_TASK_PROBE) $(ADAM_TASK_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file-at Adam/AMem.HC $(ADAM_MEM_SOURCE) --file-at Adam/TaskRep.HC $(ADAM_TASK_SOURCE) --file $(ADAM_TASK_PROBE) --file $(ADAM_TASK_AOT_PROBE)
+
 $(UASM_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(UASM_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(UASM_PROBES))
 
@@ -665,6 +676,13 @@ test-adam-mem: $(ADAM_MEM_TEST_ISO) $(ADAM_MEM_AOT_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --adam-mem-large-aot "$(QEMU)" $(ADAM_MEM_AOT_TEST_ISO)
 
 test: test-adam-mem
+
+.PHONY: test-adam-task
+test-adam-task: $(ADAM_TASK_TEST_ISO) $(ADAM_TASK_AOT_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --adam-task "$(QEMU)" $(ADAM_TASK_TEST_ISO)
+	$(BOOT_TEST) --adam-task-aot "$(QEMU)" $(ADAM_TASK_AOT_TEST_ISO)
+
+test: test-adam-task
 
 .PHONY: test-uasm
 test-uasm: $(UASM_TEST_ISO) $(UASM_AOT_TEST_ISO) $(BOOT_TEST)
