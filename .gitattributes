@@ -154,3 +154,4 @@ Linux/Fixtures/LateImportLoadProbe.HC text eol=lf
 Linux/Fixtures/LoadApiConsumer.bindings text eol=lf
 Linux/Fixtures/LoadApiProbe.HC text eol=lf
 Linux/Fixtures/LoadPass2Probe.HC text eol=lf
+Linux/Fixtures/CompilerDefinesProbe.HC text eol=lf

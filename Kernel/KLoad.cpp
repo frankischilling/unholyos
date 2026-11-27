@@ -1296,6 +1296,8 @@ bool LoadKernel(CTask &task)
       // System V entries used by host-built C++ modules.
       {"__unholyos_sysv.CAlloc", reinterpret_cast<uintptr_t>(CAlloc)},
       {"__unholyos_sysv.CmpCall", reinterpret_cast<uintptr_t>(CmpCall)},
+      {"__unholyos_sysv.DefineLstLoadCpp",
+       reinterpret_cast<uintptr_t>(DefineLstLoadCpp)},
       {"__unholyos_sysv.DirCurCpp", reinterpret_cast<uintptr_t>(DirCurCpp)},
       {"__unholyos_sysv.DirFileCpp", reinterpret_cast<uintptr_t>(DirFileCpp)},
       {"__unholyos_sysv.Doc2PlainTextCpp",

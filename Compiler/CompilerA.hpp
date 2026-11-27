@@ -590,5 +590,6 @@ CExeResult ExeFile(const char *name, int64_t flags = 0);
 int64_t ExeAnswer(const CExeResult &result);
 extern "C" int64_t ExeFileCpp(const char *name, int64_t flags);
 
+bool CmpLoadDefines();
 extern "C" int64_t CInitStatus;
 extern "C" void CInitCpp();

@@ -83,7 +83,7 @@ different entry points; the manifest must make that choice explicit.
 The tool does not generate an ABI adapter or infer one from a symbol's
 spelling.
 
-`Kernel/KLoad.cpp` publishes 44 native function addresses under
+`Kernel/KLoad.cpp` publishes 45 native function addresses under
 `__unholyos_sysv.` for the current compiler's host-built dependencies.
 The suffix names the source entry point: `__unholyos_sysv.HashFind`
 refers to the C++ `HashFind`, while `__unholyos_sysv.StrCmpCpp`
@@ -233,7 +233,7 @@ outside this comparison.
 
 ## Compiler module ownership and startup
 
-The Makefile lists the compiler's 16 C++ sources and four assembly
+The Makefile lists the compiler's 17 C++ sources and four assembly
 sources separately in `COMPILER_CXX_SRC` and `COMPILER_ASM_SRC`.
 Those objects form `build/Compiler/Compiler.o`; they are absent from
 the kernel ELF link. `MakeBIN` converts that combined object with
@@ -244,7 +244,7 @@ The compiler manifest states each side of the boundary:
 
 | Record | Count | Purpose |
 | --- | ---: | --- |
-| Native imports | 44 | Exact ELF names mapped to the kernel's `__unholyos_sysv.` entries |
+| Native imports | 45 | Exact ELF names mapped to the kernel's `__unholyos_sysv.` entries |
 | Data imports | 30 | Existing runtime storage, including the two uppercase aliases above |
 | Public exports | 9 | Existing HolyC compiler adapters |
 | Private native exports | 16 | Native compiler bodies called by kernel and Adam code |
@@ -324,7 +324,7 @@ binds the native reverse imports, and then calls `LoadPass2`.
 | ---: | --- |
 | `0` | The module entry has not run |
 | `-1` | The entry has begun; initialization has not succeeded |
-| `1` | `AsmHashLoad` returned success |
+| `1` | `CmpLoadDefines` and `AsmHashLoad` both succeeded |
 
 KMain requires both successful `LoadPass2` and status `1` before setting
 `RLF_COMPILER` and continuing. Missing module, binding failure, or
@@ -339,10 +339,10 @@ reads `::/Compiler/OpCodes.DD` from the boot volume. These absolute
 paths are explicit differences from `Kernel/KMain.HC` and
 `Compiler/AsmInit.HC`.
 
-The implemented `CInitCpp` calls only `AsmHashLoad`. It does not
-reproduce the full `Compiler/CMain.HC` initialization sequence:
-`CmpLoadDefines`, `CmpFillTables`, the `cmp.ic_nop` setup, and
-`UAsmHashLoad` are not performed there. The startup-test ISO's
+The implemented `CInitCpp` calls `CmpLoadDefines` before `AsmHashLoad`.
+It does not reproduce the full `Compiler/CMain.HC` initialization sequence:
+`CmpFillTables`, the `cmp.ic_nop` setup, and `UAsmHashLoad` are not
+performed there. The startup-test ISO's
 opcode-resource probe runs between reverse-import binding and the
 module entry so it can still test a missing first read, successful
 retry, and cached reuse. That probe remains in `Linux/BootProbe.cpp`.
@@ -379,6 +379,65 @@ the published table and leave status at `-1`. Every case stops before
 complete boot and startup matrices at 512, 3,072, and 4,608 MiB, plus
 guest ISO generation and cold boot. [Boot.md](Boot.md) records the commands,
 VM configuration, and observed results.
+
+## Compiler definition lists
+
+`Compiler/CInit.cpp::CmpLoadDefines` translates Terry A. Davis's
+`Compiler/CInit.HC::CmpLoadDefines`. It registers the same 14 lists in
+the same order, preserving all 207 entries, embedded spaces, and trailing
+empty strings:
+
+| List | Entries |
+| --- | ---: |
+| `ST_RAW_TYPES` | 16 |
+| `ST_NATURAL_TYPES` | 10 |
+| `ST_INT_SIZE_TYPES` | 8 |
+| `ST_TY_TYPES` | 7 |
+| `ST_U8_REGS` | 16 |
+| `ST_U8_REX_REGS` | 16 |
+| `ST_U16_REGS` | 16 |
+| `ST_U32_REGS` | 16 |
+| `ST_U64_REGS` | 16 |
+| `ST_MM_REGS` | 8 |
+| `ST_XMM_REGS` | 8 |
+| `ST_ARG_TYPES` | 56 |
+| `ST_SEG_REGS` | 6 |
+| `ST_FSTK_REGS` | 8 |
+
+The compiler imports the actual three-argument System V
+`DefineLstLoadCpp(name,list,frame)` through
+`__unholyos_sysv.DefineLstLoadCpp`. The existing kernel implementation
+allocates the definition record, name, copied list, index array, and
+source link in the current Adam data heap. Each index points into the
+original list literal, matching `Kernel/KDefine.HC::DefineLstLoad`.
+Those literals therefore remain in the resident compiler module.
+
+`Compiler/AsmInit.cpp` also supplies the existing public `DefineMatch`
+function's typed declaration from `Kernel/KernelC.HH`, including its
+default flags value of zero. Ordinary HolyC calls use the existing
+three-argument stack adapter.
+
+The native call supplies a null frame, as the other native boot
+definitions do, and records `AD:0x0`. This preserves the established
+native source-link convention; it does not reproduce the reference
+caller's address. The C++ function returns false on the first failed
+registration and leaves earlier entries in place. `CInitCpp` then
+retains status `-1` and skips opcode loading. When all lists register
+but opcode loading fails, all 14 lists remain registered with that
+same failure status. Successful initialization requires both stages.
+
+`make test-compiler-defines` runs the same HolyC program in native GCC
+and Clang builds that was compared with the pinned guest. Its matching
+109-byte trace covers all 207 entries and 946 copied bytes, indexed
+pointer stability after another compilation, `DefineMatch`, and `%Z`.
+Separate native failure checks verify the lists' initialization phase
+and their 70 allocations totaling 5,360 bytes. [Boot.md](Boot.md#compiler-definition-lists)
+records the inputs, commands, observed results, and source-link difference.
+
+This adds the first step of pinned `Compiler/CMain.HC::CInit`.
+`CmpFillTables`, the `cmp.ic_nop` setup, and `UAsmHashLoad` remain
+unfinished. Adam's later globals and compiler metadata still need
+their own registration work before Adam can be separated.
 
 ## Relocation mapping
 

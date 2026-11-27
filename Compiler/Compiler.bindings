@@ -28,6 +28,7 @@ export _Z6LexRawR8CCmpCtrl __unholyos_sysv.LexRaw
 export _Z17LexExpression2BinR8CCmpCtrlR8CRawType __unholyos_sysv.LexExpression2Bin
 export _Z7ExeFilePKcl __unholyos_sysv.ExeFile
 
+import native DefineLstLoadCpp __unholyos_sysv.DefineLstLoadCpp
 import native DirCurCpp __unholyos_sysv.DirCurCpp
 import native DirFileCpp __unholyos_sysv.DirFileCpp
 import native Doc2PlainTextCpp __unholyos_sysv.Doc2PlainTextCpp

@@ -1970,6 +1970,7 @@ void BootProbe()
   SerialPutHex(SYS_RUN_LEVEL);
   SerialPutS("\r\n");
   if (adam_task->cur_dv) {
+    BootFileProgramReport(*adam_task->cur_dv, "/CompilerDefinesProbe.HC");
     BootLateImportReport(*adam_task->cur_dv, *adam_task);
     BootHostModuleReport(*adam_task->cur_dv, *adam_task);
     BootNativeImportReport(*adam_task->cur_dv, *adam_task);

@@ -28,7 +28,7 @@ Use `Kernel`, including its capital K, in the filesystem, include paths, and bui
 `Linux/` holds C++ host support and verification programs. `Linux/BootProbe.cpp` runs inside the guest and contains the boot reports and fixture checks consumed by the host's `TestBoot.cpp`. Its declaration is in `Linux/BootProbe.hpp`. The Makefile lists it separately in `GUEST_TEST_SRC` and compiles it with the freestanding guest flags. `Linux/Fixtures/` holds HolyC source and binary inputs. `Kernel/SerialDev/Serial.cpp` and `SerialBoot.asm` provide serial diagnostics without a matching reference file. `Adam/DolDoc/DolDoc.hpp` and `Kernel/Compress.hpp` are additional C++ declarations. These additions support the translation and its tests; they do not represent completed TempleOS subsystems.
 
 `Compiler/Compiler.bindings` is an explicit ELF-to-guest symbol manifest
-for the host build. The Makefile builds the compiler's 16 C++ and four
+for the host build. The Makefile builds the compiler's 17 C++ and four
 assembly objects separately from the kernel and converts their combined
 object to `build/Compiler/Compiler.BIN`. Every ISO includes that file at
 `/Compiler/Compiler.BIN`. The pinned `Compiler/Compiler.PRJ` instead
@@ -123,7 +123,7 @@ The shared `HC_FRAME_ENTER`, `HC_FRAME_CALL`, `HOLYC_CPP`, and
 it no longer owns the compiler adapters. The definitions emit
 instructions only where an adapter invokes them.
 
-`Kernel/KLoad.cpp` publishes 44 explicit native function addresses
+`Kernel/KLoad.cpp` publishes 45 explicit native function addresses
 under `__unholyos_sysv.`. Their suffixes follow the source entry
 names, such as `HashFind` and `StrCmpCpp`; a binding manifest still
 names the exact ELF symbol. These System V entries coexist with the
@@ -133,7 +133,7 @@ public HolyC adapters. The loader also exposes `winmgr` and
 maps `sys_var_init_flag` and `sys_var_init_val` to
 `SYS_VAR_INIT_FLAG` and `SYS_VAR_INIT_VAL`.
 
-`Compiler/Compiler.bindings` imports those 44 native functions and
+`Compiler/Compiler.bindings` imports those 45 native functions and
 30 data symbols. It exports the nine public adapters, 16 native
 compiler bodies under `__unholyos_sysv.`, and the module-owned
 `__unholyos_compiler.CInitStatus`. The nine public names are published
@@ -169,11 +169,12 @@ the reverse imports, and invokes `LoadPass2`. The Adam task and heaps
 already exist, but color and DolDoc definitions, graphics contexts,
 the window manager, and user tasks have not been initialized yet.
 `CInitCpp` sets `CInitStatus` from zero to `-1` on entry and to `1`
-only if `AsmHashLoad` succeeds. KMain sets `RLF_COMPILER` only after
-the entry completes successfully and reports status `1`.
+only if both `CmpLoadDefines` and `AsmHashLoad` succeed. KMain sets
+`RLF_COMPILER` only after the entry completes successfully and reports
+status `1`.
 
 This C++ entry does not reproduce all of pinned `Compiler/CMain.HC`'s
-`CInit`: it omits that routine's `CmpLoadDefines`, `CmpFillTables`,
+`CInit`: it omits that routine's `CmpFillTables`,
 `cmp.ic_nop` setup, and `UAsmHashLoad` calls. GCC and Clang have built
 the separate module successfully, and both guest builds passed all seven
 focused compiler failure cases and the boot and startup matrices,
@@ -181,6 +182,29 @@ including a cold boot of the ISO built in the guest.
 [Host modules](HostModules.md) describes the binding rules and
 native-import fixture. Its pinned-guest bridge is test
 scaffolding, not native C++ support in TempleOS.
+
+## Compiler initialization lists
+
+`Compiler/CInit.cpp` retains `Compiler/CInit.HC::CmpLoadDefines` in its
+reference subsystem and preserves all 14 list names, entries, and call
+order. `CInitCpp` invokes it before `AsmHashLoad`, following the first
+step of pinned `Compiler/CMain.HC::CInit`. The function's boolean failure
+return is a native adaptation for the existing initialization status.
+
+An explicit private native binding calls the three-argument
+`Kernel/KDefine.cpp::DefineLstLoadCpp`. Its records, names, copied data,
+indices, and source links belong to Adam's data heap, while the indexed
+strings remain in the resident compiler module. A null caller frame
+records `AD:0x0`, consistent with other native boot definitions and
+different from the reference's caller-address metadata. Registration
+failure leaves completed lists in place; a later opcode failure retains
+all 14. [Host modules](HostModules.md#compiler-definition-lists) records
+the list counts, ownership, initialization order, and remaining steps.
+`Compiler/AsmInit.cpp` supplies the missing typed `DefineMatch`
+declaration from `Kernel/KernelC.HH`; its existing public adapter and
+runtime implementation retain their three-argument ABI.
+The common source and native failure-phase evidence are recorded in
+[Boot.md](Boot.md#compiler-definition-lists).
 
 ## HolyC assembler
 
