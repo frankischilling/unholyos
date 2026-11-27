@@ -3611,6 +3611,40 @@ The focused native and reference runs used QEMU 8.2.2, `pc`, `qemu64`,
 The focused tests are included in `make test`. They cover supported
 operations, not full equivalence under device errors or concurrent access.
 
+## Block cache and task-owned drive locks
+
+The pinned reference DVD configuration sizes the cache with
+`Scale2Mem(2048,0x40000)`. Native boot allocates the controller,
+block records and compact hash table from Adam's data heap. The
+focused fixture runs unchanged in all three guests:
+
+```text
+Disk cache 3FFFF
+```
+
+The 18 checks cover the disable threshold, record layout and actual
+allocator capacity, hash collisions, per-drive invalidation,
+prefix/suffix hits, LRU eviction and replacement, read/write caching,
+lock reentry, reset, explicit release and release after a contending
+child task exits. They also check I/O while the caller retains a
+drive lock. The fixture is 8915 bytes (SHA-256
+`b275dc8283a514ee9cf6e807c4f836ee5bd48a16daa0f59ac7351b0740ecd6a2`).
+The reference read-back includes the terminating NUL, and native
+execution checks the packaged source.
+
+```sh
+make -j4 test-disk-cache
+make -j4 BUILD=build/clang CXX=clang++-20 test-disk-cache
+build/Linux/TestBoot --disk-cache-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/cache-reference-final
+```
+
+The focused runs use GCC 13.3.0, Clang 20.1.2, NASM 2.16.01 and
+QEMU 8.2.2 with `pc`, `qemu64`, 512 MiB and one vCPU. The reference
+ISO hashes to `3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+See [Source layout](SourceLayout.md) for the remaining cache,
+locking and device lifecycle differences.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

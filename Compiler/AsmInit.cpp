@@ -779,6 +779,8 @@ static bool CmpDirData(CHashTable *table)
   auto *bd = CmpKernelClass(table, "CBlkDev", sizeof(CBlkDev));
   auto *file = CmpKernelClass(table, "CFile", sizeof(CFile));
   auto *glbls = CmpKernelClass(table, "CBlkDevGlbls", sizeof(CBlkDevGlbls));
+  auto *cache = CmpKernelClass(table, "CCacheBlk", sizeof(CCacheBlk));
+  if (!cache) return false;
   if (!entry || !context || !drive || !bd || !file || !glbls)
     return false;
   auto *heap = CurrentTask()->data_heap;
@@ -857,11 +859,21 @@ static bool CmpDirData(CHashTable *table)
       {"file_clus_num", file, i64, offsetof(CFile, file_clus_num)},
       {"max_blk", file, i64, offsetof(CFile, max_blk)},
       {"clus_buf", file, u8 + 1, offsetof(CFile, clus_buf)},
+      {"next_lru", cache, cache + 1, offsetof(CCacheBlk, next_lru)},
+      {"last_lru", cache, cache + 1, offsetof(CCacheBlk, last_lru)},
+      {"next_hash", cache, cache + 1, offsetof(CCacheBlk, next_hash)},
+      {"last_hash", cache, cache + 1, offsetof(CCacheBlk, last_hash)},
+      {"dv", cache, drive + 1, offsetof(CCacheBlk, dv)},
+      {"blk", cache, i64, offsetof(CCacheBlk, blk)},
+      {"body", cache, u8, offsetof(CCacheBlk, body), BLK_SIZE},
       {"blkdevs", glbls, bd + 1, offsetof(CBlkDevGlbls, blkdevs)},
       {"dft_iso_filename", glbls, u8 + 1, offsetof(CBlkDevGlbls, dft_iso_filename)},
       {"dft_iso_c_filename", glbls, u8 + 1, offsetof(CBlkDevGlbls, dft_iso_c_filename)},
       {"tmp_filename", glbls, u8 + 1, offsetof(CBlkDevGlbls, tmp_filename)},
       {"home_dir", glbls, u8 + 1, offsetof(CBlkDevGlbls, home_dir)},
+      {"cache_base", glbls, cache + 1, offsetof(CBlkDevGlbls, cache_base)},
+      {"cache_ctrl", glbls, cache + 1, offsetof(CBlkDevGlbls, cache_ctrl)},
+      {"cache_hash_table", glbls, cache + 2, offsetof(CBlkDevGlbls, cache_hash_table)},
       {"cache_size", glbls, i64, offsetof(CBlkDevGlbls, cache_size)},
       {"read_cnt", glbls, i64, offsetof(CBlkDevGlbls, read_cnt)},
       {"write_cnt", glbls, i64, offsetof(CBlkDevGlbls, write_cnt)},
@@ -2132,6 +2144,17 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"FileWrite", I64, FF_RET1,
        {{"filename", U8Ptr}, {"fbuf", U8Ptr}, {"size", I64}, {"cdt", Date, true}, {"attr", I64, true}}},
       {"Let2Drv", DrivePtr, FF_RET1, {{"drv_let", U8, true}, {"except", Bool, true, 1}}},
+      {"DrvLock", Bool, FF_RET1, {{"dv", DrvPtr}}},
+      {"DrvUnlock", Bool, FF_RET1, {{"dv", DrvPtr}, {"rst", Bool, true}}},
+      {"DrvsRelease", U0, FF_RET1, {}},
+      {"BlkDevLock", Bool, FF_RET1, {{"bd", BlkDevPtr}}},
+      {"BlkDevUnlock", Bool, FF_RET1, {{"bd", BlkDevPtr}, {"rst", Bool, true}}},
+      {"BlkDevInit", Bool, FF_RET1, {{"bd", BlkDevPtr}}},
+      {"BlkDevsRelease", U0, FF_RET1, {}},
+      {"DskCacheInit", U0, FF_RET1, {{"size_in_U8s", I64}}},
+      {"DskCacheAdd", U0, FF_RET1, {{"dv", DrvPtr}, {"buf", U8Ptr}, {"blk", I64}, {"cnt", I64}}},
+      {"DskCacheInvalidate2", U0, FF_RET1, {{"dv", DrvPtr}}},
+      {"RCache", U0, FF_RET1, {{"dv", DrvPtr}, {"_buf", U8PtrPtr}, {"_blk", I64Ptr}, {"_cnt", I64Ptr}}},
       {"DrvMakeFreeSlot", DrvPtr, FF_RET1, {{"drv_let", U8}}},
       {"DrvNextFreeLet", U8, FF_RET1, {{"first_drv_let", U8, true, 'C'}}},
       {"DrvChk", DrvPtr, FF_RET1, {{"dv", DrvPtr}, {"except", Bool, true, 1}}},
@@ -3105,6 +3128,8 @@ static bool CmpFillHash(CHashTable *table)
       {"BD_SIGNATURE_VAL", "0x56534442"}, {"DRV_SIGNATURE_VAL", "0x56535644"},
       {"SK_NAME", "0"}, {"SK_CLUS", "1"},
       {"BDF_INITIALIZED", "2"}, {"BDF_REMOVABLE", "1"}, {"BDF_READ_CACHE", "32"},
+      {"DVlf_LOCKED", "0"}, {"BDlf_LOCKED", "0"},
+      {"DSK_CACHE_HASH_SIZE", "0x2000"}, {"SEMA_DSK_CACHE", "11"},
       {"BDF_INIT_IN_PROGRESS", "128"},
       {"DOF_SIZE_MIN", "1"}, {"DOF_INTERCEPT_TASK_END", "2"},
       {"DOF_DONT_HOME", "4"}, {"DOF_WIN_MAX", "8"}, {"DOF_DONT_TEXT_ATTR", "16"},

@@ -2048,6 +2048,7 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/PathNamesProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/DirectoryServicesProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ClusterEntryProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/DiskCacheProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ListUtilitiesProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ColorConversionsProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FormatMissingArgsProbe.HC");

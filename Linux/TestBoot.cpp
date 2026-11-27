@@ -1595,7 +1595,8 @@ static bool GuestBytesEqual(CMonitor &vm, uint64_t address,
 
 static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
                                     uint64_t owner, uint64_t &graphics,
-                                    uint64_t &winmgr_slot, bool desktop,
+                                    uint64_t &winmgr_slot, uint64_t &disk,
+                                    bool desktop,
                                     const CCompilerState &compiler)
 {
   uint64_t used = 0, count = 0;
@@ -1743,12 +1744,17 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           graphics = ReadPhysical<1>(vm, addr + 64)[0];
         if (type == 0x08000001 && str == "sys_winmgr_task")
           winmgr_slot = ReadPhysical<1>(vm, addr + 64)[0];
+        if (type == 0x08000001 && str == "blkdev") {
+          Check(!disk, "Duplicate boot block device symbol");
+          disk = ReadPhysical<1>(vm, addr + 64)[0];
+        }
         used += entry[1] + name[1];
         addr = entry[2];
       }
     }
   }
-  Check(kernel && hash_del && hash_src && put_str && graphics && winmgr_slot,
+  Check(kernel && hash_del && hash_src && put_str && graphics && winmgr_slot &&
+            disk,
         "Missing boot symbols");
   Check(std::all_of(system_seen.begin(), system_seen.end(),
                     [](bool seen) { return seen; }) &&
@@ -1880,6 +1886,7 @@ static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
                                        "CBlkDev",
                                        "CFile",
                                        "CBlkDevGlbls",
+                                       "CCacheBlk",
                                        "CExcept",
                                        "CHeapCtrl",
                                        "CKbdStateGlbls",
@@ -1913,7 +1920,7 @@ static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 81);
+  static_assert(class_count == 82);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -2138,11 +2145,65 @@ static uint64_t VerifyGraphicsContexts(CMonitor &vm, uint64_t graphics,
   return used;
 }
 
+static uint64_t VerifyDiskCache(CMonitor &vm, uint64_t disk, uint64_t owner,
+                                uint64_t pool_bytes, const BlockRanges &ranges)
+{
+  constexpr uint64_t scale_limit = 2ULL * 1024 * 1024 * 1024,
+                     block_size = 512, cache_record = 560, cache_header = 48,
+                     buckets = 0x2000;
+  const uint64_t request =
+      pool_bytes >= scale_limit
+          ? 0x40000
+          : 2048 + (0x40000 - 2048) * pool_bytes / scale_limit;
+  const auto cache = ReadPhysical<4>(vm, disk + 40);
+  if (request < 0x2000) {
+    Check(cache == std::array<uint64_t, 4>{},
+          "Unexpected disk cache allocation below the initialization threshold");
+    return 0;
+  }
+  const std::array<uint64_t, 3> sizes{
+      CompilerAllocationSize(request), CompilerAllocationSize(cache_header),
+      CompilerAllocationSize(buckets * 2 * 8)};
+  BlockRanges allocations;
+  for (size_t i = 0; i < sizes.size(); ++i) {
+    const uint64_t ptr = cache[i], size = sizes[i];
+    Check(ptr >= 16 && !(ptr & 7) &&
+              std::any_of(ranges.begin(), ranges.end(), [&](const auto &range) {
+                return ptr - 16 >= range.first && ptr - 16 <= range.second &&
+                       size <= range.second - (ptr - 16);
+              }) &&
+              ReadPhysical<2>(vm, ptr - 16) ==
+                  std::array<uint64_t, 2>{owner, size},
+          "Invalid boot disk cache allocation or owner");
+    allocations.emplace_back(ptr - 16, ptr - 16 + size);
+  }
+  std::sort(allocations.begin(), allocations.end());
+  Check(allocations[0].second <= allocations[1].first &&
+            allocations[1].second <= allocations[2].first,
+        "Overlapping boot disk cache allocations");
+  const uint64_t count = (sizes[0] - 16) / cache_record;
+  Check(count && cache[3] == count * block_size,
+        "Invalid boot disk cache capacity");
+  auto valid_entry = [&](uint64_t ptr) {
+    return ptr >= cache[0] && ptr - cache[0] < count * cache_record &&
+           (ptr - cache[0]) % cache_record == 0;
+  };
+  const auto links = ReadPhysical<2>(vm, cache[1]);
+  Check(valid_entry(links[0]) && valid_entry(links[1]) &&
+            ReadPhysical<1>(vm, links[0] + 8)[0] == cache[1] &&
+            ReadPhysical<1>(vm, links[1])[0] == cache[1],
+        "Invalid boot disk cache LRU sentinel");
+  const uint64_t used = sizes[0] + sizes[1] + sizes[2];
+  std::cout << "Verified disk cache " << cache[3] << " bytes, heap bytes "
+            << used << '\n';
+  return used;
+}
+
 static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
                         const std::string &output, uint64_t range_bytes,
                         uint64_t symbol_used,
                         const std::vector<CTestE820> &e820, uint64_t idle,
-                        uint64_t graphics, uint64_t winmgr, uint64_t left,
+                        uint64_t graphics, uint64_t disk, uint64_t winmgr, uint64_t left,
                         uint64_t right, bool desktop,
                         const CCompilerState &compiler)
 {
@@ -2215,10 +2276,16 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   // byte buffers, and one 32 KiB scan-code buffer, including heap headers.
   constexpr uint64_t fifo_used = 5 * (32 + 16) + 2 * (8 + 16) +
                                  2 * (9 * page - 24) + 65 * page - 24;
+  auto code = VerifyHeap(vm, adam_hc, code_pool, adam);
+  auto data = pool ? VerifyHeap(vm, expected_data_hc, pool, adam) : CTestHeap{};
+  const uint64_t code_bytes = ram_end - heap + limit - code_base;
+  const uint64_t cache_used =
+      VerifyDiskCache(vm, disk, expected_data_hc, pool ? data_bytes : code_bytes,
+                      pool ? data.ranges : code.ranges);
   const uint64_t boot_used = range_bytes + late_used + symbol_used +
                              drive_used + allocation[1] + graphics_used +
-                             asm_hash_used + raw_used + fifo_used + compiler.data_used;
-  auto code = VerifyHeap(vm, adam_hc, code_pool, adam);
+                             asm_hash_used + raw_used + fifo_used +
+                             compiler.data_used + cache_used;
   uint64_t code_used = 0x42840 + fault_used + compiler.code_used +
                        (pool ? 0x5E8 : boot_used);
   uint64_t data_used = boot_used, data_alloced = 0;
@@ -2260,7 +2327,6 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   if (code.used != code_used)
     throw std::runtime_error("Adam code heap used " + std::to_string(code.used) +
                              " bytes, expected " + std::to_string(code_used));
-  uint64_t code_bytes = ram_end - heap + limit - code_base;
   Check(ReadPhysical<4>(vm, code_pool) ==
             std::array<uint64_t, 4>{0, code_bytes, code.alloced, code_base},
         "Invalid code block pool");
@@ -2276,7 +2342,6 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   VerifyCoverage(std::move(code.ranges), {{heap, ram_end}, {code_base, limit}});
 
   if (pool) {
-    auto data = VerifyHeap(vm, expected_data_hc, pool, adam);
     Check(data.used == data_used, "Invalid Adam data heap usage");
     data.ranges.insert(data.ranges.end(), data_used_ranges.begin(),
                        data_used_ranges.end());
@@ -2321,10 +2386,10 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
   const auto e820 = ReadE820(vm);
   uint64_t range_bytes = VerifyDeviceRanges(vm, output, e820);
   uint64_t owner = ReadPhysical<1>(vm, adam + 0x28)[0];
-  uint64_t graphics = 0, winmgr_slot = 0;
+  uint64_t graphics = 0, winmgr_slot = 0, disk = 0;
   uint64_t symbol_used =
       VerifyKernelSymbols(vm, top + 0x28, owner, graphics, winmgr_slot,
-                           desktop, compiler);
+                           disk, desktop, compiler);
   uint64_t winmgr = ReadPhysical<1>(vm, winmgr_slot)[0];
   uint64_t left = 0, right = 0;
   if (desktop) {
@@ -2371,7 +2436,7 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
             ReadPhysical<1>(vm, idle + 0x1A8)[0] == boot_cpu,
         "Invalid idle task record");
   VerifyPools(vm, heap, ram_end, output, range_bytes, symbol_used, e820, idle,
-              graphics, winmgr, left, right, desktop, compiler);
+              graphics, disk, winmgr, left, right, desktop, compiler);
 
   constexpr uint64_t task_alloced = 0x44800;
   uint64_t used_block = ram_end - task_alloced;
@@ -2950,6 +3015,10 @@ constexpr CTextProbe cluster_entry_probes[]{
 constexpr CTextProbe fat_cluster_probes[]{
     {"fat32-cluster", "/Fat32ClusterProbe.HC", "", "FAT32 cluster entry ",
      "FAT32 cluster entry ", "FAT32 cluster entry 7FF\n", {}, true}};
+
+constexpr CTextProbe disk_cache_probes[]{
+    {"disk-cache", "/DiskCacheProbe.HC", "", "Disk cache ",
+     "Disk cache ", "Disk cache 3FFFF\n", {}, true}};
 
 static void CheckBootProbeOrder(const std::string &serial,
                                 std::span<const char *const> paths)
@@ -6314,6 +6383,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--storage-services-reference" ||
        std::string_view(argv[1]) == "--cluster-entry" ||
        std::string_view(argv[1]) == "--cluster-entry-reference" ||
+       std::string_view(argv[1]) == "--disk-cache" ||
+       std::string_view(argv[1]) == "--disk-cache-reference" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -6366,11 +6437,13 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--storage-services");
     bool cluster_entry_probe =
         std::string_view(argv[1]).starts_with("--cluster-entry");
+    bool disk_cache_probe =
+        std::string_view(argv[1]).starts_with("--disk-cache");
     const bool source_probe = compiler_defines_probe || string_defines_probe ||
                               system_defines_probe || color_conversions_probe ||
                               format_missing_args_probe || class_records_probe ||
                               list_utilities_probe || storage_services_probe ||
-                              cluster_entry_probe;
+                              cluster_entry_probe || disk_cache_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6400,6 +6473,8 @@ int main(int argc, char **argv)
       text_probes = storage_services_probes;
     else if (cluster_entry_probe)
       text_probes = cluster_entry_probes;
+    else if (disk_cache_probe)
+      text_probes = disk_cache_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -6594,6 +6669,7 @@ int main(int argc, char **argv)
               << " --list-utilities[-reference] qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"
               << " --cluster-entry[-reference] qemu image.iso [capture-dir]\n"
+              << " --disk-cache[-reference] qemu image.iso [capture-dir]\n"
               << " --fat32-cluster[-reference] qemu image.iso disk.img [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"

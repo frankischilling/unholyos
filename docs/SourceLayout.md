@@ -1564,8 +1564,8 @@ guard deliberately rejects writes to read-only disks. Drive selection
 does not yet perform the reference's removable-media and file-backed
 device initialization. Directory resolution uses the existing bounded
 filesystem lookup and lacks the reference drive lock; failure and
-allocation-exhaustion paths are not fully matched. Drive cache, device
-teardown and remount are outstanding. See [Rewrite audit](RewriteAudit.md)
+allocation-exhaustion paths are not fully matched. Device teardown and
+remount are outstanding. See [Rewrite audit](RewriteAudit.md)
 for their dependencies.
 
 ## Cluster and directory-entry services
@@ -1599,6 +1599,39 @@ root, parent and directory entries. Rollback is best effort on hardware
 write failures, and full reference locking, break handling and exception
 semantics remain pending. RedSea mutation is currently limited to RAM
 drives and FAT32 mutation to explicitly writable ATA devices.
+
+## Block cache and drive ownership
+
+`Kernel/BlkDev/DskCache.cpp` restores the 560-byte `CCacheBlk` record,
+LRU queue, compact hash sentinels, initialization, insertion and
+invalidation, and `RCache`. The cache key is the drive pointer and
+absolute 512-byte block number. Cache hits do not promote entries;
+`RCache` consumes cached prefixes and suffixes. DVD startup selects
+the pinned distribution's `Scale2Mem(2048,0x40000)` configuration.
+This is not yet a general implementation of the kernel configuration
+language.
+
+`DskDrv.cpp` and `DskBlkDev.cpp` implement task ownership, same-task
+reentry, contention, reset and release. The native filesystem scopes
+retain interrupt exclusion after acquiring ownership, without yielding
+while unwinding a C++ scope. Task exit and Break release owned drives
+and devices. Controller-sharing IDE devices forward to the common
+device lock. Native release clears the drive before the device and
+does not reproduce every intermediate reference yield. SMP and
+contention across multiple partitions sharing a controller remain
+untested.
+
+`DskBlk.cpp` routes filesystem reads of published drives through the
+cache, including partial-sector reads; mount-time reads bypass it.
+Raw writes update overlapping cached bytes for the same device or
+invalidate affected blocks after a failed ATA write. RedSea RAM
+mutations invalidate cached entries before direct bitmap or data
+writes. Device reset and RAM replacement invalidate cached state.
+Reinitialization covers existing RAM, ATA and ATAPI devices; the
+reference's removable-media sequence, file-backed devices, full
+device deletion and exception paths remain incomplete. The separate
+`cur_fat_blk` write-back cache and RedSea free lists are not supplied
+by this block-cache implementation.
 
 ## Remaining structural work
 

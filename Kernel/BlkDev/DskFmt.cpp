@@ -62,7 +62,7 @@ extern "C" void FmtCpp(uint8_t drv_let, uint8_t quick, uint8_t confirm, int64_t 
     res=FAT32Fmt(*dv,quick);
   else if (dv->bd->type==BDT_RAM && (type==FSt_FAT32 || type==FSt_REDSEA)) {
     if (type==FSt_FAT32) PutS("Using RedSea File System.\n");
-    CMemLock lock(dv->locked_flags);
+    CDiskLock lock(*dv);
     ResidentDriveClear(dv->drv_let);
     auto root=dv->bd->init_root_dir_blks;
     res=(quick || BlkWriteZero(*dv,dv->drv_offset,dv->size)) &&

@@ -3,6 +3,19 @@
 static bool ram_owned[BLKDEVS_NUM];
 static uint64_t mount_flags;
 
+static void BlkDevShareController(CBlkDev &bd)
+{
+  for (size_t i=0;i<BLKDEVS_NUM;i++) {
+    auto *other=&blkdev.blkdevs[i];
+    if (other->bd_signature==BD_SIGNATURE_VAL &&
+        (other->type==BDT_ATA || other->type==BDT_ATAPI) &&
+        other->base0==bd.base0 && other->base1==bd.base1) {
+      bd.lock_fwding=BlkDevLockTarget(other);
+      break;
+    }
+  }
+}
+
 bool BlkDevGlblsInit()
 {
   auto *hc = adam_task->data_heap;
@@ -35,6 +48,11 @@ bool BlkDevGlblsInit()
   blkdev.first_dvd_drv_let = BOOT_DVD_LET;
   for (size_t i = 0; i < DRVS_NUM; i++)
     blkdev.let_to_drv[i] = drives + i;
+  // STD_DISTRO_DVD_CFG in KernelA.HH selects this Scale2Mem range.
+  auto *bp=SYS_DATA_BP?SYS_DATA_BP:SYS_CODE_BP;
+  constexpr int64_t limit=2LL*1024*1024*1024;
+  int64_t mem=bp->alloced_u8s;
+  DskCacheInitCpp(mem>=limit?0x40000:2048+(0x40000-2048)*mem/limit);
   return true;
 }
 
@@ -86,6 +104,7 @@ static int64_t BlkDevAddATA(CBlkDev *bd,int64_t prt_num,bool whole_drv)
   if (res) {
     device.bd_signature=BD_SIGNATURE_VAL;
     device.flags|=BDF_INITIALIZED | BDF_READ_ONLY;
+    BlkDevShareController(device);
     MemCpy(bd,&device,sizeof(device));
     ATAIdentifyRecord(*bd);
   }
@@ -114,6 +133,10 @@ extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole_drv,
     if (letter > 'B')
       return 0;
   }
+  auto &target = *blkdev.let_to_drv[letter - 'A'];
+  if (target.dv_signature==DRV_SIGNATURE_VAL &&
+      ((target.locked_flags&1) || (target.bd && (target.bd->locked_flags&1))))
+    return 0;
 
   CBlkDev device;
   MemCpy(&device, bd, sizeof(device));
@@ -145,13 +168,14 @@ extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole_drv,
     return 0;
   }
 
-  auto &target = *blkdev.let_to_drv[letter - 'A'];
   if (target.dv_signature == DRV_SIGNATURE_VAL) {
+    DskCacheInvalidate2Cpp(&target);
     ResidentDriveClear(letter);
     auto *old = target.bd;
     for (size_t i = 0; i < BLKDEVS_NUM; i++) {
       if (old != &blkdev.blkdevs[i] || old->type != BDT_RAM)
         continue;
+      DskCacheInvalidateDevice(old);
       if (old->RAM_dsk == device.RAM_dsk)
         owned |= ram_owned[i];
       else if (ram_owned[i])

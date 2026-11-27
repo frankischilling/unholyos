@@ -303,6 +303,8 @@ extern "C" CTask *TaskEnd()
     return task;
   }
 
+  DrvsReleaseCpp();
+  BlkDevsReleaseCpp();
   auto *child_head = reinterpret_cast<CTask *>(
       reinterpret_cast<uintptr_t>(&task->next_child_task) -
       offsetof(CTask, next_sibling_task));
