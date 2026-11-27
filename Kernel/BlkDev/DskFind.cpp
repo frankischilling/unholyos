@@ -1,8 +1,15 @@
 #include "../KernelB.hpp"
 
-static CDirEntry *FilesFind2(CDrv &dv, const char *dir, const char *mask,
-                             uint64_t flags)
+extern "C" void PrintErrCpp(const char *fmt, int64_t argc,
+                            const uint64_t *argv, const uintptr_t *frame);
+
+static CDirEntry *FilesFindInDir(CDrv &dv, const char *dir, const char *mask,
+                                uint64_t flags)
 {
+  if (!ReadableFS(dv)) {
+    PrintErrCpp("File System Not Supported\n", 0, nullptr, nullptr);
+    return nullptr;
+  }
   uint64_t clus, parent;
   size_t size = StrLen(dir);
   if (!Name2DirClus(dv, dir + 2, size - 2, clus))
@@ -13,11 +20,12 @@ static CDirEntry *FilesFind2(CDrv &dv, const char *dir, const char *mask,
     return nullptr;
   CDirEntry *res = nullptr;
   uint64_t dir_size;
-  bool okay=dv.fs_type==FSt_FAT32?
-      FAT32FilesFind(dv,clus,dir,mask,flags,nullptr,res,dir_size):
-      RedSeaFilesFind(dv,clus,parent,dir,mask,flags,nullptr,res);
-  if (!okay ||
-      !DirFilesSort(res, false)) {
+  bool okay = dv.fs_type == FSt_FAT32
+                  ? FAT32FilesFind(dv, clus, dir, mask, flags, nullptr, res,
+                                   dir_size)
+                  : RedSeaFilesFind(dv, clus, parent, dir, mask, flags, nullptr,
+                                    res);
+  if (!okay || !DirFilesSort(res, false)) {
     DirTreeDelCpp(res);
     return nullptr;
   }
@@ -27,6 +35,19 @@ static CDirEntry *FilesFind2(CDrv &dv, const char *dir, const char *mask,
     DirTreeDelCpp(res);
     return nullptr;
   }
+  return res;
+}
+
+extern "C" CDirEntry *FilesFind2Cpp(const char *mask, uint64_t flags)
+{
+  constexpr uint64_t fuf_error = 'F' | uint64_t('U') << 8 | uint64_t('F') << 16;
+  if (flags & ~FUG_FILES_FIND)
+    RaiseHolyC(fuf_error);
+  auto &task = *CurrentTask();
+  auto *directory = DirCurCpp(nullptr, nullptr);
+  auto *res = directory ? FilesFindInDir(*task.cur_dv, directory, mask, flags)
+                        : nullptr;
+  Free(directory);
   return res;
 }
 
@@ -48,10 +69,7 @@ extern "C" CDirEntry *FilesFindCpp(const char *mask, uint64_t flags)
   auto *dirc = DirContextNewCpp(mask, true, false, false);
   if (!dirc)
     return nullptr;
-  auto *directory = DirCurCpp(nullptr, nullptr);
-  auto *res = directory ? FilesFind2(*task.cur_dv, directory, dirc->mask, flags)
-                        : nullptr;
-  Free(directory);
+  auto *res = FilesFind2Cpp(dirc->mask, flags);
   DirContextDelCpp(dirc, true);
   return res;
 }

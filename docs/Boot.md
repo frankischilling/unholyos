@@ -1004,19 +1004,23 @@ first eight path cells; the captures also include the VGA framebuffer.
 Run the native regression with QEMU 8.2.2, PC, `qemu64` and 512 MiB:
 
 ```sh
-make -j4 BUILD=build/character-check
-make BUILD=build/character-check build/character-check/Linux/TestBoot
+make -j4 BUILD=build/character-check build/character-check/character-graphics-test.iso \
+  build/character-check/Linux/TestBoot
 build/character-check/Linux/TestBoot --character-graphics qemu-system-x86_64 \
-  build/character-check/unholyos.iso build/character-check/native
+  build/character-check/character-graphics-test.iso build/character-check/native
 ```
 
 To replay against the pinned distribution, invoke the same driver from
 the repository root with `--character-graphics-reference` and the
 reference ISO. It declines installation and the tour, obtains the text
 layer address from the guest's debug port, and uses GDB on local port
-45362 to copy the exact memory-set probe bytes into a guest allocation.
-The original demos execute from the reference DVD. The normal test uses
-QMP over a private socket pair and does not require GDB.
+45362 to copy the exact memory-set and CharDemo observer probe bytes into
+guest allocations. The native test ISO packages the same observer, and
+the driver checks its source bytes before booting. The observer records
+subcell pan transitions during guest refreshes independently of host
+sampling latency. The original demos run unmodified; the production ISO
+does not include the observer. The normal test uses QMP over a private
+socket pair and does not require GDB.
 
 This covers the tested keyboard, mouse, text-layer and cleanup paths,
 not every map boundary, maze shape, menu action, animation timing, or
@@ -3508,6 +3512,60 @@ completed the HolyC probe. The reference returned to its empty
 `build/list-utilities-test.iso` and `build/clang/list-utilities-test.iso`.
 The standard ISOs also built successfully. The focused test runs as part
 of `make test`.
+
+## Drive, filename and directory services
+
+The storage-service fixture suite uses the pinned TempleOS reference and
+the native GCC and Clang guests. Each executed all three HolyC files in
+order, yielding the same result lines:
+
+```text
+Drive services 7FF
+Path names 1FFF
+Directory services FFF
+```
+
+The 36 checks cover drive letter aliases, type and signature validation,
+remapping, drive selection, writable checks, default arguments, color
+tables, model/serial extraction, record layouts, extensions, filename
+validation, relative and absolute paths, compressed suffixes, cluster
+and parent lookup, recursive sorting and flattening, and tree ownership.
+The ATAPI record is absent in both guests. The separate native FAT32
+read probe checks actual ATA identity retention and reports `1FFF`.
+The reference uses the original system-export addresses through typed
+function pointers where a private symbol has no typed public declaration.
+
+| Fixture | Source bytes | SHA-256 |
+| --- | ---: | --- |
+| `DriveServicesProbe.HC` | 3271 | `f2515f32bb67979e4e8b4bb753270c07e485ad8a71d7e37d624ecec2252451f3` |
+| `PathNamesProbe.HC` | 4310 | `14811e705d987fe4e7bb85ecc3e4b243da2d172f3f80bd68881a803c9567ab53` |
+| `DirectoryServicesProbe.HC` | 4637 | `6a22ddc4c755e60e4ddacaa2b47163aca70833fd9dc70eedc9a90bf38730eb6a` |
+
+The reference driver verifies each uploaded source plus its terminating
+NUL. The native driver verifies the packaged bytes and source execution
+cleanup. The three concatenated result lines hash to
+`6ef87324f669c7c1f70779085bbda35479402497e0ae217c4fe64539e4c793cd`.
+The comparison checks the result lines, not the preceding directory
+creation and deletion diagnostics; full serial and terminal captures
+are retained in the evidence directories.
+
+```sh
+make -j4 all test-storage-services
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 all test-storage-services
+build/Linux/TestBoot --storage-services-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/storage-reference-verified
+```
+
+GCC 13.3.0, Clang 20.1.2, NASM 2.16.01 and QEMU 8.2.2 were used.
+The local Clang build used the installed Clang 20 executable by its
+path. Both native images built and booted with the same `pc`, `qemu64`,
+512 MiB, one-vCPU DVD boot configuration as the reference. The reference
+ISO hashes to `3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+Evidence is in `build/storage-native-probes-final`,
+`build/storage-native-clang-verified` and `build/storage-reference-verified`.
+`make test` includes the new focused suite and existing filesystem
+regressions. The drive report's full interactive rendering, removable
+media handling, lock and cache semantics remain unverified.
 
 ## Subsystem map
 

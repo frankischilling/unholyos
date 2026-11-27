@@ -49,7 +49,9 @@ test input is needed.
 
 Implement the complete reference scope in its corresponding source locations.
 Track each subsystem's missing routines, partial implementations, temporary
-adapters, and required assets. Complete the native HolyC compiler and runtime
+adapters, and required assets. The [rewrite audit](RewriteAudit.md) records
+the current path inventory and outstanding subsystem work. Complete the
+native HolyC compiler and runtime
 alongside the kernel and desktop so the original software can use them.
 
 This phase finishes when every reference subsystem and required runtime path

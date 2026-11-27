@@ -100,8 +100,11 @@ static std::string_view ProgramOutput(std::string_view serial, const char *path,
 static void CheckProgramOutput(std::string_view serial, const char *path,
                                std::string_view expected, char checks = '3')
 {
-  Check(ProgramOutput(serial, path, checks) == expected,
-        "Native HolyC source output differed from TempleOS");
+  const auto actual=ProgramOutput(serial,path,checks);
+  if (actual!=expected)
+    throw std::runtime_error(std::string("Native HolyC source output differed for ")+
+                             path+"\nExpected:\n"+std::string(expected)+
+                             "\nActual:\n"+std::string(actual));
 }
 
 struct CBootMedia
@@ -393,7 +396,7 @@ static Bytes VerifyCompilerMedia(const Bytes &disc, uint64_t root,
       Check(record.type == 16 && export_names.insert(record.name).second,
             "Compiler exports must be unique and relative");
     }
-  Check(native_imports == 45 && data_imports == 30 &&
+  Check(native_imports == 45 && data_imports == 32 &&
             import_names.contains("__unholyos_sysv.DefineLstLoadCpp"),
         "Compiler native or data import contract differs");
   std::set<std::string> expected_exports{std::string(compiler_status_name),
@@ -2931,6 +2934,14 @@ constexpr CTextProbe list_utilities_probes[]{
     {"list-utilities", "/ListUtilitiesProbe.HC", "", "LU linked ", "LU DONE",
      "LU linked 7F\nLU queue 7F\nLU DONE\n"}};
 
+constexpr CTextProbe storage_services_probes[]{
+    {"drive-services", "/DriveServicesProbe.HC", "", "Drive services ",
+     "Drive services ", "Drive services 7FF\n", {}, true},
+    {"path-names", "/PathNamesProbe.HC", "", "Path names ",
+     "Path names ", "Path names 1FFF\n", {}, true},
+    {"directory-services", "/DirectoryServicesProbe.HC", "", "Directory services ",
+     "Directory services ", "Directory services FFF\n", {}, true}};
+
 static void CheckBootProbeOrder(const std::string &serial,
                                 std::span<const char *const> paths)
 {
@@ -4526,6 +4537,7 @@ constexpr std::string_view file_operations_output =
     "Copying B:/Ops/A.TXT to B:/Pick/A.TXT\n"
     "Copying B:/Pick/A.TXT to B:/Pick/R.TXT\n"
     "Del A.TXT\n"
+    "Make Directory:Clone\n"
     "Make Directory:B:/Clone/Empty\n"
     "Make Directory:B:/Clone/Sub\n"
     "Make Directory:B:/Clone/Sub/Deep\n"
@@ -4535,6 +4547,7 @@ constexpr std::string_view file_operations_output =
     "Copying B:/Ops/B.BIN to B:/Clone/B.BIN\n"
     "Copying B:/Ops/A.TXT to B:/Clone/A.TXT\n"
     "tree count 9\n"
+    "Make Directory:Txt\n"
     "Make Directory:B:/Txt/Empty\n"
     "Make Directory:B:/Txt/Sub\n"
     "Make Directory:B:/Txt/Sub/Deep\n"
@@ -5192,9 +5205,11 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/VariadicPtrProbe.BIN.Z", variadic_ptr_output, '1');
     CheckProgramOutput(boot, "/DocFrame.HC", doc_frame_output, '1');
     CheckProgramOutput(boot, "/DocButton.HC", doc_button_output, '1');
-    CheckProgramOutput(boot, "/DirectoryProbe.HC", "Directory probe 1FF\n",
+    CheckProgramOutput(boot, "/DirectoryProbe.HC",
+                       "Make Directory:DirProbe\nMake Directory:Sub\nDirectory probe 1FF\n",
                        '1');
-    CheckProgramOutput(boot, "/DirContextProbe.HC", "Dir context FF\n", '1');
+    CheckProgramOutput(boot, "/DirContextProbe.HC",
+                       "Make Directory:DirScope\nMake Directory:Nested\nDir context FF\n", '1');
     CheckProgramOutput(boot, "/FileStreamProbe.HC", "File stream probe 3FF\n", '1');
     CheckProgramOutput(boot, "/FileCopyProbe.HC", file_copy_output, '1');
     CheckProgramOutput(boot, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
@@ -5342,9 +5357,11 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          '1');
       CheckProgramOutput(output, "/DocFrame.HC", doc_frame_output, '1');
       CheckProgramOutput(output, "/DocButton.HC", doc_button_output, '1');
-      CheckProgramOutput(output, "/DirectoryProbe.HC", "Directory probe 1FF\n",
+      CheckProgramOutput(output, "/DirectoryProbe.HC",
+                         "Make Directory:DirProbe\nMake Directory:Sub\nDirectory probe 1FF\n",
                          '1');
-      CheckProgramOutput(output, "/DirContextProbe.HC", "Dir context FF\n",
+      CheckProgramOutput(output, "/DirContextProbe.HC",
+                         "Make Directory:DirScope\nMake Directory:Nested\nDir context FF\n",
                          '1');
       CheckProgramOutput(output, "/FileStreamProbe.HC", "File stream probe 3FF\n",
                          '1');
@@ -6146,6 +6163,7 @@ int main(int argc, char **argv)
                    "Make Directory:C:/OPS/SUB/DEEP\nMake Directory:C:/OPS/EMPTY\n"
                    "Make Directory:C:/PICK\nCopying C:/OPS/A.TXT to C:/PICK/A.TXT\n"
                    "Copying C:/PICK/A.TXT to C:/PICK/R.TXT\nDel A.TXT\n"
+                   "Make Directory:CLONE\n"
                    "Make Directory:C:/CLONE/EMPTY\nMake Directory:C:/CLONE/SUB\n"
                    "Make Directory:C:/CLONE/SUB/DEEP\n"
                    "Copying C:/OPS/SUB/DEEP/D.TXT to C:/CLONE/SUB/DEEP/D.TXT\n"
@@ -6153,6 +6171,7 @@ int main(int argc, char **argv)
                    "Copying C:/OPS/SUB/C.TXT to C:/CLONE/SUB/C.TXT\n"
                    "Copying C:/OPS/B.BIN to C:/CLONE/B.BIN\n"
                    "Copying C:/OPS/A.TXT to C:/CLONE/A.TXT\n"
+                   "Make Directory:TXT\n"
                    "Make Directory:C:/TXT/EMPTY\nMake Directory:C:/TXT/SUB\n"
                    "Make Directory:C:/TXT/SUB/DEEP\n"
                    "Copying C:/OPS/SUB/DEEP/D.TXT to C:/TXT/SUB/DEEP/D.TXT\n"
@@ -6255,6 +6274,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--class-records-reference" ||
        std::string_view(argv[1]) == "--list-utilities" ||
        std::string_view(argv[1]) == "--list-utilities-reference" ||
+       std::string_view(argv[1]) == "--storage-services" ||
+       std::string_view(argv[1]) == "--storage-services-reference" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -6303,10 +6324,12 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--class-records");
     bool list_utilities_probe =
         std::string_view(argv[1]).starts_with("--list-utilities");
+    bool storage_services_probe =
+        std::string_view(argv[1]).starts_with("--storage-services");
     const bool source_probe = compiler_defines_probe || string_defines_probe ||
                               system_defines_probe || color_conversions_probe ||
                               format_missing_args_probe || class_records_probe ||
-                              list_utilities_probe;
+                              list_utilities_probe || storage_services_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6332,6 +6355,8 @@ int main(int argc, char **argv)
       text_probes = class_records_probes;
     else if (list_utilities_probe)
       text_probes = list_utilities_probes;
+    else if (storage_services_probe)
+      text_probes = storage_services_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -6339,11 +6364,14 @@ int main(int argc, char **argv)
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
+      if (character && !reference)
+        VerifyHostModuleMedia(argv[3],"Linux/Fixtures/CharPanObserver.HC",
+                              "CharPanObserver.HC");
       if ((source_probe || internal_types_probe) && !reference) {
-        const auto &probe = text_probes[0];
-        VerifyHostModuleMedia(argv[3],
-                              std::string("Linux/Fixtures") + probe.source,
-                              probe.source + 1);
+        for (const auto &probe:text_probes)
+          VerifyHostModuleMedia(argv[3],
+                                std::string("Linux/Fixtures") + probe.source,
+                                probe.source + 1);
       }
       const char *memory = class_records_probe ? "3072" : "512";
       CMonitor vm(argv[2], argv[3], dir, "pc", memory, false, {}, false,
@@ -6357,7 +6385,8 @@ int main(int argc, char **argv)
                                           "0x0000000000000001\r\n")
                           : vm.Boot(dir / "serial.log");
         if (source_probe) {
-          CheckBootSourceProbe(output, text_probes[0], dir);
+          for (const auto &probe:text_probes)
+            CheckBootSourceProbe(output, probe, dir);
           if (class_records_probe)
             CheckClassRecordRecovery(output);
         } else {
@@ -6429,7 +6458,8 @@ int main(int argc, char **argv)
         CheckProgramOutput(output,"/AtaWriteRejectProbe.HC","ATA reject probe 1F\n",'1');
         Check(output.find("UnholyOS: ATA partial sectors 0x0000000000000001\r\n")!=std::string::npos,
               "ATA partial sector write or restore failed");
-        CheckProgramOutput(output,"/Fat32RejectProbe.HC","FAT32 reject probe 1F\n",'1');
+        CheckProgramOutput(output,"/Fat32RejectProbe.HC",
+                           "Make Directory:C:/NEW\nFAT32 reject probe 1F\n",'1');
         vm.Quit();
         Check(FileRead(disk)==expected,"ATA disk bytes differed from expected image");
       }
@@ -6463,8 +6493,9 @@ int main(int argc, char **argv)
             "fat metadata FRAG.BIN 5 2501 20 02/29/24 12:34:56\n"
             "fat entry SUB 1024\n"
             "fat entry LongNameExample.txt 333\n"
-            "FAT32 read probe FFF\n",'1');
-        CheckProgramOutput(output,"/Fat32RejectProbe.HC","FAT32 reject probe 1F\n",'1');
+            "FAT32 read probe 1FFF\n",'1');
+        CheckProgramOutput(output,"/Fat32RejectProbe.HC",
+                           "Make Directory:C:/NEW\nFAT32 reject probe 1F\n",'1');
       }
       vm.Command(R"({"execute":"quit"})");
       std::cout<<(invalid?"Verified FAT32 invalid geometry refusal\n":
@@ -6518,6 +6549,7 @@ int main(int argc, char **argv)
               << "       " << argv[0]
               << " --class-records[-reference] qemu image.iso [capture-dir]\n"
               << " --list-utilities[-reference] qemu image.iso [capture-dir]\n"
+              << " --storage-services[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]

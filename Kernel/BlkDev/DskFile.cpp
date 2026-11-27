@@ -8,34 +8,6 @@ bool FsFileFind(const CDrv &dv,uint64_t dir,const char *name,bool directory,
                               RedSeaFileFind(dv,dir,name,directory,entry);
 }
 
-bool Name2DirClus(const CDrv &dv, const char *path, size_t count,
-                   uint64_t &dir)
-{
-  if (!count || *path != '/' || !ReadableFS(dv))
-    return false;
-  dir = dv.root_clus;
-  for (size_t pos = 1; pos < count;) {
-    if (path[pos] == '/') {
-      pos++;
-      continue;
-    }
-    size_t start = pos;
-    while (pos < count && path[pos] != '/')
-      pos++;
-    char name[CDIR_FILENAME_LEN];
-    size_t len = pos - start;
-    if (len >= sizeof(name))
-      return false;
-    MemCpy(name, path + start, len);
-    name[len] = 0;
-    CRedSeaDirEntry entry;
-    if (!FsFileFind(dv, dir, name, true, entry))
-      return false;
-    dir = entry.clus;
-  }
-  return true;
-}
-
 bool RedSeaDirClus(const CDrv &dv,const char *path,size_t count,uint64_t &dir)
 {
   return dv.fs_type==FSt_REDSEA && Name2DirClus(dv,path,count,dir);

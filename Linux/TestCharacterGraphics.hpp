@@ -543,10 +543,12 @@ static void DriveCharacterGraphics(
                       std::string_view::npos &&
                   diagnostic.find("ERROR:") == std::string_view::npos,
               "Reference failed assertion did not produce exactly one warning");
-      } else
+      } else if (!probe.allow_prefix)
         Check(
             first / 81 == 2 && first % 81 == 1,
             "Reference text probe did not begin at the cleared window origin");
+      else
+        Check(first % 81 == 1,"Reference probe result did not begin at a line");
       const auto finish = screen.find(probe.finish, first);
       Check(finish != std::string::npos,
             "Missing last reference text probe line");
@@ -1013,8 +1015,36 @@ static void DriveCharacterGraphics(
           hash = (hash ^ uint8_t(cells[y * 80 + x] >> shift)) * 0x100000001B3;
     return hash;
   };
-  cmd("Seed(12345);DocClear(,1);");
-  cmd(R"(ExeFile("::/Demo/Games/CharDemo.HC");)");
+  // Load identical test-only source on both guests. Long keyboard-entered
+  // definitions and address commands can leave the terminal panned or still
+  // editing when the host expects the observer's setup output.
+  cmd("DocClear(,1);");
+  if (reference)
+    upload(fs::absolute("Linux/Fixtures/CharPanObserver.HC"),true);
+  else
+    cmd(R"(ExeFile("::/CharPanObserver.HC");)");
+  // Column zero belongs to the window border (the reference spells its
+  // title vertically there). Match the complete marker inside the window.
+  const std::regex observer_marker(R"((?:^|\n). *CGPAN:([0-9A-Fa-f]+):END *\n)");
+  std::smatch observer_match;
+  std::string observer_screen;
+  wait([&](const Cells &cells) {
+    observer_screen=visible(cells);
+    return std::regex_search(observer_screen,observer_match,observer_marker) &&
+           observer_screen.find("T:/Home>",observer_match.position()+observer_match.length())!=std::string::npos;
+  },"CharDemo pan observer setup did not finish");
+  const auto pan_watch=std::stoull(observer_match[1].str(),nullptr,16);
+  Check(in_memory(pan_watch,32),"Invalid CharDemo pan observer address");
+  const auto initial_observer = ReadPhysical<4>(vm, pan_watch);
+  Check(initial_observer==std::array<uint64_t,4>{},
+        "CharDemo pan observer was not initialized");
+  // Start the observer and enter the demo in one guest operation.
+  cmd("CGRun;");
+  wait([&](const Cells &) {
+    const auto observed = ReadPhysical<4>(vm, pan_watch);
+    return !observed[2] && observed[3] > initial_observer[3];
+  },
+       "CharDemo pan observer did not start");
   auto initial = wait(map_visible, "CharDemo did not draw its terrain");
   Check(terrain_hash(initial) == 0xB980E584B8EAAC9C,
         "CharDemo initial terrain differs from the pinned seed");
@@ -1060,14 +1090,27 @@ static void DriveCharacterGraphics(
   };
   auto scroll = [&](const Cells &before, const char *button, int dx, int dy,
                     const char *name) {
+    const size_t axis = dx ? 0 : 1;
+    const auto start = ReadPhysical<4>(vm, pan_watch);
     key(button);
-    bool subcell = false;
-    auto cells = wait([&](const Cells &now) {
-      auto pan = ReadPhysical<2>(vm, pan_slot);
-      subcell |= pan[0] != 7 || pan[1] != 7;
-      return subcell && pan[0] == 7 && pan[1] == 7 &&
-             matches_shift(before, now, dx, dy);
-    }, "CharDemo did not scroll exactly four cells");
+    std::array<uint64_t, 2> pan{};
+    std::array<uint64_t, 4> observed{};
+    bool shifted = false;
+    Cells cells;
+    try {
+      cells = wait([&](const Cells &now) {
+        pan = ReadPhysical<2>(vm, pan_slot);
+        observed = ReadPhysical<4>(vm, pan_watch);
+        shifted = matches_shift(before, now, dx, dy);
+        return observed[axis] > start[axis] && pan[0] == 7 && pan[1] == 7 && shifted;
+      }, "CharDemo did not scroll exactly four cells");
+    } catch (...) {
+      std::cerr << name << " pan " << pan[0] << ' ' << pan[1]
+                << " observer " << start[0] << ' ' << start[1] << ' ' << start[3]
+                << " -> " << observed[0] << ' ' << observed[1] << ' ' << observed[3]
+                << " shifted " << shifted << '\n';
+      throw;
+    }
     snapshot(name);
     return cells;
   };
@@ -1093,6 +1136,20 @@ static void DriveCharacterGraphics(
   wait_text("T:/Home>");
   wait_restored();
   snapshot("char-exit");
+  wait([&](const Cells &) {
+    return ReadPhysical<4>(vm, pan_watch)[2] == 2;
+  }, "CharDemo pan observer did not stop");
+  wait([&](const Cells &cells) {
+    auto screen=visible(cells);
+    auto done=screen.find("CGWATCH 2");
+    return done!=std::string::npos && screen.find("T:/Home>",done)!=std::string::npos;
+  },"CharDemo pan observer did not exit");
+  cmd("CGDone;");
+  wait([&](const Cells &cells) {
+    auto screen=visible(cells);
+    auto done=screen.find("CGDONE");
+    return done!=std::string::npos && screen.find("T:/Home>",done)!=std::string::npos;
+  },"CharDemo pan observer cleanup did not finish");
   std::cout << "CharDemo.HC animated all four glyphs, scrolled four ways, restarted and restored state\n";
 
   auto move_to = [&](int x, int y) {

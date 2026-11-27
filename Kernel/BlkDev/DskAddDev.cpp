@@ -38,79 +38,6 @@ bool BlkDevGlblsInit()
   return true;
 }
 
-CDrv *MountedDrive(char letter)
-{
-  auto *dv = 'A' <= letter && letter <= 'Z' ? blkdev.let_to_drv[letter - 'A']
-                                            : nullptr;
-  return dv && dv->dv_signature == DRV_SIGNATURE_VAL ? dv : nullptr;
-}
-
-static uint8_t Let2Let(uint8_t letter)
-{
-  if (!letter) {
-    auto *drive = CurrentTask()->cur_dv;
-    letter = drive ? drive->drv_let : 0;
-  } else if (letter == ':') {
-    letter = blkdev.boot_drv_let;
-  } else if (letter == '~') {
-    letter = blkdev.home_dir ? *blkdev.home_dir : 0;
-  }
-  if (letter >= 'a' && letter <= 'z')
-    letter -= 'a' - 'A';
-  return letter;
-}
-
-static uint32_t Let2BlkDevType(uint8_t letter)
-{
-  if (letter < 'A' || letter > 'Z')
-    return BDT_NULL;
-  if (letter <= 'B')
-    return BDT_RAM;
-  if (letter <= 'L')
-    return BDT_ATA;
-  if (letter <= 'P')
-    return BDT_ISO_FILE_READ;
-  if (letter <= 'S')
-    return BDT_ISO_FILE_WRITE;
-  return BDT_ATAPI;
-}
-
-static CBlkDev *BlkDevNextFreeSlot(uint8_t letter, uint32_t type)
-{
-  if (!blkdev.blkdevs)
-    return nullptr;
-  CMemLock lock(mount_flags);
-  for (size_t i = 0; i < BLKDEVS_NUM; i++) {
-    auto &bd = blkdev.blkdevs[i];
-    if (bd.bd_signature != BD_SIGNATURE_VAL) {
-      MemSet(&bd, 0, sizeof(bd));
-      bd.first_drv_let = letter;
-      bd.type = type;
-      bd.blk_size = BLK_SIZE;
-      bd.max_blk = 0xEFFFFFFF;
-      if (type != BDT_RAM)
-        bd.flags = BDF_READ_CACHE;
-      if (type == BDT_ISO_FILE_READ)
-        bd.flags |= BDF_READ_ONLY;
-      if (type == BDT_ATAPI) {
-        bd.flags |= BDF_REMOVABLE | BDF_READ_ONLY;
-        bd.blk_size = DVD_BLK_SIZE;
-      }
-      return &bd;
-    }
-  }
-  return nullptr;
-}
-
-extern "C" CBlkDev *BlkDevNextFreeSlotCpp(uint8_t letter, int64_t type)
-{
-  auto resolved = Let2Let(letter);
-  if (type != BDT_NULL && Let2BlkDevType(resolved) == type)
-    if (auto *bd = BlkDevNextFreeSlot(resolved, type))
-      return bd;
-  RaiseHolyC(0x7665446B6C42); // BlkDev
-}
-
 static int64_t BlkDevAddATA(CBlkDev *bd,int64_t prt_num,bool whole_drv)
 {
   if (whole_drv || bd->first_drv_let<'C' || bd->first_drv_let>'L' ||
@@ -160,6 +87,7 @@ static int64_t BlkDevAddATA(CBlkDev *bd,int64_t prt_num,bool whole_drv)
     device.bd_signature=BD_SIGNATURE_VAL;
     device.flags|=BDF_INITIALIZED | BDF_READ_ONLY;
     MemCpy(bd,&device,sizeof(device));
+    ATAIdentifyRecord(*bd);
   }
   return res;
 }
@@ -238,16 +166,6 @@ extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole_drv,
   MemCpy(&target, &drive, sizeof(target));
   ram_owned[slot] = owned;
   return 1;
-}
-
-extern "C" CDrv *Let2DrvCpp(uint8_t letter, uint8_t except)
-{
-  auto *drive = letter ? MountedDrive(Let2Let(letter)) : CurrentTask()->cur_dv;
-  if (drive && drive->dv_signature == DRV_SIGNATURE_VAL)
-    return drive;
-  if (except)
-    RaiseHolyC(0x767244); // Drv
-  return nullptr;
 }
 
 CDrv *BlkDevsInitAll()

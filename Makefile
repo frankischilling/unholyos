@@ -23,8 +23,8 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Kernel/PCIBIOS.cpp Kernel/Mem/MemPag.cpp Kernel/Mem/MAllocFree.cpp \
 	Kernel/Mem/BlkPool.cpp Kernel/Mem/HeapCtrl.cpp Kernel/Mem/MemPhysical.cpp Kernel/Mem/PageTables.cpp \
 	Kernel/BlkDev/DskATA.cpp Kernel/BlkDev/DskATAId.cpp Kernel/BlkDev/DskAddDev.cpp \
-	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/FileSysFAT.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
-	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/BlkDev/DskFmt.cpp Kernel/Compress.cpp \
+	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/DskDrv.cpp Kernel/BlkDev/DskBlkDev.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/FileSysFAT.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
+	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskStrB.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/BlkDev/DskFmt.cpp Kernel/Compress.cpp \
 	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ASnd.cpp Adam/TaskSettings.cpp Adam/AutoComplete/ACTask.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
 	Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
 	Adam/Gr/SpriteNew.cpp Adam/Gr/GrSpritePlot.cpp Adam/Gr/ScrnCast.cpp \
@@ -95,6 +95,10 @@ CLASS_RECORDS_PROBE := Linux/Fixtures/ClassRecordsProbe.HC
 CLASS_RECORDS_TEST_ISO := $(BUILD)/class-records-test.iso
 LIST_UTILITIES_PROBE := Linux/Fixtures/ListUtilitiesProbe.HC
 LIST_UTILITIES_TEST_ISO := $(BUILD)/list-utilities-test.iso
+STORAGE_SERVICES_PROBES := $(addprefix Linux/Fixtures/,DriveServicesProbe.HC PathNamesProbe.HC DirectoryServicesProbe.HC)
+STORAGE_SERVICES_TEST_ISO := $(BUILD)/storage-services-test.iso
+CHARACTER_GRAPHICS_PROBE := Linux/Fixtures/CharPanObserver.HC
+CHARACTER_GRAPHICS_TEST_ISO := $(BUILD)/character-graphics-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
 FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
@@ -315,6 +319,9 @@ $(CLASS_RECORDS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(CLAS
 $(LIST_UTILITIES_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(LIST_UTILITIES_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(LIST_UTILITIES_PROBE)
 
+$(STORAGE_SERVICES_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STORAGE_SERVICES_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(STORAGE_SERVICES_PROBES))
+
 $(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
 
@@ -348,6 +355,10 @@ $(STRINGS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STRINGS_PR
 $(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home \
 		$(foreach demo,$(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS),--file-at $(demo) $(demo))
+
+$(CHARACTER_GRAPHICS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(GAME_DEMOS) $(CHARACTER_GRAPHICS_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(CHARACTER_GRAPHICS_PROBE) \
+		$(foreach demo,$(GAME_DEMOS),--file-at $(demo) $(demo))
 
 TEST_MODULES := $(MODULE_PROBE) $(MODULE_CALLER) $(RUNTIME_PROBE) $(FILE_READ_PROBE) \
 	$(FILE_WRITE_PROBE) $(EXCEPT_PROBE) $(FORMAT_PROBE) $(HASH_CALLER) $(HASH_PROBE) \
@@ -402,12 +413,16 @@ test-class-records: $(CLASS_RECORDS_TEST_ISO) $(BOOT_TEST)
 test-list-utilities: $(LIST_UTILITIES_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --list-utilities "$(QEMU)" $(LIST_UTILITIES_TEST_ISO)
 
-test: test-list-utilities
+.PHONY: test-storage-services
+test-storage-services: $(STORAGE_SERVICES_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --storage-services "$(QEMU)" $(STORAGE_SERVICES_TEST_ISO)
+
+test: test-list-utilities test-storage-services
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args test-internal-types test-class-records
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) $(CHARACTER_GRAPHICS_TEST_ISO) test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args test-internal-types test-class-records
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
 	$(STR_COMPARE_TEST)
 	$(BOOT_TEST) --compiler-failures "$(QEMU)" $(ISO) $(KERNEL)
@@ -419,7 +434,7 @@ test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_IS
 	$(BOOT_TEST) --fat32-stream "$(QEMU)" $(FAT_STREAM_ISO) $(FAT_WRITE_DISK)
 	$(BOOT_TEST) --fat32-tree "$(QEMU)" $(FAT_TREE_ISO) $(FAT_WRITE_DISK)
 	$(BOOT_TEST) "$(QEMU)" $< $(KERNEL) $(STARTUP_TEST_ISO)
-	$(BOOT_TEST) --character-graphics "$(QEMU)" $<
+	$(BOOT_TEST) --character-graphics "$(QEMU)" $(CHARACTER_GRAPHICS_TEST_ISO)
 	$(BOOT_TEST) --music "$(QEMU)" $<
 	$(BOOT_TEST) --tic-tac-toe "$(QEMU)" $<
 	$(BOOT_TEST) --screen-capture "$(QEMU)" $<
