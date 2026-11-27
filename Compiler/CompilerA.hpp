@@ -364,6 +364,8 @@ enum CICode : uint8_t
   IC_GS = 0x18,
   IC_TO_I64 = 0x1B,
   IC_TO_F64 = 0x1C,
+  IC_TO_BOOL = 0x1D,
+  IC_TOUPPER = 0x1E,
   IC_HOLYC_TYPECAST = 0x1F,
   IC_ADDR = 0x20,
   IC_DEREF = 0x24,
@@ -419,6 +421,9 @@ enum CICode : uint8_t
   IC_ASM = 0x61,
   IC_PUSH = 0x62,
   IC_GET_RFLAGS = 0x6C,
+  IC_RDTSC = 0x76,
+  IC_BSF = 0x7E,
+  IC_BSR = 0x7F,
   IC_QUE_INIT = 0x80,
   IC_QUE_INS,
   IC_QUE_INS_REV,
@@ -426,12 +431,21 @@ enum CICode : uint8_t
   IC_STRLEN,
   IC_BR_ZERO = 0x85,
   IC_BR_NOT_ZERO,
+  IC_ABS_I64 = 0xA9,
+  IC_SIGN_I64 = 0xAA,
   IC_MIN_I64 = 0xAB,
+  IC_MIN_U64 = 0xAC,
   IC_MAX_I64 = 0xAD,
+  IC_MAX_U64 = 0xAE,
   IC_SQR_I64 = 0xB0,
+  IC_SQR_U64,
+  IC_SQR,
+  IC_ABS,
   IC_SQRT = 0xB4,
   IC_SIN,
   IC_COS,
+  IC_TAN,
+  IC_ATAN,
   IC_SUB_ENTRY = 0xF0,
   IC_CALL_TRY,
   IC_CATCH_ENTRY,
@@ -646,6 +660,7 @@ void OptPass3(CIntermediateCode *code, uint32_t count, CHashFun &fun,
 void OptPass4(CIntermediateCode *code,uint32_t count);
 void OptPass5(CIntermediateCode *code,uint32_t count);
 void OptPass6(CIntermediateCode *code,uint32_t count,CHashFun *fun);
+bool OptContextTransfer(const CIntermediateCode &node);
 bool OptPass789A(CIntermediateCode *code,uint32_t count);
 CCodeBytes ICModr1(CMemOp op,CRawType type,uint8_t base,
                     uint8_t index=16,uint8_t shift=0,int32_t disp=0);

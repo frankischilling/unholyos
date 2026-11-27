@@ -56,6 +56,7 @@ char *DirFileCpp(const char *dirname, const char *name, const char *extension);
 CDocEntryBase *DocPutLineCpp(CDoc *doc, CDocEntryBase *entry);
 char *ExtChgCpp(const char *name, const char *ext);
 uint64_t F64PowerBits(uint64_t base, uint64_t exponent);
+void SYS_POW();
 uint64_t I64MulF64Bits(int64_t value, uint64_t scale);
 void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
@@ -1180,6 +1181,7 @@ bool LoadKernel(CTask &task)
       {"GrScaleZoom", reinterpret_cast<uintptr_t>(GrScaleZoomHC)},
       {"DrawStdMs", reinterpret_cast<uintptr_t>(DrawStdMsHC)},
       {"PaletteSetStd", reinterpret_cast<uintptr_t>(PaletteSetStdHC)},
+      {"SYS_POW", reinterpret_cast<uintptr_t>(SYS_POW)},
       {"SignI64", reinterpret_cast<uintptr_t>(SignI64HC)},
       {"RandI16", reinterpret_cast<uintptr_t>(RandI16HC)},
       {"RandU16", reinterpret_cast<uintptr_t>(RandU16HC)},

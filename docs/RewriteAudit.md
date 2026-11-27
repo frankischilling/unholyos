@@ -9,7 +9,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | Directory | Reference files | Corresponding paths | Missing paths |
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 68 | 8 |
-| `Compiler` | 33 | 25 | 8 |
+| `Compiler` | 33 | 32 | 1 |
 | `Adam` | 132 | 45 | 87 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 22 | 181 |
@@ -49,9 +49,10 @@ part of the full rewrite.
 
 ## Remaining compiler and Adam work
 
-- The unmatched compiler files are `BackA.HC`, `BackB.HC`, `BackFA.HC`,
-  `BackFB.HC`, `CExts.HC`, `CompilerB.HH`, `Templates.HC` and
-  `UAsm.HC`. Translate the
+- The unmatched compiler path is `UAsm.HC`. The split backend now has
+  corresponding integer and floating instruction-selection files, a
+  shared emitter, register-ABI symbol resolution and NASM templates.
+  Continue translating the
   intermediate-code, optimization and code-generation pipeline as
   connected work, preserving the reference's representation and ABI.
   `OptPass012.cpp` implements typed simplification and immediate lowering
@@ -62,9 +63,14 @@ part of the full rewrite.
   their memory and arithmetic instructions. `OptPass6.cpp` selects a single
   R9 temporary for compatible expression trees; `OptPass789A.cpp` relaxes
   ordinary local branches during repeated layout. Full operand-location
-  analysis, register selection, stack layout, call-aware temporary spilling,
-  remaining backend optimizations and reference code-generation parity
-  remain outstanding.
+  analysis, register selection, stack layout, remaining backend optimizations
+  and reference code-generation parity remain outstanding. R9 is spilled
+  and restored around ordinary direct and indirect calls. The new intrinsic
+  probes verify selected integer and x87 instructions, their typed metadata,
+  exact constant folds and JIT/AOT execution; `SYS_POW` uses the reference
+  register ABI and a named module relocation. Template variants, general
+  clobber analysis, other intrinsic families and the disassembler remain
+  incomplete.
 - Move remaining Adam initialization to the guest startup path after
   compiler support permits the original project and startup files.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal

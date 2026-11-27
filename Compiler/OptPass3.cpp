@@ -99,7 +99,7 @@ static bool OptContextName(const char *name)
          OptNameEqual(name,"_TASK_CONTEXT_RESTORE");
 }
 
-static bool OptContextTransfer(const CIntermediateCode &node)
+bool OptContextTransfer(const CIntermediateCode &node)
 {
   if ((node.code!=IC_CALL && node.code!=IC_ADDR) || !node.data)
     return false;

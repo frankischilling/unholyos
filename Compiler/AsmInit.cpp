@@ -2361,14 +2361,28 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"_d", U8Ptr}, {"class_name", U8Ptr, LastClass}, {"max_depth", I64, true, 2},
         {"fun", Bool, true}, {"offset", I64, true}}},
       {"GetRFlags", I64, FF_INTERNAL, {}, nullptr, IC_GET_RFLAGS},
+      {"GetTSC", I64, FF_INTERNAL, {}, nullptr, IC_RDTSC},
+      {"Bsf", I64, FF_INTERNAL, {{"bit_field_val", I64}}, nullptr, IC_BSF},
+      {"Bsr", I64, FF_INTERNAL, {{"bit_field_val", I64}}, nullptr, IC_BSR},
+      {"ATan", F64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_ATAN},
+      {"Abs", F64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_ABS},
+      {"AbsI64", I64, FF_INTERNAL, {{"i", I64}}, nullptr, IC_ABS_I64},
       {"Cos", F64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_COS},
       {"MaxI64", I64, FF_INTERNAL, {{"n1", I64}, {"n2", I64}}, nullptr, IC_MAX_I64},
+      {"MaxU64", U64, FF_INTERNAL, {{"n1", U64}, {"n2", U64}}, nullptr, IC_MAX_U64},
       {"MinI64", I64, FF_INTERNAL, {{"n1", I64}, {"n2", I64}}, nullptr, IC_MIN_I64},
+      {"MinU64", U64, FF_INTERNAL, {{"n1", U64}, {"n2", U64}}, nullptr, IC_MIN_U64},
+      {"SignI64", I64, FF_INTERNAL, {{"i", I64}}, nullptr, IC_SIGN_I64},
       {"Sin", F64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_SIN},
+      {"Sqr", F64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_SQR},
       {"SqrI64", I64, FF_INTERNAL, {{"i", I64}}, nullptr, IC_SQR_I64},
+      {"SqrU64", U64, FF_INTERNAL, {{"i", U64}}, nullptr, IC_SQR_U64},
       {"Sqrt", F64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_SQRT},
+      {"Tan", F64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_TAN},
+      {"ToBool", Bool, FF_INTERNAL, {{"i", I64}}, nullptr, IC_TO_BOOL},
       {"ToI64", I64, FF_INTERNAL, {{"d", F64}}, nullptr, IC_TO_I64},
       {"ToF64", F64, FF_INTERNAL, {{"i", I64}}, nullptr, IC_TO_F64},
+      {"ToUpper", I64, FF_INTERNAL, {{"ch", U8}}, nullptr, IC_TOUPPER},
       {"JobDel", U0, FF_RET1, {{"tmpc", JobPtr}}},
       {"TaskRstAwaitingMsg", U0, FF_RET1, {{"task", TaskPtr, true}}},
       {"TaskExe", JobPtr, FF_RET1, {{"srv", TaskPtr}, {"master", TaskPtr}, {"data", U8Ptr}, {"flags", I64}}},
@@ -2467,7 +2481,6 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"DocFormBwd", U0, FF_RET1, {{"doc", DocPtr}, {"giveup", Bool, true}}},
       {"View", Bool, FF_RET1, {}},
       {"HomeSet", U0, FF_RET1, {{"dirname", U8Ptr}}},
-      {"ToUpper", I64, FF_RET1, {{"ch", U8}}},
       {"StrCpy", U0, FF_RET1, {{"dst", U8Ptr}, {"src", U8Ptr}}, "_STRCPY"},
       {"Define", U8Ptr, FF_RET1, {{"dname", U8Ptr}}},
       {"DefineLoad", DefinePtr, FF_RET1, {{"dname", U8Ptr}, {"st", U8Ptr}}},
@@ -2512,7 +2525,6 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"DrawStdMs", U0, FF_RET1, {{"dc", DCPtr}, {"x", I64}, {"y", I64}}},
       {"PaletteSetStd", U0, FF_RET1, {}},
       {"ClampI64", I64, FF_RET1, {{"i", I64}, {"lo", I64}, {"hi", I64}}, "_CLAMP_I64"},
-      {"SignI64", I64, FF_RET1, {{"i", I64}}},
       {"Clamp", F64, FF_RET1, {{"d", F64}, {"lo", F64}, {"hi", F64}}},
       {"Min", F64, FF_RET1, {{"n1", F64}, {"n2", F64}}},
       {"Max", F64, FF_RET1, {{"n1", F64}, {"n2", F64}}},
@@ -2951,7 +2963,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     }
     fun->cls.flags = FF__EXTERN | header.flags;
     fun->return_class = types[header.result];
-    fun->exe_addr = reinterpret_cast<uint8_t *>(symbol ? symbol->val : uintptr_t{header.internal_op});
+    fun->exe_addr = reinterpret_cast<uint8_t *>(
+        header.flags & FF_INTERNAL ? uintptr_t{header.internal_op}
+                                   : symbol->val);
     HashAdd(&fun->cls.sym.hash, table);
   }
   return true;

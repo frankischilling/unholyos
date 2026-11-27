@@ -2081,6 +2081,13 @@ void BootProbe()
       BootFileProgramReport(*adam_task->cur_dv, "/AddressFoldProbe.HC");
       BootFileProgramReport(*adam_task->cur_dv, "/AddressFoldNativeProbe.HC");
     }
+    if (RedSeaFileLookup(*adam_task->cur_dv,"/BackendAOTProbe.HC",
+                         false,false,optimizer_entry,optimizer_prefix))
+      BootFileProgramReport(*adam_task->cur_dv,"/BackendAOTProbe.HC");
+    else {
+      BootFileProgramReport(*adam_task->cur_dv,"/BackendProbe.HC");
+      BootFileProgramReport(*adam_task->cur_dv,"/BackendNativeProbe.HC");
+    }
     BootFileProgramReport(*adam_task->cur_dv, "/ColorConversionsProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FormatMissingArgsProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/SystemDefinesProbe.HC");

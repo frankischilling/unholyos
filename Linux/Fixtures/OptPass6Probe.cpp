@@ -96,8 +96,8 @@ void LifetimeProbe()
     auto lhs=p.Frame(-24),inner=p.Binary();
     auto outer=p.Add(IC_SUB,RT_I64,lhs,inner);
     p.Run();
-    Check(p.Selected(inner) && !p.Selected(outer),
-          "nested RHS temporary cannot overlap R9 lifetime");
+    Check(p.Selected(inner) && p.Selected(outer),
+          "nested RHS candidate uses stack when outer R9 is live");
   }
   {
     CProbe p;
@@ -105,8 +105,8 @@ void LifetimeProbe()
     auto unary=p.Add(IC_COM,RT_I64,inner);
     auto outer=p.Add(IC_XOR,RT_I64,lhs,unary);
     p.Run();
-    Check(p.Selected(inner) && !p.Selected(outer),
-          "R9 use through unary descendant");
+    Check(p.Selected(inner) && p.Selected(outer),
+          "nested unary descendant shares lowest-slot allocation");
   }
   {
     CProbe p;
@@ -150,8 +150,8 @@ void AddressProbe()
     p.code[load].address={base,index,4,3,true};
     auto outer=p.Add(IC_ADD,RT_I64,lhs,load);
     p.Run();
-    Check(p.Selected(index) && !p.Selected(outer),
-          "folded address index can clobber R9");
+    Check(p.Selected(index) && p.Selected(outer),
+          "folded address index uses stack while outer slot is live");
   }
   {
     CProbe p;
@@ -161,8 +161,8 @@ void AddressProbe()
     p.code[load].address={base,index,0,0,true};
     auto outer=p.Add(IC_ADD,RT_I64,lhs,load);
     p.Run();
-    Check(p.Selected(base) && !p.Selected(outer),
-          "folded address base can clobber R9");
+    Check(p.Selected(base) && p.Selected(outer),
+          "folded address base uses stack while outer slot is live");
   }
   {
     CProbe p;
@@ -210,6 +210,26 @@ void BarrierProbe()
     auto outer=p.Add(IC_ADD,RT_I64,lhs,rhs);
     p.Run();
     Check(!p.Selected(outer),"unsafe RHS excluded");
+  }
+  for (auto op:{IC_CALL,IC_CALL_INDIRECT}) {
+    CProbe p;
+    CHashFun callee{};
+    auto lhs=p.Frame(-8),rhs=p.Add(op,RT_I64,NO_IC,0,
+                                   reinterpret_cast<uintptr_t>(&callee));
+    auto outer=p.Add(IC_ADD,RT_I64,lhs,rhs);
+    p.Run();
+    Check(p.Selected(outer) && p.Mask(),"returning call spills live R9");
+  }
+  {
+    CProbe p;
+    CHashFun callee{};
+    callee.cls.flags=CF_EXTERN;
+    callee.cls.sym.hash.str=const_cast<char *>("SysTry");
+    auto lhs=p.Frame(-8),rhs=p.Add(IC_CALL,RT_I64,NO_IC,0,
+                                   reinterpret_cast<uintptr_t>(&callee));
+    auto outer=p.Add(IC_ADD,RT_I64,lhs,rhs);
+    p.Run();
+    Check(!p.Selected(outer),"known context transfer disables R9");
   }
   {
     CProbe p;
