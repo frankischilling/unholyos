@@ -238,10 +238,11 @@ retry, and cached reuse. That probe remains in `Linux/BootProbe.cpp`.
 
 Adam remains statically linked. Its DolDoc addresses are therefore
 available when compiler imports are resolved. Later separation of
-Adam must address the late imports declared in `Compiler/CExts.HC`:
-the current `LoadPass2` refuses to run entries while imports remain
-unresolved, whereas the reference initializes the compiler with
-those late imports pending. The complete `StartOS.HC` and
+Adam must address the late imports declared in `Compiler/CExts.HC`.
+Generic `LoadPass2` permits those pending imports and executes entries
+on every explicit call, matching the reference. The compiler-specific
+binder still requires all of its imports before publishing its native
+dispatch table. The complete `StartOS.HC` and
 `Adam/MakeAdam.HC` startup sequence also remains unfinished.
 
 Both production compiler conversions passed with the explicit manifest:
