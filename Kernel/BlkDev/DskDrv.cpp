@@ -4,6 +4,209 @@ extern "C" void PrintCpp(const char *fmt,int64_t argc,const uint64_t *argv);
 extern "C" void PrintErrCpp(const char *fmt,int64_t argc,const uint64_t *argv,
                            const uintptr_t *frame);
 
+// Which physical FAT copy the clean buffer represents. The guest-visible
+// record retains the reference layout and its single dirty bit.
+static uint8_t fat_copy[DRVS_NUM];
+
+static uint8_t *DrvFATCopy(const CDrv &dv)
+{
+  if (blkdev.drvs)
+    for (size_t i=0;i<DRVS_NUM;i++)
+      if (&dv==&blkdev.drvs[i]) return &fat_copy[i];
+  return nullptr;
+}
+
+static bool DrvFATSector(const CDrv &dv,int64_t index,uint8_t copy,uint64_t &blk)
+{
+  if (!dv.bd || dv.bd->max_blk<0 || dv.drv_offset<0 || dv.size<=0 ||
+      index<0 || dv.fat1<=dv.drv_offset || dv.fat2<dv.fat1)
+    return false;
+  uint64_t end=uint64_t(dv.drv_offset)+dv.size;
+  if (end>uint64_t(dv.bd->max_blk)+1 || end>UINT64_MAX/BLK_SIZE)
+    return false;
+  uint64_t limit;
+  switch (dv.fs_type) {
+    case FSt_REDSEA:
+      if (dv.fat1!=dv.fat2 || dv.data_area<dv.fat1 ||
+          uint64_t(dv.data_area)>=end)
+        return false;
+      limit=uint64_t(dv.data_area)-dv.fat1+1;
+      break;
+    case FSt_FAT32: {
+      if (dv.spc<=0 || dv.spc>128 || dv.data_area<dv.drv_offset)
+        return false;
+      uint64_t data=uint64_t(dv.data_area)+2*dv.spc;
+      if (data>=end || uint64_t(dv.fat2)>=data)
+        return false;
+      limit=data-dv.fat2;
+      if (dv.fat1!=dv.fat2 && uint64_t(dv.fat2-dv.fat1)<limit)
+        limit=dv.fat2-dv.fat1;
+      break;
+    }
+    default:
+      return false;
+  }
+  if (uint64_t(index)>=limit)
+    return false;
+  blk=uint64_t(copy?dv.fat2:dv.fat1)+index;
+  return blk<end;
+}
+
+static bool DrvFATSelector(int64_t fat_sel)
+{
+  return fat_sel==0 || fat_sel==1 || fat_sel==3;
+}
+
+void DrvFATCacheReset(CDrv &dv)
+{
+  dv.cur_fat_blk_num=-1;
+  dv.fat_blk_dirty=0;
+  if (auto *copy=DrvFATCopy(dv)) *copy=0;
+}
+
+void DrvFATCacheDrop(CDrv &dv)
+{
+  Free(dv.cur_fat_blk);
+  dv.cur_fat_blk=nullptr;
+  DrvFATCacheReset(dv);
+}
+
+void DrvFATCacheResetDevice(CBlkDev *bd,bool controller)
+{
+  if (!bd || !blkdev.drvs) return;
+  for (size_t i=0;i<DRVS_NUM;i++) {
+    auto &dv=blkdev.drvs[i];
+    if (dv.dv_signature==DRV_SIGNATURE_VAL &&
+        (dv.bd==bd || (controller && BlkDevLockTarget(dv.bd)==bd)))
+      DrvFATCacheReset(dv);
+  }
+}
+
+bool DrvFATCacheInit(CDrv &dv)
+{
+  uint64_t blk;
+  if (!adam_task || !DrvFATSector(dv,0,0,blk)) return false;
+  uint32_t sector[BLK_SIZE/4];
+  if (!BlkDevReadBytes(*dv.bd,reinterpret_cast<uint8_t *>(sector),blk*BLK_SIZE,BLK_SIZE))
+    return false;
+  if (!dv.cur_fat_blk) {
+    dv.cur_fat_blk=reinterpret_cast<uint32_t *>(MAlloc(BLK_SIZE,adam_task->data_heap));
+    if (!dv.cur_fat_blk) return false;
+  }
+  MemCpy(dv.cur_fat_blk,sector,BLK_SIZE);
+  dv.cur_fat_blk_num=0;
+  dv.fat_blk_dirty=0;
+  if (auto *copy=DrvFATCopy(dv)) *copy=0;
+  return true;
+}
+
+static bool DrvFATOverlap(uint64_t blk,uint64_t pos,size_t bytes)
+{
+  uint64_t start=blk*BLK_SIZE;
+  return bytes && (start>=pos?start-pos<bytes:pos-start<BLK_SIZE);
+}
+
+bool DrvFATWriteAllowed(CBlkDev *bd,uint64_t pos,size_t bytes,const CDrv *origin)
+{
+  if (!bytes || !blkdev.drvs) return true;
+  for (size_t i=0;i<DRVS_NUM;i++) {
+    auto &dv=blkdev.drvs[i];
+    if (&dv==origin || dv.dv_signature!=DRV_SIGNATURE_VAL || dv.bd!=bd ||
+        !dv.cur_fat_blk || !(dv.fat_blk_dirty&1))
+      continue;
+    uint64_t blk1,blk2;
+    if (!DrvFATSector(dv,dv.cur_fat_blk_num,0,blk1) ||
+        !DrvFATSector(dv,dv.cur_fat_blk_num,1,blk2) ||
+        DrvFATOverlap(blk1,pos,bytes) || DrvFATOverlap(blk2,pos,bytes))
+      return false;
+  }
+  return true;
+}
+
+void DrvFATWriteThrough(CBlkDev *bd,const uint8_t *buf,uint64_t pos,
+                        size_t bytes,bool okay,const CDrv *origin)
+{
+  if (!blkdev.drvs) return;
+  for (size_t i=0;i<DRVS_NUM;i++) {
+    auto &dv=blkdev.drvs[i];
+    if (&dv==origin || dv.dv_signature!=DRV_SIGNATURE_VAL || dv.bd!=bd ||
+        !dv.cur_fat_blk || dv.cur_fat_blk_num<0 || (dv.fat_blk_dirty&1))
+      continue;
+    uint64_t blk;
+    if (!DrvFATSector(dv,dv.cur_fat_blk_num,fat_copy[i],blk)) {
+      DrvFATCacheReset(dv);
+      continue;
+    }
+    if (!DrvFATOverlap(blk,pos,bytes)) continue;
+    if (!okay) {
+      DrvFATCacheReset(dv);
+      continue;
+    }
+    uint64_t start=blk*BLK_SIZE;
+    size_t src=start>pos?start-pos:0,dst=pos>start?pos-start:0;
+    size_t cnt=bytes-src;
+    if (cnt>BLK_SIZE-dst) cnt=BLK_SIZE-dst;
+    MemCpy(reinterpret_cast<uint8_t *>(dv.cur_fat_blk)+dst,buf+src,cnt);
+  }
+}
+
+static bool DrvFATClean(CDrv &dv,int64_t fat_sel)
+{
+  if (!(dv.fat_blk_dirty&1)) return true;
+  uint64_t blk1,blk2;
+  if (!dv.cur_fat_blk || !DrvFATSector(dv,dv.cur_fat_blk_num,0,blk1) ||
+      !DrvFATSector(dv,dv.cur_fat_blk_num,1,blk2))
+    return false;
+  auto *buf=reinterpret_cast<const uint8_t *>(dv.cur_fat_blk);
+  if (blk1==blk2 || fat_sel==0 || fat_sel==3)
+    if (!BlkDevWriteBytes(*dv.bd,buf,blk1*BLK_SIZE,BLK_SIZE,&dv)) return false;
+  if (blk1!=blk2 && (fat_sel==1 || fat_sel==3))
+    if (!BlkDevWriteBytes(*dv.bd,buf,blk2*BLK_SIZE,BLK_SIZE,&dv)) return false;
+  if (blk1==blk2 || fat_sel!=0) {
+    dv.fat_blk_dirty&=~int64_t(1);
+    if (auto *copy=DrvFATCopy(dv)) *copy=blk1!=blk2 && fat_sel==1;
+  }
+  return true;
+}
+
+static bool DrvFATLoad(CDrv &dv,int64_t index,uint8_t copy)
+{
+  uint64_t blk;
+  if (!DrvFATSector(dv,index,copy,blk) || !dv.cur_fat_blk) return false;
+  uint32_t sector[BLK_SIZE/4];
+  if (!BlkDevReadBytes(*dv.bd,reinterpret_cast<uint8_t *>(sector),blk*BLK_SIZE,BLK_SIZE))
+    return false;
+  MemCpy(dv.cur_fat_blk,sector,BLK_SIZE);
+  dv.cur_fat_blk_num=index;
+  if (auto *sel=DrvFATCopy(dv)) *sel=copy;
+  return true;
+}
+
+bool DrvFATRead(const CDrv &drive,uint64_t index,void *buf,size_t offset,size_t bytes)
+{
+  if (!buf || offset>BLK_SIZE || bytes>BLK_SIZE-offset || index>INT64_MAX)
+    return false;
+  auto &dv=const_cast<CDrv &>(drive);
+  uint64_t blk;
+  if (!DrvFATSector(dv,index,0,blk)) return false;
+  auto *copy=DrvFATCopy(dv);
+  if (!copy || !dv.cur_fat_blk)
+    return BlkDevReadBytes(*dv.bd,reinterpret_cast<uint8_t *>(buf),blk*BLK_SIZE+offset,bytes);
+  CDiskLock lock(dv);
+  if (!BlkDevEnsureInitialized(*dv.bd) || !DrvFATSector(dv,index,0,blk))
+    return false;
+  if (dv.fat_blk_dirty&1) {
+    // A guest may be preparing a sector for a selected mirror. Do not evict
+    // that pending write to satisfy a native read of a different sector.
+    if (dv.cur_fat_blk_num!=int64_t(index))
+      return BlkDevReadBytes(*dv.bd,reinterpret_cast<uint8_t *>(buf),blk*BLK_SIZE+offset,bytes);
+  } else if (dv.cur_fat_blk_num!=int64_t(index) || *copy) {
+    if (!DrvFATLoad(dv,index,0)) return false;
+  }
+  MemCpy(buf,reinterpret_cast<uint8_t *>(dv.cur_fat_blk)+offset,bytes);
+  return true;
+}
+
 bool DrvLockOwner(CDrv *dv)
 {
   auto *task=CurrentTask();
@@ -64,8 +267,13 @@ extern "C" CDrv *DrvMakeFreeSlotCpp(uint8_t drv_let)
   if (!(0<=i && i<static_cast<int64_t>(DRVS_NUM)))
     RaiseHolyC(0x767244); // Drv
   auto *res=&blkdev.drvs[i];
-  if (res->locked_flags&1) RaiseHolyC(0x767244);
+  auto *bd=BlkDevLockTarget(res->bd);
+  if ((res->locked_flags&1) || (res->fat_blk_dirty&1) ||
+      (bd && (bd->locked_flags&1))) RaiseHolyC(0x767244);
   DskCacheInvalidate2Cpp(res);
+  if (res->dv_signature==DRV_SIGNATURE_VAL)
+    ResidentDriveClear(res->drv_let);
+  DrvFATCacheDrop(*res);
   MemSet(res,0,sizeof(CDrv));
   res->drv_let='A'+i;
   return res;
@@ -84,6 +292,58 @@ extern "C" uint64_t DrvNextFreeLetCpp(uint8_t first_drv_let)
       }
     } while (++i<static_cast<int64_t>(DRVS_NUM));
   RaiseHolyC(0x767244); // Drv
+}
+
+extern "C" void DrvFATBlkAllocCpp(CDrv *dv)
+{
+  DrvChkCpp(dv,true);
+  BlkDevChkCpp(dv->bd,true);
+  bool okay;
+  {
+    CDiskLock lock(*dv);
+    okay=BlkDevEnsureInitialized(*dv->bd) && DrvFATCacheInit(*dv);
+  }
+  if (!okay) RaiseHolyC(0x767244); // Drv
+}
+
+extern "C" void DrvFATBlkCleanCpp(CDrv *dv,int64_t fat_sel)
+{
+  DrvChkCpp(dv,true);
+  BlkDevChkCpp(dv->bd,true);
+  if (!DrvFATSelector(fat_sel)) RaiseHolyC(0x767244);
+  bool okay;
+  {
+    CDiskLock lock(*dv);
+    okay=(!(dv->fat_blk_dirty&1) || (dv->bd->flags&BDF_INITIALIZED)) &&
+         DrvFATClean(*dv,fat_sel);
+  }
+  if (!okay) RaiseHolyC(0x767244); // Drv
+}
+
+extern "C" void DrvFATBlkSetCpp(CDrv *dv,int64_t c,int64_t fat_sel)
+{
+  DrvChkCpp(dv,true);
+  BlkDevChkCpp(dv->bd,true);
+  if (!DrvFATSelector(fat_sel) || c<0) RaiseHolyC(0x767244);
+  bool okay=false;
+  {
+    CDiskLock lock(*dv);
+    if (BlkDevEnsureInitialized(*dv->bd)) {
+      int64_t index=-1;
+      if (dv->fs_type==FSt_FAT32) index=c/(BLK_SIZE/4);
+      else if (dv->fs_type==FSt_REDSEA && c>=dv->data_area && dv->data_area>=0)
+        index=(c-dv->data_area)/(BLK_SIZE*8);
+      uint64_t blk;
+      uint8_t copy=fat_sel==1;
+      if (DrvFATSector(*dv,index,copy,blk) &&
+          (dv->cur_fat_blk || DrvFATCacheInit(*dv))) {
+        // The reference does not switch copies when the sector index matches.
+        okay=dv->cur_fat_blk_num==index ||
+             (DrvFATClean(*dv,fat_sel) && DrvFATLoad(*dv,index,copy));
+      }
+    }
+  }
+  if (!okay) RaiseHolyC(0x767244); // Drv
 }
 
 extern "C" CDrv *DrvChkCpp(CDrv *dv,uint8_t except)

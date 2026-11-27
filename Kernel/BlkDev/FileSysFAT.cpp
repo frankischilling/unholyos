@@ -34,8 +34,7 @@ static bool FAT32ValidClus(const CDrv &dv,uint64_t c)
 static bool FAT32Link(const CDrv &dv,uint64_t c,uint32_t &next)
 {
   if (!FAT32ValidClus(dv,c) ||
-      !DrvReadBytes(dv,reinterpret_cast<uint8_t *>(&next),
-                       uint64_t(dv.fat1)*BLK_SIZE+c*4,4))
+      !DrvFATRead(dv,c/(BLK_SIZE/4),&next,(c%(BLK_SIZE/4))*4,4))
     return false;
   next&=0x0FFFFFFF;
   return true;
@@ -96,8 +95,14 @@ bool FAT32Init(CDrv &dv)
   dv.root_clus=br.root_clus;
   dv.file_system_info_sect=br.file_system_info_sect==0xFFFF?0:
                            dv.drv_offset+br.file_system_info_sect;
+  // Validate the new geometry with a raw read, before publishing or loading
+  // the persistent sector. Reinitialization may be in progress here.
   uint32_t next;
-  if (!FAT32Next(dv,dv.root_clus,next))
+  if (!BlkDevReadBytes(*dv.bd,reinterpret_cast<uint8_t *>(&next),
+                       uint64_t(dv.fat1)*BLK_SIZE+uint64_t(dv.root_clus)*4,4))
+    return false;
+  next&=0x0FFFFFFF;
+  if (next<FAT32_EOC && !FAT32ValidClus(dv,next))
     return false;
   dv.fs_type=FSt_FAT32;
   return true;
@@ -153,6 +158,7 @@ bool FAT32Fmt(CDrv &dv, bool quick)
   uint32_t fat[BLK_SIZE/4]{};
   fat[1]=fat[2]=0x0FFFFFFF;
   ResidentDriveClear(dv.drv_let);
+  DrvFATCacheReset(dv);
   dv.fs_type=0;
   uint64_t start=uint64_t(dv.drv_offset)*BLK_SIZE;
   if (!BlkWriteZero(dv,dv.drv_offset,quick?clear:br.sects) ||
@@ -164,7 +170,7 @@ bool FAT32Fmt(CDrv &dv, bool quick)
       !BlkDevWriteBytes(*dv.bd,reinterpret_cast<const uint8_t *>(&br),start,sizeof(br)) ||
       !DrvTypeSet(dv,0x0B,true))
     return false;
-  return FAT32Init(dv);
+  return FAT32Init(dv) && DrvFATCacheInit(dv);
 }
 
 static bool FAT32ChainLength(const CDrv &dv,uint64_t c,uint64_t &count)
@@ -210,7 +216,7 @@ static bool FAT32ChainTail(const CDrv &dv,uint64_t c,uint32_t &tail,
 static bool FAT32Writable(const CDrv &dv)
 {
   return dv.fs_type==FSt_FAT32 && dv.bd && dv.bd->type==BDT_ATA &&
-         !(dv.bd->flags&BDF_READ_ONLY);
+         !(dv.bd->flags&BDF_READ_ONLY) && !(dv.fat_blk_dirty&1);
 }
 
 static uint64_t FAT32ClusPos(const CDrv &dv,uint32_t c)
@@ -219,15 +225,16 @@ static uint64_t FAT32ClusPos(const CDrv &dv,uint32_t c)
 }
 
 // Update both FAT copies, retaining the reserved high four bits of each.
-// The caller holds the drive lock; no persistent FAT cache is used yet.
+// The caller holds the drive lock. Preserve each mirror's reserved bits and
+// write immediately; the raw-write hook keeps the cached sector coherent.
 static bool FAT32SetLink(CDrv &dv,uint32_t c,uint32_t next)
 {
-  if (!FAT32ValidClus(dv,c) || next>0x0FFFFFFF ||
+  if ((dv.fat_blk_dirty&1) || !FAT32ValidClus(dv,c) || next>0x0FFFFFFF ||
       (next && next<FAT32_EOC && !FAT32ValidClus(dv,next)))
     return false;
   uint64_t p1=uint64_t(dv.fat1)*BLK_SIZE+c*4,p2=uint64_t(dv.fat2)*BLK_SIZE+c*4;
   uint32_t old1,old2;
-  if (!DrvReadBytes(dv,reinterpret_cast<uint8_t *>(&old1),p1,4))
+  if (!DrvFATRead(dv,c/(BLK_SIZE/4),&old1,(c%(BLK_SIZE/4))*4,4))
     return false;
   old2=old1;
   if (p1!=p2 && !DrvReadBytes(dv,reinterpret_cast<uint8_t *>(&old2),p2,4))
@@ -266,6 +273,7 @@ static bool FAT32InfoWrite(CDrv &dv,CFAT32FileInfoSect &fis,uint32_t recent)
 // partially allocated chain on an out-of-space failure.
 static uint32_t FAT32AllocClus(CDrv &dv,uint32_t tail,uint64_t count,bool contiguous)
 {
+  if (dv.fat_blk_dirty&1) return 0;
   uint64_t limit=FAT32ClusLimit(dv);
   if (limit<=2)
     return 0;
@@ -295,8 +303,7 @@ static uint32_t FAT32AllocClus(CDrv &dv,uint32_t tail,uint64_t count,bool contig
     }
     uint64_t block=c/(BLK_SIZE/4);
     if (block!=cached) {
-      if (!DrvReadBytes(dv,reinterpret_cast<uint8_t *>(table),
-                           (uint64_t(dv.fat1)+block)*BLK_SIZE,BLK_SIZE))
+      if (!DrvFATRead(dv,block,table,0,BLK_SIZE))
         break;
       cached=block;
     }
@@ -334,6 +341,7 @@ static uint32_t FAT32AllocClus(CDrv &dv,uint32_t tail,uint64_t count,bool contig
 
 static bool FAT32FreeClus(CDrv &dv,uint32_t c)
 {
+  if (dv.fat_blk_dirty&1) return false;
   if (!c || c>=FAT32_EOC)
     return true;
   uint64_t count,root_count;

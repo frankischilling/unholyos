@@ -1629,9 +1629,38 @@ mutations invalidate cached entries before direct bitmap or data
 writes. Device reset and RAM replacement invalidate cached state.
 Reinitialization covers existing RAM, ATA and ATAPI devices; the
 reference's removable-media sequence, file-backed devices, full
-device deletion and exception paths remain incomplete. The separate
-`cur_fat_blk` write-back cache and RedSea free lists are not supplied
-by this block-cache implementation.
+device deletion and exception paths remain incomplete.
+
+## Per-drive FAT and bitmap cache
+
+`DskDrv.cpp` also maintains the Adam-owned 512-byte `cur_fat_blk`
+buffer for mounted FAT32 and RedSea drives. `DrvFATBlkAlloc`,
+`DrvFATBlkClean` and `DrvFATBlkSet` use the reference sector indices
+and selector defaults. A same-sector set does not reload the other
+FAT copy; for two copies, selector 0 writes the first and leaves the
+dirty bit set, selector 1 writes the second and clears it, and
+selector 3 writes both. Single-copy flushes clear the dirty bit.
+
+Native allocation and free operations retain immediate persistence,
+independent FAT mirror updates and best-effort rollback. Normal FAT
+link reads and RedSea bitmap reads consume the persistent buffer.
+Raw writes update its clean, selected sector; conflicting overlapping
+writes are rejected while a guest's dirty sector is pending. Native
+allocation and mutation likewise reject a pending dirty buffer rather
+than overwriting it. A private copy selector preserves the public
+`CDrv` layout. Native reads of another sector bypass pending guest
+data, and clean native primary reads may reload FAT1. Explicit cache
+allocation reuses the existing buffer if possible; failed flushes
+retain pending data. These are deliberate differences from the
+reference's less guarded behavior.
+
+Mounting publishes a stable buffer only after successful geometry and
+initial sector reads. Temporary drives are not retained in the cache.
+Normal replacement refuses dirty state; explicit reset and format
+discard it. Direct writes through an arbitrary guest RAM pointer
+cannot be intercepted. Complete drive/device deletion, RedSea free
+lists, persistent FSInfo ownership and full media-change/error paths
+remain outstanding.
 
 ## Remaining structural work
 

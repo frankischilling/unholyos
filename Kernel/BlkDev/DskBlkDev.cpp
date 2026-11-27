@@ -38,6 +38,7 @@ bool BlkDevUnlockOwner(CBlkDev *bd,bool rst)
   if (rst) {
     bd->flags&=~(BDF_INITIALIZED|BDF_INIT_IN_PROGRESS);
     DskCacheInvalidateDevice(bd);
+    DrvFATCacheResetDevice(bd,true);
   }
   bd->owning_task=nullptr;
   bd->locked_flags&=~uint64_t(1);
@@ -64,26 +65,38 @@ bool BlkDevEnsureInitialized(CBlkDev &bd)
   if (bd.flags&BDF_INIT_IN_PROGRESS) return false;
   bd.flags|=BDF_INIT_IN_PROGRESS;
   DskCacheInvalidateDevice(&bd);
+  DrvFATCacheResetDevice(&bd);
   bool res=false;
   switch (bd.type) {
     case BDT_RAM:
       for (size_t i=0;i<DRVS_NUM;i++) {
         auto &dv=blkdev.drvs[i];
         if (dv.dv_signature==DRV_SIGNATURE_VAL && dv.bd==&bd) {
-          res=bd.RAM_dsk && RedSeaInit(dv);
+          res=bd.RAM_dsk && RedSeaInit(dv) && DrvFATCacheInit(dv);
           if (!res) break;
         }
       }
       break;
     case BDT_ATA:
       res=ATAProbe(bd)==BDT_ATA && ATAReadCapacity(bd);
+      if (res)
+        for (size_t i=0;i<DRVS_NUM;i++) {
+          auto &dv=blkdev.drvs[i];
+          if (dv.dv_signature==DRV_SIGNATURE_VAL && dv.bd==&bd &&
+              dv.fs_type==FSt_FAT32 &&
+              (!FAT32Init(dv) || !DrvFATCacheInit(dv))) {
+            res=false;
+            break;
+          }
+        }
       break;
     case BDT_ATAPI:
       res=ATAPIReadCapacity(bd);
       if (res)
         for (size_t i=0;i<DRVS_NUM;i++) {
           auto &dv=blkdev.drvs[i];
-          if (dv.dv_signature==DRV_SIGNATURE_VAL && dv.bd==&bd && !ISOInit(dv)) {
+          if (dv.dv_signature==DRV_SIGNATURE_VAL && dv.bd==&bd &&
+              (!ISOInit(dv) || !DrvFATCacheInit(dv))) {
             res=false;
             break;
           }

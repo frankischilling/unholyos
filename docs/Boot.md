@@ -3645,6 +3645,44 @@ ISO hashes to `3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`
 See [Source layout](SourceLayout.md) for the remaining cache,
 locking and device lifecycle differences.
 
+## Persistent FAT and RedSea bitmap sectors
+
+`FatSectorCacheProbe.HC` runs unchanged on native GCC, native Clang
+and the pinned reference. Its 18 checks cover 512-byte sector
+contents, the 4095/4096 bitmap and 127/128 FAT entry boundaries,
+selector 0/1/3 flushes, same-index copy selection, and physical
+visibility of allocation/free operations. `FatSectorCacheNativeProbe.HC`
+adds six native-only checks of buffer stability, raw-write coherence,
+mirror isolation and refusal to overwrite pending dirty data. Both
+native toolchains report:
+
+```text
+FAT sector cache FF 3FF
+FAT sector native 3F
+```
+
+The reference runs only the shared fixture. The tests use the same
+disposable writable FAT32 disk (SHA-256
+`9e458aed28c8cddcada016e182a64135a07b086bdd351de9ddf91a60bc55568e`)
+and an isolated RAM drive. They verify that the source disk image is
+unchanged. Native fixture sizes are 7880 and 2340 bytes, with SHA-256
+`293fe9579abf84ec6e751b34a7315ea8f2ede13ba48df3a2cd5801d2e2ecf453`
+and `bf7c12870a24e78a2da98dde24280be211df869dfb1a2108267c31fb10a21969`.
+The boot physical verifier also checks each mounted drive's cache
+allocation (528 bytes including allocator overhead), its heap owner
+and clean initial sector state.
+
+```sh
+make -j4 test-fat-sector-cache
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-fat-sector-cache
+build/Linux/TestBoot --fat-sector-cache-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/fat32-writable.img build/fat-sector-reference
+```
+
+GCC 13.3.0 and Clang 20.1.2 run under QEMU 8.2.2, `pc`, `qemu64`,
+512 MiB, one vCPU. See [Source layout](SourceLayout.md) for native
+protective differences and remaining lifecycle work.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

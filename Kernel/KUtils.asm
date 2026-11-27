@@ -55,6 +55,9 @@ GLOBAL RCacheHC
 GLOBAL DrvMakeFreeSlotHC
 GLOBAL DrvNextFreeLetHC
 GLOBAL DrvChkHC
+GLOBAL DrvFATBlkAllocHC
+GLOBAL DrvFATBlkCleanHC
+GLOBAL DrvFATBlkSetHC
 GLOBAL Drv2LetHC
 GLOBAL Let2LetHC
 GLOBAL Let2BlkDevTypeHC
@@ -299,6 +302,9 @@ EXTERN RCacheCpp
 EXTERN DrvMakeFreeSlotCpp
 EXTERN DrvNextFreeLetCpp
 EXTERN DrvChkCpp
+EXTERN DrvFATBlkAllocCpp
+EXTERN DrvFATBlkCleanCpp
+EXTERN DrvFATBlkSetCpp
 EXTERN Drv2LetCpp
 EXTERN Let2LetCpp
 EXTERN Let2BlkDevTypeCpp
@@ -689,6 +695,9 @@ HOLYC_CPP RCacheHC,RCacheCpp,4
 HOLYC_CPP DrvMakeFreeSlotHC,DrvMakeFreeSlotCpp,1
 HOLYC_CPP DrvNextFreeLetHC,DrvNextFreeLetCpp,1
 HOLYC_CPP DrvChkHC,DrvChkCpp,2
+HOLYC_CPP DrvFATBlkAllocHC,DrvFATBlkAllocCpp,1
+HOLYC_CPP DrvFATBlkCleanHC,DrvFATBlkCleanCpp,2
+HOLYC_CPP DrvFATBlkSetHC,DrvFATBlkSetCpp,3
 HOLYC_CPP Drv2LetHC,Drv2LetCpp,1
 HOLYC_CPP Let2LetHC,Let2LetCpp,1
 HOLYC_CPP Let2BlkDevTypeHC,Let2BlkDevTypeCpp,1
