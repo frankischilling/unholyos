@@ -104,6 +104,7 @@ void PutSHC(), PutHexHC();
 void PUT_HEX_U64(), PUT_HEX_U32(), PUT_HEX_U16(), PUT_HEX_U8(), PUT_CHARS(),
     PUT_STR();
 void DefineSubHC(), DefineMatchHC();
+void DefineHC(), DefineLoadHC(), DefineCntHC(), DefinePrintHC();
 void HashValHC(), HashDelHC(), HashTableDelHC(), HashSrcFileSetHC();
 void SpawnHC(), TaskValidateHC(), SuspendHC(), IsSuspendedHC();
 void TaskQueInsHC(), TaskQueRemHC(), SingleUserHC(), IsSingleUserHC();
@@ -1183,9 +1184,13 @@ bool LoadKernel(CTask &task)
       {"PutSrcLink", reinterpret_cast<uintptr_t>(PutSrcLinkHC)},
       {"FixSet", reinterpret_cast<uintptr_t>(FixSetHC)},
       {"AdamErr", reinterpret_cast<uintptr_t>(AdamErrHC)},
+      {"DefineLoad", reinterpret_cast<uintptr_t>(DefineLoadHC)},
       {"DefineLstLoad", reinterpret_cast<uintptr_t>(DefineLstLoadHC)},
+      {"Define", reinterpret_cast<uintptr_t>(DefineHC)},
       {"DefineSub", reinterpret_cast<uintptr_t>(DefineSubHC)},
+      {"DefineCnt", reinterpret_cast<uintptr_t>(DefineCntHC)},
       {"DefineMatch", reinterpret_cast<uintptr_t>(DefineMatchHC)},
+      {"DefinePrint", reinterpret_cast<uintptr_t>(DefinePrintHC)},
       {"WinHorz", reinterpret_cast<uintptr_t>(WinHorzHC)},
       {"WinVert", reinterpret_cast<uintptr_t>(WinVertHC)},
       {"WinRefocus", reinterpret_cast<uintptr_t>(WinRefocusHC)},

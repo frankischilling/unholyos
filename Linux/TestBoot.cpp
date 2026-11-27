@@ -2496,10 +2496,27 @@ constexpr CTextProbe compiler_defines_probes[]{
     {"compiler-defines", "/CompilerDefinesProbe.HC", "", "CD lists ", "CD DONE",
      compiler_defines_output}};
 
-static void CheckCompilerDefines(const std::string &serial, const fs::path &dir)
+constexpr std::string_view string_defines_exceptions[]{"UndefDef", "UndefDef",
+                                                       "StrPrint", "StrPrint"};
+constexpr std::string_view string_defines_output =
+    "SD copy 1F\n"
+    "SD values F\n"
+    "SD duplicate F\n"
+    "SD print F\n"
+    "SD caller F\n"
+    "ERROR: Undefined Define: 'ST_SD_MISSING_VALUE'.\n"
+    "ERROR: Undefined Define: 'ST_SD_MISSING_COUNT'.\n"
+    "SD errors F\n"
+    "SD cleanup 7\n"
+    "SD DONE\n";
+constexpr CTextProbe string_defines_probes[]{
+    {"string-defines", "/StringDefinesProbe.HC", "", "SD copy ", "SD DONE",
+     string_defines_output, string_defines_exceptions}};
+
+static void CheckBootSourceProbe(const std::string &serial,
+                                 const CTextProbe &probe, const fs::path &dir)
 {
-  const auto &probe = compiler_defines_probes[0];
-  const auto output = ProgramOutput(serial, probe.source, '1');
+  const auto output = TextProbeOutput(serial, probe, probe.source);
   const auto start =
       std::string("UnholyOS: executing ") + probe.source + "\r\n";
   const auto finish = std::string("UnholyOS: finished ") + probe.source +
@@ -2520,15 +2537,13 @@ static void CheckCompilerDefines(const std::string &serial, const fs::path &dir)
           boot != std::string::npos && end + finish.size() <= boot &&
           serial.find(start, begin + start.size()) == std::string::npos &&
           serial.find(finish, end + finish.size()) == std::string::npos,
-      "Compiler definition source did not run once between initialization and "
-      "startup");
-  std::ofstream file(dir / "compiler-defines-native.txt");
+      "Source probe did not run once between initialization and startup");
+  std::ofstream file(dir / (std::string(probe.name) + "-native.txt"));
   file << output;
   file.close();
-  Check(bool(file), "Could not record compiler definition output");
+  Check(bool(file), "Could not record source probe output");
   std::cout << output;
-  Check(output == probe.expected,
-        "Compiler definition output differs from TempleOS");
+  Check(output == probe.expected, "Source probe output differs from TempleOS");
 }
 
 constexpr std::string_view assert_warning_output = "AW result 42\nAW DONE\n";
@@ -5774,6 +5789,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--strings-reference" ||
        std::string_view(argv[1]) == "--compiler-defines" ||
        std::string_view(argv[1]) == "--compiler-defines-reference" ||
+       std::string_view(argv[1]) == "--string-defines" ||
+       std::string_view(argv[1]) == "--string-defines-reference" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -5808,6 +5825,8 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--assert-warning");
     bool compiler_defines_probe =
         std::string_view(argv[1]).starts_with("--compiler-defines");
+    bool string_defines_probe =
+        std::string_view(argv[1]).starts_with("--string-defines");
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -5819,6 +5838,8 @@ int main(int argc, char **argv)
       text_probes = assert_warning_probes;
     else if (compiler_defines_probe)
       text_probes = compiler_defines_probes;
+    else if (string_defines_probe)
+      text_probes = string_defines_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -5826,10 +5847,12 @@ int main(int argc, char **argv)
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
-      if (compiler_defines_probe && !reference)
-        VerifyHostModuleMedia(
-            argv[3], "Linux/Fixtures/CompilerDefinesProbe.HC",
-            "CompilerDefinesProbe.HC");
+      if ((compiler_defines_probe || string_defines_probe) && !reference) {
+        const auto &probe = text_probes[0];
+        VerifyHostModuleMedia(argv[3],
+                              std::string("Linux/Fixtures") + probe.source,
+                              probe.source + 1);
+      }
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
       if (!text_probes.empty() && !reference) {
@@ -5839,8 +5862,8 @@ int main(int argc, char **argv)
                                           "/AssertWarningProbe.BIN.Z, checks "
                                           "0x0000000000000001\r\n")
                           : vm.Boot(dir / "serial.log");
-        if (compiler_defines_probe)
-          CheckCompilerDefines(output, dir);
+        if (compiler_defines_probe || string_defines_probe)
+          CheckBootSourceProbe(output, text_probes[0], dir);
         else {
           RecordTextProbes(output, text_probes, dir);
           if (assert_warning) {
@@ -5972,6 +5995,8 @@ int main(int argc, char **argv)
               << " --compiler-failures qemu image.iso kernel\n"
               << "       " << argv[0]
               << " --compiler-defines[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --string-defines[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]
