@@ -420,11 +420,17 @@ static Bytes VerifyCompilerMedia(const Bytes &disc, uint64_t root,
 }
 
 static void VerifyHostModuleMedia(const fs::path &iso, const fs::path &module,
-                                  const char *name = "HostModuleProbe.BIN")
+                                  const char *name = "HostModuleProbe.BIN",
+                                  const char *directory = nullptr)
 {
   constexpr size_t blk = 512, redsea = 88 * blk;
   const auto disc = FileRead(iso), expected = FileRead(module);
-  const auto root = ReadLE(disc, redsea + 24, 8);
+  auto root = ReadLE(disc, redsea + 24, 8);
+  if (directory) {
+    const auto dir = FindRedSeaEntry(disc, root, directory);
+    Check(ReadLE(disc, dir, 2) & 0x10, "Expected media directory");
+    root = ReadLE(disc, dir + 40, 8);
+  }
   const auto entry = FindRedSeaEntry(disc, root, name);
   const auto start = ReadLE(disc, entry + 40, 8);
   const auto size = ReadLE(disc, entry + 48, 8);
@@ -1860,7 +1866,8 @@ static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
   Check(classes[0] == inherited_table,
         "Startup class table inherited the wrong symbols");
   constexpr std::string_view views[]{"U16", "I16", "U32", "I32", "U64", "I64"};
-  constexpr std::string_view records[]{"CCntsGlbls",
+  constexpr std::string_view records[]{"Complex",
+                                       "CCntsGlbls",
                                        "CHash",
                                        "CHashSrcSym",
                                        "CHashDefineStr",
@@ -1922,7 +1929,7 @@ static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 83);
+  static_assert(class_count == 84);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -3095,6 +3102,13 @@ constexpr CTextProbe backend_probes[]{
 constexpr CTextProbe backend_aot_probes[]{
     {"backend-aot","/BackendAOTProbe.HC","","Backend AOT compile ","Backend AOT load ",
      "Backend AOT compile 0\nBackend probe 7FFFFF\nBackend AOT load 1\n",{},true}};
+
+constexpr CTextProbe adam_math_probes[]{
+    {"adam-math","/AdamMathProbe.HC","","Adam math ","Adam math ",
+     "Adam math 1FFF\n",{},true}};
+constexpr CTextProbe adam_math_aot_probes[]{
+    {"adam-math-aot","/AdamMathAOTProbe.HC","","Adam math AOT compile ","Adam math AOT load ",
+     "Adam math AOT compile 0\nAdam math 1FFF\nAdam math AOT load 1\n",{},true}};
 
 constexpr CTextProbe uasm_probes[]{
     {"uasm","/UAsmProbe.HC","","UAsm probe ","UAsm probe ",
@@ -6600,6 +6614,9 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--backend" ||
        std::string_view(argv[1]) == "--backend-reference" ||
        std::string_view(argv[1]) == "--backend-aot" ||
+       std::string_view(argv[1]) == "--adam-math" ||
+       std::string_view(argv[1]) == "--adam-math-reference" ||
+       std::string_view(argv[1]) == "--adam-math-aot" ||
        std::string_view(argv[1]) == "--uasm" ||
        std::string_view(argv[1]) == "--uasm-reference" ||
        std::string_view(argv[1]) == "--uasm-aot" ||
@@ -6674,6 +6691,8 @@ int main(int argc, char **argv)
     bool address_fold_aot=std::string_view(argv[1])=="--address-fold-aot";
     bool backend_probe=std::string_view(argv[1]).starts_with("--backend");
     bool backend_aot=std::string_view(argv[1])=="--backend-aot";
+    bool adam_math_probe=std::string_view(argv[1]).starts_with("--adam-math");
+    bool adam_math_aot=std::string_view(argv[1])=="--adam-math-aot";
     bool uasm_probe=std::string_view(argv[1]).starts_with("--uasm");
     bool uasm_aot=std::string_view(argv[1])=="--uasm-aot";
     bool storage_services_probe =
@@ -6694,7 +6713,7 @@ int main(int argc, char **argv)
                               format_missing_args_probe || class_records_probe ||
                               list_utilities_probe || storage_services_probe ||
                               cluster_entry_probe || disk_cache_probe || storage_lifecycle_probe ||
-                              file_backed_redsea_probe || nested_redsea_probe || optical_image_probe || optimizer_probe || register_allocation_probe || address_fold_probe || backend_probe || uasm_probe;
+                              file_backed_redsea_probe || nested_redsea_probe || optical_image_probe || optimizer_probe || register_allocation_probe || address_fold_probe || backend_probe || uasm_probe || adam_math_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6734,6 +6753,9 @@ int main(int argc, char **argv)
     else if (backend_probe)
       text_probes=backend_aot?std::span<const CTextProbe>(backend_aot_probes):
                              std::span<const CTextProbe>(backend_probes);
+    else if (adam_math_probe)
+      text_probes=adam_math_aot?std::span<const CTextProbe>(adam_math_aot_probes):
+                               std::span<const CTextProbe>(adam_math_probes);
     else if (uasm_probe)
       text_probes=uasm_aot?std::span<const CTextProbe>(uasm_aot_probes):
                           std::span<const CTextProbe>(uasm_probes);
@@ -6793,6 +6815,11 @@ int main(int argc, char **argv)
         if (backend_aot)
           VerifyHostModuleMedia(argv[3],"Linux/Fixtures/BackendProbe.HC",
                                 "BackendProbe.HC");
+        if (adam_math_aot)
+          VerifyHostModuleMedia(argv[3],"Linux/Fixtures/AdamMathProbe.HC",
+                                "AdamMathProbe.HC");
+        if (adam_math_probe)
+          VerifyHostModuleMedia(argv[3],"Adam/AMath.HC","AMath.HC","Adam");
         if (uasm_aot)
           VerifyHostModuleMedia(argv[3],"Linux/Fixtures/UAsmProbe.HC",
                                 "UAsmProbe.HC");
@@ -6986,6 +7013,9 @@ int main(int argc, char **argv)
               << " --address-fold-aot qemu image.iso [capture-dir]\n"
               << " --backend[-reference] qemu image.iso [capture-dir]\n"
               << " --backend-aot qemu image.iso [capture-dir]\n"
+              << " --adam-math qemu image.iso [capture-dir]\n"
+              << " --adam-math-reference qemu image.iso [capture-dir]\n"
+              << " --adam-math-aot qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"
