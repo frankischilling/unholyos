@@ -1369,22 +1369,60 @@ constexpr uint64_t late_used = 0x2828, fault_used = 0x7E8;
 constexpr uint64_t drive_pages = 7 + 9, drive_alloced = drive_pages * 512;
 constexpr uint64_t drive_used = drive_alloced - 2 * 24 + 40 + 40 + 32 + 24;
 
-struct CCompilerDefine
+struct CDefineList
 {
   std::string_view name, data;
   size_t count;
 
   template <size_t Size>
-  constexpr CCompilerDefine(std::string_view list_name,
-                            const char (&list_data)[Size], size_t list_count)
+  constexpr CDefineList(std::string_view list_name,
+                        const char (&list_data)[Size], size_t list_count)
       : name(list_name), data(list_data, Size), count(list_count)
   {
   }
 };
 
+// Terry A. Davis's Kernel/KDefine.HC::SysDefinesLoad at the pinned revision.
+// HolyC's escaped dollar in ST_FILE_UTIL_FLAGS is one decoded byte.
+constexpr CDefineList system_defines[]{
+    {"ST_OFF_ON", "Off\0On\0", 2},
+    {"ST_HTT_TYPES",
+     "ExportSysSym\0ImportSysSym\0DefineStr\0GlbVar\0"
+     "Class\0IntType\0Funct\0Word\0DictWord\0KeyWord\0AsmKeyWord\0OpCode\0"
+     "Reg\0File\0Module\0HelpFile\0Frame Ptr\0 \0 \0 \0 \0 \0 \0Private\0"
+     "Public\0Export\0Import\0Imm\0Goto\0Res\0Unres\0Local\0",
+     32},
+    {"ST_DAYS_OF_WEEK",
+     "Sunday\0Monday\0Tuesday\0Wednesday\0Thursday\0Friday\0Saturday\0", 7},
+    {"ST_MONTHS",
+     "January\0February\0March\0April\0May\0"
+     "June\0July\0August\0September\0October\0November\0December\0",
+     12},
+    {"ST_FILE_ATTRS", "R\0H\0S\0V\0D\0A\0 \0 \0X\0T\0Z\0C\0F\0", 13},
+    {"ST_FILE_UTIL_FLAGS",
+     "r\0d\0i\0a\0c\0R\0p\0m\0x\0s\0"
+     "D\0F\0T\0$\0S\0A\0J\0G\0Z\0O\0P\0f\0l\0lb\0la\0",
+     25},
+    {"ST_BLKDEV_TYPES", "NULL\0RAM\0ATA\0FILE_READ\0FILE_WRITE\0ATAPI\0", 6},
+    {"ST_DRV_TYPES", "NULL\0REDSEA\0FAT32\0ISO9660\0NTFS\0UNKNOWN\0", 6},
+    {"ST_COLORS",
+     "BLACK\0BLUE\0GREEN\0CYAN\0"
+     "RED\0PURPLE\0BROWN\0LTGRAY\0DKGRAY\0LTBLUE\0LTGREEN\0"
+     "LTCYAN\0LTRED\0LTPURPLE\0YELLOW\0WHITE\0",
+     16},
+    {"ST_INT_NAMES",
+     "Divide Error\0SingleStep\0NMI\0Breakpoint\0"
+     "Overflow\0BOUND Range Exceeded\0Invalid Opcode\0No Math Coprocessor\0"
+     "Double Fault\0Coprocessor Segment Fault\0Invalid TASK\0"
+     "Segment Not Present\0Stk Segment Fault\0General Protection\0"
+     "Page Fault\0 \0Math Fault\0Alignment Check\0Machine Check\0"
+     "SIMD Exception\0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0"
+     " \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0MP Crash\0Wake\0Dbg\0",
+     51}};
+
 // Terry A. Davis's Compiler/CInit.HC::CmpLoadDefines at the pinned revision.
 // Include the final implicit NUL so both terminators are checked.
-constexpr CCompilerDefine compiler_defines[]{
+constexpr CDefineList compiler_defines[]{
     {"ST_RAW_TYPES",
      " \0 \0I0\0U0\0I8\0U8\0I16\0U16\0I32\0U32\0I64\0U64\0"
      "F32\0UF32\0F64\0UF64\0",
@@ -1428,6 +1466,35 @@ constexpr CCompilerDefine compiler_defines[]{
     {"ST_SEG_REGS", "ES\0CS\0SS\0DS\0FS\0GS\0", 6},
     {"ST_FSTK_REGS", "ST0\0ST1\0ST2\0ST3\0ST4\0ST5\0ST6\0ST7\0", 8}};
 
+constexpr CDefineList adam_defines[]{
+    {"ST_RAINBOW_10",
+     "BLACK\0BROWN\0RED\0LTRED\0YELLOW\0GREEN\0BLUE\0PURPLE\0LTGRAY\0WHITE\0",
+     10},
+    {"DD_OS_NAME_VERSION", "UnholyOS\0", 1}};
+
+template <size_t Count>
+constexpr std::array<uint64_t, 3>
+DefineListTotals(const CDefineList (&lists)[Count])
+{
+  std::array<uint64_t, 3> totals{};
+  for (const auto &list : lists) {
+    totals[0] += list.count;
+    totals[1] += list.data.size();
+    totals[2] += 104 + ((list.name.size() + 24) & ~size_t{7}) + 24 +
+                 ((list.data.size() + 23) & ~size_t{7}) + 16 + list.count * 8;
+  }
+  return totals;
+}
+
+static_assert(std::size(system_defines) == 10 &&
+              DefineListTotals(system_defines) ==
+                  std::array<uint64_t, 3>{170, 980, 4296});
+static_assert(DefineListTotals(compiler_defines) ==
+              std::array<uint64_t, 3>{207, 946, 5360});
+static_assert(std::size(adam_defines) == 2 &&
+              DefineListTotals(adam_defines) ==
+                  std::array<uint64_t, 3>{11, 71, 560});
+
 static bool GuestBytesEqual(CMonitor &vm, uint64_t address,
                             std::string_view expected)
 {
@@ -1447,9 +1514,18 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
 {
   uint64_t used = 0, count = 0;
   bool kernel = false, hash_del = false, hash_src = false, put_str = false;
-  bool colors = false, rainbow = false, os_name = false, file_util = false;
-  std::array<bool, std::size(compiler_defines)> defines_seen{};
-  uint64_t compiler_define_used = 0;
+  std::array<bool, std::size(system_defines)> system_seen{};
+  std::array<bool, std::size(compiler_defines)> compiler_seen{};
+  std::array<bool, std::size(adam_defines)> adam_seen{};
+  uint64_t system_define_used = 0, compiler_define_used = 0,
+           adam_define_used = 0;
+  constexpr uint64_t kernel_image = 0x7C00,
+                     kernel_payload_begin = kernel_image + 32;
+  const auto kernel_header = ReadPhysical<4>(vm, kernel_image);
+  Check(kernel_header[2] >= 32 && kernel_header[2] <= kernel_header[3] &&
+            kernel_header[3] <= 0x96600 - kernel_image,
+        "Invalid kernel payload bounds for definition literals");
+  const auto kernel_payload_end = kernel_image + kernel_header[2];
   for (uint64_t i = 0; i < 1024; i += 64) {
     auto buckets = ReadPhysical<64>(vm, table_body + i * 8);
     for (size_t j = 0; j < buckets.size(); j++) {
@@ -1462,7 +1538,10 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
         bool imported = type == 2 && !compiler.unresolved.empty();
         Check((module || define || imported || type == 0x08000001) &&
                   entry[0] == owner &&
-                  entry[1] == (module ? 64u : define ? 104u : imported ? 120u : 88u) &&
+                  entry[1] == (module     ? 64u
+                               : define   ? 104u
+                               : imported ? 120u
+                                          : 88u) &&
                   entry[3] >= 16,
               "Invalid boot symbol allocation");
         auto name = ReadPhysical<2>(vm, entry[3] - 16);
@@ -1493,39 +1572,39 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           Check(str == compiler.unresolved,
                 "Unexpected unresolved boot symbol");
         if (define) {
+          const auto system_define =
+              std::find_if(std::begin(system_defines), std::end(system_defines),
+                           [&](const auto &list) { return list.name == str; });
           const auto compiler_define = std::find_if(
               std::begin(compiler_defines), std::end(compiler_defines),
               [&](const auto &list) { return list.name == str; });
+          const auto adam_define =
+              std::find_if(std::begin(adam_defines), std::end(adam_defines),
+                           [&](const auto &list) { return list.name == str; });
+          const bool system_list = system_define != std::end(system_defines);
           const bool compiler_list =
               compiler_define != std::end(compiler_defines);
-          Check(compiler_list ? compiler.init_started : desktop,
-                "Definition was created before its initialization phase");
-          bool color_list = str == "ST_COLORS";
-          bool rainbow_list = str == "ST_RAINBOW_10";
-          bool startup_name = str == "DD_OS_NAME_VERSION";
-          bool file_util_list = str == "ST_FILE_UTIL_FLAGS";
-          Check(compiler_list || color_list || rainbow_list || startup_name ||
-                    file_util_list,
+          const bool adam_list = adam_define != std::end(adam_defines);
+          Check(system_list || compiler_list || adam_list,
                 "Unexpected boot definition");
-          constexpr char color_data[] =
-              "BLACK\0BLUE\0GREEN\0CYAN\0RED\0PURPLE\0BROWN\0LTGRAY\0DKGRAY\0"
-              "LTBLUE\0LTGREEN\0LTCYAN\0LTRED\0LTPURPLE\0YELLOW\0WHITE\0";
-          constexpr char rainbow_data[] =
-              "BLACK\0BROWN\0RED\0LTRED\0YELLOW\0GREEN\0BLUE\0PURPLE\0LTGRAY\0WHITE\0";
-          constexpr char os_name_data[] = "UnholyOS\0";
-          constexpr char file_util_data[] =
-              "r\0d\0i\0a\0c\0R\0p\0m\0x\0s\0D\0F\0T\0$\0S\0A\0J\0G\0Z\0O\0P\0f\0l\0lb\0la\0";
+          Check(system_list ||
+                    (compiler_list ? compiler.init_started : desktop),
+                "Definition was created before its initialization phase");
+          const auto &expected = system_list     ? *system_define
+                                 : compiler_list ? *compiler_define
+                                                 : *adam_define;
+          auto &seen =
+              system_list
+                  ? system_seen[system_define - std::begin(system_defines)]
+              : compiler_list
+                  ? compiler_seen[compiler_define -
+                                  std::begin(compiler_defines)]
+                  : adam_seen[adam_define - std::begin(adam_defines)];
+          Check(!seen, "Duplicate boot definition");
+          seen = true;
           auto def = ReadPhysical<11>(vm, addr);
-          uint64_t entries = compiler_list    ? compiler_define->count
-                             : color_list     ? 16
-                             : rainbow_list   ? 10
-                             : file_util_list ? 25
-                                              : 1;
-          uint64_t data_size = compiler_list    ? compiler_define->data.size()
-                               : color_list     ? sizeof(color_data)
-                               : rainbow_list   ? sizeof(rainbow_data)
-                               : file_util_list ? sizeof(file_util_data)
-                                                : sizeof(os_name_data);
+          const uint64_t entries = expected.count,
+                         data_size = expected.data.size();
           Check(def[10] == entries && def[3] >= 16 && def[8] >= 16 &&
                     def[9] >= 16,
                 "Invalid boot definition");
@@ -1537,43 +1616,38 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
                                                     (data_size + 23) & ~7ULL} &&
                     index == std::array<uint64_t, 2>{owner, 16 + entries * 8},
                 "Invalid boot definition allocation");
-          if (compiler_list) {
-            const auto n = compiler_define - std::begin(compiler_defines);
-            Check(!defines_seen[n], "Duplicate compiler definition");
-            defines_seen[n] = true;
-            constexpr char source_link[] = "AD:0x0";
-            Check(!def[4] && !def[5] && !def[6] && !def[7] &&
-                      GuestBytesEqual(vm, def[3],
-                                      {source_link, sizeof(source_link)}) &&
-                      GuestBytesEqual(vm, def[8], compiler_define->data),
-                  "Compiler definition data or source link differs");
-            const auto source = ReadPhysical<1>(vm, def[9])[0];
-            Check(
-                source >= compiler.payload_begin &&
-                    source <= compiler.payload_end &&
-                    data_size <= compiler.payload_end - source &&
-                    GuestBytesEqual(vm, source, compiler_define->data),
-                "Compiler definition index does not retain its module literal");
-            size_t offset = 0;
-            for (size_t entry = 0; entry < entries; ++entry) {
-              Check(ReadPhysical<1>(vm, def[9] + entry * 8)[0] ==
-                        source + offset,
-                    "Compiler definition index offset differs");
-              const auto end = compiler_define->data.find('\0', offset);
-              Check(end != std::string_view::npos,
-                    "Compiler definition expectation is unterminated");
-              offset = end + 1;
-            }
-            Check(offset + 1 == data_size,
-                  "Compiler definition count omits list bytes");
-            compiler_define_used +=
-                entry[1] + name[1] + link[1] + data[1] + index[1];
+          constexpr char source_link[] = "AD:0x0";
+          Check(!def[4] && !def[5] && !def[6] && !def[7] &&
+                    GuestBytesEqual(vm, def[3],
+                                    {source_link, sizeof(source_link)}) &&
+                    GuestBytesEqual(vm, def[8], expected.data),
+                "Boot definition data or source link differs");
+          const auto source = ReadPhysical<1>(vm, def[9])[0];
+          const auto literal_begin =
+              compiler_list ? compiler.payload_begin : kernel_payload_begin;
+          const auto literal_end =
+              compiler_list ? compiler.payload_end : kernel_payload_end;
+          Check(source >= literal_begin && source <= literal_end &&
+                    data_size <= literal_end - source &&
+                    GuestBytesEqual(vm, source, expected.data),
+                "Boot definition index does not retain its owning module "
+                "literal");
+          size_t offset = 0;
+          for (size_t n = 0; n < entries; ++n) {
+            Check(ReadPhysical<1>(vm, def[9] + n * 8)[0] == source + offset,
+                  "Boot definition index offset differs");
+            const auto end = expected.data.find('\0', offset);
+            Check(end != std::string_view::npos,
+                  "Boot definition expectation is unterminated");
+            offset = end + 1;
           }
+          Check(offset + 1 == data_size,
+                "Boot definition count omits list bytes");
+          auto &definition_used = system_list     ? system_define_used
+                                  : compiler_list ? compiler_define_used
+                                                  : adam_define_used;
+          definition_used += entry[1] + name[1] + link[1] + data[1] + index[1];
           used += link[1] + data[1] + index[1];
-          colors |= color_list;
-          rainbow |= rainbow_list;
-          os_name |= startup_name;
-          file_util |= file_util_list;
         }
         kernel |= module && str == "/Kernel/Kernel";
         hash_del |= !module && str == "HashDel";
@@ -1588,17 +1662,29 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
       }
     }
   }
-  Check(kernel && hash_del && hash_src && put_str && graphics && winmgr_slot &&
-            (desktop ? colors && rainbow && os_name && file_util
-                     : !colors && !rainbow && !os_name && !file_util),
+  Check(kernel && hash_del && hash_src && put_str && graphics && winmgr_slot,
         "Missing boot symbols");
-  Check(std::all_of(defines_seen.begin(), defines_seen.end(),
-                    [&](bool seen) { return seen == compiler.init_started; }) &&
-            compiler_define_used == (compiler.init_started ? 5360u : 0u),
-        "Compiler definitions or their allocation total differ by startup phase");
+  Check(std::all_of(system_seen.begin(), system_seen.end(),
+                    [](bool seen) { return seen; }) &&
+            system_define_used == 4296,
+        "System definitions or their allocation total differ");
+  Check(
+      std::all_of(compiler_seen.begin(), compiler_seen.end(),
+                  [&](bool seen) { return seen == compiler.init_started; }) &&
+          compiler_define_used == (compiler.init_started ? 5360u : 0u),
+      "Compiler definitions or their allocation total differ by startup phase");
+  Check(std::all_of(adam_seen.begin(), adam_seen.end(),
+                    [&](bool seen) { return seen == desktop; }) &&
+            adam_define_used == (desktop ? 560u : 0u),
+        "Adam definitions or their allocation total differ by startup phase");
+  std::cout << "Verified system definitions " << std::size(system_defines)
+            << ", heap bytes " << system_define_used << '\n';
   std::cout << "Verified compiler definitions "
             << (compiler.init_started ? std::size(compiler_defines) : 0)
             << ", heap bytes " << compiler_define_used << '\n';
+  std::cout << "Verified Adam definitions "
+            << (desktop ? std::size(adam_defines) : 0) << ", heap bytes "
+            << adam_define_used << '\n';
   return used;
 }
 
@@ -2512,6 +2598,17 @@ constexpr std::string_view string_defines_output =
 constexpr CTextProbe string_defines_probes[]{
     {"string-defines", "/StringDefinesProbe.HC", "", "SD copy ", "SD DONE",
      string_defines_output, string_defines_exceptions}};
+
+constexpr std::string_view system_defines_output =
+    "SY lists 3FF entries 170 bytes 980\n"
+    "SY storage 3FF 3FF\n"
+    "SY consumers FF\n"
+    "SY flags 2003 1A00000\n"
+    "SY date Sat|Feb\n"
+    "SY DONE\n";
+constexpr CTextProbe system_defines_probes[]{
+    {"system-defines", "/SystemDefinesProbe.HC", "", "SY lists ", "SY DONE",
+     system_defines_output}};
 
 static void CheckBootSourceProbe(const std::string &serial,
                                  const CTextProbe &probe, const fs::path &dir)
@@ -5791,6 +5888,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--compiler-defines-reference" ||
        std::string_view(argv[1]) == "--string-defines" ||
        std::string_view(argv[1]) == "--string-defines-reference" ||
+       std::string_view(argv[1]) == "--system-defines" ||
+       std::string_view(argv[1]) == "--system-defines-reference" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -5827,6 +5926,8 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--compiler-defines");
     bool string_defines_probe =
         std::string_view(argv[1]).starts_with("--string-defines");
+    bool system_defines_probe =
+        std::string_view(argv[1]).starts_with("--system-defines");
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -5840,6 +5941,8 @@ int main(int argc, char **argv)
       text_probes = compiler_defines_probes;
     else if (string_defines_probe)
       text_probes = string_defines_probes;
+    else if (system_defines_probe)
+      text_probes = system_defines_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -5847,7 +5950,9 @@ int main(int argc, char **argv)
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
-      if ((compiler_defines_probe || string_defines_probe) && !reference) {
+      if ((compiler_defines_probe || string_defines_probe ||
+           system_defines_probe) &&
+          !reference) {
         const auto &probe = text_probes[0];
         VerifyHostModuleMedia(argv[3],
                               std::string("Linux/Fixtures") + probe.source,
@@ -5862,7 +5967,7 @@ int main(int argc, char **argv)
                                           "/AssertWarningProbe.BIN.Z, checks "
                                           "0x0000000000000001\r\n")
                           : vm.Boot(dir / "serial.log");
-        if (compiler_defines_probe || string_defines_probe)
+        if (compiler_defines_probe || string_defines_probe || system_defines_probe)
           CheckBootSourceProbe(output, text_probes[0], dir);
         else {
           RecordTextProbes(output, text_probes, dir);
@@ -5997,6 +6102,8 @@ int main(int argc, char **argv)
               << " --compiler-defines[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --string-defines[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --system-defines[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]

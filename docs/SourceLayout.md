@@ -166,9 +166,10 @@ reference's integer return convention.
 
 After PS/2 setup, `Kernel/KMain.cpp` loads `/Compiler/Compiler.BIN`
 from the selected boot drive with `LDF_JUST_LOAD | LDF_SILENT`, binds
-the reverse imports, and invokes `LoadPass2`. The Adam task and heaps
-already exist, but color and DolDoc definitions, graphics contexts,
-the window manager, and user tasks have not been initialized yet.
+the reverse imports, and invokes `LoadPass2`. The Adam task, its heaps,
+and all ten kernel system definition lists already exist. Adam's palette
+and DolDoc definitions, graphics contexts, the window manager, and user
+tasks have not been initialized yet.
 `CInitCpp` sets `CInitStatus` from zero to `-1` on entry and to `1`
 only if both `CmpLoadDefines` and `AsmHashLoad` succeed. KMain sets
 `RLF_COMPILER` only after the entry completes successfully and reports
@@ -1296,8 +1297,61 @@ Existing list index arrays
 still point to the original list strings, and `HashDel` still leaves
 their `sub_idx` allocation alone, following the pinned implementation.
 The common fixture and runtime evidence are recorded in
-[Boot.md](Boot.md#kernel-string-definitions). The remaining system and
-Adam definition initialization requires further translation.
+[Boot.md](Boot.md#kernel-string-definitions). The full Adam definition
+initialization and color conversion helpers require further translation.
+
+## Kernel system definitions
+
+`Kernel/KDefine.cpp::SysDefinesLoad` preserves the ten lists in pinned
+`Kernel/KDefine.HC::SysDefinesLoad`, in their original order. Their 170
+entries occupy 980 literal bytes, including the final empty strings.
+This replaces the separate native color and file-flag initialization
+helpers. The record, name, copied data, index, and source link for each
+list belong to Adam's data heap; the index pointers retain the original
+strings in the kernel image.
+
+| List | Entries |
+| --- | ---: |
+| `ST_OFF_ON` | 2 |
+| `ST_HTT_TYPES` | 32 |
+| `ST_DAYS_OF_WEEK` | 7 |
+| `ST_MONTHS` | 12 |
+| `ST_FILE_ATTRS` | 13 |
+| `ST_FILE_UTIL_FLAGS` | 25 |
+| `ST_BLKDEV_TYPES` | 6 |
+| `ST_DRV_TYPES` | 6 |
+| `ST_COLORS` | 16 |
+| `ST_INT_NAMES` | 51 |
+
+The intervening space entries remain intact. `ST_INT_NAMES` places
+`MP Crash`, `Wake`, and `Dbg` at indices 48, 49, and 50. The reference's
+HolyC `$$` spelling in the file-utility list becomes one literal `$` byte
+in C++.
+
+`Kernel/KMain.cpp` follows the reference's relative sequence through
+`UncachedAliasAlloc`, `LoadKernel`, `SysGrInit`, `SysDefinesLoad`, and
+`IntInit1`. Adam's task record, hash table, and heaps already exist when
+the kernel symbols and definitions are registered. The new boolean
+initialization gate returns before interrupt setup on failure and leaves
+earlier successful registrations in place. Pinned HolyC does not perform
+those allocation checks. Other boot responsibilities still differ;
+native `Core0TaskInit` creates the idle task and does not replace the
+reference's APIC and CPU-array initialization in `Core0Init`.
+
+The system lists therefore precede compiler loading, while
+`Compiler/CInit.cpp::CmpLoadDefines` supplies its fourteen lists when the
+module entry starts. Adam's `ST_RAINBOW_10` and `DD_OS_NAME_VERSION`
+definitions remain in their reference subsystems and initialize later.
+`GrPaletteInit` retains its existing position after successful compiler
+initialization.
+
+The ten system lists use 50 native allocations totaling 4,296 bytes with
+the existing null-frame `AD:0x0` source links. That convention differs
+from the reference's internal HolyC caller addresses. Compiler failure
+checks distinguish these kernel-owned literals from the compiler's
+literals and Adam's later definitions. The common fixture, phase checks,
+and remaining evidence limits are recorded in
+[Boot.md](Boot.md#kernel-system-definitions).
 
 ## Music playback
 

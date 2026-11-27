@@ -314,9 +314,11 @@ table under `CMemLock` and publishes its pointer with a release store.
 A later publication is rejected.
 
 `Kernel/KMain.cpp` loads the compiler after PS/2 setup and before
-color definitions, DolDoc definitions, graphics contexts, the window
-manager, or interactive tasks. The Adam task and its heaps already
-exist at this point. The loader uses `LDF_JUST_LOAD | LDF_SILENT`,
+Adam's palette and DolDoc definitions, graphics contexts, the window
+manager, or interactive tasks. The Adam task, its heaps, and all ten
+kernel system definition lists already exist at this point. Those lists
+are registered by `SysDefinesLoad` before interrupt setup. The loader
+uses `LDF_JUST_LOAD | LDF_SILENT`,
 binds the native reverse imports, and then calls `LoadPass2`.
 `CInitCpp` records initialization in module-owned storage:
 
