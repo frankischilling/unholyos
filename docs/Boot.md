@@ -3563,6 +3563,50 @@ Evidence is in `build/storage-native-probes-final`,
 regressions. The drive report's full interactive rendering, removable
 media handling, lock and cache semantics remain unverified.
 
+## Cluster and directory-entry services
+
+The two cluster fixtures execute the same HolyC source in native GCC and
+Clang guests and in the pinned TempleOS reference. All three produce:
+
+```text
+Cluster entry FFF
+FAT32 cluster entry 7FF
+```
+
+The 23 checks cover RedSea extent allocation and bitmap updates,
+cluster-to-block arithmetic, partial reads and writes, FAT32 fragmented
+chain traversal, contiguous allocation and extension, both FAT copies,
+directory publication, preserving and releasing replaced chains,
+directory growth and cleanup. The fixtures verify the false return from
+successful `DirNew` calls and check the resulting entries and data.
+
+| Fixture | Source bytes | SHA-256 |
+| --- | ---: | --- |
+| `ClusterEntryProbe.HC` | 3191 | `fd1f576517e47692ff203a77d4db96210413e0852994e8629ec67f0d961c27a6` |
+| `Fat32ClusterProbe.HC` | 3145 | `baea41761247bc90c17f1f98c11708b1a0ce9757062eb91118fae715b41146c0` |
+
+The FAT32 fixture mounts the primary IDE disk if it is not already
+mounted, and uses a disposable QEMU snapshot of the generated writable
+image (SHA-256
+`9e458aed28c8cddcada016e182a64135a07b086bdd351de9ddf91a60bc55568e`).
+The reference upload is checked byte-for-byte including the terminating
+NUL, and native execution checks the packaged source and cleanup.
+
+```sh
+make -j4 test-cluster-entry
+make -j4 BUILD=build/clang CXX=clang++-20 test-cluster-entry
+build/Linux/TestBoot --cluster-entry-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/cluster-reference
+build/Linux/TestBoot --fat32-cluster-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/fat32-writable.img \
+  build/fat32-cluster-reference-mounted
+```
+
+The focused native and reference runs used QEMU 8.2.2, `pc`, `qemu64`,
+512 MiB and one vCPU. The native builds used GCC 13.3.0 and Clang 20.1.2.
+The focused tests are included in `make test`. They cover supported
+operations, not full equivalence under device errors or concurrent access.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

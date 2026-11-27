@@ -1,6 +1,23 @@
 #include "../KernelB.hpp"
 
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
+extern "C" void PrintErrCpp(const char *fmt,int64_t argc,const uint64_t *argv,
+                            const uintptr_t *rbp);
+
+extern "C" uint64_t DirNewCpp(CDrv *dv,const char *cur_dir,CDirEntry *entry,
+                               uint8_t free_old_chain)
+{
+  DrvChkCpp(dv,true);
+  switch (dv->fs_type) {
+    case FSt_REDSEA:
+      return RedSeaDirNewCpp(dv,cur_dir,entry,free_old_chain);
+    case FSt_FAT32:
+      return FAT32DirNewCpp(dv,cur_dir,entry,free_old_chain);
+    default:
+      PrintErrCpp("File System Not Supported\n",0,nullptr,nullptr);
+      return false;
+  }
+}
 
 extern "C" void DirEntryDelCpp(CDirEntry *entry)
 {

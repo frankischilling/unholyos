@@ -127,6 +127,21 @@ void FSizeHC(), FOpenHC(), FCloseHC(), FBlkReadHC(), FBlkWriteHC();
 void FileAttrHC(), CopySingleHC();
 void DelHC(),CopyHC(),MoveHC(),CopyTreeHC(),DelTreeHC(),DirMkHC(),ScanFlagsHC();
 void BlkReadHC(), BlkWriteHC();
+void ClusNumNextHC();
+void Clus2BlkHC();
+void ClusBlkReadHC();
+void ClusReadHC();
+void ClusBlkWriteHC();
+void ClusWriteHC();
+void ClusAllocHC();
+void FAT32AllocClusHC();
+void FAT32AllocContiguousClusHC();
+void FAT32FreeClusHC();
+void RedSeaAllocClusHC();
+void RedSeaFreeClusHC();
+void FAT32DirNewHC();
+void RedSeaDirNewHC();
+void DirNewHC();
 void FmtHC();
 void SysTryHC(), SysUntryHC(), ThrowHC(), CallerHC(), PutExceptHC(), YorNHC();
 void BreakHC(), BreakLockHC(), BreakUnlockHC();
@@ -1029,6 +1044,21 @@ bool LoadKernel(CTask &task)
       {"Let2Drv", reinterpret_cast<uintptr_t>(Let2DrvHC)},
       {"BlkRead", reinterpret_cast<uintptr_t>(BlkReadHC)},
       {"BlkWrite", reinterpret_cast<uintptr_t>(BlkWriteHC)},
+      {"ClusNumNext", reinterpret_cast<uintptr_t>(ClusNumNextHC)},
+      {"Clus2Blk", reinterpret_cast<uintptr_t>(Clus2BlkHC)},
+      {"ClusBlkRead", reinterpret_cast<uintptr_t>(ClusBlkReadHC)},
+      {"ClusRead", reinterpret_cast<uintptr_t>(ClusReadHC)},
+      {"ClusBlkWrite", reinterpret_cast<uintptr_t>(ClusBlkWriteHC)},
+      {"ClusWrite", reinterpret_cast<uintptr_t>(ClusWriteHC)},
+      {"ClusAlloc", reinterpret_cast<uintptr_t>(ClusAllocHC)},
+      {"FAT32AllocClus", reinterpret_cast<uintptr_t>(FAT32AllocClusHC)},
+      {"FAT32AllocContiguousClus", reinterpret_cast<uintptr_t>(FAT32AllocContiguousClusHC)},
+      {"FAT32FreeClus", reinterpret_cast<uintptr_t>(FAT32FreeClusHC)},
+      {"RedSeaAllocClus", reinterpret_cast<uintptr_t>(RedSeaAllocClusHC)},
+      {"RedSeaFreeClus", reinterpret_cast<uintptr_t>(RedSeaFreeClusHC)},
+      {"FAT32DirNew", reinterpret_cast<uintptr_t>(FAT32DirNewHC)},
+      {"RedSeaDirNew", reinterpret_cast<uintptr_t>(RedSeaDirNewHC)},
+      {"DirNew", reinterpret_cast<uintptr_t>(DirNewHC)},
       {"Fmt", reinterpret_cast<uintptr_t>(FmtHC)},
       {"SysTry", reinterpret_cast<uintptr_t>(SysTryHC)},
       {"SysUntry", reinterpret_cast<uintptr_t>(SysUntryHC)},

@@ -2047,6 +2047,7 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/DriveServicesProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/PathNamesProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/DirectoryServicesProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/ClusterEntryProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ListUtilitiesProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ColorConversionsProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FormatMissingArgsProbe.HC");
@@ -2065,6 +2066,7 @@ void BootProbe()
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32FormatProbe.HC");
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32StreamProbe.HC");
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32TreeProbe.HC");
+      BootFileProgramReport(*adam_task->cur_dv,"/Fat32ClusterProbe.HC");
     }
     BootFileProgramReport(*adam_task->cur_dv,"/Fat32RejectProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ArcProbe.HC");

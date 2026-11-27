@@ -576,6 +576,25 @@ extern "C" uint64_t FBlkReadCpp(CFile *f, uint8_t *buf, int64_t blk, int64_t cnt
 extern "C" uint64_t FBlkWriteCpp(CFile *f, const uint8_t *buf, int64_t blk, int64_t cnt);
 extern "C" uint64_t BlkReadCpp(CDrv *dv, uint8_t *buf, int64_t blk, int64_t count);
 extern "C" uint64_t BlkWriteCpp(CDrv *dv, const uint8_t *buf, int64_t blk, int64_t count);
+extern "C" int64_t ClusNumNextCpp(CDrv *dv,int64_t c,int64_t cnt);
+extern "C" int64_t Clus2BlkCpp(CDrv *dv,int64_t c);
+extern "C" int64_t ClusBlkReadCpp(CDrv *dv,uint8_t *buf,int64_t c,int64_t blks);
+extern "C" int64_t ClusReadCpp(CDrv *dv,uint8_t *buf,int64_t c,int64_t cnt);
+extern "C" int64_t ClusBlkWriteCpp(CDrv *dv,const uint8_t *buf,int64_t c,int64_t blks);
+extern "C" int64_t ClusWriteCpp(CDrv *dv,const uint8_t *buf,int64_t c,int64_t cnt);
+extern "C" int64_t ClusAllocCpp(CDrv *dv,int64_t c,int64_t cnt,uint8_t contiguous);
+bool FAT32GetClusLink(const CDrv &dv,uint64_t c,uint32_t &next);
+extern "C" int64_t FAT32AllocClusCpp(CDrv *dv,int64_t c,int64_t cnt);
+extern "C" int64_t FAT32AllocContiguousClusCpp(CDrv *dv,int64_t cnt);
+extern "C" void FAT32FreeClusCpp(CDrv *dv,int64_t c);
+extern "C" int64_t RedSeaAllocClusCpp(CDrv *dv,int64_t cnt);
+extern "C" void RedSeaFreeClusCpp(CDrv *dv,int64_t c,int64_t cnt);
+extern "C" uint64_t FAT32DirNewCpp(CDrv *dv,const char *cur_dir,CDirEntry *entry,
+                                   uint8_t free_old_chain);
+extern "C" uint64_t RedSeaDirNewCpp(CDrv *dv,const char *cur_dir,CDirEntry *entry,
+                                    uint8_t free_old_chain);
+extern "C" uint64_t DirNewCpp(CDrv *dv,const char *cur_dir,CDirEntry *entry,
+                              uint8_t free_old_chain);
 char *FileNameAbs(const char *name, const CTask &task, uint64_t flags = 0);
 char *DirNameAbs(const char *name, const CTask &task);
 char *PathTrim(const char *name, CHeapCtrl *hc);

@@ -100,8 +100,11 @@ static std::string_view ProgramOutput(std::string_view serial, const char *path,
 static void CheckProgramOutput(std::string_view serial, const char *path,
                                std::string_view expected, char checks = '3')
 {
-  Check(ProgramOutput(serial, path, checks) == expected,
-        "Native HolyC source output differed from TempleOS");
+  const auto actual=ProgramOutput(serial,path,checks);
+  if (actual!=expected)
+    throw std::runtime_error(std::string("Native HolyC source output differed for ")+
+                             path+"\nExpected:\n"+std::string(expected)+
+                             "\nActual:\n"+std::string(actual));
 }
 
 struct CBootMedia
@@ -594,7 +597,8 @@ public:
         execlp(qemu, qemu, "-machine", machine, "-cpu", "qemu64", "-m", memory,
                "-boot", "d", "-cdrom", image.c_str(), "-drive", ata.c_str(),
                "-display", "none", "-monitor", "none", "-serial", serial.c_str(),
-               "-qmp", "stdio", "-debugcon", debug.c_str(), "-no-reboot",
+               "-qmp", "stdio", "-debugcon", debug.c_str(), "-gdb",
+               "tcp:127.0.0.1:45362", "-no-reboot",
                static_cast<char *>(nullptr));
         _exit(127);
       }
@@ -2939,6 +2943,14 @@ constexpr CTextProbe storage_services_probes[]{
     {"directory-services", "/DirectoryServicesProbe.HC", "", "Directory services ",
      "Directory services ", "Directory services FFF\n", {}, true}};
 
+constexpr CTextProbe cluster_entry_probes[]{
+    {"cluster-entry", "/ClusterEntryProbe.HC", "", "Cluster entry ",
+     "Cluster entry ", "Cluster entry FFF\n", {}, true}};
+
+constexpr CTextProbe fat_cluster_probes[]{
+    {"fat32-cluster", "/Fat32ClusterProbe.HC", "", "FAT32 cluster entry ",
+     "FAT32 cluster entry ", "FAT32 cluster entry 7FF\n", {}, true}};
+
 static void CheckBootProbeOrder(const std::string &serial,
                                 std::span<const char *const> paths)
 {
@@ -5205,7 +5217,8 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/DirectoryProbe.HC",
                        "Make Directory:DirProbe\nMake Directory:Sub\nDirectory probe 1FF\n",
                        '1');
-    CheckProgramOutput(boot, "/DirContextProbe.HC", "Dir context FF\n", '1');
+    CheckProgramOutput(boot, "/DirContextProbe.HC",
+                       "Make Directory:DirScope\nMake Directory:Nested\nDir context FF\n", '1');
     CheckProgramOutput(boot, "/FileStreamProbe.HC", "File stream probe 3FF\n", '1');
     CheckProgramOutput(boot, "/FileCopyProbe.HC", file_copy_output, '1');
     CheckProgramOutput(boot, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
@@ -5356,7 +5369,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/DirectoryProbe.HC",
                          "Make Directory:DirProbe\nMake Directory:Sub\nDirectory probe 1FF\n",
                          '1');
-      CheckProgramOutput(output, "/DirContextProbe.HC", "Dir context FF\n",
+      CheckProgramOutput(output, "/DirContextProbe.HC",
+                         "Make Directory:DirScope\nMake Directory:Nested\nDir context FF\n",
                          '1');
       CheckProgramOutput(output, "/FileStreamProbe.HC", "File stream probe 3FF\n",
                          '1');
@@ -6127,6 +6141,33 @@ int main(int argc, char **argv)
       return 1;
     }
   }
+  if ((argc==5 || argc==6) &&
+      (std::string_view(argv[1])=="--fat32-cluster" ||
+       std::string_view(argv[1])=="--fat32-cluster-reference")) {
+    bool reference=std::string_view(argv[1]).ends_with("-reference");
+    char path[]="/tmp/unholyos-fat32-cluster-XXXXXX";
+    if (argc==5 && !mkdtemp(path)) return 1;
+    fs::path dir=argc==6 ? fs::absolute(argv[5]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      if (!reference)
+        VerifyHostModuleMedia(argv[3],"Linux/Fixtures/Fat32ClusterProbe.HC",
+                              "Fat32ClusterProbe.HC");
+      CMonitor vm(argv[2],argv[3],dir,"pc","512",false,argv[4],false,reference);
+      vm.Connect();
+      if (reference)
+        DriveCharacterGraphics(vm,dir,"",true,false,false,false,false,false,
+                               false,false,false,fat_cluster_probes);
+      else
+        CheckBootSourceProbe(vm.Boot(dir/"serial.log"),fat_cluster_probes[0],dir);
+      vm.Quit();
+      if (argc==5) fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
   if (argc==5 && (std::string_view(argv[1])=="--fat32-write" ||
                   std::string_view(argv[1])=="--fat32-stream" ||
                   std::string_view(argv[1])=="--fat32-tree" ||
@@ -6271,6 +6312,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--list-utilities-reference" ||
        std::string_view(argv[1]) == "--storage-services" ||
        std::string_view(argv[1]) == "--storage-services-reference" ||
+       std::string_view(argv[1]) == "--cluster-entry" ||
+       std::string_view(argv[1]) == "--cluster-entry-reference" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -6321,10 +6364,13 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--list-utilities");
     bool storage_services_probe =
         std::string_view(argv[1]).starts_with("--storage-services");
+    bool cluster_entry_probe =
+        std::string_view(argv[1]).starts_with("--cluster-entry");
     const bool source_probe = compiler_defines_probe || string_defines_probe ||
                               system_defines_probe || color_conversions_probe ||
                               format_missing_args_probe || class_records_probe ||
-                              list_utilities_probe || storage_services_probe;
+                              list_utilities_probe || storage_services_probe ||
+                              cluster_entry_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6352,6 +6398,8 @@ int main(int argc, char **argv)
       text_probes = list_utilities_probes;
     else if (storage_services_probe)
       text_probes = storage_services_probes;
+    else if (cluster_entry_probe)
+      text_probes = cluster_entry_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -6542,6 +6590,8 @@ int main(int argc, char **argv)
               << " --class-records[-reference] qemu image.iso [capture-dir]\n"
               << " --list-utilities[-reference] qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"
+              << " --cluster-entry[-reference] qemu image.iso [capture-dir]\n"
+              << " --fat32-cluster[-reference] qemu image.iso disk.img [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]

@@ -1564,9 +1564,41 @@ guard deliberately rejects writes to read-only disks. Drive selection
 does not yet perform the reference's removable-media and file-backed
 device initialization. Directory resolution uses the existing bounded
 filesystem lookup and lacks the reference drive lock; failure and
-allocation-exhaustion paths are not fully matched. `DirNew`, the cluster
-allocation and I/O layer, drive cache, device teardown and remount are
-outstanding. See [Rewrite audit](RewriteAudit.md) for their dependencies.
+allocation-exhaustion paths are not fully matched. Drive cache, device
+teardown and remount are outstanding. See [Rewrite audit](RewriteAudit.md)
+for their dependencies.
+
+## Cluster and directory-entry services
+
+`Kernel/BlkDev/DskClus.cpp` translates `ClusNumNext`, `Clus2Blk`,
+`ClusBlkRead`, `ClusRead`, `ClusBlkWrite`, `ClusWrite` and `ClusAlloc`
+in reference order. The APIs retain the reference's RedSea arithmetic,
+FAT32 next-link traversal, cluster-to-block conversion, partial-block
+counts and return conventions. `DskDirA.cpp` dispatches `DirNew` to
+the filesystem implementations. Native exports and HolyC declarations
+include the public cluster calls, directory publication and private
+filesystem allocation and free routines.
+
+The RedSea RAM implementation copies the supplied 64-byte disk record,
+sets the contiguous attribute, preserves or releases the prior extent
+according to `free_old_chain`, and updates the parent entry or boot root
+when a directory grows. FAT32 publishes the supplied cluster chain and
+metadata, retains the long-name alias on replacement, and reclaims the
+old chain when requested. Both `DirNew` implementations return false
+even after successful publication, as in the reference.
+
+The native implementation rejects malformed geometry and invalid cluster
+links, protects the root and overlapping or shared chains, and refuses
+nonterminal append, freeing an overlapping extent, or replacing a
+nonempty directory with a different chain. Same-chain metadata changes
+preserve the chain; FAT32 replacement may stay in place instead of using
+an earlier deleted slot. The existing direct bitmap and mirrored FAT
+I/O remain in use; no persistent free-list or FAT cache is introduced.
+Low-level freeing still relies on caller ownership outside the checked
+root, parent and directory entries. Rollback is best effort on hardware
+write failures, and full reference locking, break handling and exception
+semantics remain pending. RedSea mutation is currently limited to RAM
+drives and FAT32 mutation to explicitly writable ATA devices.
 
 ## Remaining structural work
 
