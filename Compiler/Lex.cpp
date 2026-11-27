@@ -947,21 +947,12 @@ static bool LexIncludeFile(CCmpCtrl &cc, char *name)
 {
   if (!(SYS_RUN_LEVEL & RLF_DOC)) {
     auto *src = name ? FileReadCpp(name, nullptr, nullptr) : nullptr;
-    if (!src) {
-      Free(name);
-      return false;
-    }
     return LexIncludeStr(cc, name, reinterpret_cast<char *>(src), 0);
   }
   auto *doc = name ? DocNewCpp(name, nullptr) : nullptr;
   if (doc) {
     size_t size;
     auto *src = FileReadCpp(name, &size, nullptr);
-    if (!src) {
-      DocDelCpp(doc);
-      Free(name);
-      return false;
-    }
     doc->flags |= DOCF_DBL_DOLLARS;
     DocLoadCpp(doc, src, size);
     Free(src);

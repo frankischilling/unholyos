@@ -47,7 +47,14 @@ bool MakeAdam()
     SerialPutS("UnholyOS: loading Adam source ");
     SerialPutS(file);
     SerialPutS("\r\n");
-    auto result = ExeFile(file);
+    // Required startup files must exist even though an ordinary HolyC
+    // include of a missing file is treated as empty by the reference lexer.
+    auto *source = FileReadCpp(file, nullptr, nullptr);
+    CExeResult result{};
+    if (source) {
+      Free(source);
+      result = ExeFile(file);
+    }
     if (!result.okay || result.exception) {
       // No child may inherit partially initialized compiler symbols.
       task->hash_table = kernel;
