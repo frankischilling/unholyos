@@ -92,7 +92,8 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
                                    bool spline = false, bool flood_fill = false,
                                    bool blot = false, bool sprite_flood = false,
                                    bool music_demo = false,
-                                   std::span<const CTextProbe> text_probes = {})
+                                   std::span<const CTextProbe> text_probes = {},
+                                   const fs::path &module_binary = {})
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -392,10 +393,11 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
     std::cout << "Original ScrnCapture.HC saved, replayed and cleared a GR image\n";
   }
   bool probe_declared = false;
-  auto upload = [&](const fs::path &source, bool clear = false) {
+  auto upload = [&](const fs::path &source, bool clear = false,
+                    bool execute = true) {
     auto expected = FileRead(source);
     Check(!expected.empty() && expected.size() <= 64 * 1024,
-          "Reference probe must contain at most 64 KiB of source");
+          "Reference transfer must contain at most 64 KiB");
     const size_t allocation = (expected.size() + 1 + 4095) & ~size_t(4095);
     cmd(std::string(probe_declared ? "cgprobe" : "U8 *cgprobe") + "=CAlloc(" +
         std::to_string(allocation) + ");");
@@ -440,10 +442,54 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
                std::to_string(expected.size() + 1) + R"(,"filename":")" +
                uploaded.string() + R"("}})");
     expected.push_back(0);
-    Check(FileRead(uploaded) == expected, "Reference probe transfer changed source bytes");
-    cmd(clear ? "DocClear(,1);ExePutS(cgprobe);Free(cgprobe);"
-              : "ExePutS(cgprobe);Free(cgprobe);");
+    Check(FileRead(uploaded) == expected,
+          "Reference transfer changed payload bytes");
+    if (execute)
+      cmd(clear ? "DocClear(,1);ExePutS(cgprobe);Free(cgprobe);"
+                : "ExePutS(cgprobe);Free(cgprobe);");
   };
+  if (!module_binary.empty()) {
+    Check(reference && !text_probes.empty(),
+          "A module transfer needs a reference text probe");
+    vm.ResetDeadline(300s);
+    const auto expected = FileRead(module_binary);
+    cmd("DocClear(,1);");
+    upload(module_binary, false, false);
+    cmd("CBlkDev *hmdrive=Let2BlkDev('B',FALSE);");
+    cmd("Bool hmready=hmdrive && hmdrive->type==BDT_RAM;");
+    cmd(R"(hmready=hmready && FileFind("B:/HostModuleProbe.BIN")==0;)");
+    cmd(R"("HMREADY:%d:END\n",hmready;)");
+    wait_text("HMREADY:1:END");
+    cmd("I64 hmcluster=FileWrite(\"B:/HostModuleProbe.BIN\",cgprobe," +
+        std::to_string(expected.size()) + ");");
+    cmd("Free(cgprobe);");
+    cmd(R"(I64 hmsize=0;U8 *hmfile=FileRead("B:/HostModuleProbe.BIN",&hmsize);)");
+    cmd(R"("HMFILE:%X:%X:%X:END\n",hmfile,hmsize,hmcluster;)");
+    const std::regex pattern(
+        "HMFILE:([0-9A-Fa-f]+):([0-9A-Fa-f]+):([0-9A-Fa-f]+):END");
+    std::smatch match;
+    std::string screen;
+    wait(
+        [&](const Cells &cells) {
+          screen = visible(cells);
+          return std::regex_search(screen, match, pattern);
+        },
+        "Missing reference module file readback");
+    const auto addr = std::stoull(match[1].str(), nullptr, 16);
+    const auto size = std::stoull(match[2].str(), nullptr, 16);
+    const auto cluster = std::stoull(match[3].str(), nullptr, 16);
+    Check(size == expected.size() && cluster && cluster != UINT64_MAX && addr &&
+              addr <= 0x20000000 - size,
+          "Invalid reference module file readback");
+    const auto readback = dir / "host-module-file-readback.bin";
+    vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+               std::to_string(addr) + R"(,"size":)" + std::to_string(size) +
+               R"(,"filename":")" + readback.string() + R"("}})");
+    Check(FileRead(readback) == expected, "Reference module file bytes differ");
+    cmd("Free(hmfile);");
+    std::cout << "Verified " << size
+              << " module bytes after upload and RAM-file readback\n";
+  }
   if (!text_probes.empty()) {
     std::string failures;
     for (const auto &probe : text_probes) {

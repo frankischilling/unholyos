@@ -2086,7 +2086,8 @@ fields before releasing its temporary disk. The host requires all
 three result bits in `opcode resource checks 0x0000000000000007`.
 
 The unchanged loader guard still requires `__bss_end <= 0x96600`.
-Local builds, including the new startup checks, have these limits:
+At opcode-resource commit `02736c1`, local builds including the startup
+checks have these limits:
 
 | Compiler | `__bss_end` | Bytes below the loader | Bytes recovered from `6fa73f3` |
 | --- | --- | ---: | ---: |
@@ -2126,6 +2127,82 @@ an explicit path on the boot volume is the documented adaptation until
 `KMain` loads the separate compiler from `/Compiler`. These checks do
 not reproduce the reference's startup failure after a missing
 dictionary or establish separate compiler-module loading.
+
+## Host-built C++ and assembly modules
+
+`make -j4 test-host-modules` builds the C++20 `MakeBIN` producer, a
+freestanding C++/NASM fixture, and `build/host-modules-test.iso`. It checks
+conversion and rejected inputs, verifies the exact module bytes on the
+ISO, and boots a clean guest that loads the module twice. `make test`
+includes this target. [Host modules](HostModules.md) describes the native
+file format, explicit ABI bindings, and supported ELF relocations.
+
+Local GCC 13.3.0 and Clang 20.1.2 builds both passed the focused target.
+Each producer passed deterministic conversion and 30 rejection cases
+that preserve an existing output file. The builds used NASM 2.16.01
+and GNU ld 2.42. Both resulting binaries also passed in fresh TempleOS
+VMs, with the same 121-byte normalized output in all four runs:
+
+```text
+HM results 00000000000001FF 00000000000001FF
+HM local 000000000000003F 000000000000003F
+HM pair 000000000000001F
+HM DONE
+```
+
+The `1FF` results cover initialized and zeroed storage, internal and
+external pointers, GOT references, direct and indirect HolyC calls,
+and data and stack alignment. Each `3F` checks bounded module exports
+and local pointers, the expected imported bitmap, alignment, and the
+module header/hash record. `1F` checks nonoverlapping allocations,
+distinct local addresses, equal relative offsets, a shared external
+address, and unchanged first-load results after the second load.
+
+| Local fixture compiler | BIN bytes | SHA-256 |
+| --- | ---: | --- |
+| GCC 13.3.0 | 1,168 | `b1b97ad91cc01e4544223e07c3543c6fa34c6517e75206dee46bd85cfed40e31` |
+| Clang 20.1.2 | 1,152 | `231c9d55f3def9fa2a5497810ca09728ab548276d73a2c6178abb72aa47ca8b7` |
+
+All four VMs used QEMU 8.2.2, `-machine pc -cpu qemu64 -m 512 -boot d`,
+a clean CD boot, one CPU, `-display none -monitor none -qmp stdio`, a
+serial capture, and `-no-reboot`. The reference added a debug console
+capture and `-gdb tcp:127.0.0.1:45362` for byte-verified transfers.
+The reference distribution ISO has SHA-256
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+
+The native test calls the existing C++ `Load` through a gated boot probe.
+It reads the opaque loader result's header through the module hash record.
+The reference uses its public HolyC `Load`, which returns `CBinFile *`.
+`HostModuleLoadProbe.HC` performs the equivalent two-load checks there.
+That wrapper is 2,839 bytes with SHA-256
+`819d157e52f018ac0ff10b1237a4d7205435ed606d74036e5c6326a40356641a`.
+The reference harness verifies the uploaded module in memory, writes
+only those bytes to the fresh guest's RAM drive, reads the file back,
+and compares every byte before loading it.
+
+The focused commands are:
+
+```sh
+make -j4 test-host-modules
+make -j4 BUILD=build/clang CXX=clang++ HOSTCXX=clang++ test-host-modules
+build/Linux/TestBoot --host-module-reference qemu-system-x86_64 \
+  ../reference-media/TOS_Distro.ISO build/Linux/Fixtures/HostModuleProbe.BIN \
+  build/host-modules-gcc-reference
+build/Linux/TestBoot --host-module-reference qemu-system-x86_64 \
+  ../reference-media/TOS_Distro.ISO build/clang/Linux/Fixtures/HostModuleProbe.BIN \
+  build/host-modules-clang-reference
+```
+
+The Clang build selects the installed Clang 20.1.2 executable through
+the `CXX` and `HOSTCXX` overrides. The two reference captures retain the
+module uploads, exact RAM-file readbacks, wrapper upload, terminal text
+and cells, and screenshots. Both normalized traces have SHA-256
+`6ff271b393dc66e5157b3d3250b5fe4c2d39f3e884fc9de1fa6024f3b5f5bc85`.
+
+These runs establish the fixture's TOSB and ABI behavior across the
+two loaders. The compiler and Adam remain linked into the boot image;
+the native HolyC `Load` API, separate compiler initialization, and the
+guest C++20 build toolchain remain work for later increments.
 
 ## Subsystem map
 

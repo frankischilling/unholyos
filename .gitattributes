@@ -141,3 +141,5 @@ Linux/Fixtures/AsmBuild.HC text eol=lf
 Linux/Fixtures/AsmProbe.HC text eol=lf
 Linux/Fixtures/FloatScanProbe.HC text eol=lf
 Linux/Fixtures/StringCompareProbe.HC text eol=lf
+Linux/Fixtures/HostModuleProbe.bindings text eol=lf
+Linux/Fixtures/HostModuleLoadProbe.HC text eol=lf

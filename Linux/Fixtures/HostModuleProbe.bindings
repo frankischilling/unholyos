@@ -1,0 +1,6 @@
+# HostModuleMain adapts the loader's HolyC call to HostModuleRun's System V ABI.
+entry HostModuleMain
+export HostModuleResult HostModuleResult
+export HostModuleAnchor HostModuleAnchor
+import holyc _STRCMP _STRCMP
+import data char_bmp_alpha char_bmp_alpha

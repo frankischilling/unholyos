@@ -46,6 +46,14 @@ ISO_TOOL := $(BUILD)/Linux/MakeISO
 BOOT_TEST := $(BUILD)/Linux/TestBoot
 COMPRESS_TEST := $(BUILD)/Linux/TestCompress
 STR_COMPARE_TEST := $(BUILD)/Linux/TestStrCompare
+BIN_TOOL := $(BUILD)/Linux/MakeBIN
+MAKE_BIN_TEST := $(BUILD)/Linux/TestMakeBIN
+HOST_MODULE_CPP := $(BUILD)/Linux/Fixtures/HostModuleProbe.cpp.o
+HOST_MODULE_ASM := $(BUILD)/Linux/Fixtures/HostModuleProbe.asm.o
+HOST_MODULE_OBJECT := $(BUILD)/Linux/Fixtures/HostModuleProbe.o
+HOST_MODULE := $(BUILD)/Linux/Fixtures/HostModuleProbe.BIN
+HOST_MODULE_BINDINGS := Linux/Fixtures/HostModuleProbe.bindings
+HOST_MODULE_TEST_ISO := $(BUILD)/host-modules-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
 FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
@@ -115,7 +123,7 @@ QUEUE_PROBE := Linux/Fixtures/QueueProbe.HC
 TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInputProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 
-.PHONY: all run test
+.PHONY: all run test test-host-modules
 all: $(ISO)
 
 $(LOADER): Adam/Opt/Boot/BootDVD.asm Kernel/KernelA.inc
@@ -158,6 +166,28 @@ $(STR_COMPARE_TEST): Linux/TestStrCompare.cpp $(BUILD)/Kernel/StrA.asm.o
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -fno-pie -no-pie -mno-red-zone -o $@ $^
 
+$(BIN_TOOL): Linux/MakeBIN.cpp Linux/BootMedia.hpp Kernel/KernelA.hpp
+	mkdir -p $(@D)
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
+
+$(MAKE_BIN_TEST): Linux/TestMakeBIN.cpp Linux/BootMedia.hpp Kernel/KernelA.hpp
+	mkdir -p $(@D)
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
+
+$(HOST_MODULE_CPP): Linux/Fixtures/HostModuleProbe.cpp
+	mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -fPIC -fcf-protection=none -c -o $@ $<
+
+$(HOST_MODULE_ASM): Linux/Fixtures/HostModuleProbe.asm
+	mkdir -p $(@D)
+	$(NASM) $(NASMFLAGS) -f elf64 -o $@ $<
+
+$(HOST_MODULE_OBJECT): $(HOST_MODULE_CPP) $(HOST_MODULE_ASM)
+	$(LD) -m elf_x86_64 -r --no-relax --force-group-allocation -o $@ $^
+
+$(HOST_MODULE): $(HOST_MODULE_OBJECT) $(HOST_MODULE_BINDINGS) $(BIN_TOOL)
+	$(BIN_TOOL) $(HOST_MODULE_OBJECT) $(HOST_MODULE_BINDINGS) $@
+
 $(FAT_TOOL): Linux/MakeFAT32.cpp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
@@ -173,7 +203,11 @@ $(FAT_WRITE_DISK): $(FAT_TOOL)
 
 $(ISO) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(ATA_TEST_ISO) $(FAT_WRITE_ISO) \
 $(FAT_FORMAT_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(BREAK_TEST_ISO) \
-$(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(STRINGS_TEST_ISO): $(COMPILER_RESOURCE)
+$(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(STRINGS_TEST_ISO) \
+$(HOST_MODULE_TEST_ISO): $(COMPILER_RESOURCE)
+
+$(HOST_MODULE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(HOST_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(HOST_MODULE)
 
 $(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
@@ -221,10 +255,14 @@ $(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(STARTU
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(STARTUP_FIXTURE) $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(STARTUP_FILES)) \
 			$(foreach demo,$(DOC_BIN_DEMOS) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS),--file-at $(demo) $(demo)) --file-at Demo/Graphics/DocBinLink.DD $(DOC_BIN_LINK) --file-at Doc/QueueProbe.HC $(QUEUE_PROBE)
 
+test-host-modules: $(HOST_MODULE_TEST_ISO) $(BOOT_TEST) $(MAKE_BIN_TEST)
+	$(MAKE_BIN_TEST) $(BIN_TOOL) $(HOST_MODULE_OBJECT) $(HOST_MODULE_BINDINGS) $(BUILD)/make-bin-test
+	$(BOOT_TEST) --host-module "$(QEMU)" $(HOST_MODULE_TEST_ISO) $(HOST_MODULE)
+
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO)
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) test-host-modules
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
 	$(STR_COMPARE_TEST)
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_DISK) valid
@@ -245,4 +283,4 @@ test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_IS
 	$(BOOT_TEST) --database "$(QEMU)" $<
 	$(BOOT_TEST) --database-persistent "$(QEMU)" $< $(FAT_WRITE_DISK)
 
--include $(CXX_OBJ:.o=.d)
+-include $(CXX_OBJ:.o=.d) $(HOST_MODULE_CPP:.o=.d)

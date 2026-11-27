@@ -137,6 +137,24 @@ static void VerifyOpcodeResource(const Bytes &disc, uint64_t root)
         "Packaged Compiler/OpCodes.DD differs from the reference source");
 }
 
+static void VerifyHostModuleMedia(const fs::path &iso, const fs::path &module)
+{
+  constexpr size_t blk = 512, redsea = 88 * blk;
+  const auto disc = FileRead(iso), expected = FileRead(module);
+  const auto root = ReadLE(disc, redsea + 24, 8);
+  const auto entry = FindRedSeaEntry(disc, root, "HostModuleProbe.BIN");
+  const auto start = ReadLE(disc, entry + 40, 8);
+  const auto size = ReadLE(disc, entry + 48, 8);
+  Check(ReadLE(disc, entry, 2) == 0x800 && !expected.empty() &&
+            size == expected.size() && start < disc.size() / blk &&
+            size <= disc.size() - start * blk,
+        "Invalid HostModuleProbe.BIN extent");
+  Check(
+      std::equal(expected.begin(), expected.end(), disc.begin() + start * blk),
+      "Packaged HostModuleProbe.BIN differs from the host module");
+  std::cout << "Verified " << size << " packaged host module bytes\n";
+}
+
 static void VerifyHome(const Bytes &disc, uint64_t root)
 {
   constexpr size_t blk = 512;
@@ -1752,6 +1770,15 @@ static void DriveDigits(CMonitor &vm, const fs::path &dir,
 
 #include "TestStrings.hpp"
 #include "TestCharacterGraphics.hpp"
+
+constexpr std::string_view host_module_output =
+    "HM results 00000000000001FF 00000000000001FF\n"
+    "HM local 000000000000003F 000000000000003F\n"
+    "HM pair 000000000000001F\n"
+    "HM DONE\n";
+constexpr CTextProbe host_module_probes[]{
+    {"host-module", "/HostModuleLoadProbe.HC", "/HostModuleProbe.BIN",
+     "HM results ", "HM DONE", host_module_output}};
 
 static void VerifyFormatRefusal(CMonitor &vm, const fs::path &dir,
                                 const std::string &boot)
@@ -4588,6 +4615,51 @@ static void VerifyDatabaseRecords(const Bytes &disk)
 
 int main(int argc, char **argv)
 {
+  if ((argc == 5 || argc == 6) &&
+      (std::string_view(argv[1]) == "--host-module" ||
+       std::string_view(argv[1]) == "--host-module-reference")) {
+    const bool reference = std::string_view(argv[1]).ends_with("-reference");
+    char path[] = "/tmp/unholyos-host-module-XXXXXX";
+    if (argc == 5 && !mkdtemp(path))
+      return 1;
+    const fs::path dir = argc == 6 ? fs::absolute(argv[5]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      if (!reference)
+        VerifyHostModuleMedia(argv[3], argv[4]);
+      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false,
+                  reference);
+      vm.Connect();
+      if (reference)
+        DriveCharacterGraphics(vm, dir, "", true, false, false, false, false,
+                               false, false, false, false, host_module_probes,
+                               fs::absolute(argv[4]));
+      else {
+        const auto serial = vm.Boot(dir / "serial.log");
+        const auto first = serial.find("HM results ");
+        const auto last = serial.find("HM DONE\r\n", first);
+        Check(first != std::string::npos && last != std::string::npos,
+              "Missing native host module report");
+        auto output = serial.substr(first, last + 9 - first);
+        std::erase(output, '\r');
+        std::ofstream file(dir / "host-module-native.txt");
+        file << output;
+        file.close();
+        Check(bool(file), "Could not record native host module output");
+        std::cout << output;
+        Check(output == host_module_output,
+              "Native host module results differ");
+      }
+      vm.Quit();
+      if (argc == 5)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << ReadText(dir / "serial.log") << error.what() << '\n'
+                << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
   if ((argc==5 || argc==6) &&
       (std::string_view(argv[1])=="--database-persistent" ||
        std::string_view(argv[1])=="--database-persistent-reference")) {
@@ -4918,6 +4990,8 @@ int main(int argc, char **argv)
               << " qemu image.iso kernel [startup-test.iso]\n"
               << "       " << argv[0]
               << " --q35-no-compiler qemu image.iso kernel\n"
+              << "       " << argv[0]
+              << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]
               << " --digits qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
