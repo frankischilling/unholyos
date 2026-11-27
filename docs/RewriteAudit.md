@@ -9,7 +9,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | Directory | Reference files | Corresponding paths | Missing paths |
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 68 | 8 |
-| `Compiler` | 33 | 32 | 1 |
+| `Compiler` | 33 | 33 | 0 |
 | `Adam` | 132 | 45 | 87 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 22 | 181 |
@@ -49,7 +49,13 @@ part of the full rewrite.
 
 ## Remaining compiler and Adam work
 
-- The unmatched compiler path is `UAsm.HC`. The split backend now has
+- `UAsm.cpp` supplies the last missing corresponding compiler path,
+  building immutable opcode-table views at compiler initialization and
+  exposing `Ui`, `U` and `Un` through the loaded compiler module. It
+  decodes selected integer, control-transfer and x87 forms; complete
+  instruction coverage, matching selection and formatting in every
+  operand/address-size mode, source links and debugger integration
+  still need work. The split backend now has
   corresponding integer and floating instruction-selection files, a
   shared emitter, register-ABI symbol resolution and NASM templates.
   Continue translating the
@@ -69,8 +75,7 @@ part of the full rewrite.
   probes verify selected integer and x87 instructions, their typed metadata,
   exact constant folds and JIT/AOT execution; `SYS_POW` uses the reference
   register ABI and a named module relocation. Template variants, general
-  clobber analysis, other intrinsic families and the disassembler remain
-  incomplete.
+  clobber analysis and other intrinsic families remain incomplete.
 - Move remaining Adam initialization to the guest startup path after
   compiler support permits the original project and startup files.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal

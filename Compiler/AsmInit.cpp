@@ -245,6 +245,8 @@ bool AsmHashLoad()
   LexSourceDel(cc);
   Free(source);
   if (okay)
+    okay=UAsmHashLoad(*table,heap);
+  if (okay)
     asm_hash = table;
   else
     HashTableDelCpp(table);
@@ -2266,6 +2268,13 @@ static bool CmpRuntimeHeaders(CHashTable *table)
         {"instance", I64, true, 1}}, "_HASH_FIND"},
       {"MemberFind", MemberPtr, FF_RET1,
        {{"needle_str", U8Ptr}, {"haystack_class", HashClassPtr}}},
+      {"U", U8Ptr, FF_RET1,
+       {{"rip", U8Ptr}, {"cnt", I64, true, 20}, {"seg_size", I64, true, 64}}},
+      {"Ui", U0, FF_RET1,
+       {{"buf", U8Ptr}, {"_rip", U8PtrPtr}, {"seg_size", I64, true, 64},
+        {"_jmp_dst", I64Ptr, true}, {"just_ins", Bool, true}}},
+      {"Un", I64, FF_RET1,
+       {{"rip", U8Ptr}, {"cnt", I64, true, 0x80}, {"seg_size", I64, true, 64}}},
       {"MemberMetaData", I64, FF_RET1,
        {{"needle_str", U8Ptr}, {"haystack_member_lst", MemberPtr}}},
       {"MemberMetaFind", MemberMetaPtr, FF_RET1,
