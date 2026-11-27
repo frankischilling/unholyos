@@ -106,7 +106,8 @@ static bool DrvFATOverlap(uint64_t blk,uint64_t pos,size_t bytes)
   return bytes && (start>=pos?start-pos<bytes:pos-start<BLK_SIZE);
 }
 
-bool DrvFATWriteAllowed(CBlkDev *bd,uint64_t pos,size_t bytes,const CDrv *origin)
+bool DrvFATWriteAllowedImage(CBlkDev *bd,uint64_t pos,size_t bytes,
+                             const CDrv *origin)
 {
   if (!bytes || !blkdev.drvs) return true;
   for (size_t i=0;i<DRVS_NUM;i++) {
@@ -121,6 +122,12 @@ bool DrvFATWriteAllowed(CBlkDev *bd,uint64_t pos,size_t bytes,const CDrv *origin
       return false;
   }
   return true;
+}
+
+bool DrvFATWriteAllowed(CBlkDev *bd,uint64_t pos,size_t bytes,const CDrv *origin)
+{
+  return (!bytes || !BlkDevImageBacking(bd)) &&
+         DrvFATWriteAllowedImage(bd,pos,bytes,origin);
 }
 
 void DrvFATWriteThrough(CBlkDev *bd,const uint8_t *buf,uint64_t pos,
@@ -530,7 +537,7 @@ extern "C" CDrv *Let2DrvCpp(uint8_t drv_let,uint8_t except)
 extern "C" CBlkDev *DrvIsWritableCpp(uint8_t drv_let,uint8_t except)
 {
   auto *bd=Let2BlkDevCpp(drv_let,except);
-  if (!bd || bd->flags&BDF_READ_ONLY) {
+  if (!bd || bd->flags&BDF_READ_ONLY || BlkDevImageBacking(bd)) {
     if (except)
       RaiseHolyC(0x767244); // Drv
     return nullptr;
@@ -623,7 +630,9 @@ extern "C" uint64_t DrvCpp(uint8_t drv_let)
   BlkDevChkCpp(dv->bd,true);
   auto *task=CurrentTask();
   if (dv!=task->cur_dv && !(dv->bd->flags&BDF_INITIALIZED) &&
-      (dv->bd->type==BDT_RAM || (dv->bd->flags&BDF_REMOVABLE)))
+      (dv->bd->type==BDT_RAM || dv->bd->type==BDT_ISO_FILE_READ ||
+       dv->bd->type==BDT_ISO_FILE_WRITE ||
+       (dv->bd->flags&BDF_REMOVABLE)))
     if (!DrvChangeMedia(*dv)) return false;
   auto *dir=StrNew("/",task->data_heap);
   if (!dir)

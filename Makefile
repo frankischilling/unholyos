@@ -32,7 +32,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp \
 	Adam/DolDoc/DocChar.cpp Adam/DolDoc/DocPutKey.cpp Adam/DolDoc/DocRun.cpp \
 	Adam/DolDoc/DocGet.cpp Adam/DolDoc/DocForm.cpp Adam/DolDoc/DocEd.cpp Adam/DolDoc/DocTerm.cpp HomeSys.cpp \
-	Adam/ABlkDev/ADskA.cpp Adam/Opt/Boot/DskISORedSea.cpp
+	Adam/ABlkDev/ADskA.cpp Adam/ABlkDev/Mount.cpp Adam/Opt/Boot/DskISORedSea.cpp
 GUEST_TEST_SRC := Linux/BootProbe.cpp
 COMPILER_ASM_SRC := Compiler/CExcept.asm Compiler/CMain.asm Compiler/CMisc.asm Compiler/LexLib.asm
 COMPILER_CXX_SRC := Compiler/CInit.cpp Compiler/CMain.cpp Compiler/Asm.cpp Compiler/AsmResolve.cpp Compiler/AsmLib.cpp Compiler/CHash.cpp Compiler/CExcept.cpp Compiler/CMisc.cpp Compiler/Lex.cpp Compiler/LexLib.cpp Compiler/AsmInit.cpp Compiler/PrsLib.cpp \
@@ -107,6 +107,8 @@ FAT_SECTOR_CACHE_PROBE := $(addprefix Linux/Fixtures/,FatSectorCacheProbe.HC Fat
 FAT_SECTOR_CACHE_TEST_ISO := $(BUILD)/fat-sector-cache-test.iso
 STORAGE_LIFECYCLE_PROBE := $(addprefix Linux/Fixtures/,StorageLifecycleProbe.HC StorageLifecycleNativeProbe.HC)
 STORAGE_LIFECYCLE_TEST_ISO := $(BUILD)/storage-lifecycle-test.iso
+FILE_BACKED_REDSEA_PROBES := $(addprefix Linux/Fixtures/,FileBackedRedSeaProbe.HC FileBackedRedSeaWriteProbe.HC FileBackedRedSeaNativeProbe.HC)
+FILE_BACKED_REDSEA_TEST_ISO := $(BUILD)/file-backed-redsea-test.iso
 CHARACTER_GRAPHICS_PROBE := Linux/Fixtures/CharPanObserver.HC
 CHARACTER_GRAPHICS_TEST_ISO := $(BUILD)/character-graphics-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
@@ -219,7 +221,7 @@ $(ISO_TOOL): Linux/MakeISO.cpp Adam/Opt/Boot/DskISORedSea.cpp Kernel/Compress.cp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
 
-$(BOOT_TEST): Linux/TestBoot.cpp Linux/BootMedia.hpp Linux/TestCharacterGraphics.hpp Linux/TestStrings.hpp
+$(BOOT_TEST): Linux/TestBoot.cpp Linux/BootMedia.hpp Linux/TestCharacterGraphics.hpp Linux/TestStrings.hpp Linux/TestFileBackedRedSea.hpp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
 
@@ -347,6 +349,9 @@ $(FAT_SECTOR_CACHE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(F
 $(STORAGE_LIFECYCLE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STORAGE_LIFECYCLE_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(STORAGE_LIFECYCLE_PROBE))
 
+$(FILE_BACKED_REDSEA_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FILE_BACKED_REDSEA_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(FILE_BACKED_REDSEA_PROBES))
+
 $(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
 
@@ -468,6 +473,12 @@ test-storage-lifecycle: $(STORAGE_LIFECYCLE_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --storage-lifecycle "$(QEMU)" $(STORAGE_LIFECYCLE_TEST_ISO)
 
 test: test-storage-lifecycle
+
+.PHONY: test-file-backed-redsea
+test-file-backed-redsea: $(FILE_BACKED_REDSEA_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --file-backed-redsea "$(QEMU)" $(FILE_BACKED_REDSEA_TEST_ISO)
+
+test: test-file-backed-redsea
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio

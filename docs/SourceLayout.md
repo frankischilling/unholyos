@@ -1560,12 +1560,10 @@ them. `DskFind.cpp` exposes `FilesFind2` for the current directory and
 The native mount path still requires canonical drive letters, supported
 device types and validated partition geometry. Its slot locking is not
 the reference's task-owned lock protocol, and its writable filesystem
-guard deliberately rejects writes to read-only disks. Drive selection
-does not yet perform the reference's removable-media and file-backed
-device initialization. Directory resolution uses the existing bounded
+guard deliberately rejects writes to read-only disks. The reference's
+removable-media initialization sequence remains partial. Directory resolution uses the existing bounded
 filesystem lookup and lacks the reference drive lock; failure and
-allocation-exhaustion paths are not fully matched. Device teardown and
-remount are outstanding. See [Rewrite audit](RewriteAudit.md)
+allocation-exhaustion paths are not fully matched. See [Rewrite audit](RewriteAudit.md)
 for their dependencies.
 
 ## Cluster and directory-entry services
@@ -1597,8 +1595,8 @@ I/O remain in use; no persistent free-list or FAT cache is introduced.
 Low-level freeing still relies on caller ownership outside the checked
 root, parent and directory entries. Rollback is best effort on hardware
 write failures, and full reference locking, break handling and exception
-semantics remain pending. RedSea mutation is currently limited to RAM
-drives and FAT32 mutation to explicitly writable ATA devices.
+semantics remain pending. RedSea mutation supports RAM drives and writable
+file-backed images; FAT32 mutation supports explicitly writable ATA devices.
 
 ## Block cache and drive ownership
 
@@ -1624,11 +1622,11 @@ untested.
 `DskBlk.cpp` routes filesystem reads of published drives through the
 cache, including partial-sector reads; mount-time reads bypass it.
 Raw writes update overlapping cached bytes for the same device or
-invalidate affected blocks after a failed ATA write. RedSea RAM
-mutations invalidate cached entries before direct bitmap or data
-writes. Device reset and RAM replacement invalidate cached state.
-Reinitialization covers existing RAM, ATA and ATAPI devices; the
-reference's removable-media sequence, file-backed devices and full
+invalidate affected blocks after a failed ATA write. RedSea mutations
+use bounded device I/O and update or invalidate cached blocks.
+Device reset and RAM replacement invalidate cached state.
+Reinitialization covers RAM, ATA, ATAPI and supported file-backed devices; the
+reference's removable-media sequence and full
 exception paths remain incomplete.
 
 ## Per-drive FAT and bitmap cache
@@ -1679,13 +1677,44 @@ writes is also rejected. These guards deliberately differ from the
 reference's less restricted deletion and enable operations. Ordinary
 open `CFile` handles and task current-directory references are not
 globally tracked, so callers must close files and change drives before
-teardown. File-backed devices are not yet supported and a live backing
-file prevents deletion.
+teardown. A live file-backed device prevents deletion of its backing device.
 
 `DskCacheInvalidate` and `DskChg` ensure initialization, clear applicable
 cached state, refresh removable ATAPI metadata, and reset the current
 directory to the root on disk change. The read-only override is respected.
 Complete removable-media failure/retry behavior remains unverified.
+
+## File-backed RedSea devices
+
+`Adam/ABlkDev/Mount.cpp` translates `MountFile` and `Unmount`, including
+the default `.ISO.C` extension. `Kernel/BlkDev/DskAddDev.cpp` initializes
+read-only image devices on M–P and writable image devices on Q–S. Both
+use the 88-sector RedSea offset and a fixed contiguous extent. The
+writable path creates the backing file, formats its RedSea volume and
+writes the ISO descriptor and El Torito prefix before publishing the device.
+The backing stream, name and cluster buffer belong to Adam; device locking
+forwards to the backing device. `DskCFile.cpp`, `DskBlk.cpp` and
+`FileSysRedSea.cpp` share bounded device I/O for RAM and writable images.
+
+The implementation requires nonremovable RAM or ATA backing storage and
+validated contiguous file extents. FAT32 requires the contiguous `.C`
+attribute. Nested image devices and occupied-slot replacement are not
+supported. Multiple read-only mounts may coexist; a writable mount is
+exclusive. While an image is mounted, the backing device is protected
+against unrelated mutations, deletion and reconfiguration. Closing its
+owned stream directly raises `File`. These restrictions are broader than
+the reference's lifetime rules. Invalid mount requests return zero and
+invalid raw I/O returns false where the reference may throw.
+
+Writable images commit the backing extent and directory entry before
+publication. Failure during subsequent formatting may leave the backing
+file; persistent I/O errors have no guaranteed transactional rollback.
+RedSea root relocation updates the boot record, but does not rewrite the
+ISO descriptor root field. The guest `RedSeaISO` builder still uses a
+temporary RAM volume and `CopyTree2`; converting it to the reference's
+mounted writable-image workflow remains outstanding. FAT32 backing media,
+arbitrary open-stream lifetime, direct RAM writes, SMP and removable-media
+recovery need further runtime comparisons.
 
 ## Remaining structural work
 

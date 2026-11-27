@@ -1,4 +1,5 @@
 #include "../KernelB.hpp"
+#include "../../Adam/Opt/Boot/DskISORedSea.hpp"
 
 static uint8_t *ram_owned[BLKDEVS_NUM];
 uint64_t mount_flags;
@@ -141,9 +142,136 @@ static int64_t BlkDevAddATA(CBlkDev *bd,int64_t prt_num,bool whole_drv)
   return res;
 }
 
+static bool BlkDevImageSlot(const CBlkDev *bd)
+{
+  if (!bd || !blkdev.blkdevs) return false;
+  for (size_t i=0;i<BLKDEVS_NUM;i++)
+    if (bd==&blkdev.blkdevs[i])
+      return bd->bd_signature!=BD_SIGNATURE_VAL && !bd->file_dsk &&
+             (bd->type==BDT_ISO_FILE_READ || bd->type==BDT_ISO_FILE_WRITE);
+  return false;
+}
+
+static int64_t BlkDevAddImage(CBlkDev *bd,bool make_free)
+{
+  if (!BlkDevImageSlot(bd)) return 0;
+  bool write=bd->type==BDT_ISO_FILE_WRITE;
+  char first=write?'Q':'M',last=write?'S':'P';
+  if ((!write && !bd->file_dsk_name) || bd->first_drv_let<first ||
+      bd->first_drv_let>last || bd->drv_offset<0 ||
+      (write && (bd->drv_offset!=ISO_DRV_OFFSET ||
+                 bd->max_blk<bd->drv_offset+2 || bd->max_blk>=int64_t(INT64_MAX/BLK_SIZE))))
+    return 0;
+  auto *requested_name=bd->file_dsk_name;
+  auto requested_letter=bd->first_drv_let;
+  auto requested_offset=bd->drv_offset;
+  auto requested_max=bd->max_blk;
+  auto requested_type=bd->type;
+  char default_name[]="T:/DrvQ.ISO.C";
+  default_name[0]=blkdev.boot_drv_let;
+  default_name[6]=requested_letter;
+  auto *absolute=FileNameAbs(requested_name?reinterpret_cast<const char *>(requested_name):default_name,
+                             *CurrentTask());
+  if (!absolute) return 0;
+  auto *backing=absolute[0] && absolute[1]==':' && absolute[2]=='/'
+                ? MountedDrive(absolute[0]) : nullptr;
+  int64_t res=0;
+  if (backing && ReadableFS(*backing) && BlkDevLockTarget(backing->bd) &&
+      (backing->bd->type==BDT_RAM || backing->bd->type==BDT_ATA) &&
+      !(backing->bd->flags&BDF_REMOVABLE)) {
+    auto *source_bd=backing->bd;
+    auto *source_lock=BlkDevLockTarget(source_bd);
+    // Acquire the potentially contended backing lock before mount_flags.
+    // The staged device forwards its lock to this same backing device.
+    CDiskLock backing_lock(*backing);
+    CMemLock mount(mount_flags);
+    if (BlkDevImageSlot(bd) && bd->file_dsk_name==requested_name &&
+        bd->first_drv_let==requested_letter && bd->drv_offset==requested_offset &&
+        bd->max_blk==requested_max && bd->type==requested_type &&
+        MountedDrive(absolute[0])==backing && backing->bd==source_bd &&
+        BlkDevLockTarget(source_bd)==source_lock && ReadableFS(*backing) &&
+        (source_bd->type==BDT_RAM || source_bd->type==BDT_ATA) &&
+        !(source_bd->flags&BDF_REMOVABLE) &&
+        BlkDevEnsureInitialized(*source_bd)) {
+      bool clean=!write || WritableFS(*backing);
+      for (size_t i=0;i<DRVS_NUM;i++)
+        if (blkdev.drvs[i].bd==backing->bd &&
+            (blkdev.drvs[i].fat_blk_dirty&1))
+          clean=false;
+      for (size_t i=0;i<BLKDEVS_NUM;i++) {
+        const auto &image=blkdev.blkdevs[i];
+        if (image.bd_signature==BD_SIGNATURE_VAL &&
+            (write || image.type==BDT_ISO_FILE_WRITE) && image.file_dsk &&
+            image.file_dsk->dv && image.file_dsk->dv->bd &&
+            BlkDevSameBacking(*image.file_dsk->dv->bd,*source_bd))
+          clean=false;
+      }
+      char letter=bd->first_drv_let;
+      if (!make_free)
+        while (letter<=last && (MountedDrive(letter) ||
+               blkdev.drvs[letter-'A'].dv_signature==DRV_SIGNATURE_VAL))
+          letter++;
+      if (clean && letter<=last && !MountedDrive(letter) &&
+          blkdev.drvs[letter-'A'].dv_signature!=DRV_SIGNATURE_VAL) {
+        auto &target=blkdev.drvs[letter-'A'];
+        auto *name=StrNew(absolute,adam_task->data_heap);
+        auto *f=name?(write?FOpenImageWrite(absolute,backing,requested_max+1):
+                            FOpenImageRead(absolute,backing)):nullptr;
+        if (f && name && bd->drv_offset<=f->max_blk) {
+          CBlkDev device{};
+          MemCpy(&device,bd,sizeof(device));
+          device.bd_signature=BD_SIGNATURE_VAL;
+          device.flags|=BDF_INITIALIZED;
+          device.flags&=~(BDF_INIT_IN_PROGRESS|BDF_READ_ONLY_OVERRIDE|BDF_READ_ONLY);
+          if (!write) device.flags|=BDF_READ_ONLY;
+          device.first_drv_let=letter;
+          device.blk_size=BLK_SIZE;
+          device.max_blk=f->max_blk;
+          device.file_dsk=f;
+          device.file_dsk_name=reinterpret_cast<uint8_t *>(name);
+          device.lock_fwding=backing->bd;
+          CDrv drive{};
+          drive.bd=&device;
+          drive.drv_offset=device.drv_offset;
+          drive.size=device.max_blk+1-drive.drv_offset;
+          drive.drv_let=letter;
+          size_t root_blocks=bd->init_root_dir_blks>0?bd->init_root_dir_blks:1;
+          if ((write?(RedSeaFormatRAM(drive,root_blocks) && RedSeaISO9660Write(drive)):
+                     RedSeaInit(drive)) && DrvFATCacheInit(drive)) {
+            CMemLock lock(disk_lock_flags);
+            if (DrvDeleteReady(&target)) {
+              DrvDelete(target);
+              if (adam_task && adam_task->hash_table)
+                ResidentDriveClear(letter);
+              blkdev.let_to_drv[letter-'A']=&target;
+              auto *old_name=bd->file_dsk_name;
+              MemCpy(bd,&device,sizeof(device));
+              drive.dv_signature=DRV_SIGNATURE_VAL;
+              drive.bd=bd;
+              MemCpy(&target,&drive,sizeof(drive));
+              // BlkDevAdd consumes the supplied heap-owned name on success.
+              Free(old_name);
+              res=1;
+            }
+          }
+          if (!res) DrvFATCacheDrop(drive);
+        }
+        if (!res) {
+          Free(name);
+          FCloseImage(f);
+        }
+      }
+    }
+  }
+  Free(absolute);
+  return res;
+}
+
 extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole_drv,
                                 uint8_t make_free)
 {
+  if (BlkDevImageSlot(bd))
+    return BlkDevAddImage(bd,make_free);
   CMemLock lock(mount_flags);
   unsigned slot = 0;
   while (slot < BLKDEVS_NUM && bd != blkdev.blkdevs + slot)
@@ -256,7 +384,7 @@ extern "C" uint64_t DrvEnableCpp(uint8_t drv_let,uint8_t val)
     okay=dv->dv_signature==DRV_SIGNATURE_VAL && bd &&
          (!(dv->locked_flags&1) || dv->owning_task==CurrentTask()) &&
          (!(bd->locked_flags&1) || bd->owning_task==CurrentTask()) &&
-         (val || !(dv->fat_blk_dirty&1));
+         (val || (!(dv->fat_blk_dirty&1) && !DrvHasImageDependents(*dv)));
     if (okay) {
       if (val)
         dv->fs_type&=FSG_TYPE_MASK;

@@ -141,6 +141,7 @@ void DrvTextAttrGetHC();
 void DrvRepHC();
 void BlkDevChkHC();
 void Let2BlkDevHC();
+void UnmountHC(),MountFileHC();
 void RedSeaISOHC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
 void FSizeHC(), FOpenHC(), FCloseHC(), FBlkReadHC(), FBlkWriteHC();
@@ -1032,6 +1033,8 @@ bool LoadKernel(CTask &task)
       {"DrvRep", reinterpret_cast<uintptr_t>(DrvRepHC)},
       {"BlkDevChk", reinterpret_cast<uintptr_t>(BlkDevChkHC)},
       {"Let2BlkDev", reinterpret_cast<uintptr_t>(Let2BlkDevHC)},
+      {"Unmount", reinterpret_cast<uintptr_t>(UnmountHC)},
+      {"MountFile", reinterpret_cast<uintptr_t>(MountFileHC)},
       {"Cd", reinterpret_cast<uintptr_t>(CdHC)},
       {"IsDir", reinterpret_cast<uintptr_t>(IsDirHC)},
       {"Dir", reinterpret_cast<uintptr_t>(DirHC)},

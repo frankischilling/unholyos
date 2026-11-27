@@ -7,6 +7,7 @@ extern "C" uint64_t YorNCpp();
 bool DrvTypeSet(CDrv &dv, uint8_t type, bool write)
 {
   if (!dv.bd || dv.bd->type!=BDT_ATA || (dv.bd->flags&BDF_READ_ONLY) ||
+      DrvHasImageDependents(dv) ||
       dv.drv_offset<=0 || dv.size<=0)
     return false;
   uint8_t mbr[BLK_SIZE];
@@ -53,14 +54,15 @@ extern "C" void FmtCpp(uint8_t drv_let, uint8_t quick, uint8_t confirm, int64_t 
     PutS("Invalid Drive\n");
     return;
   }
-  if (dv->bd->flags&BDF_READ_ONLY) {
+  if (dv->bd->flags&BDF_READ_ONLY || DrvHasImageDependents(*dv)) {
     PutS("Drive Read Only\n");
     return;
   }
   bool res=false;
   if (type==FSt_FAT32 && dv->bd->type==BDT_ATA)
     res=FAT32Fmt(*dv,quick);
-  else if (dv->bd->type==BDT_RAM && (type==FSt_FAT32 || type==FSt_REDSEA)) {
+  else if ((dv->bd->type==BDT_RAM || dv->bd->type==BDT_ISO_FILE_WRITE) &&
+           (type==FSt_FAT32 || type==FSt_REDSEA)) {
     if (type==FSt_FAT32) PutS("Using RedSea File System.\n");
     CDiskLock lock(*dv);
     ResidentDriveClear(dv->drv_let);

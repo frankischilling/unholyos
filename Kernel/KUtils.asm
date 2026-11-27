@@ -76,6 +76,7 @@ GLOBAL DrvTextAttrGetHC
 GLOBAL DrvRepHC
 GLOBAL BlkDevChkHC
 GLOBAL Let2BlkDevHC
+GLOBAL UnmountHC,MountFileHC
 GLOBAL CdHC,IsDirHC,DirHC,PutDirLinkHC,FilesFindHC,FileFindHC,FilesFindMatchHC
 GLOBAL DirEntryDelHC,DirEntryDel2HC,DirTreeDelHC,DirTreeDel2HC
 GLOBAL ClusNumNextHC
@@ -329,6 +330,7 @@ EXTERN DrvTextAttrGetCpp
 EXTERN DrvRepCpp
 EXTERN BlkDevChkCpp
 EXTERN Let2BlkDevCpp
+EXTERN UnmountCpp,MountFileCpp
 EXTERN CdCpp,IsDirCpp,DirCpp,PutDirLinkCpp,FilesFindCpp,FileFindCpp,FilesFindMatchCpp
 EXTERN DirEntryDelCpp,DirEntryDel2Cpp,DirTreeDelCpp,DirTreeDel2Cpp
 EXTERN ClusNumNextCpp
@@ -728,6 +730,8 @@ HOLYC_CPP DrvTextAttrGetHC,DrvTextAttrGetCpp,1
 HOLYC_CPP DrvRepHC,DrvRepCpp,0
 HOLYC_CPP BlkDevChkHC,BlkDevChkCpp,2
 HOLYC_CPP Let2BlkDevHC,Let2BlkDevCpp,2
+HOLYC_CPP UnmountHC,UnmountCpp,1
+HOLYC_CPP MountFileHC,MountFileCpp,1
 HOLYC_CPP CdHC,CdCpp,2
 HOLYC_CPP IsDirHC,IsDirCpp,1
 HOLYC_CPP DirHC,DirCpp,2
