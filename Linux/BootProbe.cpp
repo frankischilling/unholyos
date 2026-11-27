@@ -721,11 +721,13 @@ extern "C" CBlkDev *BlkDevNextFreeSlotCpp(uint8_t letter, int64_t type);
 extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole,
                                uint8_t make_free);
 
-static void BootLoadApiReport(const CDrv &dvd)
+static void BootStagedLoadReport(const CDrv &dvd, const char *probe,
+                                 const char *consumer, const char *ram_consumer,
+                                 const char *marker)
 {
   CRedSeaDirEntry entry;
   size_t prefix;
-  if (!RedSeaFileLookup(dvd, "/LoadApiProbe.HC", false, false, entry, prefix) ||
+  if (!RedSeaFileLookup(dvd, probe, false, false, entry, prefix) ||
       MountedDrive('B'))
     return;
   auto *bd = BlkDevNextFreeSlotCpp('B', BDT_RAM);
@@ -736,7 +738,7 @@ static void BootLoadApiReport(const CDrv &dvd)
   if (!ram || ram->bd->type != BDT_RAM || ram->fs_type != FSt_REDSEA)
     return;
   const char *paths[][2]{
-      {"::/LoadApiConsumer.BIN", "B:/LoadApiConsumer.BIN"},
+      {consumer, ram_consumer},
       {"::/LateImportProvider.BIN", "B:/LateImportProvider.BIN"}};
   for (const auto &path : paths) {
     size_t size = 0, read_size = 0;
@@ -757,8 +759,8 @@ static void BootLoadApiReport(const CDrv &dvd)
   auto *saved = DirCurCpp(CurrentTask(), CurrentTask());
   if (!saved)
     return;
-  SerialPutS("UnholyOS: Load API input bytes verified\r\n");
-  BootFileProgramReport(dvd, "/LoadApiProbe.HC");
+  SerialPutS(marker);
+  BootFileProgramReport(dvd, probe);
   CdCpp(saved, false);
   Free(saved);
 }
@@ -1530,7 +1532,9 @@ static void BootModuleReport(const CDrv &dv, CTask &task)
 static void BootLateImportReport(const CDrv &dv, CTask &task)
 {
   CRedSeaDirEntry file;
-  if (!RedSeaFileFind(dv, dv.root_clus, "LateImportConsumer.BIN", false, file))
+  // The common raw-pass probe must start with this import unresolved.
+  if (RedSeaFileFind(dv, dv.root_clus, "LoadPass2Probe.HC", false, file) ||
+      !RedSeaFileFind(dv, dv.root_clus, "LateImportConsumer.BIN", false, file))
     return;
   struct CImage
   {
@@ -2027,7 +2031,13 @@ void BootProbe()
                     "UnholyOS: compiler runtime probe ");
     BootProbeReport(*adam_task->cur_dv, *adam_task, "/FileWriteProbe.BIN",
                     "FileWriteProbeResult", "UnholyOS: write probe ");
-    BootLoadApiReport(*adam_task->cur_dv);
+    BootStagedLoadReport(*adam_task->cur_dv, "/LoadApiProbe.HC",
+                         "::/LoadApiConsumer.BIN", "B:/LoadApiConsumer.BIN",
+                         "UnholyOS: Load API input bytes verified\r\n");
+    BootStagedLoadReport(*adam_task->cur_dv, "/LoadPass2Probe.HC",
+                         "::/LateImportConsumer.BIN",
+                         "B:/LateImportConsumer.BIN",
+                         "UnholyOS: LoadPass2 input bytes verified\r\n");
     BootVariadicReport(
         *adam_task->cur_dv, *adam_task, "/AssertWarningProbe.HC",
         "/AssertWarningProbe.BIN.Z",

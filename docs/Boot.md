@@ -2513,6 +2513,97 @@ automatic destination sentinel; null and `-1` are not tested destinations.
 `make test` includes this fixture in the complete regression gate. The pull
 request records the exact tested commit and the GCC and Clang CI results.
 
+## Raw HolyC LoadPass2
+
+`LoadPass2Probe.HC` declares the reference's ordinary
+`extern U0 LoadPass2(U8 *src,U8 *module_base,I64 flags)` and runs unchanged
+in both guests. GCC 13.3.0 and Clang 20.1.2 native builds and the pinned
+TempleOS run all produced these exact 134 normalized output bytes:
+
+```text
+LP table 12 1212 121212 6
+LP unsigned 1 2
+LP empty 1 1
+LP throw 6761543273736150 19 2 1
+LP module 0 1 2 2 42 3
+LP checks FFFF
+LP DONE
+```
+
+The first table has no image header and starts 17 bytes into a 1,024-byte
+allocation. Its 350 bytes include named records, ordinary import/export
+records, an unknown type, two ordered `IET_MAIN` entries, `IET_END`, and
+an entry after END that must never run. It exercises zero and two-offset
+tails for `IET_ABS_ADDR`, both code-heap types, and both data-heap types.
+Repeated passes produce orders 12, 1212, and 121212 even with
+`LDF_JUST_LOAD` and other nonzero flags. A complete allocation snapshot
+checks that the table and surrounding guards remain unchanged.
+
+Separate tables use offsets `0x80000000` and `0xFFFFFFFF` with adjusted
+integer bases that reach valid functions only when the offsets are
+zero-extended from `U32`. A null computed target is skipped, and an
+END-only table stops before a following entry. A throwing MAIN propagates
+the exact `Pass2Tag` value to the outer HolyC catch, stops before the next
+MAIN, and permits the wrapper to continue. Source review of
+`Kernel/KLoad.HC::LoadPass2` and `Kernel/KUtils.HC::_CALL` establishes these
+traversal and call rules; the shared trace reproduces the listed cases.
+
+The module case reuses the unchanged late-import consumer and provider.
+Public `Load` with `LDF_JUST_LOAD` leaves the counter at zero. Two raw
+passes raise it to 1 and 2 while the unrelated import remains pending.
+Loading the provider invalidates the pending record without running the
+consumer again. After checking export ownership and the exact patched
+CALL target, the wrapper obtains 42 and runs one more pass to reach 3.
+The dedicated ISO suppresses the older C++ late-import probe so it cannot
+preload this provider. The ordinary `test-late-imports` path is unchanged.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `LateImportConsumer.BIN` | 128 | `47cdb87d4132cad8f8060b77963a6f784b24e9482d826601e8c244f4382c2748` |
+| `LateImportProvider.BIN` | 80 | `bf3116c370a8a8ec1e200068b7f829cc75447b2c80e779f6b645423c484f4e24` |
+| Common `LoadPass2Probe.HC` | 7,899 | `8fe09bd63fbcd5da68443b380d5e5a557b2a604f37b6258f54557bfaca746956` |
+| Normalized trace | 134 | `c09de2560149be3a193b361585f018b8a76f0a6f5c5ce28ca78a4a9ba1d3ce38` |
+
+The native driver verifies all three packaged files. The boot probe
+compares both BINs after staging and reading them back on B:; the driver
+requires that staging marker, the complete trace, and source completion
+with `checks 1`. The reference transport verifies both BIN
+uploads and RAM-file readbacks, plus all 7,899 source bytes and the
+terminating NUL before `ExePutS`. It retains the screen and full terminal
+text and requires an empty prompt after completion.
+
+```sh
+make -j6 test-load-pass2
+make -j6 BUILD=build/clang CXX=clang++ HOSTCXX=clang++ test-load-pass2
+build/Linux/TestBoot --load-pass2-reference qemu-system-x86_64 \
+  ../reference-media/TOS_Distro.ISO \
+  build/Linux/Fixtures/LateImportConsumer.BIN \
+  build/Linux/Fixtures/LateImportProvider.BIN build/load-pass2-reference-first
+```
+
+The Clang build selected the installed Clang 20 binary for both compiler
+variables. The native ISOs are `build/load-pass2-test.iso` and
+`build/clang/load-pass2-test.iso`. Both focused commands exited successfully;
+their logs are `build/load-pass2-gcc.log` and `build/load-pass2-clang.log`.
+The successful reference capture is `build/load-pass2-reference-first`,
+with its command log at `build/load-pass2-reference-first.log`.
+
+The separate reference checkout was verified clean through the Git Human
+Workflow helper before and after the run at
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`. Its ISO SHA-256 is
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+All three runs used QEMU 8.2.2 (`1:8.2.2+ds-0ubuntu1.18`),
+`-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`, one default vCPU,
+`-display none -monitor none -qmp stdio -no-reboot`, and serial capture.
+The reference additionally used the debug console and GDB on port 45362;
+the VM exited and released the port afterward.
+
+These tests supply valid, bounded tables and executable targets. They do
+not exercise malformed pointers or unterminated tables; the raw reference
+API has no image-size argument. `make test` includes this fixture in the
+complete regression gate. The pull request records the exact tested
+commit and the GCC and Clang CI results.
+
 ## Loading the compiler from the boot volume
 
 The host build now puts the existing compiler implementation in
