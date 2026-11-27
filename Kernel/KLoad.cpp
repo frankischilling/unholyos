@@ -72,7 +72,8 @@ void MStrUtilHC();
 void _HASH_ADD(), _HASH_ADD_AFTER(), _HASH_FIND(), _HASH_SINGLE_TABLE_FIND();
 void HashTableNewHC(), HashTypeNumHC(), CeilU64HC(), Pow10I64HC();
 void ClampHC(), MinHC(), MaxHC(), FloorU64HC(), RoundI64HC(), FloorI64HC(), CeilI64HC();
-void LinkedLstDelHC(), LinkedLstSizeHC(), QueDelHC();
+void LinkedLstDelHC(), LinkedLstCopyHC(), LinkedLstCntHC(), LinkedLstSizeHC();
+void QueDelHC(), QueCopyHC(), QueCntHC(), QueSizeHC();
 void QueVectU8NewHC(), QueVectU8PutHC(), QueVectU8GetHC(), QueVectU8DelHC();
 void FifoU8NewHC(), FifoU8DelHC(), FifoU8InsHC(), FifoU8RemHC();
 void FifoU8PeekHC(), FifoU8FlushHC(), FifoU8CntHC();
@@ -877,8 +878,13 @@ bool LoadKernel(CTask &task)
       {"FloorI64", reinterpret_cast<uintptr_t>(FloorI64HC)},
       {"CeilI64", reinterpret_cast<uintptr_t>(CeilI64HC)},
       {"LinkedLstDel", reinterpret_cast<uintptr_t>(LinkedLstDelHC)},
+      {"LinkedLstCopy", reinterpret_cast<uintptr_t>(LinkedLstCopyHC)},
+      {"LinkedLstCnt", reinterpret_cast<uintptr_t>(LinkedLstCntHC)},
       {"LinkedLstSize", reinterpret_cast<uintptr_t>(LinkedLstSizeHC)},
       {"QueDel", reinterpret_cast<uintptr_t>(QueDelHC)},
+      {"QueCopy", reinterpret_cast<uintptr_t>(QueCopyHC)},
+      {"QueCnt", reinterpret_cast<uintptr_t>(QueCntHC)},
+      {"QueSize", reinterpret_cast<uintptr_t>(QueSizeHC)},
       {"QueVectU8New", reinterpret_cast<uintptr_t>(QueVectU8NewHC)},
       {"QueVectU8Put", reinterpret_cast<uintptr_t>(QueVectU8PutHC)},
       {"QueVectU8Get", reinterpret_cast<uintptr_t>(QueVectU8GetHC)},

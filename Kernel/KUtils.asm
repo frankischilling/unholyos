@@ -16,7 +16,8 @@ GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
 GLOBAL HashTableNewHC,HashTypeNumHC,CeilU64HC,Pow10I64HC
 GLOBAL ClampHC,MinHC,MaxHC,FloorU64HC,RoundI64HC,FloorI64HC,CeilI64HC
-GLOBAL LinkedLstDelHC,LinkedLstSizeHC,QueDelHC
+GLOBAL LinkedLstDelHC,LinkedLstCopyHC,LinkedLstCntHC,LinkedLstSizeHC
+GLOBAL QueDelHC,QueCopyHC,QueCntHC,QueSizeHC
 GLOBAL QueVectU8NewHC,QueVectU8PutHC,QueVectU8GetHC,QueVectU8DelHC
 GLOBAL FifoU8NewHC,FifoU8DelHC,FifoU8InsHC,FifoU8RemHC
 GLOBAL FifoU8PeekHC,FifoU8FlushHC,FifoU8CntHC
@@ -202,7 +203,8 @@ EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
 EXTERN HashRemDelCpp,HashValCpp,HashDelCpp,HashTableDelCpp,HashSrcFileSetCpp,SysSymImportsResolveCpp
 EXTERN HashTableNewCpp,HashTypeNumCpp,CeilU64Cpp,Pow10I64Cpp
 EXTERN ClampCpp,MinCpp,MaxCpp,FloorU64Cpp,RoundI64Cpp,FloorI64Cpp,CeilI64Cpp
-EXTERN LinkedLstDelCpp,LinkedLstSizeCpp,QueDelCpp
+EXTERN LinkedLstDelCpp,LinkedLstCopyCpp,LinkedLstCntCpp,LinkedLstSizeCpp
+EXTERN QueDelCpp,QueCopyCpp,QueCntCpp,QueSizeCpp
 EXTERN QueVectU8NewCpp,QueVectU8PutCpp,QueVectU8GetCpp,QueVectU8DelCpp
 EXTERN FifoU8NewCpp,FifoU8DelCpp,FifoU8InsCpp,FifoU8RemCpp
 EXTERN FifoU8PeekCpp,FifoU8FlushCpp,FifoU8CntCpp
@@ -508,8 +510,13 @@ HOLYC_CPP RoundI64HC,RoundI64Cpp,2
 HOLYC_CPP FloorI64HC,FloorI64Cpp,2
 HOLYC_CPP CeilI64HC,CeilI64Cpp,2
 HOLYC_CPP LinkedLstDelHC,LinkedLstDelCpp,1
+HOLYC_CPP LinkedLstCopyHC,LinkedLstCopyCpp,2
+HOLYC_CPP LinkedLstCntHC,LinkedLstCntCpp,1
 HOLYC_CPP LinkedLstSizeHC,LinkedLstSizeCpp,1
 HOLYC_CPP QueDelHC,QueDelCpp,2
+HOLYC_CPP QueCopyHC,QueCopyCpp,2
+HOLYC_CPP QueCntHC,QueCntCpp,1
+HOLYC_CPP QueSizeHC,QueSizeCpp,1
 HOLYC_CPP QueVectU8NewHC,QueVectU8NewCpp,1
 HOLYC_CPP QueVectU8PutHC,QueVectU8PutCpp,3
 HOLYC_CPP QueVectU8GetHC,QueVectU8GetCpp,2

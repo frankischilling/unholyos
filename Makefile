@@ -93,6 +93,8 @@ INTERNAL_TYPES_PROBE := Linux/Fixtures/InternalTypesProbe.HC
 INTERNAL_TYPES_TEST_ISO := $(BUILD)/internal-types-test.iso
 CLASS_RECORDS_PROBE := Linux/Fixtures/ClassRecordsProbe.HC
 CLASS_RECORDS_TEST_ISO := $(BUILD)/class-records-test.iso
+LIST_UTILITIES_PROBE := Linux/Fixtures/ListUtilitiesProbe.HC
+LIST_UTILITIES_TEST_ISO := $(BUILD)/list-utilities-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
 FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
@@ -310,6 +312,9 @@ $(INTERNAL_TYPES_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(INT
 $(CLASS_RECORDS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(CLASS_RECORDS_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(CLASS_RECORDS_PROBE)
 
+$(LIST_UTILITIES_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(LIST_UTILITIES_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(LIST_UTILITIES_PROBE)
+
 $(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
 
@@ -392,6 +397,12 @@ test-internal-types: $(INTERNAL_TYPES_TEST_ISO) $(BOOT_TEST)
 
 test-class-records: $(CLASS_RECORDS_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --class-records "$(QEMU)" $(CLASS_RECORDS_TEST_ISO)
+
+.PHONY: test-list-utilities
+test-list-utilities: $(LIST_UTILITIES_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --list-utilities "$(QEMU)" $(LIST_UTILITIES_TEST_ISO)
+
+test: test-list-utilities
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
