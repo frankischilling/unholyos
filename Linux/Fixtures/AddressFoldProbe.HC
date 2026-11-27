@@ -99,6 +99,59 @@ I64 AddressFoldWide(I64 n)
   return n+0x100000000;
 }
 
+I64 StackTempRead(I64 noreg a,I64 noreg b,I64 noreg c)
+{
+  return a+b*c;
+}
+
+I64 StackTempNested(I64 noreg a,I64 noreg b,I64 noreg c,
+                    I64 noreg d,I64 noreg e)
+{
+  return a-((b+c)*(d+e));
+}
+
+I64 StackTempCall(I64 noreg a,I64 noreg b)
+{
+  return a+AddressFoldMark(b);
+}
+
+I64 StackTempDiv(I64 noreg a,I64 noreg b,I64 noreg c)
+{
+  return a+b/c;
+}
+
+I64 StackTempShift(I64 noreg a,I64 noreg b,I64 noreg c)
+{
+  return a>>(b+c);
+}
+
+I64 BranchNear(I64 noreg n)
+{
+  if (n) return 11;
+  return 22;
+}
+
+I64 BranchFar(I64 noreg n)
+{
+  I64 noreg value=0;
+  if (n) {
+    value+=1; value+=2; value+=3; value+=4;
+    value+=5; value+=6; value+=7; value+=8;
+    value+=9; value+=10; value+=11; value+=12;
+  }
+  return value;
+}
+
+I64 BranchLoop(I64 noreg n)
+{
+  I64 noreg sum=0;
+  while (n) {
+    sum+=n;
+    n--;
+  }
+  return sum;
+}
+
 U0 AddressFoldProbe()
 {
   U8 a[3];
@@ -230,6 +283,16 @@ U0 AddressFoldProbe()
   okay=okay && pp==&ptrs[2] && result==&samples[1];
   pp=&ptrs[2]; result=*(pp--);
   if (okay && pp==&ptrs[1] && result==&samples[2]) res|=0x8000;
+
+  address_fold_order=0;
+  if (StackTempRead(7,-3,5)==-8 &&
+      StackTempNested(100,2,3,4,5)==55 &&
+      StackTempCall(13,7)==20 && address_fold_order==7 &&
+      StackTempDiv(20,-21,4)==15 && StackTempShift(256,2,3)==8)
+    res|=0x10000;
+  if (BranchNear(0)==22 && BranchNear(1)==11 &&
+      BranchFar(0)==0 && BranchFar(1)==78 &&
+      BranchLoop(0)==0 && BranchLoop(5)==15) res|=0x20000;
   "Address fold %X\n",res;
 }
 

@@ -139,8 +139,12 @@ public:
     }
   }
 
-  size_t Branch(CICode op)
+  size_t Branch(CICode op,bool short_branch=false)
   {
+    if (short_branch) {
+      Bytes(op==IC_JMP?0xEB:op==IC_BR_ZERO?0x74:0x75,0);
+      return size;
+    }
     if (op == IC_JMP || op == IC_SUB_CALL)
       Bytes(op == IC_JMP ? 0xE9 : 0xE8);
     else
@@ -149,13 +153,30 @@ public:
     return size;
   }
 
-  void PatchBranch(size_t end, size_t target)
+  void PatchBranch(size_t end, size_t target,bool short_branch=false)
   {
     if (!buf)
       return;
-    auto disp = static_cast<uint32_t>(target - end);
-    for (unsigned i = 0; i < 4; ++i)
-      buf[end - 4 + i] = disp >> (8 * i);
+    int64_t disp=static_cast<int64_t>(target)-static_cast<int64_t>(end);
+    if (short_branch && (disp<INT8_MIN || disp>INT8_MAX)) {
+      failed=true;
+      return;
+    }
+    if (disp<INT32_MIN || disp>INT32_MAX) {
+      failed=true;
+      return;
+    }
+    unsigned width=short_branch?1:4;
+    for (unsigned i=0;i<width;i++)
+      buf[end-width+i]=static_cast<uint32_t>(disp)>>(8*i);
+  }
+
+  void LabelBranch(CIntermediateCode &node,CICode op,size_t target)
+  {
+    auto end=Branch(op,node.short_branch);
+    if (end>INT32_MAX) failed=true;
+    node.branch_end=static_cast<uint32_t>(end);
+    PatchBranch(end,target,node.short_branch);
   }
 
   void Switch(const CSwitchTable &sw, const CIntermediateCode *code,
@@ -863,16 +884,22 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     out.Bytes(0x50); // Keep the preceding comparison's result.
     out.Bytes(0x51); // Reuse the preceding comparison's right operand.
     left = code[code[node.left].right].type;
-  } else
+  } else if (node.stack_reg)
+    out.Bytes(0x49,0x89,0xC1); // MOV R9,RAX
+  else
     out.Bytes(0x50);
   if (!Emit(out, code, node.right, depth + 1,
-            stack_slots + (node.chain ? 2 : 1)))
+            stack_slots + (node.chain ? 2 : node.stack_reg ? 0 : 1)))
     return false;
   if (logical) {
     out.Test();
     out.SetBool(5);
   }
-  out.Bytes(0x48, 0x89, 0xC1, 0x58); // MOV RCX,RAX / POP RAX
+  out.Bytes(0x48,0x89,0xC1); // MOV RCX,RAX
+  if (node.stack_reg)
+    out.Bytes(0x4C,0x89,0xC8); // MOV RAX,R9
+  else
+    out.Bytes(0x58); // POP RAX
   auto right = code[node.right].type;
   if (!logical && (left == RT_F64 || right == RT_F64 || op == IC_POWER))
     FltBinary(out, node, left, right, stack_slots);
@@ -904,7 +931,7 @@ static bool EmitBody(CCodeOut &out, CCodeCtrl &coc, CRawType type,
         return false;
       [[fallthrough]];
     case IC_SUB_CALL:
-      out.PatchBranch(out.Branch(node.code), code[node.right].data);
+      out.LabelBranch(node,node.code,code[node.right].data);
       break;
     case IC_SUB_ENTRY:
       ++stack_slots;
@@ -933,7 +960,7 @@ static bool EmitBody(CCodeOut &out, CCodeCtrl &coc, CRawType type,
       if (!Emit(out, code, node.left, 0, stack_slots))
         return false;
       out.Test();
-      out.PatchBranch(out.Branch(node.code), code[node.right].data);
+      out.LabelBranch(node,node.code,code[node.right].data);
       break;
     default:
       if (node.left != NO_IC && !Emit(out, code, node.left, 0, stack_slots))
@@ -941,7 +968,7 @@ static bool EmitBody(CCodeOut &out, CCodeCtrl &coc, CRawType type,
       if (node.code == IC_RETURN_VAL) {
         if (node.left != NO_IC)
           out.Convert(code[node.left].type, type);
-        out.PatchBranch(out.Branch(IC_JMP), code[node.right].data);
+        out.LabelBranch(node,IC_JMP,code[node.right].data);
       }
       break;
     }
@@ -991,10 +1018,26 @@ uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
     OptPass3(coc.code,coc.Count(),*fun,locals);
   OptPass4(coc.code,coc.Count());
   OptPass5(coc.code,coc.Count());
+  OptPass6(coc.code,coc.Count(),fun);
+  for (uint32_t i=0;i<coc.Count();i++) {
+    coc.code[i].branch_end=0;
+    coc.code[i].short_branch=false;
+    if (coc.code[i].code==IC_LABEL)
+      coc.code[i].data=UINT64_MAX;
+  }
   CCodeOut size(nullptr, aot, locals);
   if (!EmitFunction(size, coc, root, type, fun) || size.failed ||
       size.size > INT32_MAX)
     return nullptr;
+  // Shortening an instruction cannot increase a branch distance when
+  // layout contains no alignment-sensitive assembly. Iterate with a
+  // bounded number of rounds; every round preserves earlier selections.
+  for (unsigned pass=0;pass<32 && OptPass789A(coc.code,coc.Count());pass++) {
+    size.size=0;
+    if (!EmitFunction(size,coc,root,type,fun) || size.failed ||
+        size.size>INT32_MAX)
+      return nullptr;
+  }
   if (coc.asm_first)
     AsmLabelsLayout(*coc.asm_first);
   auto total_size = size.size;
@@ -1013,6 +1056,7 @@ uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
     return nullptr;
   CCodeOut out(result, aot, locals);
   if (!EmitFunction(out, coc, root, type, fun) || out.failed ||
+      out.size!=size.size ||
       (coc.asm_first && !AsmPublish(*coc.asm_first, result))) {
     Free(result);
     return nullptr;

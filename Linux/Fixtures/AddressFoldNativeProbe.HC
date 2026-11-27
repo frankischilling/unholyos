@@ -63,6 +63,46 @@ I64 AddressNativeCodeSize(U8 *name,U8 *entry)
   return size;
 }
 
+I64 AddressNativeR9Saves(U8 *name,U8 *entry)
+{
+  I64 size=AddressNativeCodeSize(name,entry),i,count=0;
+  for (i=0;i+3<=size;i++)
+    if (entry[i]==0x49 && entry[i+1]==0x89 && entry[i+2]==0xC1)
+      count++;
+  return count;
+}
+
+// The condition lowering emits TEST RAX,RAX followed by JZ/JNZ.
+Bool AddressNativeBranch(U8 *name,U8 *entry,Bool short_form)
+{
+  I64 size=AddressNativeCodeSize(name,entry),i,target;
+  for (i=0;i+5<=size;i++) {
+    if (entry[i]==0x48 && entry[i+1]==0x85 && entry[i+2]==0xC0) {
+      if (short_form && (entry[i+3]==0x74 || entry[i+3]==0x75)) {
+        target=i+5+entry[i+4](I8);
+        if (target>=0 && target<size) return TRUE;
+      } else if (!short_form && i+9<=size && entry[i+3]==0x0F &&
+          (entry[i+4]==0x84 || entry[i+4]==0x85)) {
+        target=i+9+*(entry+i+5)(I32 *);
+        if (target>=0 && target<size && target-(i+9)>127) return TRUE;
+      }
+    }
+  }
+  return FALSE;
+}
+
+Bool AddressNativeBackJump()
+{
+  U8 *entry=&BranchLoop;
+  I64 size=AddressNativeCodeSize("BranchLoop",entry),i,target;
+  for (i=0;i+2<=size;i++)
+    if (entry[i]==0xEB && entry[i+1](I8)<0) {
+      target=i+2+entry[i+1](I8);
+      if (target>=0 && target<i) return TRUE;
+    }
+  return FALSE;
+}
+
 // mode=1/2 tests [RBP+disp8/32]; mode=-1 tests a real SIB index.
 // The optional displacement is checked exactly, and the scan is bounded.
 Bool AddressNativeMem(U8 *name,U8 *entry,I64 opcode,I64 second,
@@ -141,6 +181,7 @@ I64 AddressNativeRhs()
 U0 AddressFoldNativeProbe()
 {
   I64 res=0,alias;
+  CHashFun *fn;
   if (AddressNativeMem("AddressNativeFrame",&AddressNativeFrame,0x8B,-1,
           TRUE,1,0,-8) &&
       AddressNativeMem("AddressNativeFrame",&AddressNativeFrame,0x89,-1,
@@ -171,6 +212,20 @@ U0 AddressFoldNativeProbe()
   if (alias==33 && address_native_values[0]==33 &&
       address_native_values[1]==13 && address_native_order==12 &&
       address_native_ptr==&address_native_values[1]) res|=256;
+  fn=HashFind("StackTempRead",Fs->hash_table,HTT_FUN);
+  if (fn && fn->used_reg_mask&0x200 && fn->clobbered_reg_mask&0x200 &&
+      AddressNativeR9Saves("StackTempRead",&StackTempRead)==1 &&
+      AddressNativeR9Saves("StackTempNested",&StackTempNested)==1 &&
+      AddressNativeR9Saves("StackTempDiv",&StackTempDiv)==1 &&
+      AddressNativeR9Saves("StackTempShift",&StackTempShift)==1) res|=0x200;
+  fn=HashFind("StackTempCall",Fs->hash_table,HTT_FUN);
+  if (fn && !(fn->used_reg_mask&0x200) && !(fn->clobbered_reg_mask&0x200) &&
+      AddressNativeCodeSize("StackTempCall",&StackTempCall)>0 &&
+      !AddressNativeR9Saves("StackTempCall",&StackTempCall)) res|=0x400;
+  if (AddressNativeBranch("BranchNear",&BranchNear,TRUE) &&
+      AddressNativeBranch("BranchFar",&BranchFar,FALSE) &&
+      AddressNativeBranch("BranchLoop",&BranchLoop,TRUE) &&
+      AddressNativeBackJump()) res|=0x800;
   "Address fold native %X\n",res;
 }
 

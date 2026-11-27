@@ -489,6 +489,9 @@ struct CIntermediateCode
   uint8_t local_reg = 0; // Promoted IC_DEREF operand; zero uses memory.
   COptAddress address{};
   COptRhs rhs{};
+  bool stack_reg=false; // The left result can remain in R9 during RHS evaluation.
+  uint32_t branch_end=0;
+  bool short_branch=false;
 };
 
 struct COptReg
@@ -642,6 +645,8 @@ void OptPass3(CIntermediateCode *code, uint32_t count, CHashFun &fun,
               COptRegPlan &plan);
 void OptPass4(CIntermediateCode *code,uint32_t count);
 void OptPass5(CIntermediateCode *code,uint32_t count);
+void OptPass6(CIntermediateCode *code,uint32_t count,CHashFun *fun);
+bool OptPass789A(CIntermediateCode *code,uint32_t count);
 CCodeBytes ICModr1(CMemOp op,CRawType type,uint8_t base,
                     uint8_t index=16,uint8_t shift=0,int32_t disp=0);
 CCodeBytes ICBinaryRhs(CICode op,const COptRhs &rhs);

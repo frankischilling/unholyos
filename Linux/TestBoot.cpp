@@ -3073,14 +3073,14 @@ constexpr CTextProbe register_allocation_aot_probes[]{
 
 constexpr CTextProbe address_fold_probes[]{
     {"address-fold", "/AddressFoldProbe.HC", "",
-     "Address fold ", "Address fold ", "Address fold FFFF\n", {}, true},
+     "Address fold ", "Address fold ", "Address fold 3FFFF\n", {}, true},
     {"address-fold-native", "/AddressFoldNativeProbe.HC", "",
      "Address fold native ", "Address fold native ",
-     "Address fold native 1FF\n", {}, true}};
+     "Address fold native FFF\n", {}, true}};
 constexpr CTextProbe address_fold_aot_probes[]{
     {"address-fold-aot", "/AddressFoldAOTProbe.HC", "",
      "Address fold AOT compile ", "Address fold AOT load ",
-     "Address fold AOT compile 0\nAddress fold FFFF\nAddress fold AOT load 1\n",
+     "Address fold AOT compile 0\nAddress fold 3FFFF\nAddress fold AOT load 1\n",
      {}, true}};
 
 constexpr CTextProbe storage_services_probes[]{

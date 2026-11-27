@@ -3863,6 +3863,35 @@ build/Linux/TestBoot --address-fold-reference qemu-system-x86_64 \
 These checks establish the selected behavior and native encodings, not
 reference instruction-byte equivalence or reference AOT execution.
 
+## Stack temporary and short branch lowering
+
+The extended `AddressFoldProbe.HC` (7378 bytes, SHA-256
+`b8faebce0c77d760cdd244be0fc073b14436afe27d04b0573150ae2a4c987c01`)
+adds nested integer operands, calls, division and shifts, plus forward,
+backward and distant branches. The pinned reference and both native
+builds produced `Address fold 3FFFF` with the same QEMU configuration
+as the preceding tests. The native probe checks R9 save instructions,
+used and clobbered register masks, call fallback, short conditional and
+backward jumps, and a conditional branch outside rel8 range. Both native
+builds produced `Address fold native FFF`.
+
+The host tests passed 86 stack-temporary checks, 115 branch-layout checks
+and the existing 122 operand-lowering checks with GCC and Clang. The
+native AOT runs each compiled with result 0, produced `Address fold 3FFFF`
+and loaded with result 1.
+
+```sh
+make -j6 test-opt-pass6 test-branch-layout test-address-fold
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 \
+  test-opt-pass6 test-branch-layout test-address-fold
+build/Linux/TestBoot --address-fold-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/branch-reference
+```
+
+The earlier fixture hash and masks above identify the previous optimizer
+batch, not the expanded source. These tests do not establish full reference
+register allocation, branch selection, or instruction-byte equivalence.
+
 ## Nested images, FAT32 backing, and mounted ISO generation
 
 The shared `NestedRedSeaProbe.HC`, `RedSeaFreeListProbe.HC`, and `Fat32ImageProbe.HC` fixtures run on

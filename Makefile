@@ -36,7 +36,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 GUEST_TEST_SRC := Linux/BootProbe.cpp
 COMPILER_ASM_SRC := Compiler/CExcept.asm Compiler/CMain.asm Compiler/CMisc.asm Compiler/LexLib.asm
 COMPILER_CXX_SRC := Compiler/CInit.cpp Compiler/CMain.cpp Compiler/Asm.cpp Compiler/AsmResolve.cpp Compiler/AsmLib.cpp Compiler/CHash.cpp Compiler/CExcept.cpp Compiler/CMisc.cpp Compiler/Lex.cpp Compiler/LexLib.cpp Compiler/AsmInit.cpp Compiler/PrsLib.cpp \
-	Compiler/PrsExp.cpp Compiler/PrsStmt.cpp Compiler/PrsVar.cpp Compiler/OptLib.cpp Compiler/OptPass012.cpp Compiler/OptPass3.cpp Compiler/OptPass4.cpp Compiler/OptPass5.cpp Compiler/BackLib.cpp Compiler/BackC.cpp
+	Compiler/PrsExp.cpp Compiler/PrsStmt.cpp Compiler/PrsVar.cpp Compiler/OptLib.cpp Compiler/OptPass012.cpp Compiler/OptPass3.cpp Compiler/OptPass4.cpp Compiler/OptPass5.cpp Compiler/OptPass6.cpp Compiler/OptPass789A.cpp Compiler/BackLib.cpp Compiler/BackC.cpp
 ASM_OBJ := $(ASM_SRC:%.asm=$(BUILD)/%.asm.o)
 CXX_OBJ := $(CXX_SRC:%.cpp=$(BUILD)/%.o) $(GUEST_TEST_SRC:%.cpp=$(BUILD)/%.o)
 COMPILER_ASM_OBJ := $(COMPILER_ASM_SRC:%.asm=$(BUILD)/%.asm.o)
@@ -54,6 +54,8 @@ STR_COMPARE_TEST := $(BUILD)/Linux/TestStrCompare
 OPT_PASS_TEST := $(BUILD)/Linux/TestOptPass012
 OPT_PASS3_TEST := $(BUILD)/Linux/TestOptPass3
 OPERAND_LOWERING_TEST := $(BUILD)/Linux/TestOperandLowering
+OPT_PASS6_TEST := $(BUILD)/Linux/TestOptPass6
+BRANCH_LAYOUT_TEST := $(BUILD)/Linux/TestBranchLayout
 BIN_TOOL := $(BUILD)/Linux/MakeBIN
 MAKE_BIN_TEST := $(BUILD)/Linux/TestMakeBIN
 HOST_MODULE_CPP := $(BUILD)/Linux/Fixtures/HostModuleProbe.cpp.o
@@ -284,6 +286,26 @@ test-operand-lowering: $(OPERAND_LOWERING_TEST)
 	$(OPERAND_LOWERING_TEST)
 
 test: test-operand-lowering
+
+$(OPT_PASS6_TEST): Linux/Fixtures/OptPass6Probe.cpp Compiler/OptPass6.cpp Compiler/CompilerA.hpp Kernel/KernelA.hpp
+	mkdir -p $(@D)
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
+
+.PHONY: test-opt-pass6
+test-opt-pass6: $(OPT_PASS6_TEST)
+	$(OPT_PASS6_TEST)
+
+test: test-opt-pass6
+
+$(BRANCH_LAYOUT_TEST): Linux/Fixtures/BranchLayoutProbe.cpp Compiler/OptPass789A.cpp Compiler/CompilerA.hpp Kernel/KernelA.hpp
+	mkdir -p $(@D)
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
+
+.PHONY: test-branch-layout
+test-branch-layout: $(BRANCH_LAYOUT_TEST)
+	$(BRANCH_LAYOUT_TEST)
+
+test: test-branch-layout
 
 $(BIN_TOOL): Linux/MakeBIN.cpp Linux/BootMedia.hpp Kernel/KernelA.hpp
 	mkdir -p $(@D)

@@ -1820,6 +1820,31 @@ the indexed IR. Full operand allocation, variable shifts and division
 operand selection, complex memory operands, instruction scheduling and
 reference machine-code parity remain incomplete.
 
+## Stack temporaries and branch layout
+
+`OptPass6.cpp` implements the single R9 temporary from the reference
+`OptPass6Lag` for selected integer binary expressions. It checks the
+evaluated right subtree, including folded address operands, and retains
+the stack path when a call, nested R9 lifetime, floating operation,
+mutation or opaque operation could interfere. Inline assembly, variadic
+functions, flag observation and nonlocal control flow disable selection.
+The backend saves the left result in R9, evaluates the right without
+adding a stack slot, then restores the left result. Function metadata
+records the additional used and clobbered register bit without clearing
+other bits. This does not implement the reference's call-aware spilling
+or complete register-lifetime model.
+
+`OptPass789A.cpp` selects rel8 branches from recorded branch ends and
+label offsets. The backend first measures all branches in their near
+forms, then repeats layout for up to 32 rounds, monotonically selecting
+short jumps and conditions. Forward targets move with the shortened
+branch; backward candidates account for the branch's own size reduction.
+The final emitter checks signed displacement ranges and total code size
+before publication. Inline assembly and opaque code addresses retain the
+near layout; subroutine calls and switch-table branches are not relaxed.
+The reference's other late optimization and instruction selection work
+remains incomplete.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. Earlier reports now cover the kernel state before compiler loading and the loaded compiler image; the opcode-resource probe runs before the module entry. These reports remain in `Linux/BootProbe.cpp`. [Source structure verification](SourceStructureVerification.md) records the earlier layout review; the compiler load cutover requires its own runtime evidence in [Boot.md](Boot.md).
