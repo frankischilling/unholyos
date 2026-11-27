@@ -3761,6 +3761,41 @@ is `build/file-backed-redsea-test.iso`. The fixtures establish the tested
 RAM-backed image operations, not FAT32-backed image or full lifecycle
 parity. See [Source layout](SourceLayout.md) for remaining differences.
 
+## Typed optimizer passes
+
+`OptimizerProbe.HC` (1247 bytes, SHA-256
+`71a710366fe1334a75cff1685137061f7a7ac78bf17b3413d31a56d259771524`)
+exercises integer and binary64 constant arithmetic, immediate operations,
+signed and unsigned shifts, chained comparisons, short-circuit branches,
+side effects, narrow arithmetic and pointer indexing. Both native compiler
+builds and the pinned reference produced `Optimizer probe 3FF`.
+
+The separate `OptimizerAOTProbe.HC` guest compiles the same source and loads
+the resulting module without first executing its JIT definitions. GCC and
+Clang both produced:
+
+```text
+Optimizer AOT compile 0
+Optimizer probe 3FF
+Optimizer AOT load 1
+```
+
+The host intermediate-code probe checks 43 transformations and retained
+operations under each toolchain. The existing expression and function probes
+retain their recorded result hashes; the unmodified `ClassMeta.HC` also runs.
+
+```sh
+make -j6 test-optimizer
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-optimizer
+build/Linux/TestBoot --optimizer-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/optimizer-reference
+```
+
+The source comparison uses QEMU 8.2.2, `pc`, `qemu64`, 512 MiB and one vCPU.
+Native AOT execution is tested separately; reference AOT and instruction-byte
+parity are not established by these checks. See [Source layout](SourceLayout.md)
+for unimplemented optimizer stages.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

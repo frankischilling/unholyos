@@ -1716,6 +1716,26 @@ mounted writable-image workflow remains outstanding. FAT32 backing media,
 arbitrary open-stream lifetime, direct RAM writes, SMP and removable-media
 recovery need further runtime comparisons.
 
+## Initial optimizer passes
+
+`Compiler/OptPass012.cpp` implements the constant simplification and
+immediate-operation parts of `OptPass012.HC`. The parser already constructs
+typed, indexed expression trees, so the pass operates on their links instead
+of reconstructing the reference's postfix queue. `BackC.cpp::COCCompile`
+runs the optimizer before sizing and emitting either JIT or AOT code.
+The emitter handles `IC_ADD_CONST`, `IC_SUB_CONST`, `IC_SHL_CONST`, and
+`IC_SHR_CONST` using the reference opcode identifiers.
+
+Integer operations preserve the existing 64-bit intermediate semantics;
+constant division faults remain executable. Immediate multiplication and
+unsigned division by powers of two use shifts. Constant branches retain
+evaluation order and comparison-chain links. Binary64 folding is limited to
+supported comparisons, bitwise operations, conversions, and arithmetic that
+does not depend on rounding precision; other operations still use the existing
+x87 emitter. This is not the complete reference optimizer: dynamic signed
+division strength reduction, operand-location analysis, register allocation,
+and `OptPass3` through the later backend passes need further translation.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. Earlier reports now cover the kernel state before compiler loading and the loaded compiler image; the opcode-resource probe runs before the module entry. These reports remain in `Linux/BootProbe.cpp`. [Source structure verification](SourceStructureVerification.md) records the earlier layout review; the compiler load cutover requires its own runtime evidence in [Boot.md](Boot.md).

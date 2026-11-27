@@ -3048,6 +3048,15 @@ constexpr CTextProbe list_utilities_probes[]{
     {"list-utilities", "/ListUtilitiesProbe.HC", "", "LU linked ", "LU DONE",
      "LU linked 7F\nLU queue 7F\nLU DONE\n"}};
 
+constexpr CTextProbe optimizer_probes[]{
+    {"optimizer", "/OptimizerProbe.HC", "", "Optimizer probe ",
+     "Optimizer probe ", "Optimizer probe 3FF\n", {}, true}};
+constexpr CTextProbe optimizer_aot_probes[]{
+    {"optimizer-aot", "/OptimizerAOTProbe.HC", "", "Optimizer AOT compile ",
+     "Optimizer AOT load ",
+     "Optimizer AOT compile 0\nOptimizer probe 3FF\nOptimizer AOT load 1\n",
+     {}, true}};
+
 constexpr CTextProbe storage_services_probes[]{
     {"drive-services", "/DriveServicesProbe.HC", "", "Drive services ",
      "Drive services ", "Drive services 7FF\n", {}, true},
@@ -6477,6 +6486,9 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--class-records-reference" ||
        std::string_view(argv[1]) == "--list-utilities" ||
        std::string_view(argv[1]) == "--list-utilities-reference" ||
+       std::string_view(argv[1]) == "--optimizer" ||
+       std::string_view(argv[1]) == "--optimizer-reference" ||
+       std::string_view(argv[1]) == "--optimizer-aot" ||
        std::string_view(argv[1]) == "--storage-services" ||
        std::string_view(argv[1]) == "--storage-services-reference" ||
        std::string_view(argv[1]) == "--cluster-entry" ||
@@ -6535,6 +6547,8 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--class-records");
     bool list_utilities_probe =
         std::string_view(argv[1]).starts_with("--list-utilities");
+    bool optimizer_probe = std::string_view(argv[1]).starts_with("--optimizer");
+    bool optimizer_aot = std::string_view(argv[1]) == "--optimizer-aot";
     bool storage_services_probe =
         std::string_view(argv[1]).starts_with("--storage-services");
     bool cluster_entry_probe =
@@ -6550,7 +6564,7 @@ int main(int argc, char **argv)
                               format_missing_args_probe || class_records_probe ||
                               list_utilities_probe || storage_services_probe ||
                               cluster_entry_probe || disk_cache_probe || storage_lifecycle_probe ||
-                              file_backed_redsea_probe;
+                              file_backed_redsea_probe || optimizer_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6576,6 +6590,9 @@ int main(int argc, char **argv)
       text_probes = class_records_probes;
     else if (list_utilities_probe)
       text_probes = list_utilities_probes;
+    else if (optimizer_probe)
+      text_probes = optimizer_aot ? std::span<const CTextProbe>(optimizer_aot_probes)
+                                 : std::span<const CTextProbe>(optimizer_probes);
     else if (storage_services_probe)
       text_probes = storage_services_probes;
     else if (cluster_entry_probe)
@@ -6605,6 +6622,9 @@ int main(int argc, char **argv)
           VerifyHostModuleMedia(argv[3],
                                 std::string("Linux/Fixtures") + probe.source,
                                 probe.source + 1);
+        if (optimizer_aot)
+          VerifyHostModuleMedia(argv[3], "Linux/Fixtures/OptimizerProbe.HC",
+                                "OptimizerProbe.HC");
       }
       const char *memory = class_records_probe ? "3072" : "512";
       CMonitor vm(argv[2], argv[3], dir, "pc", memory, false, {}, false,
@@ -6787,6 +6807,8 @@ int main(int argc, char **argv)
               << "       " << argv[0]
               << " --class-records[-reference] qemu image.iso [capture-dir]\n"
               << " --list-utilities[-reference] qemu image.iso [capture-dir]\n"
+              << " --optimizer[-reference] qemu image.iso [capture-dir]\n"
+              << " --optimizer-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"
               << " --cluster-entry[-reference] qemu image.iso [capture-dir]\n"
               << " --disk-cache[-reference] qemu image.iso [capture-dir]\n"

@@ -373,6 +373,8 @@ enum CICode : uint8_t
   IC_UNARY_MINUS,
   IC_SHL = 0x2B,
   IC_SHR,
+  IC_SHL_CONST,
+  IC_SHR_CONST,
   IC_POWER = 0x2F,
   IC_MUL,
   IC_DIV,
@@ -382,6 +384,8 @@ enum CICode : uint8_t
   IC_XOR,
   IC_ADD,
   IC_SUB,
+  IC_ADD_CONST,
+  IC_SUB_CONST,
   IC_EQU_EQU = 0x3A,
   IC_NOT_EQU,
   IC_LESS,
@@ -454,6 +458,7 @@ struct CIntermediateCode
   const CArrayDim *dim = nullptr;
   const CHashFun *fun_ptr = nullptr;
   uint32_t call_target = NO_IC;
+  bool cmp_link = false;
 };
 
 class CAsm;
@@ -589,6 +594,7 @@ uint8_t *LexTypedExpression2Bin(CCmpCtrl &cc, CRawType type,
                                 bool strings = false);
 uint32_t PrsExpression(CCmpCtrl &cc, CCodeCtrl &coc);
 uint32_t PrsPrint(CCmpCtrl &cc, CCodeCtrl &coc);
+void OptPass012(CIntermediateCode *code, uint32_t count);
 bool OptBranch(CCodeCtrl &coc, uint32_t value, CICode branch, uint32_t target,
                unsigned depth = 0);
 bool LexExpression(CCmpCtrl &cc, uint64_t &result);

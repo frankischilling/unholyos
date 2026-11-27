@@ -667,6 +667,21 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
       out.Bytes(0x48, 0xF7, op == IC_COM ? 0xD0 : 0xD8);
     return true;
   }
+  if (op == IC_ADD_CONST || op == IC_SUB_CONST) {
+    const auto imm=static_cast<int64_t>(node.data);
+    if (imm>=-128 && imm<=127)
+      out.Bytes(0x48,0x83,op==IC_ADD_CONST?0xC0:0xE8,imm);
+    else {
+      out.Bytes(0x48,op==IC_ADD_CONST?0x05:0x2D);
+      out.Immediate(node.data,4);
+    }
+    return true;
+  }
+  if (op == IC_SHL_CONST || op == IC_SHR_CONST) {
+    bool uns=IsUnsigned(left) || IsUnsigned(code[node.right].type);
+    out.Bytes(0x48,0xC1,op==IC_SHL_CONST?0xE0:uns?0xE8:0xF8,node.data);
+    return true;
+  }
   // A value expression evaluates both operands. Branch lowering belongs to
   // the statement compiler.
   bool logical = op == IC_AND_AND || op == IC_OR_OR || op == IC_XOR_XOR;
@@ -713,6 +728,11 @@ static bool EmitBody(CCodeOut &out, CCodeCtrl &coc, CRawType type,
       node.data = out.size;
       break;
     case IC_JMP:
+      // A folded condition still leaves its value in RAX, as the original
+      // conditional branch did.
+      if (node.left!=NO_IC && !Emit(out,code,node.left,0,stack_slots))
+        return false;
+      [[fallthrough]];
     case IC_SUB_CALL:
       out.PatchBranch(out.Branch(node.code), code[node.right].data);
       break;
@@ -791,9 +811,11 @@ static bool EmitFunction(CCodeOut &out, CCodeCtrl &coc, uint32_t root,
 uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
                     const CHashFun *fun, CAOT *aot, size_t *bytes)
 {
+  if (coc.failed || !coc.GoToLabelsDefined())
+    return nullptr;
+  OptPass012(coc.code,coc.Count());
   CCodeOut size(nullptr, aot);
-  if (coc.failed || !coc.GoToLabelsDefined() ||
-      !EmitFunction(size, coc, root, type, fun) || size.failed ||
+  if (!EmitFunction(size, coc, root, type, fun) || size.failed ||
       size.size > INT32_MAX)
     return nullptr;
   if (coc.asm_first)
