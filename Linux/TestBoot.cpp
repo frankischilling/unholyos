@@ -100,8 +100,11 @@ static std::string_view ProgramOutput(std::string_view serial, const char *path,
 static void CheckProgramOutput(std::string_view serial, const char *path,
                                std::string_view expected, char checks = '3')
 {
-  Check(ProgramOutput(serial, path, checks) == expected,
-        "Native HolyC source output differed from TempleOS");
+  const auto actual=ProgramOutput(serial,path,checks);
+  if (actual!=expected)
+    throw std::runtime_error(std::string("Native HolyC source output differed for ")+
+                             path+"\nExpected:\n"+std::string(expected)+
+                             "\nActual:\n"+std::string(actual));
 }
 
 struct CBootMedia
@@ -5205,7 +5208,8 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/DirectoryProbe.HC",
                        "Make Directory:DirProbe\nMake Directory:Sub\nDirectory probe 1FF\n",
                        '1');
-    CheckProgramOutput(boot, "/DirContextProbe.HC", "Dir context FF\n", '1');
+    CheckProgramOutput(boot, "/DirContextProbe.HC",
+                       "Make Directory:DirScope\nMake Directory:Nested\nDir context FF\n", '1');
     CheckProgramOutput(boot, "/FileStreamProbe.HC", "File stream probe 3FF\n", '1');
     CheckProgramOutput(boot, "/FileCopyProbe.HC", file_copy_output, '1');
     CheckProgramOutput(boot, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
@@ -5356,7 +5360,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/DirectoryProbe.HC",
                          "Make Directory:DirProbe\nMake Directory:Sub\nDirectory probe 1FF\n",
                          '1');
-      CheckProgramOutput(output, "/DirContextProbe.HC", "Dir context FF\n",
+      CheckProgramOutput(output, "/DirContextProbe.HC",
+                         "Make Directory:DirScope\nMake Directory:Nested\nDir context FF\n",
                          '1');
       CheckProgramOutput(output, "/FileStreamProbe.HC", "File stream probe 3FF\n",
                          '1');
