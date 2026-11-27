@@ -146,84 +146,74 @@ a2f_end:
 
 extern "C" uint64_t Str2DateCpp(const char *_src)
 {
-  if (!_src)
-    return 0;
-  auto *src=StrNew(_src,CurrentTask()->data_heap);
-  if (!src)
-    return 0;
-  char *dst=src;
-  for (auto *s=src;*s;s++) {
-    uint8_t ch=*s;
-    if (!(char_bmp_white_space[ch/32]&(uint32_t{1}<<(ch%32))))
-      *dst++=ch>='a' && ch<='z' ? ch-32 : ch;
+  CDate res{};
+  CDateStruct ds, ds_now;
+  char *src = MStrUtilCpp(_src, SUF_REM_SPACES | SUF_TO_UPPER,
+                          0x3FF0000000000000ULL),
+       *v = StrNew(src, CurrentTask()->data_heap), *ptr = src;
+  bool start_mon = false, end_mon = false, start_year = false, end_year = false;
+  const char *end;
+  if (!v)
+    RaiseHolyC(0x6D654D74754FULL);
+
+  MemSet(&ds, 0, sizeof(CDateStruct));
+  if (ptr[0] == 'S' && ptr[1] == 'M' && ptr[2] == '(') {
+    ptr += 3;
+    start_mon = true;
+  } else if (ptr[0] == 'E' && ptr[1] == 'M' && ptr[2] == '(') {
+    ptr += 3;
+    end_mon = true;
+  } else if (ptr[0] == 'S' && ptr[1] == 'Y' && ptr[2] == '(') {
+    ptr += 3;
+    start_year = true;
+  } else if (ptr[0] == 'E' && ptr[1] == 'Y' && ptr[2] == '(') {
+    ptr += 3;
+    end_year = true;
   }
-  *dst=0;
-  char *ptr=src;
-  enum { NONE,SM,EM,SY,EY } mode=NONE;
-  if (StrLen(ptr)>=3 && ptr[2]=='(') {
-    if (ptr[0]=='S' && ptr[1]=='M') mode=SM;
-    if (ptr[0]=='E' && ptr[1]=='M') mode=EM;
-    if (ptr[0]=='S' && ptr[1]=='Y') mode=SY;
-    if (ptr[0]=='E' && ptr[1]=='Y') mode=EY;
-    if (mode!=NONE) ptr+=3;
-  }
-  uint64_t res=0;
-  auto offset=DateBits(local_time_offset);
-  if (*ptr=='*') {
+  if (*ptr == '*') {
     ptr++;
-    res=Now()+offset;
-    if (*ptr=='+' || *ptr=='-') {
-      const char *end;
-      res+=uint64_t(Str2I64Cpp(ptr,10,&end))<<32;
-      ptr=const_cast<char *>(end);
+    if (*ptr == '+' || *ptr == '-') {
+      res.date = Str2I64Cpp(ptr, 10, &end);
+      ptr = const_cast<char *>(end);
     }
+    res = DateFromBits(DateBits(res) + Now());
+    res = DateFromBits(DateBits(res) + DateBits(local_time_offset));
   } else {
-    // Split the slash-separated fields before converting their numeric prefixes.
-    auto *sep=ptr;
-    while (*sep && *sep!='/')
-      sep++;
-    bool slash=*sep!=0;
-    *sep=0;
-    CDateStruct ds{};
-    ds.mon=Str2I64Cpp(ptr,10,nullptr);
-    if (!ds.mon || ds.mon>12) {
-      Free(src);
-      return 0;
-    }
-    ptr=sep+slash;
-    sep=ptr;
-    while (*sep && *sep!='/')
-      sep++;
-    const char *end;
-    if (*sep) {
-      *sep=0;
-      ds.day_of_mon=Str2I64Cpp(ptr,10,nullptr);
-      ds.year=Str2I64Cpp(sep+1,10,&end);
-      if (ds.year<100) ds.year+=2000;
+    StrFirstRemCpp(ptr, reinterpret_cast<const uint8_t *>("/"), v);
+    ds.mon = Str2I64Cpp(v, 10, nullptr);
+    if (StrFirstOccCpp(ptr, reinterpret_cast<const uint8_t *>("/"))) {
+      StrFirstRemCpp(ptr, reinterpret_cast<const uint8_t *>("/"), v);
+      ds.day_of_mon = Str2I64Cpp(v, 10, nullptr);
+      ds.year = Str2I64Cpp(ptr, 10, &end);
+      ptr = const_cast<char *>(end);
+      if (ds.year < 100)
+        ds.year += 2000;
     } else {
-      ds.day_of_mon=Str2I64Cpp(ptr,10,&end);
-      CDateStruct ds_now;
-      Date2Struct(ds_now,DateFromBits(Now()+offset));
-      ds.year=ds_now.year;
+      ds.day_of_mon = Str2I64Cpp(ptr, 10, &end);
+      ptr = const_cast<char *>(end);
+      auto now = Now();
+      Date2Struct(ds_now, DateFromBits(now + DateBits(local_time_offset)));
+      ds.year = ds_now.year;
     }
-    ptr=const_cast<char *>(end);
-    res=DateBits(Struct2Date(ds));
+    res = Struct2Date(ds);
   }
-  if (*ptr==')') ptr++;
-  if (mode!=NONE) {
-    auto date=DateFromBits(res);
-    switch (mode) {
-      case SM: date.date=FirstDayOfMon(date.date); break;
-      case EM: date.date=LastDayOfMon(date.date); break;
-      case SY: date.date=FirstDayOfYear(date.date); break;
-      default: date.date=LastDayOfYear(date.date); break;
-    }
-    res=DateBits(date);
-  }
-  if (*ptr=='+' || *ptr=='-')
-    res+=uint64_t(Str2I64Cpp(ptr,10,nullptr))<<32;
+  if (*ptr == ')')
+    ptr++;
+
+  if (start_mon)
+    res.date = FirstDayOfMon(res.date);
+  else if (end_mon)
+    res.date = LastDayOfMon(res.date);
+  else if (start_year)
+    res.date = FirstDayOfYear(res.date);
+  else if (end_year)
+    res.date = LastDayOfYear(res.date);
+
+  if (*ptr == '+' || *ptr == '-')
+    res.date = uint32_t(res.date) + uint32_t(Str2I64Cpp(ptr, 10, nullptr));
   Free(src);
-  return res-offset;
+  Free(v);
+  return DateBits(res) - DateBits(local_time_offset);
 }
 
 extern "C" char *StrScanCpp(char *src, const char *fmt, int64_t argc,

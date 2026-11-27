@@ -27,6 +27,7 @@ Linux/Fixtures/Fat32TreeProbe.HC text eol=lf
 Linux/Fixtures/AtaWriteProbe.HC text eol=lf
 Linux/Fixtures/AtaWriteRejectProbe.HC text eol=lf
 Linux/Fixtures/DateOffsetProbe.HC text eol=lf
+Linux/Fixtures/DateScanProbe.HC text eol=lf
 Demo/ClassMeta.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/LastClass.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Dsk/DataBase.HC -text whitespace=cr-at-eol,-blank-at-eol
