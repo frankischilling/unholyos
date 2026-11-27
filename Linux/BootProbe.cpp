@@ -50,6 +50,75 @@ static void BootDVDReport(const CDrv &dv)
   SerialPutS("\r\n");
 }
 
+static void BootOpcodeResourceReport(const CDrv &dvd)
+{
+  CRedSeaDirEntry probe;
+  if (!RedSeaFileFind(dvd, dvd.root_clus, "OpcodeProbe.HC", false, probe))
+    return;
+  uint8_t letter = 'Z';
+  while (letter >= 'A' && (letter == blkdev.boot_drv_let ||
+                           letter == dvd.drv_let || MountedDrive(letter)))
+    --letter;
+  if (letter < 'A')
+    return;
+
+  auto &task = *CurrentTask();
+  auto *heap = adam_task->data_heap;
+  // RedSeaISO also uses a temporary drive without registering a drive letter.
+  CBlkDev bd{};
+  CDrv ram{};
+  bd.type = BDT_RAM;
+  bd.RAM_dsk = CAlloc(8 * BLK_SIZE, heap);
+  bd.max_blk = 7;
+  ram.bd = &bd;
+  ram.drv_let = letter;
+  ram.size = 8;
+  if (!bd.RAM_dsk || !RedSeaFormatRAM(ram, 1) || !RedSeaMkDir(ram, "/Home")) {
+    Free(bd.RAM_dsk);
+    return;
+  }
+
+  auto *drive = task.cur_dv;
+  auto *dir = task.cur_dir;
+  const auto boot = blkdev.boot_drv_let;
+  char cwd[] = "/Home";
+  task.cur_dv = &ram;
+  task.cur_dir = cwd;
+  blkdev.boot_drv_let = letter;
+  const auto used = heap->used_u8s;
+  bool missing = !AsmHashLoad();
+  missing = missing && !AsmHashFind("MOV", HTT_OPCODE) &&
+            !AsmHashFind("XMM7", HTT_REG) &&
+            !AsmHashFind("noargpop", HTT_KEYWORD) &&
+            !AsmHashFind("BINFILE", HTT_ASM_KEYWORD) && heap->used_u8s == used;
+
+  blkdev.boot_drv_let = boot;
+  bool loaded = AsmHashLoad();
+  auto *opcode = AsmHashFind("MOV_RAX_CR4", HTT_OPCODE);
+  auto *reg = AsmHashFind("XMM7", HTT_REG);
+  auto *keyword = AsmHashFind("noargpop", HTT_KEYWORD);
+  auto *directive = AsmHashFind("BINFILE", HTT_ASM_KEYWORD);
+  loaded = loaded && opcode && reg && keyword && directive &&
+           task.cur_dv == &ram && task.cur_dir == cwd;
+  const auto cached_used = heap->used_u8s;
+  blkdev.boot_drv_let = letter;
+  bool cached = AsmHashLoad();
+  cached = cached && AsmHashFind("MOV_RAX_CR4", HTT_OPCODE) == opcode &&
+           AsmHashFind("XMM7", HTT_REG) == reg &&
+           AsmHashFind("noargpop", HTT_KEYWORD) == keyword &&
+           AsmHashFind("BINFILE", HTT_ASM_KEYWORD) == directive &&
+           heap->used_u8s == cached_used && task.cur_dv == &ram &&
+           task.cur_dir == cwd;
+  blkdev.boot_drv_let = boot;
+  task.cur_dv = drive;
+  task.cur_dir = dir;
+  Free(bd.RAM_dsk);
+  SerialPutS("UnholyOS: opcode resource checks ");
+  SerialPutHex(uint64_t(missing) | (uint64_t(loaded) << 1) |
+               (uint64_t(cached) << 2));
+  SerialPutS("\r\n");
+}
+
 static void BootStartupReport(const CDrv &dv)
 {
   size_t size;
@@ -1467,6 +1536,7 @@ void BootProbe()
   SerialPutHex(reinterpret_cast<uintptr_t>(text.raw_scrn_image));
   SerialPutS("\r\n");
   if (adam_task->cur_dv) {
+    BootOpcodeResourceReport(*adam_task->cur_dv);
     BootDVDReport(*adam_task->cur_dv);
     if (MountedDrive('C')) {
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32ReadProbe.HC");
