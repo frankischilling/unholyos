@@ -9,7 +9,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | Directory | Reference files | Corresponding paths | Missing paths |
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 68 | 8 |
-| `Compiler` | 33 | 20 | 13 |
+| `Compiler` | 33 | 23 | 10 |
 | `Adam` | 132 | 45 | 87 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 22 | 181 |
@@ -50,17 +50,18 @@ part of the full rewrite.
 ## Remaining compiler and Adam work
 
 - The unmatched compiler files are `BackA.HC`, `BackB.HC`, `BackFA.HC`,
-  `BackFB.HC`, `BackLib.HC`, `CExts.HC`, `CompilerB.HH`,
-  `OptPass4.HC`, `OptPass5.HC`, `OptPass6.HC`,
+  `BackFB.HC`, `CExts.HC`, `CompilerB.HH`, `OptPass6.HC`,
   `OptPass789A.HC`, `Templates.HC` and `UAsm.HC`. Translate the
   intermediate-code, optimization and code-generation pipeline as
   connected work, preserving the reference's representation and ABI.
   `OptPass012.cpp` implements typed simplification and immediate lowering
   in the current indexed expression IR. `OptPass3.cpp` assigns eligible
   frame members to four preserved registers and the backend emits their
-  loads, stores and updates. Full operand-location analysis, the reference
-  register selection and stack layout, later optimizer passes, and
-  reference code-generation parity remain outstanding.
+  loads, stores and updates. `OptPass4.cpp` folds eligible addresses,
+  `OptPass5.cpp` selects simple right operands, and `BackLib.cpp` encodes
+  their memory and arithmetic instructions. Full operand-location analysis,
+  register selection and stack layout, later optimizer passes, and reference
+  code-generation parity remain outstanding.
 - Move remaining Adam initialization to the guest startup path after
   compiler support permits the original project and startup files.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal

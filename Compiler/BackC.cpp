@@ -22,6 +22,33 @@ public:
     Immediate(bits, 8);
   }
 
+  void Instruction(const CCodeBytes &ins)
+  {
+    if (!ins.count)
+      failed=true;
+    for (unsigned i=0;i<ins.count;i++) Byte(ins.bytes[i]);
+  }
+
+  void Memory(CMemOp op,CRawType type,uint8_t base,
+              uint8_t index=16,uint8_t shift=0,int32_t disp=0)
+  {
+    Instruction(ICModr1(op,type,base,index,shift,disp));
+  }
+
+  void AddSub(bool inc,uint64_t amount)
+  {
+    if (amount==uint64_t(int64_t(int8_t(amount))))
+      Bytes(0x48,0x83,inc?0xC0:0xE8,amount);
+    else if (amount==uint64_t(int64_t(int32_t(amount)))) {
+      Bytes(0x48,inc?0x05:0x2D);
+      Immediate(amount,4);
+    } else {
+      Bytes(0x48,0xBA); // MOV RDX,imm64
+      Immediate(amount,8);
+      Bytes(0x48,inc?0x01:0x29,0xD0);
+    }
+  }
+
   void LocalLoad(uint8_t reg)
   {
     Bytes(0x4C,0x89,0xC0+((reg&7)<<3)); // MOV RAX,R12..R15
@@ -395,7 +422,8 @@ static void FltBinary(CCodeOut &out, const CIntermediateCode &node,
 static void ICCompoundAssign(CCodeOut &out, CIntermediateCode node,
                              const CIntermediateCode &rhs, CRawType left,
                              bool by_val, unsigned stack_slots,
-                             uint8_t local_reg = 0)
+                             uint8_t local_reg = 0,
+                             const COptAddress *frame = nullptr)
 {
   constexpr CICode binary_ops[]{IC_SHL, IC_SHR, IC_MUL, IC_DIV, IC_MOD,
                                 IC_AND, IC_OR,  IC_XOR, IC_ADD, IC_SUB};
@@ -425,6 +453,8 @@ static void ICCompoundAssign(CCodeOut &out, CIntermediateCode node,
   out.Bytes(0x48, 0x89, 0xC1);       // MOV RCX,RAX
   if (local_reg)
     out.LocalLoad(local_reg);
+  else if (frame)
+    out.Memory(CMemOp::Load,left,5,16,0,frame->disp);
   else {
     out.Bytes(0x48, 0x8B, 0x04, 0x24); // MOV RAX,[RSP]
     out.Load(left);
@@ -458,12 +488,49 @@ static void FunAddress(CCodeOut &out, const CHashFun &fun, bool indirect)
                          : reinterpret_cast<uintptr_t>(fun.exe_addr));
 }
 
+static bool Emit(CCodeOut &out,const CIntermediateCode *code,uint32_t index,
+                 unsigned depth=0,unsigned stack_slots=0);
+
+static bool FrameAddress(const COptAddress &addr)
+{
+  return addr.valid && addr.base==NO_IC && addr.index==NO_IC;
+}
+
+static bool EmitAddress(CCodeOut &out,const CIntermediateCode *code,
+                        const CIntermediateCode &target,CMemOp op,
+                        unsigned depth,unsigned stack_slots)
+{
+  const auto &addr=target.address;
+  if (!addr.valid) {
+    if (!Emit(out,code,target.left,depth,stack_slots)) return false;
+    if (op==CMemOp::Load) out.Load(target.type);
+    return true;
+  }
+  uint8_t base=5,index=16;
+  if (addr.base!=NO_IC) {
+    if (!Emit(out,code,addr.base,depth,stack_slots)) return false;
+    base=0;
+  }
+  if (addr.index!=NO_IC) {
+    if (base==0) out.Bytes(0x50); // Preserve base across index evaluation.
+    if (!Emit(out,code,addr.index,depth,stack_slots+(base==0))) return false;
+    if (base==0) {
+      out.Bytes(0x5A); // POP RDX
+      base=2;
+    }
+    index=0;
+  }
+  out.Memory(op,op==CMemOp::Lea?RT_I64:target.type,base,index,
+             addr.shift,addr.disp);
+  return !out.failed;
+}
+
 static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
-                 unsigned depth = 0, unsigned stack_slots = 0)
+                 unsigned depth, unsigned stack_slots)
 {
   // The parser has a fixed nesting limit. A flat expression can still have
   // a deeper tree on the left than it did on the operator stack.
-  if (depth == 512)
+  if (depth >= 512)
     return false;
   const auto &node = code[index];
   auto op = node.code;
@@ -584,11 +651,13 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
       out.LocalStore(target.local_reg);
       return true;
     }
-    if (!Emit(out, code, target.left, depth + 1, stack_slots))
-      return false;
-    out.Bytes(
-        0x50); // Save the address through evaluation of the right operand.
-    if (!Emit(out, code, node.right, depth + 1, stack_slots + 1))
+    bool frame=FrameAddress(target.address);
+    if (!frame) {
+      if (!EmitAddress(out,code,target,CMemOp::Lea,depth+1,stack_slots))
+        return false;
+      out.Bytes(0x50); // Save address across RHS evaluation.
+    }
+    if (!Emit(out, code, node.right, depth + 1, stack_slots + !frame))
       return false;
     if (op == IC_ASSIGN) {
       out.Convert(code[node.right].type, target.type);
@@ -598,10 +667,14 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
       ICCompoundAssign(out, node, code[node.right], target.type,
                        address == IC_IMM_I64 || address == IC_DATA_ADDR ||
                            address == IC_GLBL_ADDR || address == IC_RBP,
-                       stack_slots + 1);
+                       stack_slots + !frame,0,frame?&target.address:nullptr);
     }
-    out.Bytes(0x5A); // POP RDX
-    out.Store(target.type);
+    if (frame)
+      out.Memory(CMemOp::Store,target.type,5,16,0,target.address.disp);
+    else {
+      out.Bytes(0x5A); // POP RDX
+      out.Store(target.type);
+    }
     return true;
   }
   if (op == IC_STR_CONST) {
@@ -647,16 +720,21 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
       out.LocalLoad(target.local_reg);
       if (postfix)
         out.Bytes(0x48,0x89,0xC1); // MOV RCX,RAX
-      out.Bytes(0x48,0x83,inc?0xC0:0xE8,node.data);
+      out.AddSub(inc,node.data);
       out.LocalStore(target.local_reg);
       if (postfix)
         out.Bytes(0x48,0x89,0xC8); // MOV RAX,RCX
       return true;
     }
-    if (!Emit(out, code, target.left, depth + 1, stack_slots))
-      return false;
-    out.Bytes(0x50); // Save the address for the store.
-    out.Load(target.type);
+    bool frame=FrameAddress(target.address);
+    if (frame)
+      out.Memory(CMemOp::Load,target.type,5,16,0,target.address.disp);
+    else {
+      if (!EmitAddress(out,code,target,CMemOp::Lea,depth+1,stack_slots))
+        return false;
+      out.Bytes(0x50); // Save the address for the store.
+      out.Load(target.type);
+    }
     const bool postfix = op == IC_PP_ || op == IC_MM_;
     const bool inc = op == IC__PP || op == IC_PP_;
     if (postfix)
@@ -665,15 +743,19 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
       out.Bytes(0xB9, 1, 0, 0, 0); // MOV ECX,1
       CIntermediateCode math{0,      NO_IC, NO_IC, inc ? IC_ADD : IC_SUB,
                              RT_F64, false, false, true};
-      FltBinary(out, math, target.type, RT_I64, stack_slots + 1 + postfix);
+      FltBinary(out, math, target.type, RT_I64, stack_slots + !frame + postfix);
     } else {
-      out.Bytes(0x48, 0x83, inc ? 0xC0 : 0xE8, node.data); // ADD/SUB RAX,imm8
+      out.AddSub(inc,node.data);
       out.Extend(target.type, 0xC0);
     }
     if (postfix)
       out.Bytes(0x59); // POP RCX
-    out.Bytes(0x5A);   // POP RDX
-    out.Store(target.type);
+    if (frame)
+      out.Memory(CMemOp::Store,target.type,5,16,0,target.address.disp);
+    else {
+      out.Bytes(0x5A); // POP RDX
+      out.Store(target.type);
+    }
     if (postfix)
       out.Bytes(0x48, 0x89, 0xC8); // MOV RAX,RCX
     return true;
@@ -682,6 +764,8 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     out.LocalLoad(node.local_reg);
     return true;
   }
+  if (op==IC_DEREF && node.address.valid)
+    return EmitAddress(out,code,node,CMemOp::Load,depth+1,stack_slots);
   if (!Emit(out, code, node.left, depth + 1, stack_slots))
     return false;
   auto left = code[node.left].type;
@@ -750,19 +834,23 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     return true;
   }
   if (op == IC_ADD_CONST || op == IC_SUB_CONST) {
-    const auto imm=static_cast<int64_t>(node.data);
-    if (imm>=-128 && imm<=127)
-      out.Bytes(0x48,0x83,op==IC_ADD_CONST?0xC0:0xE8,imm);
-    else {
-      out.Bytes(0x48,op==IC_ADD_CONST?0x05:0x2D);
-      out.Immediate(node.data,4);
-    }
+    out.AddSub(op==IC_ADD_CONST,node.data);
     return true;
   }
   if (op == IC_SHL_CONST || op == IC_SHR_CONST) {
     bool uns=IsUnsigned(left) || IsUnsigned(code[node.right].type);
     out.Bytes(0x48,0xC1,op==IC_SHL_CONST?0xE0:uns?0xE8:0xF8,node.data);
     return true;
+  }
+  if (node.rhs.kind!=COptRhsKind::Stack) {
+    auto ins=ICBinaryRhs(op,node.rhs);
+    if (ins.count) {
+      out.Instruction(ins);
+      if (ICIsComparison(op))
+        out.SetBool(CmpCondition(op,IsUnsigned(left) ||
+                                  IsUnsigned(code[node.right].type)));
+      return true;
+    }
   }
   // A value expression evaluates both operands. Branch lowering belongs to
   // the statement compiler.
@@ -901,6 +989,8 @@ uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
   COptRegPlan locals;
   if (fun)
     OptPass3(coc.code,coc.Count(),*fun,locals);
+  OptPass4(coc.code,coc.Count());
+  OptPass5(coc.code,coc.Count());
   CCodeOut size(nullptr, aot, locals);
   if (!EmitFunction(size, coc, root, type, fun) || size.failed ||
       size.size > INT32_MAX)

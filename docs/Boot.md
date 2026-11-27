@@ -3830,6 +3830,39 @@ build/Linux/TestBoot --register-allocation-reference qemu-system-x86_64 \
 The tests check execution and native allocation metadata, not reference
 instruction bytes or the reference's complete register allocation policy.
 
+## Address and right-operand lowering
+
+`AddressFoldProbe.HC` (6151 bytes, SHA-256
+`e293aae6b82fb08827218659b949de44908897270de9e5ac925788830db79789`)
+checks signed and unsigned scaled loads, packed member displacements,
+width-correct stores, compound-assignment evaluation order, frame updates,
+comparison chains, immediate ranges and pointer increments. The initial
+reference result exposed the one-byte stride for a class-pointer update
+directly followed by an arrow. The expanded fixture tests all four arrow
+forms, as well as ordinary full-stride updates and direct dereferences.
+The pinned reference and both native builds produced `Address fold FFFF`
+under QEMU 8.2.2, `pc`, `qemu64`, 512 MiB and one vCPU.
+
+The native probe checks emitted memory and arithmetic encodings and
+produced `Address fold native 1FF` in both builds. The host pass probe
+passed 122 checks with GCC and Clang. Both native AOT runs produced:
+
+```text
+Address fold AOT compile 0
+Address fold FFFF
+Address fold AOT load 1
+```
+
+```sh
+make -j6 test-address-fold
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-address-fold
+build/Linux/TestBoot --address-fold-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/address-fold-reference
+```
+
+These checks establish the selected behavior and native encodings, not
+reference instruction-byte equivalence or reference AOT execution.
+
 ## Nested images, FAT32 backing, and mounted ISO generation
 
 The shared `NestedRedSeaProbe.HC`, `RedSeaFreeListProbe.HC`, and `Fat32ImageProbe.HC` fixtures run on

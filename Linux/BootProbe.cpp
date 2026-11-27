@@ -2074,6 +2074,13 @@ void BootProbe()
       BootFileProgramReport(*adam_task->cur_dv, "/RegisterAllocationProbe.HC");
       BootFileProgramReport(*adam_task->cur_dv, "/RegisterAllocationNativeProbe.HC");
     }
+    if (RedSeaFileLookup(*adam_task->cur_dv, "/AddressFoldAOTProbe.HC",
+                         false, false, optimizer_entry, optimizer_prefix))
+      BootFileProgramReport(*adam_task->cur_dv, "/AddressFoldAOTProbe.HC");
+    else {
+      BootFileProgramReport(*adam_task->cur_dv, "/AddressFoldProbe.HC");
+      BootFileProgramReport(*adam_task->cur_dv, "/AddressFoldNativeProbe.HC");
+    }
     BootFileProgramReport(*adam_task->cur_dv, "/ColorConversionsProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FormatMissingArgsProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/SystemDefinesProbe.HC");

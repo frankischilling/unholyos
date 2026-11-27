@@ -397,8 +397,17 @@ private:
 
   uint32_t Member(uint32_t value)
   {
-    if (cc.token == TK_DEREFERENCE)
+    if (cc.token == TK_DEREFERENCE) {
+      // PrsUnaryModifier in the reference changes the class on a
+      // pointer-update value before selecting the member. The reference
+      // increment/decrement emitter sees a non-pointer class and uses one byte.
+      auto &base=coc.code[value];
+      if ((base.code==IC__PP || base.code==IC__MM ||
+           base.code==IC_PP_ || base.code==IC_MM_) && base.cls &&
+          base.cls->ptr_stars_cnt==1)
+        base.data=1;
       value = Deref(value);
+    }
     if (!IsLValue(value) || Lex(cc) != TK_IDENT)
       return NO_IC;
     const auto node = coc.code[value];
