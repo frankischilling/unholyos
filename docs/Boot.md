@@ -2715,8 +2715,9 @@ about how the pinned system handles deliberately corrupted media.
 
 Source review establishes the corresponding compiler load boundary.
 The current `CInitCpp` calls `CmpLoadDefines` before `AsmHashLoad`; the
-reference's `CmpFillTables`, `cmp.ic_nop` setup, and `UAsmHashLoad` steps
-remain incomplete. Adam remains linked into the kernel,
+reference's `CmpFillTables` and `cmp.ic_nop` setup remain incomplete.
+`AsmHashLoad` now initializes the disassembler's opcode views before
+publishing the dictionary. Adam remains linked into the kernel,
 and complete `StartOS.HC`/`Adam/MakeAdam.HC` execution still needs work.
 The guest ISO builder copies existing files, including this compiler
 module. Rebuilding C++20, HolyC, and assembly components entirely in
@@ -3923,6 +3924,36 @@ The boot media contract now requires 44 native imports and 32 data imports
 and explicitly rejects the removed native power import. These checks do not
 establish full instruction-byte parity, complete reference spilling, or
 cross-OS AOT loading.
+
+## Disassembler initialization and entry points
+
+The shared `UAsmProbe.HC` (1640 bytes, SHA-256
+`7c16e3ad3a7b70eb8687accb9eb6f3e11409a5e07d7a1fddb660630c06deb797`)
+produces `UAsm probe FFF` on the pinned reference and in both native JIT
+builds. Its twelve checks compare decoded text, instruction lengths,
+branch destinations and the full line's byte display. They include REX
+registers, SIB, signed immediate formatting, RIP-relative addressing,
+stack instructions and x87 operations.
+
+The native companion produces `UAsm native 3F`, checking unknown-opcode
+progress, operand-size prefixes, 64-bit immediates, instruction-count and
+byte-range walks, and a truncated encoding at the byte-range limit. The
+guest AOT fixture compiles with result 0, produces `UAsm probe FFF` and
+loads with result 1, exercising the public compiler-module symbol binding.
+
+```sh
+make -j6 test-uasm
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-uasm
+build/Linux/TestBoot --uasm-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/uasm-reference
+```
+
+The compiler loader contract now includes `Ui`, `U` and `Un` among its
+twelve public HolyC entry points. The reference comparison covers the
+selected 64-bit encodings only. It does not establish complete decoder,
+formatting, source-link or debugger parity, or compatibility for every
+16/32-bit instruction. `Un` deliberately bounds decoding by the given
+byte range, including at a partial final instruction.
 
 ## Nested images, FAT32 backing, and mounted ISO generation
 

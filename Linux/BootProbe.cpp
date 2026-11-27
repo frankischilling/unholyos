@@ -2088,6 +2088,13 @@ void BootProbe()
       BootFileProgramReport(*adam_task->cur_dv,"/BackendProbe.HC");
       BootFileProgramReport(*adam_task->cur_dv,"/BackendNativeProbe.HC");
     }
+    if (RedSeaFileLookup(*adam_task->cur_dv,"/UAsmAOTProbe.HC",
+                         false,false,optimizer_entry,optimizer_prefix))
+      BootFileProgramReport(*adam_task->cur_dv,"/UAsmAOTProbe.HC");
+    else {
+      BootFileProgramReport(*adam_task->cur_dv,"/UAsmProbe.HC");
+      BootFileProgramReport(*adam_task->cur_dv,"/UAsmNativeProbe.HC");
+    }
     BootFileProgramReport(*adam_task->cur_dv, "/ColorConversionsProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FormatMissingArgsProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/SystemDefinesProbe.HC");

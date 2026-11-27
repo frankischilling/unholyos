@@ -11,6 +11,9 @@ export StreamDirHC StreamDir
 export MemberMetaDataHC MemberMetaData
 export MemberMetaFindHC MemberMetaFind
 export MemberFindHC MemberFind
+export UHC U
+export UiHC Ui
+export UnHC Un
 
 export _Z11AsmHashLoadv __unholyos_sysv.AsmHashLoad
 export _Z11LexStmt2BinR8CCmpCtrlRPhR8CRawType __unholyos_sysv.LexStmt2Bin

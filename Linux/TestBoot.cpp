@@ -133,7 +133,7 @@ constexpr std::string_view compiler_native_names[]{"AsmHashLoad",
 constexpr std::string_view compiler_public_names[]{
     "Cmp",         "ExePutS",   "ExeFile",        "StreamExePrint",
     "StreamPrint", "StreamDir", "MemberMetaData", "MemberMetaFind",
-    "MemberFind"};
+    "MemberFind", "U", "Ui", "Un"};
 constexpr std::string_view compiler_status_name =
     "__unholyos_compiler.CInitStatus";
 constexpr std::string_view compiler_types_name = "internal_types_table";
@@ -3092,6 +3092,15 @@ constexpr CTextProbe backend_probes[]{
 constexpr CTextProbe backend_aot_probes[]{
     {"backend-aot","/BackendAOTProbe.HC","","Backend AOT compile ","Backend AOT load ",
      "Backend AOT compile 0\nBackend probe 1FFFF\nBackend AOT load 1\n",{},true}};
+
+constexpr CTextProbe uasm_probes[]{
+    {"uasm","/UAsmProbe.HC","","UAsm probe ","UAsm probe ",
+     "UAsm probe FFF\n",{},true},
+    {"uasm-native","/UAsmNativeProbe.HC","","UAsm native ","UAsm native ",
+     "UAsm native 3F\n",{},true}};
+constexpr CTextProbe uasm_aot_probes[]{
+    {"uasm-aot","/UAsmAOTProbe.HC","","UAsm AOT compile ","UAsm AOT load ",
+     "UAsm AOT compile 0\nUAsm probe FFF\nUAsm AOT load 1\n",{},true}};
 
 constexpr CTextProbe storage_services_probes[]{
     {"drive-services", "/DriveServicesProbe.HC", "", "Drive services ",
@@ -6588,6 +6597,9 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--backend" ||
        std::string_view(argv[1]) == "--backend-reference" ||
        std::string_view(argv[1]) == "--backend-aot" ||
+       std::string_view(argv[1]) == "--uasm" ||
+       std::string_view(argv[1]) == "--uasm-reference" ||
+       std::string_view(argv[1]) == "--uasm-aot" ||
        std::string_view(argv[1]) == "--storage-services" ||
        std::string_view(argv[1]) == "--storage-services-reference" ||
        std::string_view(argv[1]) == "--cluster-entry" ||
@@ -6659,6 +6671,8 @@ int main(int argc, char **argv)
     bool address_fold_aot=std::string_view(argv[1])=="--address-fold-aot";
     bool backend_probe=std::string_view(argv[1]).starts_with("--backend");
     bool backend_aot=std::string_view(argv[1])=="--backend-aot";
+    bool uasm_probe=std::string_view(argv[1]).starts_with("--uasm");
+    bool uasm_aot=std::string_view(argv[1])=="--uasm-aot";
     bool storage_services_probe =
         std::string_view(argv[1]).starts_with("--storage-services");
     bool cluster_entry_probe =
@@ -6677,7 +6691,7 @@ int main(int argc, char **argv)
                               format_missing_args_probe || class_records_probe ||
                               list_utilities_probe || storage_services_probe ||
                               cluster_entry_probe || disk_cache_probe || storage_lifecycle_probe ||
-                              file_backed_redsea_probe || nested_redsea_probe || optical_image_probe || optimizer_probe || register_allocation_probe || address_fold_probe || backend_probe;
+                              file_backed_redsea_probe || nested_redsea_probe || optical_image_probe || optimizer_probe || register_allocation_probe || address_fold_probe || backend_probe || uasm_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6717,6 +6731,9 @@ int main(int argc, char **argv)
     else if (backend_probe)
       text_probes=backend_aot?std::span<const CTextProbe>(backend_aot_probes):
                              std::span<const CTextProbe>(backend_probes);
+    else if (uasm_probe)
+      text_probes=uasm_aot?std::span<const CTextProbe>(uasm_aot_probes):
+                          std::span<const CTextProbe>(uasm_probes);
     else if (storage_services_probe)
       text_probes = storage_services_probes;
     else if (cluster_entry_probe)
@@ -6743,6 +6760,8 @@ int main(int argc, char **argv)
     if (address_fold_probe && reference)
       text_probes=text_probes.first(1);
     if (backend_probe && reference)
+      text_probes=text_probes.first(1);
+    if (uasm_probe && reference)
       text_probes=text_probes.first(1);
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -6771,6 +6790,9 @@ int main(int argc, char **argv)
         if (backend_aot)
           VerifyHostModuleMedia(argv[3],"Linux/Fixtures/BackendProbe.HC",
                                 "BackendProbe.HC");
+        if (uasm_aot)
+          VerifyHostModuleMedia(argv[3],"Linux/Fixtures/UAsmProbe.HC",
+                                "UAsmProbe.HC");
       }
       const char *memory = class_records_probe ? "3072" : "512";
       CMonitor vm(argv[2], argv[3], dir, "pc", memory, false, {}, false,
@@ -6961,6 +6983,8 @@ int main(int argc, char **argv)
               << " --address-fold-aot qemu image.iso [capture-dir]\n"
               << " --backend[-reference] qemu image.iso [capture-dir]\n"
               << " --backend-aot qemu image.iso [capture-dir]\n"
+              << " --uasm[-reference] qemu image.iso [capture-dir]\n"
+              << " --uasm-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"
               << " --cluster-entry[-reference] qemu image.iso [capture-dir]\n"
               << " --disk-cache[-reference] qemu image.iso [capture-dir]\n"

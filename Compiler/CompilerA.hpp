@@ -233,6 +233,7 @@ inline const CInst *AsmInstEntries(const CHashOpcode &op)
 }
 
 bool AsmHashLoad();
+bool UAsmHashLoad(const CHashTable &table, CHeapCtrl *heap);
 const CHash *AsmHashFind(const char *name, uint32_t mask);
 bool CmpAsmHashLoad(CHashTable *table);
 CHashTable *CmpAsmHashNew();

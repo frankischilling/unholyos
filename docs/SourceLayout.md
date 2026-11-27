@@ -135,9 +135,9 @@ maps `sys_var_init_flag` and `sys_var_init_val` to
 `SYS_VAR_INIT_FLAG` and `SYS_VAR_INIT_VAL`.
 
 `Compiler/Compiler.bindings` imports 44 of those native functions and
-32 data symbols. It exports the nine public adapters, 16 native
+32 data symbols. It exports twelve public adapters, 16 native
 compiler bodies under `__unholyos_sysv.`, and the module-owned
-`__unholyos_compiler.CInitStatus`. The nine public names are published
+`__unholyos_compiler.CInitStatus`. The twelve public names are published
 by the module rather than `LoadKernel`. `CInitHC` in
 `Compiler/CMain.asm` is the sole `IET_MAIN` target.
 
@@ -176,8 +176,9 @@ only if both `CmpLoadDefines` and `AsmHashLoad` succeed. KMain sets
 status `1`.
 
 This C++ entry does not reproduce all of pinned `Compiler/CMain.HC`'s
-`CInit`: it omits that routine's `CmpFillTables`,
-`cmp.ic_nop` setup, and `UAsmHashLoad` calls. GCC and Clang have built
+`CInit`: it omits that routine's `CmpFillTables` and
+`cmp.ic_nop` setup. `AsmHashLoad` now calls `UAsmHashLoad` before publishing
+the opcode dictionary. GCC and Clang have built
 the separate module successfully, and both guest builds passed all seven
 focused compiler failure cases and the boot and startup matrices,
 including a cold boot of the ISO built in the guest.
@@ -244,8 +245,19 @@ The reference registers these primitives once in `AsmHashLoad` and
 stores their addresses in `cmp.internal_types`. The native compiler
 still initializes separate child hash tables on first use. The table
 migration restores the listed fields and registration inputs; shared
-compiler ownership, `CCmpGlbls`, `CmpFillTables`, `cmp.ic_nop`, and
-`UAsmHashLoad` remain unfinished.
+compiler ownership, `CCmpGlbls`, `CmpFillTables` and `cmp.ic_nop`
+remain unfinished.
+
+`Compiler/UAsm.cpp` builds separate 16/32-bit and 64-bit instruction
+views from the non-alias entries of the original opcode dictionary.
+`Ui` resolves prefixes, opcode extensions, registers, ModR/M and SIB
+operands, immediate values and relative destinations for the supported
+forms. `U` walks an instruction count and `Un` walks a byte range;
+unsupported or truncated encodings advance by one byte. Their typed
+headers and stack adapters use the existing compiler module ABI. These
+are partial translations of the reference disassembler: complete
+selection rules, operand families, 16/32-bit behavior, source links
+and debugger presentation remain to be verified or implemented.
 
 The primitive probe checks selected record fields and pointer
 companions. Its original comparison at `24030d55` preceded the class
