@@ -244,6 +244,35 @@ $(LOADER): Adam/Opt/Boot/BootDVD.asm Kernel/KernelA.inc
 $(BUILD)/Adam/Opt/Boot/DskISORedSea.asm.o: NASMFLAGS += -D'BDVD_FILE="$(LOADER)"'
 $(BUILD)/Adam/Opt/Boot/DskISORedSea.asm.o: $(LOADER)
 
+$(BUILD)/Kernel/KStart16.asm.o $(BUILD)/Kernel/KStart32.asm.o: Kernel/KCfg.inc
+$(BUILD)/Kernel/KStart16.asm.o $(BUILD)/Kernel/KStart32.asm.o: NASMFLAGS += $(KCFG_NASMFLAGS)
+
+$(BUILD)/Linux/KernelCfgTest.asm.o: Kernel/KStart32.asm Kernel/KernelA.inc Kernel/KCfg.inc
+	mkdir -p $(@D)
+	$(NASM) -DKCFG_MEM_INIT=0xA5 -DKCFG_HEAP_INIT=0 -DKCFG_VAR_INIT=-1 \
+		-DKCFG_BOOT_DRV_LET=85 -DKCFG_FIRST_HD_DRV_LET=68 -DKCFG_MOUNT_PRIMARY_HD=0 \
+		-D'KCFG_HOME_DIR="::/Account"' -DKCFG_CACHE_MIN=32768 -DKCFG_CACHE_MAX=32768 \
+		-DKCFG_CACHE_LIMIT=0x80000000 -f elf64 -o $@ $<
+
+$(BUILD)/Linux/TestKernelCfg: Linux/TestKernelCfg.cpp Kernel/KCfg.hpp $(BUILD)/Linux/KernelCfgTest.asm.o
+	$(HOSTCXX) $(HOSTCXXFLAGS) -no-pie -Wl,--gc-sections -o $@ $< $(BUILD)/Linux/KernelCfgTest.asm.o
+
+.PHONY: test-kernel-cfg
+test-kernel-cfg: $(BUILD)/Linux/TestKernelCfg
+	$<
+
+test: test-kernel-cfg
+
+$(BUILD)/kernel-cfg-test.iso: $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) Linux/Fixtures/KernelCfgProbe.HC $(COMPILER_MODULE) $(COMPILER_RESOURCE) $(ADAM_STARTUP_SOURCES)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --dir Account --file Linux/Fixtures/KernelCfgProbe.HC
+
+KCFG_TEST_PROFILE ?= default
+KCFG_TEST_MEMORY ?= 512
+.PHONY: test-kernel-cfg-boot
+test-kernel-cfg-boot: $(BUILD)/kernel-cfg-test.iso $(FAT_WRITE_DISK) $(BOOT_TEST)
+	$(BOOT_TEST) --kernel-cfg "$(QEMU)" $(BUILD)/kernel-cfg-test.iso $(FAT_WRITE_DISK) \
+		$(KCFG_TEST_PROFILE) $(KCFG_TEST_MEMORY) $(BUILD)/kernel-cfg-$(KCFG_TEST_MEMORY)
+
 $(ASM_OBJ) $(COMPILER_ASM_OBJ): $(BUILD)/%.asm.o: %.asm Kernel/KernelA.inc
 	mkdir -p $(@D)
 	$(NASM) $(NASMFLAGS) -f elf64 -o $@ $<

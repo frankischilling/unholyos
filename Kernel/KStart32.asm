@@ -1,6 +1,11 @@
 %include "Kernel/KernelA.inc"
+%include "Kernel/KCfg.inc"
 
 GLOBAL CORE0_32BIT_INIT
+GLOBAL sys_mem_init_flag,sys_mem_init_val,sys_heap_init_flag,sys_heap_init_val
+GLOBAL sys_var_init_flag,sys_var_init_val
+GLOBAL kcfg_home_dir,kcfg_boot_drv_let,kcfg_first_hd_drv_let,kcfg_mount_primary_hd
+GLOBAL kcfg_cache_min,kcfg_cache_max,kcfg_cache_limit
 EXTERN SYS_RUN_LEVEL,__sys_run_level_offset
 EXTERN SYS_INIT_PAGE_TABLES,SYS_INIT_16MEG_SYS_CODE_BP,SYS_ENTER_LONG_MODE
 EXTERN SYS_SERIAL_INIT,__bss_start,__bss_end
@@ -44,5 +49,20 @@ CORE0_32BIT_INIT:
 	CALL	SYS_ENTER_LONG_MODE
 BITS 64
 	JMP	CORE0_64BIT_INIT
+
+SECTION .data
+	KCFG_INIT_BYTE sys_mem_init_flag,sys_mem_init_val,KCFG_MEM_INIT
+	KCFG_INIT_BYTE sys_heap_init_flag,sys_heap_init_val,KCFG_HEAP_INIT
+	KCFG_INIT_BYTE sys_var_init_flag,sys_var_init_val,KCFG_VAR_INIT
+
+SECTION .rodata
+kcfg_boot_drv_let:	DB KCFG_BOOT_DRV_LET
+kcfg_first_hd_drv_let:	DB KCFG_FIRST_HD_DRV_LET
+kcfg_mount_primary_hd:	DB KCFG_MOUNT_PRIMARY_HD
+kcfg_home_dir:		DB KCFG_HOME_DIR,0
+ALIGN 4
+kcfg_cache_min:		DD KCFG_CACHE_MIN
+kcfg_cache_max:		DD KCFG_CACHE_MAX
+kcfg_cache_limit:	DD KCFG_CACHE_LIMIT
 
 SECTION .note.GNU-stack noalloc noexec nowrite progbits

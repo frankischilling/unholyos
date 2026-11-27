@@ -2036,6 +2036,107 @@ void BootPreCompilerProbe()
     SerialPutS("UnholyOS: Could not mount the boot DVD\r\n");
 }
 
+static bool BootCfgBytes(const uint8_t *p,size_t bytes,uint8_t value)
+{
+  for (size_t i=0;i<bytes;i++)
+    if (p[i]!=value)
+      return false;
+  return true;
+}
+
+static bool BootCfgPool(const CBlkPool *bp,bool low)
+{
+  if (!bp)
+    return false;
+  for (auto *blk=bp->mem_free_lst;blk;blk=blk->next) {
+    auto addr=reinterpret_cast<uintptr_t>(blk);
+    size_t size=uint64_t(blk->pags)<<MEM_PAG_BITS;
+    if ((addr<0x1000000)!=low || size<128)
+      continue;
+    auto *p=reinterpret_cast<const uint8_t *>(blk);
+    return BootCfgBytes(p+sizeof(CMemBlk),64,sys_mem_init_val) &&
+           BootCfgBytes(p+size-32,32,sys_mem_init_val);
+  }
+  return false;
+}
+
+void BootKernelCfgReport()
+{
+  auto *dvd=adam_task->cur_dv;
+  CRedSeaDirEntry entry;
+  size_t prefix;
+  if (!dvd || !RedSeaFileLookup(*dvd,"/KernelCfgProbe.HC",false,false,entry,prefix))
+    return;
+
+  bool boot=dvd==MountedDrive(kcfg_boot_drv_let) &&
+            Let2DrvCpp(':',false)==dvd && blkdev.boot_drv_let==kcfg_boot_drv_let &&
+            blkdev.first_hd_drv_let==kcfg_first_hd_drv_let;
+  auto *home=DirNameAbs("~",*adam_task);
+  auto *idle=CurrentCPU()->idle_task;
+  bool home_ok=home && idle && blkdev.home_dir &&
+      home[0]==KCfgHomeDrive(kcfg_home_dir,kcfg_boot_drv_let) &&
+      !StrCmpCpp(reinterpret_cast<uint8_t *>(home+1),
+                 reinterpret_cast<const uint8_t *>(kcfg_home_dir+1)) &&
+      !StrCmpCpp(reinterpret_cast<uint8_t *>(home),
+                 reinterpret_cast<uint8_t *>(blkdev.home_dir)) &&
+      idle->cur_dv==MountedDrive(home[0]) &&
+      !StrCmpCpp(reinterpret_cast<uint8_t *>(idle->cur_dir),
+                 reinterpret_cast<uint8_t *>(home+2));
+  Free(home);
+  auto *bp=SYS_DATA_BP?SYS_DATA_BP:SYS_CODE_BP;
+  auto cache_request=KCfgScale2Mem(bp->alloced_u8s,kcfg_cache_min,kcfg_cache_max,
+                                  kcfg_cache_limit);
+  bool cache=cache_request<0x2000?!blkdev.cache_base:
+      blkdev.cache_base && MSize(blkdev.cache_base)>=cache_request &&
+      uint64_t(blkdev.cache_size)==MSize(blkdev.cache_base)/sizeof(CCacheBlk)*BLK_SIZE;
+  bool heap=true;
+  auto *hc=adam_task->data_heap;
+  const size_t sizes[]{37,4097};
+  for (size_t size:sizes) {
+    auto *p=MAlloc(size,hc);
+    heap &= p && (!(sys_heap_init_flag&1) ||
+                  BootCfgBytes(p,MSize(p),sys_heap_init_val));
+    if (p) {
+      MemSet(p,sys_heap_init_val^0xFF,MSize(p));
+      Free(p);
+    }
+    p=CAlloc(size,hc);
+    heap &= p && BootCfgBytes(p,size,0) &&
+           (!(sys_heap_init_flag&1) || BootCfgBytes(p+size,MSize(p)-size,
+                                                    sys_heap_init_val));
+    Free(p);
+  }
+  bool low=!sys_mem_init_flag || BootCfgPool(SYS_CODE_BP,true);
+  bool high=!sys_mem_init_flag || BootCfgPool(SYS_CODE_BP,false);
+  bool data=!sys_mem_init_flag || !SYS_DATA_BP || BootCfgPool(SYS_DATA_BP,false);
+  auto run=ExeFile("/KernelCfgProbe.HC");
+  auto var=ExePutS("kcfg_probe_vars[0]+256*kcfg_probe_vars[1]+"
+                   "65536*kcfg_probe_vars[2]+16777216*kcfg_probe_vars[3];",
+                   nullptr,0);
+  bool vars=run.okay && run.value==0x04030201 && var.okay &&
+            (!sys_var_init_flag || var.value==uint64_t(sys_var_init_val)*0x01010101);
+
+  SerialPutS("UnholyOS: kernel cfg checks ");
+  SerialPutHex(boot | (home_ok<<1) | (cache<<2) | (heap<<3) |
+               (low<<4) | (high<<5) | (data<<6) | (vars<<7));
+  SerialPutS(", VGA "); SerialPutHex(bool(SYS_RUN_LEVEL&RLF_VGA));
+  SerialPutS(", rows "); SerialPutHex(text.rows);
+  SerialPutS(", mem flag/value "); SerialPutHex(sys_mem_init_flag);
+  SerialPutS("/"); SerialPutHex(sys_mem_init_val);
+  SerialPutS(", heap flag/value "); SerialPutHex(sys_heap_init_flag);
+  SerialPutS("/"); SerialPutHex(sys_heap_init_val);
+  SerialPutS(", var flag/value "); SerialPutHex(sys_var_init_flag);
+  SerialPutS("/"); SerialPutHex(sys_var_init_val);
+  SerialPutS(", var bytes "); SerialPutHex(var.value);
+  SerialPutS(", boot "); SerialPutHex(blkdev.boot_drv_let);
+  SerialPutS(", HD "); SerialPutHex(blkdev.first_hd_drv_let);
+  SerialPutS(", mounted HD "); SerialPutHex(bool(MountedDrive(kcfg_first_hd_drv_let)));
+  SerialPutS(", home "); SerialPutS(blkdev.home_dir);
+  SerialPutS(", cache request "); SerialPutHex(cache_request);
+  SerialPutS(", cache bytes "); SerialPutHex(blkdev.cache_size);
+  SerialPutS("\r\n");
+}
+
 void BootProbe()
 {
   SerialPutS("UnholyOS: text base ");

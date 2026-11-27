@@ -189,6 +189,13 @@ extern "C" void KMainCpp()
     return;
   }
   SYS_RUN_LEVEL |= RLF_COMPILER;
+  if (!(SYS_RUN_LEVEL & RLF_VGA)) {
+    BootKernelCfgReport();
+    BootPutS("Text mode: kernel ready; graphical Adam startup disabled");
+    SerialPutS("UnholyOS: text mode kernel ready; graphical Adam startup disabled\r\n");
+    for (;;)
+      asm volatile("cli; hlt" : : : "memory");
+  }
   if (!GrPaletteInit()) {
     SerialPutS("UnholyOS: Could not register color names\r\n");
     return;
@@ -202,6 +209,7 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not load Adam sources\r\n");
     return;
   }
+  BootKernelCfgReport();
   if (!GrInit2()) {
     SerialPutS("UnholyOS: Could not allocate graphics device contexts\r\n");
     return;

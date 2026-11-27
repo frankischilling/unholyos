@@ -6538,6 +6538,77 @@ static void VerifyDatabaseRecords(const Bytes &disk)
   Check(actual == expected, "Database record bytes differ from saved forms");
 }
 
+static void TestKernelCfgBoot(const char *qemu,const fs::path &iso,
+                              const fs::path &disk,std::string_view profile,
+                              const char *memory,const fs::path &dir)
+{
+  bool text=profile=="text",alt=profile=="alt";
+  Check(text || alt || profile=="default","Unknown kernel configuration profile");
+  fs::create_directories(dir);
+  auto serial=dir/"serial.log";
+  CMonitor vm(qemu,iso,dir,"pc",memory,false,disk);
+  vm.Connect();
+  vm.ResetDeadline(90s);
+  constexpr std::string_view text_marker=
+      "UnholyOS: text mode kernel ready; graphical Adam startup disabled";
+  auto output=vm.WaitSerial(serial,text?text_marker:BOOT_MARKER);
+  auto require=[&](std::string_view marker) {
+    if (output.find(marker)==std::string::npos)
+      throw std::runtime_error("Missing kernel configuration evidence: "+
+                               std::string(marker));
+  };
+  require("UnholyOS: kernel cfg checks 0x00000000000000ff");
+  require(text?"VGA 0x0000000000000000, rows 0x0000000000000019":
+               "VGA 0x0000000000000001, rows 0x000000000000003c");
+  if (alt) {
+    require("mem flag/value 0x0000000000000001/0x000000000000006b");
+    require("heap flag/value 0x0000000000000001/0x00000000000000a5");
+    require("var flag/value 0x0000000000000001/0x000000000000003c");
+    require("var bytes 0x000000003c3c3c3c");
+    require("boot 0x0000000000000055, HD 0x0000000000000044, mounted HD 0x0000000000000001");
+    require("home U:/Account, cache request 0x0000000000008000, cache bytes 0x0000000000007600");
+  } else if (text) {
+    require("mem flag/value 0x0000000000000001/0x0000000000000000");
+    require("heap flag/value 0x0000000000000001/0x0000000000000000");
+    require("var flag/value 0x0000000000000001/0x0000000000000000");
+    require("var bytes 0x0000000000000000");
+    require("boot 0x0000000000000056, HD 0x0000000000000044, mounted HD 0x0000000000000000");
+    require("home V:/Home, cache request 0x0000000000000000, cache bytes 0x0000000000000000");
+    require("raw screen 0x0000000000000000");
+    Check(output.find(BOOT_MARKER)==std::string::npos &&
+          output.find("UnholyOS: text base ")==std::string::npos,
+          "Text mode started the graphical desktop");
+    auto registers=StopAtIdle(vm);
+    std::smatch flags;
+    Check(std::regex_search(registers,flags,std::regex(R"(RFL=([0-9a-f]+))")) &&
+          !(std::stoull(flags[1].str(),nullptr,16)&0x200),
+          "Text mode did not stop with interrupts disabled");
+    constexpr std::string_view message=
+        "Text mode: kernel ready; graphical Adam startup disabled";
+    auto cells=ReadPhysical<message.size()>(vm,0xB8000,'h');
+    for (size_t i=0;i<message.size();i++)
+      Check((cells[i]&0xFF)==uint8_t(message[i]),
+            "Text-mode status does not match VGA text memory");
+  } else {
+    require("mem flag/value 0x0000000000000000/0x0000000000000000");
+    require("heap flag/value 0x0000000000000000/0x0000000000000000");
+    require("var flag/value 0x0000000000000000/0x0000000000000000");
+    require("boot 0x0000000000000054, HD 0x0000000000000043, mounted HD 0x0000000000000001");
+    require("home T:/Home");
+    if (std::string_view(memory)=="512")
+      require("cache request 0x0000000000010370");
+  }
+  if (!text) {
+    require("UnholyOS: text base ");
+    Check(output.find("Could not start the user task")==std::string::npos,
+          "Graphical startup failed");
+  }
+  vm.ResetDeadline(10s);
+  vm.Quit();
+  std::cout << "Kernel configuration " << profile << ", " << memory
+            << " MiB: passed\n" << output;
+}
+
 int main(int argc, char **argv)
 {
   if ((argc == 4 || argc == 5) &&
@@ -6564,6 +6635,16 @@ int main(int argc, char **argv)
       return 0;
     } catch (const std::exception &error) {
       std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
+  if (argc==8 && std::string_view(argv[1])=="--kernel-cfg") {
+    try {
+      TestKernelCfgBoot(argv[2],argv[3],argv[4],argv[5],argv[6],
+                        fs::absolute(argv[7]));
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n';
       return 1;
     }
   }
