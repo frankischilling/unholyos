@@ -467,6 +467,7 @@ int32_t PCIClassFind(uint32_t class_code, uint16_t index);
 
 uint32_t ATAProbe(const CBlkDev &bd);
 bool ATAReadCapacity(CBlkDev &bd);
+bool ATAIdentifyRecord(CBlkDev &bd);
 bool ATAReadBytes(CBlkDev &bd, uint8_t *buf, uint64_t pos, size_t bytes);
 bool ATAWriteBytes(CBlkDev &bd, const uint8_t *buf, uint64_t pos, size_t bytes);
 bool ATAPIStartStop(const CBlkDev &bd, bool start);
@@ -480,7 +481,25 @@ bool ATAPIReadBytes(const CBlkDev &bd, uint8_t *buf, uint64_t pos,
 CDrv *BlkDevsInitAll();
 bool BlkDevGlblsInit();
 CDrv *MountedDrive(char letter);
+extern "C" CDrv *DrvMakeFreeSlotCpp(uint8_t drv_let);
+extern "C" uint64_t DrvNextFreeLetCpp(uint8_t first_drv_let);
+extern "C" CDrv *DrvChkCpp(CDrv *dv,uint8_t except);
+extern "C" uint64_t Drv2LetCpp(CDrv *dv);
+extern "C" uint64_t Let2LetCpp(uint8_t drv_let);
+extern "C" int64_t Let2BlkDevTypeCpp(uint8_t drv_let);
 extern "C" CDrv *Let2DrvCpp(uint8_t letter, uint8_t except);
+extern "C" CBlkDev *DrvIsWritableCpp(uint8_t drv_let,uint8_t except);
+extern "C" uint64_t DrvMapCpp(uint8_t drv_let,CDrv *dv);
+extern "C" uint64_t DrvCpp(uint8_t drv_let);
+extern "C" char *DrvSerialNumCpp(uint8_t drv_let);
+extern "C" char *DrvModelNumCpp(uint8_t drv_let);
+extern "C" uint64_t DrvTextAttrGetCpp(uint8_t drv_let);
+extern "C" void DrvRepCpp();
+extern "C" uint8_t blkdev_text_attr[6],drv_text_attr[3];
+CBlkDev *BlkDevNextFreeSlot(uint8_t first_drv_let,uint32_t type);
+extern "C" CBlkDev *BlkDevNextFreeSlotCpp(uint8_t first_drv_let,int64_t type);
+extern "C" CBlkDev *BlkDevChkCpp(CBlkDev *bd,uint8_t except);
+extern "C" CBlkDev *Let2BlkDevCpp(uint8_t drv_let,uint8_t except);
 bool BlkDevReadBytes(CBlkDev &bd, uint8_t *buf, uint64_t pos,
                      size_t bytes);
 bool BlkDevWriteBytes(CBlkDev &bd, const uint8_t *buf, uint64_t pos,
@@ -535,6 +554,10 @@ inline bool WritableFS(const CDrv &dv)
 }
 inline bool FsMkDir(CDrv &dv,const char *path,int64_t entry_cnt=0);
 bool Name2DirClus(const CDrv &dv, const char *path, size_t count, uint64_t &dir);
+bool Name2ParentDirClus(const CDrv &dv, const char *path, size_t count,
+                        uint64_t &parent);
+extern "C" uint64_t Name2DirClusCpp(CDrv *dv,const char *dirname);
+extern "C" uint64_t Name2ParentDirClusCpp(CDrv *dv,const char *dirname);
 bool FsIsDir(const CDrv &dv, const char *path);
 bool FsFileFind(const CDrv &dv, uint64_t dir, const char *name,
                 bool directory, CRedSeaDirEntry &entry);
@@ -565,6 +588,15 @@ extern "C" uint64_t FilesFindMatchCpp(const char *name, const char *mask,
                                       uint64_t flags);
 extern "C" char *ExtDftCpp(const char *name, const char *ext);
 const char *FileExtDot(const char *name);
+extern "C" char *FileExtDotCpp(char *src);
+extern "C" char *FileExtRemCpp(char *src,char *dst);
+extern "C" uint64_t IsDotZCpp(const char *filename);
+extern "C" uint64_t IsDotCCpp(const char *filename);
+extern "C" uint64_t FileNameChkCpp(const char *filename);
+extern "C" uint64_t CFileNameToCpp(char *dst,const char *src);
+extern "C" char *ToggleZorNotZCpp(const char *name);
+extern "C" char *FileNameTmpTxtCpp();
+extern "C" CDirEntry *Cd2DirEntryCpp(CDirEntry *tmpde,const char *abs_name);
 bool IsDotExt(const char *name, char ext);
 extern "C" uint64_t FileAttrCpp(const char *name,uint64_t attr);
 extern "C" uint64_t CopySingleCpp(const char *f1,const char *f2);
@@ -579,7 +611,13 @@ extern "C" void ScanFlagsCpp(uint8_t *dst, const uint8_t *list,
                              const char *src);
 int64_t DirEntryCompareName(const CRedSeaDirEntry &a, const CRedSeaDirEntry &b);
 bool DirFilesSort(CDirEntry *&first, bool by_cluster);
+extern "C" int64_t DirEntryCompareNameCpp(const CDirEntry *a,const CDirEntry *b);
+extern "C" int64_t DirEntryCompareClusCpp(const CDirEntry *a,const CDirEntry *b);
+extern "C" void DirFilesSortCpp(CDirEntry **first,int64_t key);
 void DirFilesFlatten(CDirEntry *&first, uint64_t flags);
+extern "C" CDirEntry *DirFilesFlattenCpp(CDirEntry *entry,CDirEntry **res,
+                                        uint64_t flags);
+extern "C" CDirEntry *FilesFind2Cpp(const char *mask,uint64_t flags);
 char *DirEntryFullName(const char *directory, const char *name);
 extern "C" void DirEntryDelCpp(CDirEntry *entry);
 extern "C" void DirEntryDel2Cpp(CDirEntry *entry);

@@ -90,6 +90,37 @@ void DocMaxHC(), DocDataFmtHC(), DocDataScanHC();
 void DocFormHC(), DocEdHC(), DocFormFwdHC(), DocFormBwdHC(), ViewHC(),
     HomeSetHC(), ToUpperHC();
 void ExtChgHC(), ExtDftHC();
+void FileExtDotHC();
+void FileExtRemHC();
+void IsDotZHC();
+void IsDotCHC();
+void FileNameChkHC();
+void ToggleZorNotZHC();
+void FileNameTmpTxtHC();
+void CFileNameToHC();
+void Name2DirClusHC();
+void Name2ParentDirClusHC();
+void Cd2DirEntryHC();
+void DirEntryCompareNameHC();
+void DirEntryCompareClusHC();
+void DirFilesSortHC();
+void DirFilesFlattenHC();
+void FilesFind2HC();
+void DrvMakeFreeSlotHC();
+void DrvNextFreeLetHC();
+void DrvChkHC();
+void Drv2LetHC();
+void Let2LetHC();
+void Let2BlkDevTypeHC();
+void DrvIsWritableHC();
+void DrvMapHC();
+void DrvHC();
+void DrvSerialNumHC();
+void DrvModelNumHC();
+void DrvTextAttrGetHC();
+void DrvRepHC();
+void BlkDevChkHC();
+void Let2BlkDevHC();
 void RedSeaISOHC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
 void FSizeHC(), FOpenHC(), FCloseHC(), FBlkReadHC(), FBlkWriteHC();
@@ -792,6 +823,8 @@ bool LoadKernel(CTask &task)
       {"SYS_VAR_INIT_VAL", reinterpret_cast<uintptr_t>(&sys_var_init_val)},
       {"adam_task", reinterpret_cast<uintptr_t>(&adam_task)},
       {"blkdev", reinterpret_cast<uintptr_t>(&blkdev)},
+      {"blkdev_text_attr", reinterpret_cast<uintptr_t>(blkdev_text_attr)},
+      {"drv_text_attr", reinterpret_cast<uintptr_t>(drv_text_attr)},
       {"dbg", reinterpret_cast<uintptr_t>(&dbg)},
       {"sys_semas", reinterpret_cast<uintptr_t>(sys_semas)},
       {"_BEQU", reinterpret_cast<uintptr_t>(_BEQU)},
@@ -913,6 +946,37 @@ bool LoadKernel(CTask &task)
       {"DirFile", reinterpret_cast<uintptr_t>(DirFileHC)},
       {"ExtChg", reinterpret_cast<uintptr_t>(ExtChgHC)},
       {"ExtDft", reinterpret_cast<uintptr_t>(ExtDftHC)},
+      {"FileExtDot", reinterpret_cast<uintptr_t>(FileExtDotHC)},
+      {"FileExtRem", reinterpret_cast<uintptr_t>(FileExtRemHC)},
+      {"IsDotZ", reinterpret_cast<uintptr_t>(IsDotZHC)},
+      {"IsDotC", reinterpret_cast<uintptr_t>(IsDotCHC)},
+      {"FileNameChk", reinterpret_cast<uintptr_t>(FileNameChkHC)},
+      {"ToggleZorNotZ", reinterpret_cast<uintptr_t>(ToggleZorNotZHC)},
+      {"FileNameTmpTxt", reinterpret_cast<uintptr_t>(FileNameTmpTxtHC)},
+      {"CFileNameTo", reinterpret_cast<uintptr_t>(CFileNameToHC)},
+      {"Name2DirClus", reinterpret_cast<uintptr_t>(Name2DirClusHC)},
+      {"Name2ParentDirClus", reinterpret_cast<uintptr_t>(Name2ParentDirClusHC)},
+      {"Cd2DirEntry", reinterpret_cast<uintptr_t>(Cd2DirEntryHC)},
+      {"DirEntryCompareName", reinterpret_cast<uintptr_t>(DirEntryCompareNameHC)},
+      {"DirEntryCompareClus", reinterpret_cast<uintptr_t>(DirEntryCompareClusHC)},
+      {"DirFilesSort", reinterpret_cast<uintptr_t>(DirFilesSortHC)},
+      {"DirFilesFlatten", reinterpret_cast<uintptr_t>(DirFilesFlattenHC)},
+      {"FilesFind2", reinterpret_cast<uintptr_t>(FilesFind2HC)},
+      {"DrvMakeFreeSlot", reinterpret_cast<uintptr_t>(DrvMakeFreeSlotHC)},
+      {"DrvNextFreeLet", reinterpret_cast<uintptr_t>(DrvNextFreeLetHC)},
+      {"DrvChk", reinterpret_cast<uintptr_t>(DrvChkHC)},
+      {"Drv2Let", reinterpret_cast<uintptr_t>(Drv2LetHC)},
+      {"Let2Let", reinterpret_cast<uintptr_t>(Let2LetHC)},
+      {"Let2BlkDevType", reinterpret_cast<uintptr_t>(Let2BlkDevTypeHC)},
+      {"DrvIsWritable", reinterpret_cast<uintptr_t>(DrvIsWritableHC)},
+      {"DrvMap", reinterpret_cast<uintptr_t>(DrvMapHC)},
+      {"Drv", reinterpret_cast<uintptr_t>(DrvHC)},
+      {"DrvSerialNum", reinterpret_cast<uintptr_t>(DrvSerialNumHC)},
+      {"DrvModelNum", reinterpret_cast<uintptr_t>(DrvModelNumHC)},
+      {"DrvTextAttrGet", reinterpret_cast<uintptr_t>(DrvTextAttrGetHC)},
+      {"DrvRep", reinterpret_cast<uintptr_t>(DrvRepHC)},
+      {"BlkDevChk", reinterpret_cast<uintptr_t>(BlkDevChkHC)},
+      {"Let2BlkDev", reinterpret_cast<uintptr_t>(Let2BlkDevHC)},
       {"Cd", reinterpret_cast<uintptr_t>(CdHC)},
       {"IsDir", reinterpret_cast<uintptr_t>(IsDirHC)},
       {"Dir", reinterpret_cast<uintptr_t>(DirHC)},

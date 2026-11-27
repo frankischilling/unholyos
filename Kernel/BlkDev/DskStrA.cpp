@@ -1,5 +1,50 @@
 #include "../KernelB.hpp"
 
+const char *FileExtDot(const char *name)
+{
+  for (; *name; name++)
+    if (*name == '.' && name[1] != '/' && name[1] != '.')
+      return name;
+  return nullptr;
+}
+
+extern "C" char *FileExtDotCpp(char *src)
+{
+  return const_cast<char *>(FileExtDot(src));
+}
+
+extern "C" char *FileExtRemCpp(char *src, char *dst)
+{
+  if (auto *ptr = FileExtDotCpp(src)) {
+    if (dst)
+      MemCpy(dst, ptr + 1, StrLen(ptr + 1) + 1);
+    *ptr = 0;
+  } else if (dst)
+    *dst = 0;
+  return dst;
+}
+
+bool IsDotExt(const char *name, char ext)
+{
+  size_t len = StrLen(name);
+  if (len < 3 || name[len - 2] != '.' || name[len - 1] != ext)
+    return false;
+  for (size_t i = 0; i < len - 2; i++)
+    if (name[i] == '.')
+      return true;
+  return false;
+}
+
+extern "C" uint64_t IsDotZCpp(const char *filename)
+{
+  return IsDotExt(filename, 'Z');
+}
+
+extern "C" uint64_t IsDotCCpp(const char *filename)
+{
+  return IsDotExt(filename, 'C');
+}
+
 static bool WildMatch(const char *test, const char *wild, const char *end)
 {
   const char *fall_back_src = nullptr, *fall_back_wild = nullptr;
@@ -241,7 +286,13 @@ char *FileNameAbs(const char *name, const CTask &task, uint64_t flags)
   Free(dir);
   Free(input);
 
-  if (res && flags && !(flags & FUF_JUST_DIRS) && *res && res[1] == ':') {
+  if (res && flags && &task == CurrentTask()) {
+    CDirEntry de;
+    if (FileFindCpp(res, &de, flags | FUF_JUST_FILES)) {
+      Free(res);
+      res = de.full_name;
+    }
+  } else if (res && flags && !(flags & FUF_JUST_DIRS) && *res && res[1] == ':') {
     const auto *dv = PathDrive(task, res[0]);
     CRedSeaDirEntry found;
     size_t prefix;
@@ -257,23 +308,20 @@ char *FileNameAbs(const char *name, const CTask &task, uint64_t flags)
   return res;
 }
 
-const char *FileExtDot(const char *name)
+extern "C" CDirEntry *Cd2DirEntryCpp(CDirEntry *tmpde, const char *abs_name)
 {
-  for (; *name; name++)
-    if (*name == '.' && name[1] != '/' && name[1] != '.')
-      return name;
+  while (tmpde) {
+    size_t i = StrLen(tmpde->full_name);
+    if (StrNCmpCpp(tmpde->full_name, abs_name, i) ||
+        (i && tmpde->full_name[i - 1] != '/' && abs_name[i] &&
+         abs_name[i] != '/'))
+      tmpde = tmpde->next;
+    else if (StrLen(abs_name) == i)
+      return tmpde;
+    else
+      return Cd2DirEntryCpp(tmpde->sub, abs_name);
+  }
   return nullptr;
-}
-
-bool IsDotExt(const char *name, char ext)
-{
-  size_t len = StrLen(name);
-  if (len < 3 || name[len - 2] != '.' || name[len - 1] != ext)
-    return false;
-  for (size_t i = 0; i < len - 2; i++)
-    if (name[i] == '.')
-      return true;
-  return false;
 }
 
 extern "C" uint64_t FileAttrCpp(const char *name,uint64_t attr)
@@ -303,6 +351,11 @@ bool FileNameChk(const char *name)
   return false;
 }
 
+extern "C" uint64_t FileNameChkCpp(const char *filename)
+{
+  return FileNameChk(filename);
+}
+
 char *ToggleZorNotZ(const char *name, CHeapCtrl *hc)
 {
   if (!IsDotExt(name, 'Z'))
@@ -311,6 +364,17 @@ char *ToggleZorNotZ(const char *name, CHeapCtrl *hc)
   if (res)
     res[StrLen(res) - 2] = 0;
   return res;
+}
+
+extern "C" char *ToggleZorNotZCpp(const char *name)
+{
+  return ToggleZorNotZ(name, MemTaskHeap(nullptr));
+}
+
+extern "C" char *FileNameTmpTxtCpp()
+{
+  uint64_t arg = GetTSC() >> 8 & 0xFFFFFFFF;
+  return MStrPrintCpp("~/SysTmp%X.DD.Z", 1, &arg);
 }
 
 static char *ExtSet(const char *name, const char *ext, bool replace)

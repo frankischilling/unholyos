@@ -135,7 +135,7 @@ maps `sys_var_init_flag` and `sys_var_init_val` to
 `SYS_VAR_INIT_FLAG` and `SYS_VAR_INIT_VAL`.
 
 `Compiler/Compiler.bindings` imports those 45 native functions and
-30 data symbols. It exports the nine public adapters, 16 native
+32 data symbols. It exports the nine public adapters, 16 native
 compiler bodies under `__unholyos_sysv.`, and the module-owned
 `__unholyos_compiler.CInitStatus`. The nine public names are published
 by the module rather than `LoadKernel`. `CInitHC` in
@@ -1532,6 +1532,41 @@ or two stack arguments and the original names exported by `KLoad.cpp`.
 with the declarations and defaults in `Kernel/KernelC.HH`.
 The matching guest test covers empty lists, allocated payloads, link
 order, ownership and cleanup. See [Boot.md](Boot.md#linked-lists-and-queues).
+
+## Drive, filename and directory services
+
+`Kernel/BlkDev/DskDrv.cpp` and `DskBlkDev.cpp` hold the drive and device
+slot lookup, signature checks, drive letter aliases, writable queries,
+drive selection, remapping and identity reporting from the corresponding
+reference files. `DskAddDev.cpp` retains mounting and initialization.
+The ATA mount keeps its identify record on Adam's heap for the model and
+serial routines. ATAPI devices leave this record unset, as the reference
+does. The drive color tables retain the reference names and contents and
+are exposed as data exports. The compiler registers their array metadata,
+the drive and device members, and the typed HolyC declarations.
+
+`Kernel/BlkDev/DskStrA.cpp` supplies extension handling, filename checks,
+temporary names and the directory-entry lookup. `DskStrB.cpp` translates
+`CFileNameTo`, `Name2DirClus` and `Name2ParentDirClus`; the filesystem's
+bounded internal traversal shares that implementation. `DskDirA.cpp`
+provides extension-first sorting, cluster sorting, recursive flattening
+and entry/tree disposal. The flattening return value is the final link
+slot, which aliases the last entry because `next` is its first field.
+As in TempleOS, a flattened files-only result can retain parent pointer
+values belonging to freed directory entries; callers must not dereference
+them. `DskFind.cpp` exposes `FilesFind2` for the current directory and
+`DskDirB.cpp` emits the directory-creation diagnostic before dispatch.
+
+The native mount path still requires canonical drive letters, supported
+device types and validated partition geometry. Its slot locking is not
+the reference's task-owned lock protocol, and its writable filesystem
+guard deliberately rejects writes to read-only disks. Drive selection
+does not yet perform the reference's removable-media and file-backed
+device initialization. Directory resolution uses the existing bounded
+filesystem lookup and lacks the reference drive lock; failure and
+allocation-exhaustion paths are not fully matched. `DirNew`, the cluster
+allocation and I/O layer, drive cache, device teardown and remount are
+outstanding. See [Rewrite audit](RewriteAudit.md) for their dependencies.
 
 ## Remaining structural work
 

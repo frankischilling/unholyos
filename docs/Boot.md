@@ -3509,6 +3509,60 @@ completed the HolyC probe. The reference returned to its empty
 The standard ISOs also built successfully. The focused test runs as part
 of `make test`.
 
+## Drive, filename and directory services
+
+The storage-service fixture suite uses the pinned TempleOS reference and
+the native GCC and Clang guests. Each executed all three HolyC files in
+order, yielding the same result lines:
+
+```text
+Drive services 7FF
+Path names 1FFF
+Directory services FFF
+```
+
+The 36 checks cover drive letter aliases, type and signature validation,
+remapping, drive selection, writable checks, default arguments, color
+tables, model/serial extraction, record layouts, extensions, filename
+validation, relative and absolute paths, compressed suffixes, cluster
+and parent lookup, recursive sorting and flattening, and tree ownership.
+The ATAPI record is absent in both guests. The separate native FAT32
+read probe checks actual ATA identity retention and reports `1FFF`.
+The reference uses the original system-export addresses through typed
+function pointers where a private symbol has no typed public declaration.
+
+| Fixture | Source bytes | SHA-256 |
+| --- | ---: | --- |
+| `DriveServicesProbe.HC` | 3271 | `f2515f32bb67979e4e8b4bb753270c07e485ad8a71d7e37d624ecec2252451f3` |
+| `PathNamesProbe.HC` | 4310 | `14811e705d987fe4e7bb85ecc3e4b243da2d172f3f80bd68881a803c9567ab53` |
+| `DirectoryServicesProbe.HC` | 4637 | `6a22ddc4c755e60e4ddacaa2b47163aca70833fd9dc70eedc9a90bf38730eb6a` |
+
+The reference driver verifies each uploaded source plus its terminating
+NUL. The native driver verifies the packaged bytes and source execution
+cleanup. The three concatenated result lines hash to
+`6ef87324f669c7c1f70779085bbda35479402497e0ae217c4fe64539e4c793cd`.
+The comparison checks the result lines, not the preceding directory
+creation and deletion diagnostics; full serial and terminal captures
+are retained in the evidence directories.
+
+```sh
+make -j4 all test-storage-services
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 all test-storage-services
+build/Linux/TestBoot --storage-services-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/storage-reference-verified
+```
+
+GCC 13.3.0, Clang 20.1.2, NASM 2.16.01 and QEMU 8.2.2 were used.
+The local Clang build used the installed Clang 20 executable by its
+path. Both native images built and booted with the same `pc`, `qemu64`,
+512 MiB, one-vCPU DVD boot configuration as the reference. The reference
+ISO hashes to `3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+Evidence is in `build/storage-native-probes-final`,
+`build/storage-native-clang-verified` and `build/storage-reference-verified`.
+`make test` includes the new focused suite and existing filesystem
+regressions. The drive report's full interactive rendering, removable
+media handling, lock and cache semantics remain unverified.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

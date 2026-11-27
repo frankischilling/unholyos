@@ -1,7 +1,8 @@
 #include "../KernelB.hpp"
 
 constexpr uint8_t ATA_NOP = 0, ATA_READ = 0x20, ATA_WRITE = 0x30,
-                  ATA_PACKET = 0xA0, ATA_FLUSH = 0xE7, ATA_ID_DEV = 0xEC;
+                  ATA_PACKET = 0xA0,
+                  ATA_FLUSH = 0xE7, ATA_ID_DEV = 0xEC;
 constexpr uint8_t ATAS_ERR = 1, ATAS_DRQ = 8, ATAS_DF = 0x20,
                   ATAS_DRDY = 0x40, ATAS_BSY = 0x80;
 constexpr uint16_t ATAR0_DATA = 0, ATAR0_FEAT = 1, ATAR0_LCYL = 4,
@@ -156,6 +157,30 @@ bool ATAReadCapacity(CBlkDev &bd)
   bd.max_blk=(sectors>0x10000000?0x10000000:sectors)-1;
   bd.blk_size=BLK_SIZE;
   bd.max_reads=bd.max_writes=128;
+  return true;
+}
+
+bool ATAIdentifyRecord(CBlkDev &bd)
+{
+  uint16_t id[256];
+  {
+    CATAChannelLock lock(bd);
+    ATASel(bd);
+    auto deadline=ATADeadline(1000);
+    if (ATAWait(bd,deadline,0)<=0)
+      return false;
+    ATACmd(bd,ATA_ID_DEV);
+    if (!ATAGetRes(bd,deadline,reinterpret_cast<uint8_t *>(id),
+                   sizeof(id),sizeof(id)))
+      return false;
+  }
+  auto *record=reinterpret_cast<uint16_t *>(
+      MAlloc(sizeof(id),adam_task->data_heap));
+  if (!record)
+    return false;
+  MemCpy(record,id,sizeof(id));
+  Free(bd.dev_id_record);
+  bd.dev_id_record=record;
   return true;
 }
 

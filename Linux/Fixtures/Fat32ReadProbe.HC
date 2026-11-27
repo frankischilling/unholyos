@@ -14,7 +14,7 @@ U0 Fat32ReadProbe()
   I64 res=0,size,attr,cnt=0;
   CDirEntry de,*tree,*entry,*child;
   CDate date=Str2Date("2/29/24");
-  U8 *saved=DirCur,*cwd,*buf,*blocks=MAlloc(5*BLK_SIZE);
+  U8 *saved=DirCur,*cwd,*buf,*model,*serial,*blocks=MAlloc(5*BLK_SIZE);
   CDrv *dv;
   CFile *f;
   if (Cd("C:/")) {
@@ -25,6 +25,12 @@ U0 Fat32ReadProbe()
 	dv->drv_offset==2048 && dv->size==132130 && dv->fat1==2080 &&
 	dv->fat2==2593 && dv->data_area==3102)
       res|=1;
+    model=DrvModelNum('C');
+    serial=DrvSerialNum('C');
+    if (dv->bd->dev_id_record && model && *model && serial && *serial)
+      res|=4096;
+    Free(model);
+    Free(serial);
   }
   if (FileFind("C:/FRAG.BIN",&de,FUF_JUST_FILES)) {
     "fat metadata %s %d %d %X %D %T\n",de.name,de.clus,de.size,de.attr,

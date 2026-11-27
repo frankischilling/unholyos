@@ -78,12 +78,14 @@ import native _Z8HashFindPKcP10CHashTablejm __unholyos_sysv.HashFind
 import data SYS_RUN_LEVEL SYS_RUN_LEVEL
 import data adam_task adam_task
 import data blkdev blkdev
+import data blkdev_text_attr blkdev_text_attr
 import data char_bmp_alpha char_bmp_alpha
 import data char_bmp_alpha_numeric char_bmp_alpha_numeric
 import data char_bmp_alpha_numeric_no_at char_bmp_alpha_numeric_no_at
 import data char_bmp_non_eol char_bmp_non_eol
 import data char_bmp_non_eol_white_space char_bmp_non_eol_white_space
 import data cnts cnts
+import data drv_text_attr drv_text_attr
 import data gr gr
 import data gr_palette_gray gr_palette_gray
 import data gr_palette_std gr_palette_std

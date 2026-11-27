@@ -5,6 +5,7 @@ struct CTextProbe
   const char *name, *source, *module;
   std::string_view first, finish, expected;
   std::span<const std::string_view> exceptions{};
+  bool allow_prefix=false;
 };
 
 constexpr std::string_view str_scan_exceptions[]{
@@ -157,6 +158,12 @@ static std::string TextProbeOutput(std::string_view serial,
   }
   Check(count == probe.exceptions.size(),
         "Missing native exception diagnostic");
+  if (probe.allow_prefix) {
+    auto first=output.find(probe.first);
+    Check(first!=std::string::npos && (!first || output[first-1]=='\n'),
+          "Missing source probe result line");
+    output.erase(0,first);
+  }
   return output;
 }
 

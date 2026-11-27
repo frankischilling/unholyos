@@ -543,10 +543,12 @@ static void DriveCharacterGraphics(
                       std::string_view::npos &&
                   diagnostic.find("ERROR:") == std::string_view::npos,
               "Reference failed assertion did not produce exactly one warning");
-      } else
+      } else if (!probe.allow_prefix)
         Check(
             first / 81 == 2 && first % 81 == 1,
             "Reference text probe did not begin at the cleared window origin");
+      else
+        Check(first % 81 == 1,"Reference probe result did not begin at a line");
       const auto finish = screen.find(probe.finish, first);
       Check(finish != std::string::npos,
             "Missing last reference text probe line");
