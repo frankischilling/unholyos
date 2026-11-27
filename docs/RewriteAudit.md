@@ -8,7 +8,7 @@ in UnholyOS. It includes include-only and project-organization files.
 
 | Directory | Reference files | Corresponding paths | Missing paths |
 | --- | ---: | ---: | ---: |
-| `Kernel` | 76 | 68 | 8 |
+| `Kernel` | 76 | 69 | 7 |
 | `Compiler` | 33 | 33 | 0 |
 | `Adam` | 132 | 48 | 84 |
 | `Apps` | 71 | 3 | 68 |
@@ -39,10 +39,16 @@ part of the full rewrite.
   behavior and multi-CPU locking still need work.
   `DskCluster.HC` is present in the reference tree but not included by
   its `MakeBlkDev.HC`; the active cluster implementation is `DskClus.HC`.
-- `Kernel/BlkDev/MakeBlkDev.HC`, `Kernel/Mem/MakeMem.HC`,
-  `Kernel/SerialDev/MakeSerialDev.HC`, `Kernel/KCfg.HC`, `Kernel/KEnd.HC`
-  and `Kernel/KernelC.HH`: reproduce their configuration, declaration
-  and build responsibilities without duplicating existing code.
+- `Kernel/KCfg.inc` and `Kernel/KCfg.hpp` implement host-build configuration
+  with actual memory, heap, and variable initialization; boot and home drive
+  selection; primary IDE discovery; and disk cache sizing. The five focused
+  boot profiles in [KernelConfiguration.md](KernelConfiguration.md) cover
+  default and alternate values, separate data heaps, and text-mode gating.
+  The original interactive configuration, complete drive discovery, and text
+  desktop remain outstanding. `Kernel/BlkDev/MakeBlkDev.HC`,
+  `Kernel/Mem/MakeMem.HC`, `Kernel/SerialDev/MakeSerialDev.HC`,
+  `Kernel/KEnd.HC` and `Kernel/KernelC.HH` still need their project and
+  declaration responsibilities integrated without duplicating existing code.
 - Review existing scheduler, interrupt, device, memory and exception
   routines against the reference. Single-CPU boot and selected device
   tests do not establish SMP, driver or scheduling parity.

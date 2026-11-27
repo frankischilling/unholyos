@@ -38,6 +38,9 @@ static void BlkDevShareController(CBlkDev &bd)
 
 bool BlkDevGlblsInit()
 {
+  char home_let=KCfgHomeDrive(kcfg_home_dir,kcfg_boot_drv_let);
+  if (!home_let)
+    return false;
   auto *hc = adam_task->data_heap;
   auto *devices =
       reinterpret_cast<CBlkDev *>(CAlloc(sizeof(CBlkDev) * BLKDEVS_NUM, hc));
@@ -45,9 +48,7 @@ bool BlkDevGlblsInit()
   auto *iso = StrNew(DFT_ISO_FILENAME, hc);
   auto *iso_c = StrNew(DFT_ISO_C_FILENAME, hc);
   auto *tmp = StrNew(DFT_TMP_FILENAME, hc);
-  char home[]{"T:/Home"};
-  home[0] = BOOT_DVD_LET;
-  auto *home_dir = StrNew(home, hc);
+  auto *home_dir = StrNew(kcfg_home_dir, hc);
   if (!devices || !drives || !iso || !iso_c || !tmp || !home_dir) {
     Free(devices);
     Free(drives);
@@ -62,17 +63,16 @@ bool BlkDevGlblsInit()
   blkdev.dft_iso_filename = iso;
   blkdev.dft_iso_c_filename = iso_c;
   blkdev.tmp_filename = tmp;
+  home_dir[0]=home_let;
   blkdev.home_dir = home_dir;
-  blkdev.boot_drv_let = BOOT_DVD_LET;
-  blkdev.first_hd_drv_let = 'C';
+  blkdev.boot_drv_let = kcfg_boot_drv_let;
+  blkdev.first_hd_drv_let = kcfg_first_hd_drv_let;
   blkdev.first_dvd_drv_let = BOOT_DVD_LET;
   for (size_t i = 0; i < DRVS_NUM; i++)
     blkdev.let_to_drv[i] = drives + i;
-  // STD_DISTRO_DVD_CFG in KernelA.HH selects this Scale2Mem range.
   auto *bp=SYS_DATA_BP?SYS_DATA_BP:SYS_CODE_BP;
-  constexpr int64_t limit=2LL*1024*1024*1024;
-  int64_t mem=bp->alloced_u8s;
-  DskCacheInitCpp(mem>=limit?0x40000:2048+(0x40000-2048)*mem/limit);
+  DskCacheInitCpp(KCfgScale2Mem(bp->alloced_u8s,kcfg_cache_min,kcfg_cache_max,
+                              kcfg_cache_limit));
   return true;
 }
 
@@ -444,8 +444,8 @@ CDrv *BlkDevsInitAll()
   drive->dv_signature = DRV_SIGNATURE_VAL;
   blkdev.dvd_boot_is_good = true;
   // Discover the primary legacy IDE disk without touching its contents.
-  if (dvd->base0!=0x1F0 || dvd->unit!=0) {
-    if (auto *disk=BlkDevNextFreeSlot('C',BDT_ATA)) {
+  if (kcfg_mount_primary_hd && (dvd->base0!=0x1F0 || dvd->unit!=0)) {
+    if (auto *disk=BlkDevNextFreeSlot(blkdev.first_hd_drv_let,BDT_ATA)) {
       disk->base0=0x1F0;
       disk->base1=0x3F4;
       disk->unit=0;

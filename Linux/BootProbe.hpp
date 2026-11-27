@@ -7,4 +7,5 @@ struct CLoadedModule;
 void BootPreCompilerProbe();
 void BootCompilerImageReport(const CLoadedModule &module);
 void BootOpcodeResourceReport(const CDrv &dvd);
+void BootKernelCfgReport();
 void BootProbe();

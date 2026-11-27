@@ -2,10 +2,38 @@
 
 constexpr uint64_t SYS_16MEG_AREA_LIMIT = 0x1000000;
 
+static void BlkPoolMemInit(uintptr_t base,uint64_t bytes)
+{
+  if (!sys_mem_init_flag || !bytes || bytes>UINTPTR_MAX-base)
+    return;
+  uintptr_t end=base+bytes;
+  if (!MEM_E820[0].type) {
+    // E801 describes the contiguous legacy extended memory region.
+    uintptr_t hi=SYS_16MEG_AREA_LIMIT+(uint64_t(MEM_E801[1])<<16);
+    if (base>=SYS_16MEG_AREA_LIMIT && base<hi)
+      MemSet(reinterpret_cast<void *>(base),sys_mem_init_val,
+             (end<hi?end:hi)-base);
+    return;
+  }
+  for (const auto &range:MEM_E820) {
+    if (!range.type)
+      break;
+    if (range.type!=1 || range.len>UINTPTR_MAX-range.base)
+      continue;
+    uintptr_t lo=range.base>base?range.base:base;
+    uintptr_t hi=range.base+range.len;
+    if (hi>end)
+      hi=end;
+    if (lo<hi)
+      MemSet(reinterpret_cast<void *>(lo),sys_mem_init_val,hi-lo);
+  }
+}
+
 static bool BlkPoolAdd(CBlkPool *bp, uintptr_t base, uint64_t pags)
 {
   if (!pags || pags > UINT32_MAX)
     return false;
+  BlkPoolMemInit(base,pags<<MEM_PAG_BITS);
   CMemLock lock(bp->locked_flags);
   auto *blk = reinterpret_cast<CMemBlk *>(base);
   blk->next = bp->mem_free_lst;
