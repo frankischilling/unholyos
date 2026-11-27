@@ -1223,8 +1223,10 @@ the compiler objects now form the separate TOSB module.
 reference DVD loader at `0x96600`; the temporary boot stack occupies
 `0x96E00` through `0x96FFF`. Separating Adam remains structural work.
 The reference initializes the compiler with late DolDoc imports from
-`Compiler/CExts.HC` unresolved; the current native `LoadPass2` requires
-all imports before executing entries. Shared source/module probe execution
+`Compiler/CExts.HC` unresolved. Generic native `LoadPass2` now runs entries
+with pending imports and on repeated calls; the compiler-specific binder
+still requires all its imports before publishing dispatch targets.
+Shared source/module probe execution
 in `Linux/BootProbe.cpp` avoids duplicating the same compile-and-load
 code within this limited boot image.
 

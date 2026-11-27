@@ -2290,6 +2290,19 @@ constexpr CTextProbe native_import_probes[]{
     {"native-import", "/NativeImportLoadProbe.HC", "/NativeImportProbe.BIN",
      "NI START", "NI DONE", native_import_output}};
 
+constexpr std::string_view late_import_output = "LI default 1 1\n"
+                                                "LI repeat 2 1\n"
+                                                "LI resolved 2 0\n"
+                                                "LI call 42\n"
+                                                "LI again 3\n"
+                                                "LI just 0\n"
+                                                "LI passes 1 2\n"
+                                                "LI checks FFFF\n"
+                                                "LI DONE\n";
+constexpr CTextProbe late_import_probes[]{
+    {"late-import", "/LateImportLoadProbe.HC", "/LateImportConsumer.BIN",
+     "LI default ", "LI DONE", late_import_output}};
+
 constexpr std::string_view assert_warning_output = "AW result 42\nAW DONE\n";
 constexpr CTextProbe assert_warning_probes[]{
     {"assert-warning", "/AssertWarningProbe.HC", "/AssertWarningProbe.BIN.Z",
@@ -5247,17 +5260,26 @@ int main(int argc, char **argv)
         std::string_view(argv[1]) == "--host-module-reference" ||
         std::string_view(argv[1]) == "--native-import")) ||
       ((argc == 6 || argc == 7) &&
-       std::string_view(argv[1]) == "--native-import-reference")) {
+       (std::string_view(argv[1]) == "--native-import-reference" ||
+        std::string_view(argv[1]) == "--late-import" ||
+        std::string_view(argv[1]) == "--late-import-reference"))) {
     const bool reference = std::string_view(argv[1]).ends_with("-reference");
     const bool native_import =
         std::string_view(argv[1]).starts_with("--native-import");
-    const int capture_arg = native_import && reference ? 6 : 5;
-    const char *name = native_import ? "native-import" : "host-module";
-    const char *guest_name =
-        native_import ? "NativeImportProbe.BIN" : "HostModuleProbe.BIN";
+    const bool late_import =
+        std::string_view(argv[1]).starts_with("--late-import");
+    const int capture_arg = late_import || (native_import && reference) ? 6 : 5;
+    const char *name = late_import     ? "late-import"
+                       : native_import ? "native-import"
+                                       : "host-module";
+    const char *guest_name = late_import     ? "LateImportConsumer.BIN"
+                             : native_import ? "NativeImportProbe.BIN"
+                                             : "HostModuleProbe.BIN";
     std::span<const CTextProbe> probes = host_module_probes;
     if (native_import)
       probes = native_import_probes;
+    else if (late_import)
+      probes = late_import_probes;
     char path[] = "/tmp/unholyos-host-module-XXXXXX";
     if (argc == capture_arg && !mkdtemp(path))
       return 1;
@@ -5265,19 +5287,26 @@ int main(int argc, char **argv)
         argc > capture_arg ? fs::absolute(argv[capture_arg]) : fs::path(path);
     try {
       fs::create_directories(dir);
-      if (!reference)
+      if (!reference) {
         VerifyHostModuleMedia(argv[3], argv[4], guest_name);
+        if (late_import)
+          VerifyHostModuleMedia(argv[3], argv[5], "LateImportProvider.BIN");
+      }
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false,
                   reference);
       vm.Connect();
       if (reference) {
         const CModuleFile modules[]{
-            {fs::absolute(argv[4]), guest_name, name},
-            {native_import ? fs::absolute(argv[5]) : fs::path{},
-             "NativeImportReference.BIN", "native-import-reference"}};
-        DriveCharacterGraphics(vm, dir, "", true, false, false, false, false,
-                               false, false, false, false, probes,
-                               std::span(modules, native_import ? 2 : 1));
+            {fs::absolute(argv[4]), guest_name,
+             late_import ? "late-import-consumer" : name},
+            {native_import || late_import ? fs::absolute(argv[5]) : fs::path{},
+             late_import ? "LateImportProvider.BIN"
+                         : "NativeImportReference.BIN",
+             late_import ? "late-import-provider" : "native-import-reference"}};
+        DriveCharacterGraphics(
+            vm, dir, "", true, false, false, false, false, false, false, false,
+            false, probes,
+            std::span(modules, native_import || late_import ? 2 : 1));
       } else {
         const auto serial = vm.Boot(dir / "serial.log");
         const auto first = serial.find(probes[0].first);
@@ -5661,6 +5690,8 @@ int main(int argc, char **argv)
               << " --native-import qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]
               << " --native-import-reference qemu image.iso module.BIN bridge.BIN [capture-dir]\n"
+              << "       " << argv[0]
+              << " --late-import[-reference] qemu image.iso consumer.BIN provider.BIN [capture-dir]\n"
               << "       " << argv[0]
               << " --digits qemu image.iso [capture-dir]\n"
               << "       " << argv[0]

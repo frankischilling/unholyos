@@ -1,0 +1,4 @@
+entry LateImportConsumerMain
+export LateImportCount LateImportCount
+export LateImportCall LateImportCall
+import holyc LateImportTarget LateImportTarget

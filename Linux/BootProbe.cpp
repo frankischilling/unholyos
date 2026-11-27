@@ -914,15 +914,40 @@ static void BootCmpReport(const CDrv &dvd, CTask &task)
   BootGuestFileReport(*ram, "/CmpOutput.BIN.Z");
 }
 
+static CHashImport *BootPendingImport(CTask &task, const char *module_name,
+                                      const char *name)
+{
+  auto *module = reinterpret_cast<CHashGeneric *>(
+      HashSingleTableFind(module_name, task.hash_table, HTT_MODULE));
+  auto *pending = reinterpret_cast<CHashImport *>(
+      HashSingleTableFind(name, task.hash_table, HTT_IMPORT_SYS_SYM));
+  if (!module || !module->user_data0 || !pending)
+    return nullptr;
+  auto *image = reinterpret_cast<const uint8_t *>(module->user_data0);
+  CBinFile header;
+  MemCpy(&header, image, sizeof(header));
+  if (pending->module_base != image + sizeof(header) ||
+      pending->module_header_entry < image + header.patch_table_offset ||
+      pending->module_header_entry > image + header.file_size - 6)
+    return nullptr;
+  return pending;
+}
+
 static void BootImportReport(const CDrv &dvd, CTask &task)
 {
   auto *ram = MountedDrive('B');
   if (!ram || !BootFileProgramReport(dvd, "/ImportBuild.HC").okay)
     return;
   auto *caller = Load(*ram, "/ImportCaller.BIN.Z", task, LDF_JUST_LOAD);
-  if (!caller || LoadPass2(*caller))
+  if (!caller || !BootPendingImport(task, "/ImportCaller", "NativeLinkAdd") ||
+      !BootPendingImport(task, "/ImportCaller", "NativeLinkBias"))
     return;
-  if (!Load(*ram, "/ImportProvider.BIN.Z", task) || !LoadPass2(*caller))
+  if (!Load(*ram, "/ImportProvider.BIN.Z", task) ||
+      HashSingleTableFind("NativeLinkAdd", task.hash_table,
+                          HTT_IMPORT_SYS_SYM) ||
+      HashSingleTableFind("NativeLinkBias", task.hash_table,
+                          HTT_IMPORT_SYS_SYM) ||
+      !LoadPass2(*caller))
     return;
   auto *entry = HashFind("NativeLinkDateResult", task.hash_table,
                           HTT_EXPORT_SYS_SYM);
@@ -936,8 +961,13 @@ static void BootImportReport(const CDrv &dvd, CTask &task)
   if (!declarations.okay)
     return;
   auto *late = Load(*ram, "/ImportLate.BIN.Z", task, LDF_JUST_LOAD);
-  if (!late || LoadPass2(*late) ||
+  if (!late || !BootPendingImport(task, "/ImportLate", "NativeLateFn") ||
+      !BootPendingImport(task, "/ImportLate", "NativeLateData") ||
       !BootFileProgramReport(dvd, "/ImportExtern.HC").okay ||
+      HashSingleTableFind("NativeLateFn", task.hash_table,
+                          HTT_IMPORT_SYS_SYM) ||
+      HashSingleTableFind("NativeLateData", task.hash_table,
+                          HTT_IMPORT_SYS_SYM) ||
       !LoadPass2(*late))
     return;
   auto missing = ExePutS("extern I64 MissingNativeExtern(I64 n);"
@@ -1409,9 +1439,11 @@ static void BootSwitchReport(const CDrv &dvd, CTask &task)
 static void BootModuleReport(const CDrv &dv, CTask &task)
 {
   auto *caller = Load(dv, "/LoadCaller.BIN", task, LDF_JUST_LOAD);
-  if (!caller || LoadPass2(*caller))
+  if (!caller || !BootPendingImport(task, "/LoadCaller", "LoadProbe"))
     return;
-  if (!Load(dv, "/LoadProbe", task) || !LoadPass2(*caller))
+  if (!Load(dv, "/LoadProbe", task) ||
+      HashSingleTableFind("LoadProbe", task.hash_table, HTT_IMPORT_SYS_SYM) ||
+      !LoadPass2(*caller))
     return;
   const char *names[]{"LoadProbeValue", "LoadCallerValue", "LoadProbeAddress",
                       "LoadProbe",      "LoadProbeDate",   "LoadProbeCopyEnd",
@@ -1451,6 +1483,191 @@ static void BootModuleReport(const CDrv &dv, CTask &task)
   SerialPutS(", heap address ");
   SerialPutHex(value[6]);
   SerialPutS("\r\n");
+}
+
+static void BootLateImportReport(const CDrv &dv, CTask &task)
+{
+  CRedSeaDirEntry file;
+  if (!RedSeaFileFind(dv, dv.root_clus, "LateImportConsumer.BIN", false, file))
+    return;
+  struct CImage
+  {
+    uintptr_t header, base, end, image_end, count, call;
+  } first{}, provider{}, second{};
+  auto inside = [](const CImage &s, uintptr_t address, size_t size) {
+    return address >= s.base && address <= s.end && size <= s.end - address;
+  };
+  auto image = [&](CImage &s, const char *name) {
+    auto *module = reinterpret_cast<CHashGeneric *>(
+        HashSingleTableFind(name, task.hash_table, HTT_MODULE));
+    if (!module || !module->user_data0)
+      return false;
+    s.header = module->user_data0;
+    CBinFile header;
+    MemCpy(&header, reinterpret_cast<const void *>(s.header), sizeof(header));
+    if (header.bin_signature != BIN_SIGNATURE_VAL ||
+        header.org != INVALID_PTR ||
+        header.patch_table_offset < sizeof(header) ||
+        header.patch_table_offset >= header.file_size ||
+        header.file_size > UINTPTR_MAX - s.header)
+      return false;
+    s.base = s.header + sizeof(header);
+    s.end = s.header + header.patch_table_offset;
+    s.image_end = s.header + header.file_size;
+    return true;
+  };
+  auto exports = [&](CImage &s) {
+    auto *count = reinterpret_cast<CHashExport *>(HashSingleTableFind(
+        "LateImportCount", task.hash_table, HTT_EXPORT_SYS_SYM));
+    auto *call = reinterpret_cast<CHashExport *>(HashSingleTableFind(
+        "LateImportCall", task.hash_table, HTT_EXPORT_SYS_SYM));
+    if (!count || !call || !inside(s, count->val, 8) ||
+        !inside(s, call->val, 1) || (count->val & 7))
+      return false;
+    s.count = count->val;
+    s.call = call->val;
+    return true;
+  };
+  auto pending_count = [&] {
+    uint64_t count = 0;
+    while (HashSingleTableFind("LateImportTarget", task.hash_table,
+                               HTT_IMPORT_SYS_SYM, count + 1))
+      ++count;
+    return count;
+  };
+  auto value = [](uintptr_t address) {
+    uint64_t result;
+    MemCpy(&result, reinterpret_cast<const void *>(address), sizeof(result));
+    return result;
+  };
+  auto resolved = [&](const CImage &s, uintptr_t site, uintptr_t target) {
+    if (!inside(s, site, 4) || site <= s.base ||
+        *reinterpret_cast<const uint8_t *>(site - 1) != 0xE8)
+      return false;
+    int32_t displacement;
+    MemCpy(&displacement, reinterpret_cast<const void *>(site),
+           sizeof(displacement));
+    return site + 4 + displacement == target;
+  };
+  uint64_t checks = 0, default_count = 0, pending_default = 0, repeat_count = 0;
+  uint64_t pending_repeat = 0, resolved_count = 0, pending_resolved = 0,
+           result = 0;
+  uint64_t again_count = 0, just_count = 0, pass1 = 0, pass2 = 0;
+  auto run = [&] {
+    auto *initial = Load(dv, "/LateImportConsumer.BIN", task, LDF_SILENT);
+    if (!initial || !image(first, "/LateImportConsumer"))
+      return;
+    checks |= 1;
+    if (!exports(first))
+      return;
+    default_count = value(first.count);
+    pending_default = pending_count();
+    if (default_count == 1)
+      checks |= 2;
+    auto *pending =
+        BootPendingImport(task, "/LateImportConsumer", "LateImportTarget");
+    if (!pending || pending_default != 1)
+      return;
+    const auto *record = pending->module_header_entry;
+    if (reinterpret_cast<uintptr_t>(record) > first.image_end - 22 ||
+        *record != IET_REL_I32 ||
+        StrCmpCpp(record + 5,
+                  reinterpret_cast<const uint8_t *>("LateImportTarget")))
+      return;
+    uint32_t offset;
+    MemCpy(&offset, record + 1, sizeof(offset));
+    const auto site = first.base + offset;
+    if (!inside(first, site, 4))
+      return;
+    checks |= 4;
+    if (!LoadPass2(*initial))
+      return;
+    repeat_count = value(first.count);
+    pending_repeat = pending_count();
+    if (repeat_count == 2 && pending_repeat == 1 &&
+        pending->sym.hash.type == HTT_IMPORT_SYS_SYM &&
+        HashSingleTableFind("LateImportTarget", task.hash_table,
+                            HTT_IMPORT_SYS_SYM) == &pending->sym.hash)
+      checks |= 8;
+    if (!Load(dv, "/LateImportProvider.BIN", task, LDF_SILENT) ||
+        !image(provider, "/LateImportProvider"))
+      return;
+    auto *target = reinterpret_cast<CHashExport *>(HashSingleTableFind(
+        "LateImportTarget", task.hash_table, HTT_EXPORT_SYS_SYM));
+    if (!target || !inside(provider, target->val, 1))
+      return;
+    checks |= 16;
+    resolved_count = value(first.count);
+    pending_resolved = pending_count();
+    if (pending_resolved || pending->sym.hash.type != HTT_INVALID)
+      return;
+    if (resolved_count == 2)
+      checks |= 32;
+    if (!resolved(first, site, target->val))
+      return;
+    checks |= 64;
+    if (CallHolyC0Checked(reinterpret_cast<const uint8_t *>(first.call),
+                          &result) &&
+        result == 42 && value(first.count) == 2)
+      checks |= 128;
+    if (!LoadPass2(*initial))
+      return;
+    again_count = value(first.count);
+    if (again_count == 3)
+      checks |= 256;
+    auto *fresh =
+        Load(dv, "/LateImportConsumer.BIN", task, LDF_SILENT | LDF_JUST_LOAD);
+    if (!fresh || !image(second, "/LateImportConsumer") || !exports(second))
+      return;
+    if (second.header != first.header)
+      checks |= 512;
+    just_count = value(second.count);
+    if (pending_count())
+      return;
+    if (!just_count)
+      checks |= 1024;
+    if (!LoadPass2(*fresh))
+      return;
+    pass1 = value(second.count);
+    if (pass1 == 1)
+      checks |= 2048;
+    if (!LoadPass2(*fresh))
+      return;
+    pass2 = value(second.count);
+    if (pass2 == 2)
+      checks |= 4096;
+    uint64_t fresh_result = 0;
+    if (resolved(second, second.base + offset, target->val) &&
+        value(first.count) == 3 &&
+        CallHolyC0Checked(reinterpret_cast<const uint8_t *>(second.call),
+                          &fresh_result) &&
+        fresh_result == 42)
+      checks |= 8192;
+    if (first.count != second.count && first.call != second.call &&
+        first.count - first.base == second.count - second.base &&
+        first.call - first.base == second.call - second.base)
+      checks |= 16384;
+    if (!(first.base & 15) && !(provider.base & 15) && !(second.base & 15) &&
+        (first.image_end <= provider.header ||
+         provider.image_end <= first.header) &&
+        (first.image_end <= second.header ||
+         second.image_end <= first.header) &&
+        (provider.image_end <= second.header ||
+         second.image_end <= provider.header))
+      checks |= 32768;
+  };
+  run();
+  uint64_t args[]{default_count,  pending_default, repeat_count,
+                  pending_repeat, resolved_count,  pending_resolved,
+                  result,         again_count,     just_count,
+                  pass1,          pass2,           checks};
+  char text[512];
+  SerialPutS(StrPrintJoin(
+      text,
+      "LI default %d %d\r\nLI repeat %d %d\r\nLI resolved %d %d\r\n"
+      "LI call %d\r\nLI again %d\r\nLI just %d\r\nLI passes %d %d\r\n"
+      "LI checks %X\r\nLI DONE\r\n",
+      12, args));
 }
 
 static void BootHostModuleReport(const CDrv &dv, CTask &task)
@@ -1707,6 +1924,7 @@ void BootProbe()
   SerialPutHex(SYS_RUN_LEVEL);
   SerialPutS("\r\n");
   if (adam_task->cur_dv) {
+    BootLateImportReport(*adam_task->cur_dv, *adam_task);
     BootHostModuleReport(*adam_task->cur_dv, *adam_task);
     BootNativeImportReport(*adam_task->cur_dv, *adam_task);
     if (MountedDrive('C')) {
@@ -1748,10 +1966,16 @@ void BootProbe()
                     "FormatProbeResult", "UnholyOS: format probe ");
     auto *hash_caller =
         Load(*adam_task->cur_dv, "/HashCaller.BIN", *adam_task, LDF_JUST_LOAD);
-    if (hash_caller && !LoadPass2(*hash_caller)) {
+    if (hash_caller &&
+        BootPendingImport(*adam_task, "/HashCaller", "HashTargetFn") &&
+        BootPendingImport(*adam_task, "/HashCaller", "HashTargetVar")) {
       BootProbeReport(*adam_task->cur_dv, *adam_task, "/HashProbe.BIN",
                       "HashProbeResult", "UnholyOS: hash probe ");
-      if (LoadPass2(*hash_caller))
+      if (!HashSingleTableFind("HashTargetFn", adam_task->hash_table,
+                               HTT_IMPORT_SYS_SYM) &&
+          !HashSingleTableFind("HashTargetVar", adam_task->hash_table,
+                               HTT_IMPORT_SYS_SYM) &&
+          LoadPass2(*hash_caller))
         SerialPutS("UnholyOS: typed imports resolved\r\n");
     }
     BootProbeReport(*adam_task->cur_dv, *adam_task, "/DocProbe.BIN",

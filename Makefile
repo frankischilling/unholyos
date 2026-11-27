@@ -68,6 +68,11 @@ NATIVE_IMPORT_REFERENCE_OBJECT := $(BUILD)/Linux/Fixtures/NativeImportReference.
 NATIVE_IMPORT_REFERENCE := $(BUILD)/Linux/Fixtures/NativeImportReference.BIN
 NATIVE_IMPORT_REFERENCE_BINDINGS := Linux/Fixtures/NativeImportReference.bindings
 NATIVE_IMPORT_TEST_ISO := $(BUILD)/native-import-test.iso
+LATE_IMPORT_CONSUMER_OBJECT := $(BUILD)/Linux/Fixtures/LateImportConsumer.asm.o
+LATE_IMPORT_PROVIDER_OBJECT := $(BUILD)/Linux/Fixtures/LateImportProvider.asm.o
+LATE_IMPORT_CONSUMER := $(BUILD)/Linux/Fixtures/LateImportConsumer.BIN
+LATE_IMPORT_PROVIDER := $(BUILD)/Linux/Fixtures/LateImportProvider.BIN
+LATE_IMPORT_TEST_ISO := $(BUILD)/late-import-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
 FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
@@ -138,7 +143,7 @@ QUEUE_PROBE := Linux/Fixtures/QueueProbe.HC
 TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInputProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 
-.PHONY: all run test test-host-modules test-native-imports
+.PHONY: all run test test-host-modules test-native-imports test-late-imports
 all: $(ISO)
 
 $(LOADER): Adam/Opt/Boot/BootDVD.asm Kernel/KernelA.inc
@@ -203,7 +208,7 @@ $(HOST_MODULE_CPP) $(NATIVE_IMPORT_CPP): $(BUILD)/Linux/Fixtures/%.cpp.o: Linux/
 	mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) -fPIC -fcf-protection=none -c -o $@ $<
 
-$(HOST_MODULE_ASM) $(NATIVE_IMPORT_ASM) $(NATIVE_IMPORT_REFERENCE_OBJECT): $(BUILD)/Linux/Fixtures/%.asm.o: Linux/Fixtures/%.asm
+$(HOST_MODULE_ASM) $(NATIVE_IMPORT_ASM) $(NATIVE_IMPORT_REFERENCE_OBJECT) $(LATE_IMPORT_CONSUMER_OBJECT) $(LATE_IMPORT_PROVIDER_OBJECT): $(BUILD)/Linux/Fixtures/%.asm.o: Linux/Fixtures/%.asm
 	mkdir -p $(@D)
 	$(NASM) $(NASMFLAGS) -f elf64 -o $@ $<
 
@@ -222,6 +227,12 @@ $(NATIVE_IMPORT): $(NATIVE_IMPORT_OBJECT) $(NATIVE_IMPORT_BINDINGS) $(BIN_TOOL)
 $(NATIVE_IMPORT_REFERENCE): $(NATIVE_IMPORT_REFERENCE_OBJECT) $(NATIVE_IMPORT_REFERENCE_BINDINGS) $(BIN_TOOL)
 	$(BIN_TOOL) $(NATIVE_IMPORT_REFERENCE_OBJECT) $(NATIVE_IMPORT_REFERENCE_BINDINGS) $@
 
+$(LATE_IMPORT_CONSUMER): $(LATE_IMPORT_CONSUMER_OBJECT) Linux/Fixtures/LateImportConsumer.bindings $(BIN_TOOL)
+	$(BIN_TOOL) $(LATE_IMPORT_CONSUMER_OBJECT) Linux/Fixtures/LateImportConsumer.bindings $@
+
+$(LATE_IMPORT_PROVIDER): $(LATE_IMPORT_PROVIDER_OBJECT) Linux/Fixtures/LateImportProvider.bindings $(BIN_TOOL)
+	$(BIN_TOOL) $(LATE_IMPORT_PROVIDER_OBJECT) Linux/Fixtures/LateImportProvider.bindings $@
+
 $(FAT_TOOL): Linux/MakeFAT32.cpp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
@@ -238,13 +249,16 @@ $(FAT_WRITE_DISK): $(FAT_TOOL)
 $(ISO) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(ATA_TEST_ISO) $(FAT_WRITE_ISO) \
 $(FAT_FORMAT_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(BREAK_TEST_ISO) \
 $(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(STRINGS_TEST_ISO) \
-$(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO): $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+$(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO) $(LATE_IMPORT_TEST_ISO): $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 
 $(HOST_MODULE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(HOST_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(HOST_MODULE)
 
 $(NATIVE_IMPORT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(NATIVE_IMPORT)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(NATIVE_IMPORT)
+
+$(LATE_IMPORT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(LATE_IMPORT_CONSUMER) $(LATE_IMPORT_PROVIDER)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(LATE_IMPORT_CONSUMER) --file $(LATE_IMPORT_PROVIDER)
 
 $(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
@@ -299,10 +313,13 @@ test-host-modules: $(HOST_MODULE_TEST_ISO) $(BOOT_TEST) $(MAKE_BIN_TEST)
 test-native-imports: $(NATIVE_IMPORT_TEST_ISO) $(NATIVE_IMPORT_REFERENCE) $(BOOT_TEST)
 	$(BOOT_TEST) --native-import "$(QEMU)" $(NATIVE_IMPORT_TEST_ISO) $(NATIVE_IMPORT)
 
+test-late-imports: $(LATE_IMPORT_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --late-import "$(QEMU)" $(LATE_IMPORT_TEST_ISO) $(LATE_IMPORT_CONSUMER) $(LATE_IMPORT_PROVIDER)
+
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) test-host-modules test-native-imports
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) test-host-modules test-native-imports test-late-imports
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
 	$(STR_COMPARE_TEST)
 	$(BOOT_TEST) --compiler-failures "$(QEMU)" $(ISO) $(KERNEL)

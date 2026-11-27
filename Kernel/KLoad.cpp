@@ -460,8 +460,6 @@ static void LoadPass1(CLoadedModule &module, CHashTable *table, unsigned flags)
 
 bool LoadPass2(CLoadedModule &module)
 {
-  if (module.unresolved || module.started)
-    return false;
   module.started = true;
   for (size_t i = 0; i < module.count; i++)
     if (module.records[i].type == IET_MAIN)

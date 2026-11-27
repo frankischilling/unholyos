@@ -457,7 +457,7 @@ The source reference is [TempleOS at c26482bb6ad3f80106d28504ec5db3c6a360732c](h
 - `BootDVDProbeAll` and `BootDVDProbe` in `Kernel/BlkDev/DskATAId.HC` try PCI IDE ports and the legacy channels. The probe rereads the BIOS-supplied DVD block and compares the kernel compile timestamp at the supplied shift. QEMU traces for both guests show `START STOP UNIT` and `READ(12)` on the secondary IDE device. `ATAPIReadBlks2` in `Kernel/BlkDev/DskATA.HC` supplies the native 2,048-byte sectors for the 512-byte RedSea view.
 - `ISOInit` in `Kernel/BlkDev/DskCDDVD.HC` looks for the RedSea publisher in the supplementary descriptor and advances the volume offset for a bootable disc. `RedSeaInit` and `RedSeaFileFind` in `Kernel/BlkDev/FileSysRedSea.HC` read the boot record and the 64-byte directory records. UnholyOS attaches the read-only boot volume to Adam after mounting it. Its file reader can read a byte range from a contiguous file. In a separate test, GDB set the DVD handoff to the pinned TempleOS disc on the second IDE unit, and the guest checksum matched the full 189,760-byte kernel file on that disc. Disk caching remains pending; the read-only ATA/FAT32 path is described above.
 - `FileRead` in `Kernel/BlkDev/DskFile.HC` checks Adam's resident file table, tries the requested and alternate names in the target directory, then searches its parents. The native RedSea entry point follows that order and returns the file size and attributes with a zero-terminated buffer. `ArcExpandBuf`, `ArcCompressBuf`, and `ArcEntryGet` in `Kernel/Compress.HC` define the stored, 7-bit, and 8-bit streams, width changes, and dictionary reuse at 12 bits. The host test reproduces both pinned compressed archive streams byte for byte.
-- `Cmp` in `Compiler/CMain.HC` emits the `CBinFile` header and patch records read by `LoadPass1` and `LoadPass2` in `Kernel/KLoad.HC`. UnholyOS validates the records, aligns the executable body, and installs symbols in Adam's hash table using the bucket order from `Kernel/KHashA.HC`. It resolves relative imports when a later module publishes an export. A module with unresolved imports can be loaded for linking, and its initializers wait for an explicit call after resolution. Fixed-address modules and the full kernel symbol set remain pending.
+- `Cmp` in `Compiler/CMain.HC` emits the `CBinFile` header and patch records read by `LoadPass1` and `LoadPass2` in `Kernel/KLoad.HC`. UnholyOS validates the records, aligns the executable body, and installs symbols in Adam's hash table using the bucket order from `Kernel/KHashA.HC`. It resolves relative imports when a later module publishes an export. `LDF_JUST_LOAD` defers entry execution; ordinary loading runs entries even with pending imports, and each explicit `LoadPass2` runs them again. Existing caller probes defer their entries until the providers they call are present. The full kernel symbol set remains pending.
 - Kernel exports use HolyC stack arguments and callee cleanup. `Kernel/Mem/MAllocFree.HC` supplies the heap and string allocation contracts, including the negative offset before an aligned pointer. `Kernel/KHashA.HC` and `Kernel/KHashB.HC` supply the hash lookup and insertion rules, including matching across parent tables. `Kernel/StrA.HC`, `Kernel/KUtils.HC`, and `Kernel/KMathB.HC` supply the string, bit, memory, and numeric calls. Allocation exceptions and configurable variable initialization at boot are pending.
 - The pinned TempleOS compiler built `Linux/Fixtures/LoadProbe.BIN` and `LoadCaller.BIN` from the adjacent HolyC source files using `Cmp`. The two guests produced 40 and 28, preserved a relocated function address, and loaded the probe at its requested 128-byte alignment. The probe also imported `SYS_COMPILE_TIME` and called `_MEMCPY` with HolyC stack arguments. The copy returned the address just past its destination, as implemented in `Kernel/KUtils.HC`. The 4.5 GiB test checks that a data-heap relocation reaches an allocation above 4 GiB.
 - The pinned compiler also built `RuntimeProbe.BIN` from `RuntimeProbe.HC`. Both guests reported `0xff` with QEMU PC, `qemu64`, and 512 MiB. The probe checks allocation and aligned heap headers, string calls, hash instances and use counts, numeric and bit calls, and imported globals. It checks the exact `Pow10I64(2)` return bits (`0x4058fffffffffffe`).
@@ -2200,9 +2200,10 @@ and cells, and screenshots. Both normalized traces have SHA-256
 `6ff271b393dc66e5157b3d3250b5fe4c2d39f3e884fc9de1fa6024f3b5f5bc85`.
 
 These runs establish the fixture's TOSB and ABI behavior across the
-two loaders. The compiler and Adam remain linked into the boot image;
-the native HolyC `Load` API, separate compiler initialization, and the
-guest C++20 build toolchain remain work for later increments.
+two loaders. Initialization of the separately loaded compiler is covered
+by the later compiler tests below. Adam remains linked into the boot
+image; the native HolyC `Load` API and guest C++20 build toolchain remain
+work for later increments.
 
 ## Native compiler bindings
 
@@ -2332,6 +2333,93 @@ AOT warning counts or diagnostic-format parity.
 build/Linux/TestBoot --assert-warning-reference qemu-system-x86_64 \
   ../reference-media/TOS_Distro.ISO build/assert-warning-reference
 ```
+
+## Module entries and late imports
+
+Pinned `Kernel/KLoad.HC::LoadPass2` runs every `IET_MAIN` record whenever
+called. Pending imports do not suppress that pass, and publishing a
+provider does not run it automatically. The native implementation now
+follows those rules. It retains the `started` bookkeeping used by the
+compiler-specific binder, but generic entry execution no longer rejects
+an unresolved or previously started module. `LDF_JUST_LOAD` still defers
+the initial pass.
+
+`LateImportConsumer.asm` contains a module-owned counter and an entry
+that increments it. A separate exported HolyC function calls the missing
+`LateImportTarget` with argument 7. `LateImportProvider.asm` supplies that
+function and returns 42. The entry never invokes the unresolved target.
+The two explicit binding manifests let `MakeBIN` produce TOSB files from
+these NASM objects. The focused fixture checks:
+
+| Operation | Counter | Pending imports |
+| --- | ---: | ---: |
+| Load the consumer normally | 1 | 1 |
+| Explicitly repeat its entry pass | 2 | 1 |
+| Load the provider | 2 | 0 |
+| Call the now-resolved function | 2 | 0 |
+| Repeat the first consumer's entry pass | 3 | 0 |
+| Load a second consumer with `LDF_JUST_LOAD` | 0 in the second image | 0 |
+| Run the second image's entry twice | 1, then 2 | 0 |
+
+The checks also cover module and export addresses, the pending import's
+invalidation, and retention of the first image's counter after loading
+and running the second. Existing caller probes keep their original
+bytes; their test orchestration defers entries until the providers those
+entries call are available.
+
+```sh
+make -j6 test-late-imports
+build/Linux/TestBoot --late-import-reference qemu-system-x86_64 \
+  ../reference-media/TOS_Distro.ISO \
+  build/Linux/Fixtures/LateImportConsumer.BIN \
+  build/Linux/Fixtures/LateImportProvider.BIN build/late-import-reference-extern
+```
+
+GCC 13.3.0 and Clang 20.1.2 native builds passed this focused gate.
+The same consumer and provider bytes passed in the pinned TempleOS
+guest. All three runs used QEMU 8.2.2 (`1:8.2.2+ds-0ubuntu1.18`),
+`-machine pc -cpu qemu64 -m 512`, one default vCPU, and a clean CD boot.
+The native ISO is `build/late-import-test.iso`, or
+`build/clang/late-import-test.iso` with `BUILD=build/clang`; the Clang
+build selects its compiler through both `CXX` and `HOSTCXX`.
+Both native builds and the reference produced these exact 114 normalized
+output bytes:
+
+```text
+LI default 1 1
+LI repeat 2 1
+LI resolved 2 0
+LI call 42
+LI again 3
+LI just 0
+LI passes 1 2
+LI checks FFFF
+LI DONE
+```
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Consumer BIN, GCC and Clang | 128 | `47cdb87d4132cad8f8060b77963a6f784b24e9482d826601e8c244f4382c2748` |
+| Provider BIN, GCC and Clang | 80 | `bf3116c370a8a8ec1e200068b7f829cc75447b2c80e779f6b645423c484f4e24` |
+| HolyC reference wrapper | 5,550 | `c5ad76e31ee1e32214d93c6fb630971bb7b1a21ee0d98c0728520a5336ab9e0a` |
+| Normalized trace | 114 | `ffef912216f4ea2d8184f409350febf91bbe49129ade212df5c9691863c957dd` |
+
+The source checkout stayed clean at
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`. The reference capture verifies
+both uploaded BIN files byte for byte, their trailing NULs and RAM-file
+readbacks, and the complete wrapper plus NUL before execution. It retains
+the full terminal text and screenshot and requires a clean prompt after
+the completion marker. The captured run is under
+`build/late-import-reference-extern`; its reference ISO has SHA-256
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+
+The native guest probe uses the internal C++ loader. The pinned guest executes
+`LateImportLoadProbe.HC` through its public `Load` and an explicit
+declaration of the exported `LoadPass2` routine. This comparison targets
+generic module entry and deferred relocation behavior. The native public
+HolyC `Load` ABI, filename defaults, and caller-supplied destination
+address remain separate work. The compiler boot binder still rejects
+pending imports before publishing its dispatch table.
 
 ## Loading the compiler from the boot volume
 
