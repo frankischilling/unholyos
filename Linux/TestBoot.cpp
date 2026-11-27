@@ -111,6 +111,48 @@ struct CBootMedia
   Bytes compiler;
 };
 
+constexpr std::string_view compiler_native_names[]{"AsmHashLoad",
+                                                   "LexStmt2Bin",
+                                                   "ExePutS",
+                                                   "ClassMemberLstDel",
+                                                   "CmpAsmHashLoad",
+                                                   "LexSourceInit",
+                                                   "LexSourceDel",
+                                                   "Lex",
+                                                   "LexTypedExpression2Bin",
+                                                   "MemberMetaDataCpp",
+                                                   "AsmHashFind",
+                                                   "CmpAsmHashNew",
+                                                   "LexAttachDoc",
+                                                   "LexRaw",
+                                                   "LexExpression2Bin",
+                                                   "ExeFile"};
+constexpr std::string_view compiler_public_names[]{
+    "Cmp",         "ExePutS",   "ExeFile",        "StreamExePrint",
+    "StreamPrint", "StreamDir", "MemberMetaData", "MemberMetaFind",
+    "MemberFind"};
+constexpr std::string_view compiler_status_name =
+    "__unholyos_compiler.CInitStatus";
+constexpr std::string_view compiler_types_name = "internal_types_table";
+
+// TempleOS Compiler/CInit.HC fields and names, Terry A. Davis.
+// C++ initializes the unused name bytes to zero.
+struct CExpectedInternalType
+{
+  uint8_t type, size;
+  char name[8];
+};
+constexpr CExpectedInternalType compiler_internal_types[]{
+    {2, 0, "I0i"},  {2, 0, "I0"},    {3, 0, "U0i"},   {3, 0, "U0"},
+    {4, 1, "I8i"},  {4, 1, "I8"},    {4, 1, "Bool"},  {5, 1, "U8i"},
+    {5, 1, "U8"},   {6, 2, "I16i"},  {7, 2, "U16i"},  {8, 4, "I32i"},
+    {9, 4, "U32i"}, {10, 8, "I64i"}, {11, 8, "U64i"}, {14, 8, "F64i"},
+    {14, 8, "F64"}};
+static_assert(sizeof(CExpectedInternalType) == 10 &&
+              sizeof(compiler_internal_types) == 170);
+constexpr auto compiler_internal_type_bytes =
+    std::bit_cast<std::array<uint8_t, 170>>(compiler_internal_types);
+
 struct CCompilerRecord
 {
   size_t offset, name_offset, offsets_offset = 0;
@@ -179,6 +221,28 @@ static std::vector<CCompilerRecord> CompilerRecords(const Bytes &image)
                         [](uint8_t byte) { return byte == 0; }),
         "Invalid compiler patch terminator or padding");
   return records;
+}
+
+static size_t
+CompilerInternalTypesOffset(const Bytes &image,
+                            const std::vector<CCompilerRecord> &records)
+{
+  const CCompilerRecord *table = nullptr;
+  for (const auto &record : records)
+    if (record.name == compiler_types_name) {
+      Check(!table && record.type == 16,
+            "Compiler internal type table needs one relative export");
+      table = &record;
+    }
+  const auto payload = ReadLE(image, 16, 8) - 32;
+  Check(table && table->value <= payload &&
+            compiler_internal_type_bytes.size() <= payload - table->value,
+        "Compiler internal type table is outside its payload");
+  const size_t offset = 32 + size_t(table->value);
+  Check(std::equal(compiler_internal_type_bytes.begin(),
+                   compiler_internal_type_bytes.end(), image.begin() + offset),
+        "Compiler internal type table differs from its C++ initializer");
+  return offset;
 }
 
 static void WriteLE(Bytes &bytes, size_t offset, uint64_t value, size_t width)
@@ -314,9 +378,10 @@ static Bytes VerifyCompilerMedia(const Bytes &disc, uint64_t root,
   const auto size = ReadLE(disc, file + 48, 8);
   auto expected = FileRead(kernel_path.parent_path().parent_path() /
                            "Compiler/Compiler.BIN");
-  std::set<std::string> import_names;
+  const auto records = CompilerRecords(expected);
+  std::set<std::string> import_names, export_names;
   size_t native_imports = 0, data_imports = 0;
-  for (const auto &record : CompilerRecords(expected))
+  for (const auto &record : records)
     if ((record.type == 8 || record.type == 11) && !record.name.empty()) {
       Check(import_names.insert(record.name).second,
             "Duplicate compiler import group");
@@ -324,10 +389,22 @@ static Bytes VerifyCompilerMedia(const Bytes &disc, uint64_t root,
         ++native_imports;
       else
         ++data_imports;
+    } else if (record.type == 16 || record.type == 17) {
+      Check(record.type == 16 && export_names.insert(record.name).second,
+            "Compiler exports must be unique and relative");
     }
   Check(native_imports == 45 && data_imports == 30 &&
             import_names.contains("__unholyos_sysv.DefineLstLoadCpp"),
         "Compiler native or data import contract differs");
+  std::set<std::string> expected_exports{std::string(compiler_status_name),
+                                         std::string(compiler_types_name)};
+  for (auto name : compiler_native_names)
+    expected_exports.insert("__unholyos_sysv." + std::string(name));
+  for (auto name : compiler_public_names)
+    expected_exports.emplace(name);
+  Check(export_names == expected_exports,
+        "Compiler native, HolyC, or data export contract differs");
+  CompilerInternalTypesOffset(expected, records);
   expected = CompilerVariant(std::move(expected), phase);
   Check(ReadLE(disc, file, 2) == 0x800 && !expected.empty() &&
             size == expected.size() && start < disc.size() / blk &&
@@ -854,15 +931,6 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
                                       const std::string &output,
                                       const CBootMedia &media, CBootPhase phase)
 {
-  constexpr std::string_view imports[]{
-      "AsmHashLoad", "LexStmt2Bin", "ExePutS", "ClassMemberLstDel",
-      "CmpAsmHashLoad", "LexSourceInit", "LexSourceDel", "Lex",
-      "LexTypedExpression2Bin", "MemberMetaDataCpp", "AsmHashFind",
-      "CmpAsmHashNew", "LexAttachDoc", "LexRaw", "LexExpression2Bin", "ExeFile"};
-  constexpr std::string_view public_names[]{
-      "Cmp", "ExePutS", "ExeFile", "StreamExePrint", "StreamPrint", "StreamDir",
-      "MemberMetaData", "MemberMetaFind", "MemberFind"};
-  constexpr std::string_view status_name = "__unholyos_compiler.CInitStatus";
   auto symbols = ReadBootSymbols(vm);
   const auto define_native =
       symbols.exports.find("__unholyos_sysv.DefineLstLoadCpp");
@@ -900,12 +968,13 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
   auto module_entry = symbols.modules.find("/Compiler/Compiler");
   if (!CompilerLoaded(phase)) {
     Check(!reported && module_entry == symbols.modules.end() &&
-              !symbols.exports.contains(std::string(status_name)),
+              !symbols.exports.contains(std::string(compiler_status_name)) &&
+              !symbols.exports.contains(std::string(compiler_types_name)),
           "Rejected compiler module published executable state");
-    for (auto name : imports)
+    for (auto name : compiler_native_names)
       Check(!symbols.exports.contains("__unholyos_sysv." + std::string(name)),
             "Rejected compiler has a native export");
-    for (auto name : public_names)
+    for (auto name : compiler_public_names)
       Check(!symbols.exports.contains(std::string(name)),
             "Rejected compiler has a public HolyC export");
     return {};
@@ -917,6 +986,7 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
     fields[i] = std::stoull(match[i + 1].str(), nullptr, 16);
   const auto [module, image, size, patch, loaded_hash] = fields;
   const auto records = CompilerRecords(media.compiler);
+  const auto types_offset = CompilerInternalTypesOffset(media.compiler, records);
   const auto base = image + 32;
   const auto alignment = uint64_t{1} << media.compiler[2];
   Check(image > 0x100000 && image < 0x80000000 && size == media.compiler.size() &&
@@ -970,6 +1040,17 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
   Check(std::equal(prepared.begin(), prepared.begin() + 32, actual.begin()) &&
             std::equal(prepared.begin() + patch, prepared.end(), actual.begin() + patch),
         "Compiler initialization changed its header or patch table");
+  const auto types = symbols.exports.find(std::string(compiler_types_name));
+  Check(types != symbols.exports.end() &&
+            symbols.export_counts[std::string(compiler_types_name)] == 1 &&
+            types->second == image + types_offset &&
+            std::equal(compiler_internal_type_bytes.begin(),
+                       compiler_internal_type_bytes.end(),
+                       actual.begin() + types_offset),
+        "Live internal type table differs from its compiler payload storage");
+  std::cout << "Verified compiler internal types "
+            << std::size(compiler_internal_types) << ", bytes "
+            << compiler_internal_type_bytes.size() << '\n';
   const auto state = ReadPhysical<5>(vm, module);
   Check(state[0] == image && state[1] && state[2] == records.size() &&
             state[3] == (unresolved.empty() ? 0u : 1u) &&
@@ -992,7 +1073,7 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
               !ReadLE(raw_records, at + 56, 8),
           "Compiler load record differs from its disk patch record");
   }
-  const auto status = symbols.exports.find(std::string(status_name));
+  const auto status = symbols.exports.find(std::string(compiler_status_name));
   Check(status != symbols.exports.end() && !(status->second & 7) &&
             status->second >= base && status->second <= image + patch - 8 &&
             ReadLE(media.compiler, status->second - image, 8) == 0,
@@ -1003,8 +1084,9 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
         "Compiler initialization status or rejected-entry execution differs");
   if (bindings) {
     const auto targets = ReadPhysical<16>(vm, bindings);
-    for (size_t i = 0; i < std::size(imports); ++i) {
-      const auto found = symbols.exports.find("__unholyos_sysv." + std::string(imports[i]));
+    for (size_t i = 0; i < std::size(compiler_native_names); ++i) {
+      const auto found = symbols.exports.find(
+          "__unholyos_sysv." + std::string(compiler_native_names[i]));
       Check(found != symbols.exports.end() && targets[i] == found->second &&
                 targets[i] >= base && targets[i] < image + patch,
             "A compiler reverse import points outside its loaded module");
@@ -2637,15 +2719,29 @@ constexpr CTextProbe format_missing_args_probes[]{
     {"format-missing-args", "/FormatMissingArgsProbe.HC", "", "FM errors ",
      "FM DONE", format_missing_args_output, format_missing_args_exceptions}};
 
-static void CheckBootSourceProbe(const std::string &serial,
-                                 const CTextProbe &probe, const fs::path &dir)
+constexpr std::string_view internal_types_output =
+    "IT table 1FFFF size 170 writable 1\n"
+    "IT metadata 1FFFF pointers 68\n"
+    "IT views 3F members 24\n"
+    "IT layout 3F\n"
+    "IT void FF stack FF\n"
+    "IT float 1\n"
+    "IT runtime F\n"
+    "IT DONE\n";
+constexpr CTextProbe internal_types_probes[]{
+    {"internal-types", "/InternalTypesProbe.HC", "/InternalTypesProbe.BIN.Z",
+     "IT table ", "IT DONE", internal_types_output}};
+const std::string internal_types_aot_output =
+    std::string(internal_types_output) +
+    "IT AOT compile 0\nIT AOT load 1\nIT AOT DONE\n";
+const CTextProbe internal_types_reference_probes[]{
+    internal_types_probes[0],
+    {"internal-types-aot", "/InternalTypesAOTProbe.HC", "", "IT table ",
+     "IT AOT DONE", internal_types_aot_output}};
+
+static void CheckBootProbeOrder(const std::string &serial,
+                                std::span<const char *const> paths)
 {
-  const auto output = TextProbeOutput(serial, probe, probe.source);
-  const auto start =
-      std::string("UnholyOS: executing ") + probe.source + "\r\n";
-  const auto finish = std::string("UnholyOS: finished ") + probe.source +
-                      ", checks 0x0000000000000001\r\n";
-  const auto begin = serial.find(start), end = serial.find(finish, begin);
   const auto module = serial.find("UnholyOS: compiler module ");
   const auto boot = serial.find(BOOT_MARKER);
   std::smatch initialized;
@@ -2656,12 +2752,30 @@ static void CheckBootSourceProbe(const std::string &serial,
               R"(UnholyOS: text base 0x[0-9a-f]+, compiler run level (0x[0-9a-f]+)\r\n)")) &&
           std::stoull(initialized[1].str(), nullptr, 16) == 0x12FF &&
           module != std::string::npos &&
-          module < size_t(initialized.position()) &&
-          size_t(initialized.position()) < begin && begin < end &&
-          boot != std::string::npos && end + finish.size() <= boot &&
-          serial.find(start, begin + start.size()) == std::string::npos &&
-          serial.find(finish, end + finish.size()) == std::string::npos,
-      "Source probe did not run once between initialization and startup");
+          module < size_t(initialized.position()) && boot != std::string::npos,
+      "Missing text probe initialization or startup report");
+  size_t previous = initialized.position() + initialized.length();
+  for (const auto *path : paths) {
+    const auto start = std::string("UnholyOS: executing ") + path + "\r\n";
+    const auto finish = std::string("UnholyOS: finished ") + path +
+                        ", checks 0x0000000000000001\r\n";
+    const auto begin = serial.find(start), end = serial.find(finish, begin);
+    Check(begin != std::string::npos && end != std::string::npos &&
+              previous <= begin && begin < end && end + finish.size() <= boot &&
+              serial.find(start, begin + start.size()) == std::string::npos &&
+              serial.find(finish, end + finish.size()) == std::string::npos,
+          "Text probe did not run once in order between initialization and "
+          "startup");
+    previous = end + finish.size();
+  }
+}
+
+static void CheckBootSourceProbe(const std::string &serial,
+                                 const CTextProbe &probe, const fs::path &dir)
+{
+  const auto output = TextProbeOutput(serial, probe, probe.source);
+  const char *paths[]{probe.source};
+  CheckBootProbeOrder(serial, paths);
   std::ofstream file(dir / (std::string(probe.name) + "-native.txt"));
   file << output;
   file.close();
@@ -5921,6 +6035,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--color-conversions-reference" ||
        std::string_view(argv[1]) == "--format-missing-args" ||
        std::string_view(argv[1]) == "--format-missing-args-reference" ||
+       std::string_view(argv[1]) == "--internal-types" ||
+       std::string_view(argv[1]) == "--internal-types-reference" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -5963,6 +6079,8 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--color-conversions");
     bool format_missing_args_probe =
         std::string_view(argv[1]).starts_with("--format-missing-args");
+    bool internal_types_probe =
+        std::string_view(argv[1]).starts_with("--internal-types");
     const bool source_probe = compiler_defines_probe || string_defines_probe ||
                               system_defines_probe || color_conversions_probe ||
                               format_missing_args_probe;
@@ -5985,6 +6103,8 @@ int main(int argc, char **argv)
       text_probes = color_conversions_probes;
     else if (format_missing_args_probe)
       text_probes = format_missing_args_probes;
+    else if (internal_types_probe)
+      text_probes = internal_types_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -5992,7 +6112,7 @@ int main(int argc, char **argv)
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
-      if (source_probe && !reference) {
+      if ((source_probe || internal_types_probe) && !reference) {
         const auto &probe = text_probes[0];
         VerifyHostModuleMedia(argv[3],
                               std::string("Linux/Fixtures") + probe.source,
@@ -6018,9 +6138,21 @@ int main(int argc, char **argv)
                    "both executions completed\n";
           } else {
             CheckTextProbes(output, text_probes);
+            if (internal_types_probe) {
+              const char *paths[]{text_probes[0].source, text_probes[0].module};
+              CheckBootProbeOrder(output, paths);
+              CaptureGuestFile(vm, dir, output, "InternalTypesProbe.BIN.Z");
+            }
             std::cout << "Text probe sources and compiled modules matched\n";
           }
         }
+      } else if (internal_types_probe && reference) {
+        const CModuleFile source[]{
+            {fs::absolute("Linux/Fixtures/InternalTypesProbe.HC"),
+             "InternalTypesProbe.HC", "internal-types-source"}};
+        DriveCharacterGraphics(vm, dir, "", true, false, false, false, false,
+                               false, false, false, false,
+                               internal_types_reference_probes, source);
       } else if (character || tic || breaks || screen_capture || spline ||
                  flood_fill || blot || sprite_flood || music_demo ||
                  !text_probes.empty())
@@ -6148,6 +6280,8 @@ int main(int argc, char **argv)
               << " --color-conversions[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --format-missing-args[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --internal-types[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]

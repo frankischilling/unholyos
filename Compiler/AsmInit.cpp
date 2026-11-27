@@ -2880,18 +2880,27 @@ static bool CmpFillHash(CHashTable *table)
   for (bool defined : seen)
     if (!defined)
       return false;
+  for (const auto &type : internal_types_table) {
+    auto *entry = PrsClassNew();
+    auto *name = entry ? StrNew(reinterpret_cast<const char *>(type.name), heap)
+                       : nullptr;
+    if (!name) {
+      Free(entry);
+      return false;
+    }
+    entry->sym.hash.str = name;
+    entry->sym.hash.type = HTT_INTERNAL_TYPE;
+    entry->raw_type = type.type;
+    entry->flags |= CF_INTERNAL_TYPE;
+    entry->size = type.size;
+    HashAdd(&entry->sym.hash, table);
+  }
   static constexpr struct
   {
     const char *name;
     CRawType type;
-    bool members = false;
-  } types[]{{"U0", RT_U0},         {"U0i", RT_U0},        {"I8", RT_I8},
-            {"I8i", RT_I8},        {"Bool", RT_I8},       {"U8", RT_U8},
-            {"U8i", RT_U8},        {"I16i", RT_I16},      {"U16i", RT_U16},
-            {"I32i", RT_I32},      {"U32i", RT_U32},      {"I64i", RT_I64},
-            {"U64i", RT_U64},      {"I16", RT_I16, true}, {"U16", RT_U16, true},
-            {"I32", RT_I32, true}, {"U32", RT_U32, true}, {"I64", RT_I64, true},
-            {"U64", RT_U64, true}, {"F64", RT_F64},       {"F64i", RT_F64}};
+  } types[]{{"U16", RT_U16}, {"I16", RT_I16}, {"U32", RT_U32},
+            {"I32", RT_I32}, {"U64", RT_U64}, {"I64", RT_I64}};
   for (const auto &type : types) {
     auto *entry = PrsClassNew();
     auto *name = entry ? StrNew(type.name, heap) : nullptr;
@@ -2900,26 +2909,19 @@ static bool CmpFillHash(CHashTable *table)
       return false;
     }
     entry->sym.hash.str = name;
-    entry->raw_type = type.type;
     entry->size = TypeSize(type.type);
-    if (!type.members) {
-      entry->sym.hash.type = HTT_INTERNAL_TYPE;
-      entry->flags = CF_INTERNAL_TYPE;
-    }
     HashAdd(&entry->sym.hash, table);
   }
   for (const auto &type : types) {
-    if (type.members) {
-      char name[6];
-      auto len = StrLen(type.name);
-      MemCpy(name, type.name, len);
-      name[len] = 'i';
-      name[len + 1] = 0;
-      auto *cls = FindType(type.name, table);
-      cls->fwd_class = FindType(name, table);
-      if (!CmpIntMembers(table, *cls))
-        return false;
-    }
+    char name[6];
+    auto len = StrLen(type.name);
+    MemCpy(name, type.name, len);
+    name[len] = 'i';
+    name[len + 1] = 0;
+    auto *cls = FindType(type.name, table);
+    cls->fwd_class = FindType(name, table);
+    if (!CmpIntMembers(table, *cls))
+      return false;
   }
   constexpr struct {
     const char *name;
@@ -3040,6 +3042,7 @@ static bool CmpFillHash(CHashTable *table)
       {"DOCEF_REFRESH_DATA", "(1<<45)"}, {"DOCEF_UPDATE_DATA", "(1<<46)"},
       {"DOCEF_DEREF_DATA", "(1<<47)"}, {"DOCEF_HAS_TERMINATOR", "(1<<49)"},
       {"DOCEF_REMALLOC_DATA", "(1<<48)"}, {"DOCEF_LST", "(1<<53)"},
+      {"RT_I0", "2"}, {"RT_U0", "3"},
       {"RT_I8", "4"}, {"RT_U8", "5"}, {"RT_I16", "6"}, {"RT_U16", "7"},
       {"RT_I32", "8"}, {"RT_U32", "9"}, {"RT_I64", "10"}, {"RT_PTR", "10"},
       {"RT_U64", "11"}, {"RT_F64", "14"},

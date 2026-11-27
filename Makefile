@@ -89,6 +89,8 @@ COLOR_CONVERSIONS_PROBE := Linux/Fixtures/ColorConversionsProbe.HC
 COLOR_CONVERSIONS_TEST_ISO := $(BUILD)/color-conversions-test.iso
 FORMAT_MISSING_ARGS_PROBE := Linux/Fixtures/FormatMissingArgsProbe.HC
 FORMAT_MISSING_ARGS_TEST_ISO := $(BUILD)/format-missing-args-test.iso
+INTERNAL_TYPES_PROBE := Linux/Fixtures/InternalTypesProbe.HC
+INTERNAL_TYPES_TEST_ISO := $(BUILD)/internal-types-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
 FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
@@ -159,7 +161,7 @@ QUEUE_PROBE := Linux/Fixtures/QueueProbe.HC
 TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInputProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 
-.PHONY: all run test test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args
+.PHONY: all run test test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args test-internal-types
 all: $(ISO)
 
 $(LOADER): Adam/Opt/Boot/BootDVD.asm Kernel/KernelA.inc
@@ -268,7 +270,7 @@ $(FAT_WRITE_DISK): $(FAT_TOOL)
 $(ISO) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(ATA_TEST_ISO) $(FAT_WRITE_ISO) \
 $(FAT_FORMAT_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(BREAK_TEST_ISO) \
 $(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(STRINGS_TEST_ISO) \
-$(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO) $(LATE_IMPORT_TEST_ISO) $(LOAD_API_TEST_ISO) $(LOAD_PASS2_TEST_ISO) $(COMPILER_DEFINES_TEST_ISO) $(STRING_DEFINES_TEST_ISO) $(SYSTEM_DEFINES_TEST_ISO) $(COLOR_CONVERSIONS_TEST_ISO) $(FORMAT_MISSING_ARGS_TEST_ISO): $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+$(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO) $(LATE_IMPORT_TEST_ISO) $(LOAD_API_TEST_ISO) $(LOAD_PASS2_TEST_ISO) $(COMPILER_DEFINES_TEST_ISO) $(STRING_DEFINES_TEST_ISO) $(SYSTEM_DEFINES_TEST_ISO) $(COLOR_CONVERSIONS_TEST_ISO) $(FORMAT_MISSING_ARGS_TEST_ISO) $(INTERNAL_TYPES_TEST_ISO): $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 
 $(HOST_MODULE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(HOST_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(HOST_MODULE)
@@ -299,6 +301,9 @@ $(COLOR_CONVERSIONS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(
 
 $(FORMAT_MISSING_ARGS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FORMAT_MISSING_ARGS_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FORMAT_MISSING_ARGS_PROBE)
+
+$(INTERNAL_TYPES_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(INTERNAL_TYPES_PROBE) $(FILE_WRITE_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(INTERNAL_TYPES_PROBE) --file $(FILE_WRITE_PROBE)
 
 $(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
@@ -377,10 +382,13 @@ test-color-conversions: $(COLOR_CONVERSIONS_TEST_ISO) $(BOOT_TEST)
 test-format-missing-args: $(FORMAT_MISSING_ARGS_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --format-missing-args "$(QEMU)" $(FORMAT_MISSING_ARGS_TEST_ISO)
 
+test-internal-types: $(INTERNAL_TYPES_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --internal-types "$(QEMU)" $(INTERNAL_TYPES_TEST_ISO)
+
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args test-internal-types
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
 	$(STR_COMPARE_TEST)
 	$(BOOT_TEST) --compiler-failures "$(QEMU)" $(ISO) $(KERNEL)

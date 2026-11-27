@@ -343,11 +343,12 @@ private:
 
   uint32_t TypeCast(uint32_t value, CHashClass &cls)
   {
-    if (value == NO_IC || !TypeSize(ClassRawType(cls)) ||
-        !TypeSize(coc.code[value].type))
+    auto type = ClassRawType(cls);
+    if (value == NO_IC || (!TypeSize(type) && !IsVoid(type)) ||
+        (!TypeSize(coc.code[value].type) && !IsVoid(coc.code[value].type)))
       return NO_IC;
-    return Add({0, value, NO_IC, IC_HOLYC_TYPECAST, ClassRawType(cls), false,
-                false, coc.code[value].runtime, NO_IC, &cls});
+    return Add({0, value, NO_IC, IC_HOLYC_TYPECAST, type, false, false,
+                coc.code[value].runtime, NO_IC, &cls});
   }
 
   const CHashFun *Callable(uint32_t value) const
@@ -421,10 +422,11 @@ private:
       return NO_IC;
     Lex(cc);
     cls = PrsStars(cc, cls);
-    if (!cls || !cls->size || cc.token != ')')
+    if (!cls || (!cls->size && !IsVoid(ClassRawType(*cls))) || cc.token != ')')
       return NO_IC;
     Lex(cc);
-    if (IsLValue(value) && !coc.code[value].grouped)
+    if (IsLValue(value) && !coc.code[value].grouped &&
+        !IsVoid(ClassRawType(*cls)))
       return coc.LValue(coc.code[value].left, *cls);
     return TypeCast(value, *cls);
   }

@@ -1,5 +1,6 @@
 entry CInitHC
 export CInitStatus __unholyos_compiler.CInitStatus
+export internal_types_table internal_types_table
 
 export CmpHC Cmp
 export ExePutSHC ExePutS

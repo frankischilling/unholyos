@@ -2036,6 +2036,10 @@ void BootProbe()
                     "UnholyOS: compiler runtime probe ");
     BootProbeReport(*adam_task->cur_dv, *adam_task, "/FileWriteProbe.BIN",
                     "FileWriteProbeResult", "UnholyOS: write probe ");
+    BootVariadicReport(
+        *adam_task->cur_dv, *adam_task, "/InternalTypesProbe.HC",
+        "/InternalTypesProbe.BIN.Z",
+        "Cmp(\"::/InternalTypesProbe.HC\",,\"B:/InternalTypesProbe.BIN.Z\");");
     BootStagedLoadReport(*adam_task->cur_dv, "/LoadApiProbe.HC",
                          "::/LoadApiConsumer.BIN", "B:/LoadApiConsumer.BIN",
                          "UnholyOS: Load API input bytes verified\r\n");

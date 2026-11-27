@@ -208,6 +208,55 @@ runtime implementation retain their three-argument ABI.
 The common source and native failure-phase evidence are recorded in
 [Boot.md](Boot.md#compiler-definition-lists).
 
+## Compiler primitive types
+
+`Compiler/CInit.cpp::internal_types_table` preserves the 17 entries at
+the start of pinned `Compiler/CInit.HC`, including `I0i` and `I0` with
+raw type 2. `Compiler/CompilerA.hpp` declares the 10-byte
+`CInternalType` record and checks its field offsets. The compiler
+module exports the actual writable 170-byte array under its reference
+name. `Compiler/AsmInit.cpp::CmpFillHash` reads that array directly;
+its former private primitive list has been removed.
+
+C++ string initialization zeroes the unused bytes of each `name[8]`.
+Pinned `Compiler/PrsVar.HC::PrsVarInit2` instead copies the full fixed
+array length from a temporary string. The checked-in `Compiler.BIN`
+therefore contains nonzero bytes after some name terminators. This
+translation retains zero-filled tails; it does not reproduce those
+bytes from temporary storage. The common probe checks the declared
+fields and terminated names, while the native host check verifies the
+entire deterministic C++ table before and after module initialization.
+
+The six integer-view classes remain separate and follow their
+`Kernel/KernelA.HH` order: `U16`, `I16`, `U32`, `I32`, `U64`, and `I64`.
+Their base records retain raw type `RT_PTR`, as in `PrsClassNew`; a
+`fwd_class` link identifies the scalar primitive. `ClassRawType` follows
+the complete forwarding chain, matching `OptLib.HC::OptClassFwd`.
+Each primitive uses `PrsClassNew`'s existing allocation for one base
+record and four pointer records. `PrsClass` accepts both zero-width
+raw types, and the explicit cast path in `PrsExp.cpp` accepts them as
+source or destination types. It still rejects unsupported aggregate
+casts and other invalid zero-size classes. `BackC.cpp::CCodeOut::Convert`
+leaves floating-point results unconverted when either side is `I0` or
+`U0`.
+
+The reference registers these primitives once in `AsmHashLoad` and
+stores their addresses in `cmp.internal_types`. The native compiler
+still initializes separate child hash tables on first use. The table
+migration restores the listed fields and registration inputs; shared
+compiler ownership, `CCmpGlbls`, `CmpFillTables`, `cmp.ic_nop`, and
+`UAsmHashLoad` remain unfinished.
+
+`PrsClassNew` also retains two earlier differences from
+`Compiler/PrsLib.HC`: records use the current task's data heap instead
+of its code heap, and `last_in_member_lst` starts null instead of
+pointing to the record's `member_lst_and_root` field. The current
+member insertion code handles its first element separately. The
+primitive probe checks selected record fields and pointer companions;
+it does not establish complete class-record or allocation parity.
+The common source and compiled-module comparison is recorded in
+[Boot.md](Boot.md#compiler-primitive-types).
+
 ## HolyC assembler
 
 `Compiler/Asm.cpp` follows `PrsAsmBlk` and `PrsAsmInst` in

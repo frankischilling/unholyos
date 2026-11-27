@@ -3214,6 +3214,139 @@ and both final native traces match the successful reference captures.
 pull request records the exact tested commit and the GCC and Clang CI
 results.
 
+## Compiler primitive types
+
+`InternalTypesProbe.HC` executes unchanged as source and as a guest-built
+TOSB module in pinned TempleOS and the GCC and Clang native builds. The
+fixture follows Terry A. Davis's `Compiler/CInit.HC`, `AsmInit.HC`,
+`PrsLib.HC`, and the scalar unions in `Kernel/KernelA.HH`. Every source
+and module execution produced these 153 normalized bytes:
+
+```text
+IT table 1FFFF size 170 writable 1
+IT metadata 1FFFF pointers 68
+IT views 3F members 24
+IT layout 3F
+IT void FF stack FF
+IT float 1
+IT runtime F
+IT DONE
+```
+
+The table check covers all 17 rows in order, their type and size fields,
+and each bounded name through its NUL. It verifies the 10-byte row layout,
+finds the mutable `internal_types_table` export, saves all 170 actual
+bytes, changes unused name storage, then restores and compares the full
+snapshot before further compilation. The reference's unused name bytes
+are not required to be zero: `PrsVar.HC::PrsVarInit2` copies the fixed
+eight-byte field from a temporary string, including bytes beyond its
+terminator. The C++ initializer zeros that unused storage. Native host
+checks separately require its exact 170-byte encoding in the packaged
+and loaded compiler, one relative export, and ownership within that
+module's payload.
+
+The metadata checks inspect the listed fields of 17 base primitive
+records and their 68 contiguous pointer companions, covering stars 0
+through 4. They verify names, flags, raw types, widths, and selected
+empty links. Six integer view classes retain raw type 10 and forward to
+their scalar types; all 24 members are checked for offsets, dimensions,
+effective types, and signed or unsigned reads. A fixture union forwarded
+through `I16` checks a two-link chain and preserves raw type 10. These
+checks do not compare every byte of each 128-byte class record. Native
+`PrsClassNew` still uses the current task's data heap instead of the
+reference code heap, and initializes `last_in_member_lst` to NULL instead
+of the reference's `&member_lst_and_root` sentinel.
+
+`I0` and `I0i` have raw type 2 and size zero; `U0` and `U0i` retain raw
+type 3. Their pointer widths, direct and typed function-pointer calls,
+float discard casts, and two void-to-void casts are exercised. Eight
+calls accumulate distinct side effects while standalone RSP samples
+remain equal. A subsequent floating operation verifies liveness.
+Existing string, allocation, square-root, and definition-list functions
+also run. Full `CmpFillTables`, intermediate-code tables, and complete
+compiler parity remain outside this evidence.
+
+Native `BootVariadicReport` uses the existing `FileWriteProbe.BIN` RAM
+drive setup, executes the common source, calls `Cmp`, then loads and
+executes its output. The driver requires one source and one module
+completion with `checks 1`, their full traces, and the expected startup
+order after Adam initialization but before `RLF_DOC` and user tasks. It
+captures the generated `InternalTypesProbe.BIN.Z`; both native guests produced the same
+5,232 bytes. Separate seven-case compiler-failure runs passed under GCC
+and Clang with the new table checks, in
+`build/internal-types-failures-gcc.log` and its Clang counterpart.
+
+The reference transport verifies the complete source plus NUL and an
+exact `B:/InternalTypesProbe.HC` file readback. The separate
+`InternalTypesAOTProbe.HC` wrapper creates a project with the original
+Kernel, Compiler, and Adam declaration headers, enabling extern imports
+as in `Compiler.PRJ`, then includes that same verified source. This is
+needed because reference `CmpJoin` starts AOT compilation from
+`cmp.asm_hash`, without the terminal's declarations. After actual `Cmp`
+and `Load`, the wrapper appends these rows, making the AOT trace 196 bytes:
+
+```text
+IT AOT compile 0
+IT AOT load 1
+IT AOT DONE
+```
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Common `InternalTypesProbe.HC` and RAM-file readback | 10,045 | `5d378100aaf59f10988167faeddba0b8c0be232c1549ad80a5fa8e189b2153f5` |
+| Core upload readback, including NUL | 10,046 | `3d31a354c72e2d29108bddf515733b4e5816247f38bc438e63ea623ac1b45474` |
+| Reference AOT wrapper | 1,050 | `38a1cb89d0187cd8942ac1b59d8265a41a7afb2662141dac33a95363b06bcdd2` |
+| Wrapper upload readback, including NUL | 1,051 | `2841258a6d91aa04f75ff8a58582a5b701dcafded284b6b8c5f5828dd87bb97e` |
+| Common execution trace | 153 | `58e9155dc743d10c0614ab6282df824fdc49221feb5d8e79e7ee1dcca46593d8` |
+| Reference AOT trace with status rows | 196 | `e4edd432ca1351a358c30a4baf55a1f6e52ae94dd3e54582e614ecf2cae9532a` |
+| Native guest-built `InternalTypesProbe.BIN.Z` | 5,232 | `f830c0e5c0268d6057fc28de122a006496f9ed099f587f1d05c4778b748c13de` |
+
+```sh
+make -j4 build/internal-types-test.iso build/Linux/TestBoot
+build/Linux/TestBoot --internal-types qemu-system-x86_64 \
+  build/internal-types-test.iso build/internal-types-gcc-final
+make -j4 BUILD=build/clang \
+  CXX=/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  HOSTCXX=/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  build/clang/internal-types-test.iso build/clang/Linux/TestBoot
+build/clang/Linux/TestBoot --internal-types qemu-system-x86_64 \
+  build/clang/internal-types-test.iso build/internal-types-clang-final
+g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+  -o build/internal-types-audit/TestBoot.final.gcc Linux/TestBoot.cpp
+build/internal-types-audit/TestBoot.final.gcc --internal-types-reference \
+  qemu-system-x86_64 ../reference-media/TOS_Distro.ISO \
+  build/internal-types-reference-verified
+```
+
+All final commands exited successfully. Native logs and captures use
+`build/internal-types-gcc-final` and `build/internal-types-clang-final`;
+reference text, screens, source readbacks, and log use
+`build/internal-types-reference-verified`. Earlier attempts are retained
+separately. They exposed the invalid zero-padding oracle, the missing AOT
+header context and required `FileWrite` size argument, and an invalid
+exact comparison of decimal literals. An isolated reference diagnostic
+confirmed unchanged float return bits and FPU status across the eight
+discard calls: `1.25+2.5` produced bits `400E000000000000`, while the
+literal `3.75` parsed as `400E000000000002`. The final liveness check uses
+`1.0+2.0==3.0`. The diagnostic also captured the reference Compiler.BIN:
+its 193,792 bytes match the pinned checked-in binary at SHA-256
+`3e64fe19c1a6c7eb7c7400ba6e4c56fc684612b5578722b9a7ebf495970a4bee`,
+including the table export and incidental name tails.
+
+The separate reference checkout was verified clean through the Git
+Human Workflow helper before and after execution at
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`. The ISO SHA-256 is
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+All runs used QEMU 8.2.2 (`1:8.2.2+ds-0ubuntu1.18`),
+`-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`, one default vCPU,
+`-display none -monitor none -qmp stdio -no-reboot`, and serial capture.
+The reference also used the debug console and GDB on port 45362, returned
+to an empty prompt after each probe, then exited and released the port.
+
+`make test` includes the primitive fixture in the complete regression
+gate. The pull request records the exact tested commit and the GCC and
+Clang CI results.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |
