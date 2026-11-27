@@ -248,6 +248,8 @@ CMemberLst *MemberAdd(CHashClass &owner, const char *name, CHashClass &cls,
 CHashClass *PrsClass(const CCmpCtrl &cc);
 CHashClass *PrsStars(CCmpCtrl &cc, CHashClass *cls);
 CHashClass *PrsClassNew();
+constexpr int8_t REG_UNDEF = INT8_MIN, REG_NONE = 32, REG_ALLOC = 33;
+bool PrsReg(CCmpCtrl &cc, int8_t &reg);
 struct CPrsDeclarator
 {
   CPrsDeclarator() = default;
@@ -262,6 +264,7 @@ struct CPrsDeclarator
   CHashClass *cls = nullptr;
   const char *name = nullptr;
   CHashFun *fun_ptr = nullptr;
+  int8_t reg = REG_UNDEF;
 };
 
 inline CHashFun *FunPtrBase(CHashFun *fun)
@@ -459,6 +462,20 @@ struct CIntermediateCode
   const CHashFun *fun_ptr = nullptr;
   uint32_t call_target = NO_IC;
   bool cmp_link = false;
+  uint8_t local_reg = 0; // Promoted IC_DEREF operand; zero uses memory.
+};
+
+struct COptReg
+{
+  CMemberLst *m;
+  int64_t offset;
+  uint8_t reg;
+};
+
+struct COptRegPlan
+{
+  COptReg regs[4]{};
+  unsigned count = 0;
 };
 
 class CAsm;
@@ -595,11 +612,13 @@ uint8_t *LexTypedExpression2Bin(CCmpCtrl &cc, CRawType type,
 uint32_t PrsExpression(CCmpCtrl &cc, CCodeCtrl &coc);
 uint32_t PrsPrint(CCmpCtrl &cc, CCodeCtrl &coc);
 void OptPass012(CIntermediateCode *code, uint32_t count);
+void OptPass3(CIntermediateCode *code, uint32_t count, CHashFun &fun,
+              COptRegPlan &plan);
 bool OptBranch(CCodeCtrl &coc, uint32_t value, CICode branch, uint32_t target,
                unsigned depth = 0);
 bool LexExpression(CCmpCtrl &cc, uint64_t &result);
 uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
-                    const CHashFun *fun = nullptr, CAOT *aot = nullptr,
+                    CHashFun *fun = nullptr, CAOT *aot = nullptr,
                     size_t *size = nullptr);
 bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type);
 bool PrsStreamBlk(CCmpCtrl &cc);

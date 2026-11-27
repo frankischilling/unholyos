@@ -181,6 +181,15 @@ public:
       if (auto *cls = PrsClass(cc))
         return cc.htc.fun && PrsLocal(*cc.htc.fun, *cls, true);
       return false;
+    case KW_REG:
+    case KW_NOREG: {
+      int8_t reg = REG_UNDEF;
+      if (!cc.htc.fun || !PrsReg(cc, reg))
+        return false;
+      if (auto *cls = PrsClass(cc))
+        return PrsLocal(*cc.htc.fun, *cls, false, reg);
+      return false;
+    }
     case KW_TRY:
       Lex(cc);
       return PrsTryBlk(depth);
@@ -331,11 +340,14 @@ private:
     return Consume(':');
   }
 
-  bool PrsLocal(CHashFun &fun, CHashClass &base, bool is_static = false)
+  bool PrsLocal(CHashFun &fun, CHashClass &base, bool is_static = false,
+                int8_t reg = REG_UNDEF)
   {
     do {
       Lex(cc);
       CPrsDeclarator decl;
+      decl.reg = reg;
+      reg = REG_UNDEF;
       if (!PrsType(cc, base, decl, 0, true) || !decl.name ||
           !ClassComplete(*decl.cls))
         return false;
@@ -348,6 +360,7 @@ private:
         return false;
       if (is_static) {
         member->flags |= MLF_STATIC;
+        member->reg = REG_NONE;
         if (!PrsVarInit(cc, *cls, member->dim, member->static_data,
                         CurrentTask()->code_heap))
           return false;
