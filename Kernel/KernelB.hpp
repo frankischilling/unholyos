@@ -26,6 +26,12 @@ extern "C" int64_t Str2I64Cpp(const char *text, int64_t radix,
                               const char **end);
 extern "C" uint64_t Str2F64Cpp(const char *text, const char **end);
 extern "C" uint64_t Str2DateCpp(const char *src);
+extern "C" char *StrScanCpp(char *src, const char *fmt, int64_t argc,
+                            const uint64_t *argv);
+extern "C" int64_t LstMatchCpp(const uint8_t *needle, const uint8_t *list,
+                               uint64_t flags);
+extern "C" int64_t DefineMatchCpp(const uint8_t *needle, const char *name,
+                                  uint64_t flags);
 bool ChkPtr(const void *ptr);
 bool ChkPtrRange(const void *ptr, size_t size);
 extern "C" uint64_t ChkPtrCpp(const void *ptr);

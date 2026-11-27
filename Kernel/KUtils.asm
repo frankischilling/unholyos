@@ -3,7 +3,7 @@ GLOBAL _MEMCPY,_MEMSET,_MEMSET_U16,_MEMSET_U32,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_
 GLOBAL memcpy,memset
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
-GLOBAL Str2I64HC,Str2DateHC
+GLOBAL Str2I64HC,Str2DateHC,StrScanHC
 GLOBAL Str2F64HC,ChkPtrHC,ClassRep2HC,ClassRepHC,ClassRepDHC
 GLOBAL DocMaxHC,DocDataFmtHC,DocDataScanHC
 GLOBAL DocFormHC,DocEdHC,DocFormFwdHC,DocFormBwdHC,ViewHC,HomeSetHC,ToUpperHC
@@ -207,7 +207,7 @@ EXTERN QSortCpp,QSortI64Cpp,LstMatchCpp
 EXTERN FileReadCpp,FileNameAbsCpp,DirNameAbsCpp,DirCurCpp,DirFileCpp,ExtChgCpp,ExtDftCpp
 EXTERN CdCpp,IsDirCpp,DirCpp,PutDirLinkCpp,FilesFindCpp,FileFindCpp,FilesFindMatchCpp
 EXTERN DirEntryDelCpp,DirEntryDel2Cpp,DirTreeDelCpp,DirTreeDel2Cpp
-EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp,Str2DateCpp
+EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp,Str2DateCpp,StrScanCpp
 EXTERN Str2F64Cpp,ChkPtrCpp,ClassRep2Cpp,ClassRepCpp,ClassRepDCpp
 EXTERN DocMaxCpp,DocDataFmtCpp,DocDataScanCpp
 EXTERN DocFormCpp,DocEdCpp,DocFormFwdCpp,DocFormBwdCpp,ViewCpp,HomeSetCpp,ToUpperCpp
@@ -620,6 +620,7 @@ HOLYC_CPP DirContextDelHC,DirContextDelCpp,2
 HOLYC_CPP Str2I64HC,Str2I64Cpp,3
 HOLYC_CPP Str2DateHC,Str2DateCpp,1
 HOLYC_CPP Str2F64HC,Str2F64Cpp,2
+HOLYC_PRINT StrScanHC,StrScanCpp,2
 HOLYC_CPP ChkPtrHC,ChkPtrCpp,1
 HOLYC_CPP ClassRep2HC,ClassRep2Cpp,8
 HOLYC_CPP ClassRepHC,ClassRepCpp,5

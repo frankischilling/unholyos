@@ -190,3 +190,135 @@ extern "C" uint64_t Str2DateCpp(const char *_src)
   Free(src);
   return res-offset;
 }
+
+extern "C" char *StrScanCpp(char *src, const char *fmt, int64_t argc,
+                            const uint64_t *argv)
+{
+  char *buf, *ptr, **pptr;
+  [[maybe_unused]] bool left_justify = false;
+  int64_t ch, cur_arg = 0, i, len;
+  [[maybe_unused]] int64_t dec_len;
+  uint64_t value;
+  void *out;
+  constexpr uint64_t scan_error = 0x6E616353; // Scan
+  if (!fmt)
+    RaiseHolyC(scan_error);
+  while ((ch = uint8_t(*fmt++))) {
+    if (ch == '%') {
+      if (*fmt == '%') {
+        src++;
+        fmt++;
+      } else {
+        if (*fmt == '-') {
+          left_justify = true;
+          fmt++;
+        } else
+          left_justify = false;
+        len = 0;
+        while ('0' <= *fmt && *fmt <= '9')
+          len = int64_t(uint64_t(len) * 10 + (*fmt++ - '0'));
+        if (*fmt == '*') {
+          fmt++;
+          if (cur_arg >= argc)
+            RaiseHolyC(scan_error);
+          len = int64_t(argv[cur_arg++]);
+        }
+        ch = uint8_t(*fmt++);
+        if (ch && !len) {
+          ptr = src;
+          while (*ptr && *ptr != *fmt)
+            ptr++;
+          len = ptr - src;
+        } else {
+          if (ch == '.') {
+            dec_len = 0;
+            while ('0' <= *fmt && *fmt <= '9')
+              dec_len = int64_t(uint64_t(dec_len) * 10 + (*fmt++ - '0'));
+            if (*fmt == '*') {
+              fmt++;
+              if (cur_arg >= argc)
+                RaiseHolyC(scan_error);
+              dec_len = int64_t(argv[cur_arg++]);
+            }
+            ch = uint8_t(*fmt++);
+          }
+        }
+        buf = reinterpret_cast<char *>(
+            MAlloc(uint64_t(len) + 1, CurrentTask()->data_heap));
+        if (!buf)
+          RaiseHolyC(0x6D654D74754FULL); // OutMem from the reference MAlloc.
+        for (i = 0; i < len; i++)
+          buf[i] = *src++;
+        buf[i] = 0;
+        switch (ch) {
+        case 's':
+          if (cur_arg >= argc)
+            RaiseHolyC(scan_error);
+          pptr = reinterpret_cast<char **>(argv[cur_arg++]);
+          MemCpy(&ptr, pptr, sizeof(ptr));
+          MemCpy(ptr, buf, StrLen(buf) + 1);
+          break;
+        case 'c':
+          if (cur_arg >= argc)
+            RaiseHolyC(scan_error);
+          ptr = reinterpret_cast<char *>(argv[cur_arg++]);
+          *ptr = *buf;
+          break;
+        case 'C':
+          if (cur_arg >= argc)
+            RaiseHolyC(scan_error);
+          ptr = reinterpret_cast<char *>(argv[cur_arg++]);
+          *ptr = 'a' <= *buf && *buf <= 'z' ? *buf - ('a' - 'A') : *buf;
+          break;
+        case 'z':
+          if (cur_arg + 1 >= argc)
+            RaiseHolyC(scan_error);
+          out = reinterpret_cast<void *>(argv[cur_arg++]);
+          value = LstMatchCpp(
+              reinterpret_cast<uint8_t *>(buf),
+              reinterpret_cast<const uint8_t *>(argv[cur_arg++]), 0);
+          MemCpy(out, &value, sizeof(value));
+          break;
+        case 'Z':
+          if (cur_arg + 1 >= argc)
+            RaiseHolyC(scan_error);
+          out = reinterpret_cast<void *>(argv[cur_arg++]);
+          value = DefineMatchCpp(
+              reinterpret_cast<uint8_t *>(buf),
+              reinterpret_cast<const char *>(argv[cur_arg++]), 0);
+          MemCpy(out, &value, sizeof(value));
+          break;
+        case 'd':
+        case 'X':
+        case 'b':
+          if (cur_arg >= argc)
+            RaiseHolyC(scan_error);
+          out = reinterpret_cast<void *>(argv[cur_arg++]);
+          value = Str2I64Cpp(buf, ch == 'd' ? 10 : ch == 'X' ? 16 : 2, nullptr);
+          MemCpy(out, &value, sizeof(value));
+          break;
+        case 'e':
+        case 'f':
+        case 'g':
+        case 'n':
+          if (cur_arg >= argc)
+            RaiseHolyC(scan_error);
+          out = reinterpret_cast<void *>(argv[cur_arg++]);
+          value = Str2F64Cpp(buf, nullptr);
+          MemCpy(out, &value, sizeof(value));
+          break;
+        case 'D':
+          if (cur_arg >= argc)
+            RaiseHolyC(scan_error);
+          out = reinterpret_cast<void *>(argv[cur_arg++]);
+          value = Str2DateCpp(buf);
+          MemCpy(out, &value, sizeof(value));
+          break;
+        }
+        Free(buf);
+      }
+    } else
+      src++;
+  }
+  return src;
+}

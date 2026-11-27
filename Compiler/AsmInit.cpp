@@ -529,6 +529,8 @@ static bool CmpKernelCallback(CHashTable *table, CHashClass &record,
 
 static bool CmpDocData(CHashTable *table, CHashClass &task)
 {
+  static_assert(offsetof(CDocEntry,define_str)==128 &&
+                offsetof(CDocEntry,my_fmt_data)==160);
   auto *doc = CmpKernelClass(table, "CDoc", sizeof(CDoc));
   auto *entry = CmpKernelClass(table, "CDocEntry", sizeof(CDocEntry));
   auto *bin = CmpKernelClass(table, "CDocBin", sizeof(CDocBin));
@@ -572,6 +574,8 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
       {"min_col", entry, FindType("U32", table), offsetof(CDocEntry, base) + offsetof(CDocEntryBase, min_col)},
       {"max_col", entry, FindType("U32", table), offsetof(CDocEntry, base) + offsetof(CDocEntryBase, max_col)},
       {"aux_str", entry, u8ptr, offsetof(CDocEntry, aux_str)},
+      {"define_str", entry, u8ptr, offsetof(CDocEntry, define_str)},
+      {"my_fmt_data", entry, u8ptr, offsetof(CDocEntry, my_fmt_data)},
       {"raw_type", entry, FindType("U8", table), offsetof(CDocEntry, raw_type)},
       {"len", entry, i32, offsetof(CDocEntry, len)},
       {"data", entry, u8ptr, offsetof(CDocEntry, data)},
@@ -2021,6 +2025,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Str2I64", I64, FF_RET1, {{"st", U8Ptr}, {"radix", I64, true, 10}, {"_end_ptr", U8PtrPtr, true}}},
       {"Str2F64", F64, FF_RET1, {{"src", U8Ptr}, {"_end_ptr", U8PtrPtr, true}}},
       {"Str2Date", Date, FF_RET1, {{"src", U8Ptr}}},
+      {"StrScan", U8Ptr, FF_DOT_DOT_DOT, {{"src", U8Ptr}, {"fmt", U8Ptr}}},
       {"SysTry", U0, FF_RET1, {{"catch_start", U8Ptr}, {"untry_start", U8Ptr}}},
       {"SysUntry", U0, FF_RET1, {}},
       {"throw", U0, FF_RET1, {{"ch", I64, true}, {"no_log", Bool, true}}},
@@ -2885,9 +2890,15 @@ static bool CmpFillHash(CHashTable *table)
       {"DOCF_BWD_MOVEMENT", "0x40000"},
       {"DOCF_DO_FULL_REFRESH", "0x200000"}, {"TASKf_IDLE", "3"},
       {"RECALCt_FIND_CURSOR", "1"},
-      {"DOCT_DATA", "30"}, {"DOCT_TREE", "36"},
+      {"DOCT_DATA", "30"}, {"DOCT_CHECK_BOX", "31"}, {"DOCT_LST", "32"},
+      {"DOCT_TREE", "36"},
+      {"DOCEF_TAG", "1"}, {"DOCEF_AUX_STR", "4"}, {"DOCEF_DEFINE", "8"},
       {"DOCEF_REFRESH_DATA", "(1<<45)"}, {"DOCEF_UPDATE_DATA", "(1<<46)"},
       {"DOCEF_DEREF_DATA", "(1<<47)"}, {"DOCEF_HAS_TERMINATOR", "(1<<49)"},
+      {"DOCEF_REMALLOC_DATA", "(1<<48)"}, {"DOCEF_LST", "(1<<53)"},
+      {"RT_I8", "4"}, {"RT_U8", "5"}, {"RT_I16", "6"}, {"RT_U16", "7"},
+      {"RT_I32", "8"}, {"RT_U32", "9"}, {"RT_I64", "10"}, {"RT_PTR", "10"},
+      {"RT_U64", "11"}, {"RT_F64", "14"},
       {"RECALCt_TO_SCRN", "2"},
       {"RECALCF_HAS_CURSOR", "0x100"},
       {"DISPLAYf_SHOW", "0"},

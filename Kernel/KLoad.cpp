@@ -49,7 +49,7 @@ void QSortHC(), QSortI64HC(), LstMatchHC();
 void FileReadHC(), FileNameAbsHC(), DirNameAbsHC(), DirCurHC(), DirFileHC();
 void CdHC(), IsDirHC(), DirHC(), PutDirLinkHC(), FilesFindHC(), FileFindHC(),
     FilesFindMatchHC(), DirEntryDelHC(), DirEntryDel2HC(), DirTreeDelHC(), DirTreeDel2HC();
-void DirContextNewHC(), DirContextDelHC(), Str2I64HC();
+void DirContextNewHC(), DirContextDelHC(), Str2I64HC(), StrScanHC();
 void Str2DateHC(), GetI64HC(), GetF64HC(), GetDateHC();
 void Str2F64HC(), ChkPtrHC(), ClassRep2HC(), ClassRepHC(), ClassRepDHC();
 void DocMaxHC(), DocDataFmtHC(), DocDataScanHC();
@@ -692,6 +692,7 @@ bool LoadKernel(CTask &task)
       {"Str2I64", reinterpret_cast<uintptr_t>(Str2I64HC)},
       {"Str2Date", reinterpret_cast<uintptr_t>(Str2DateHC)},
       {"Str2F64", reinterpret_cast<uintptr_t>(Str2F64HC)},
+      {"StrScan", reinterpret_cast<uintptr_t>(StrScanHC)},
       {"ChkPtr", reinterpret_cast<uintptr_t>(ChkPtrHC)},
       {"ClassRep2", reinterpret_cast<uintptr_t>(ClassRep2HC)},
       {"ClassRep", reinterpret_cast<uintptr_t>(ClassRepHC)},
