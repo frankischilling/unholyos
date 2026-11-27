@@ -247,15 +247,39 @@ migration restores the listed fields and registration inputs; shared
 compiler ownership, `CCmpGlbls`, `CmpFillTables`, `cmp.ic_nop`, and
 `UAsmHashLoad` remain unfinished.
 
-`PrsClassNew` also retains two earlier differences from
-`Compiler/PrsLib.HC`: records use the current task's data heap instead
-of its code heap, and `last_in_member_lst` starts null instead of
-pointing to the record's `member_lst_and_root` field. The current
-member insertion code handles its first element separately. The
-primitive probe checks selected record fields and pointer companions;
-it does not establish complete class-record or allocation parity.
+The primitive probe checks selected record fields and pointer
+companions. Its original comparison at `24030d55` preceded the class
+allocation and list-initialization changes below; it does not establish
+complete class-record or allocation parity.
 The common source and compiled-module comparison is recorded in
 [Boot.md](Boot.md#compiler-primitive-types).
+
+## Compiler class records
+
+`Compiler/PrsLib.cpp::PrsClassNew` follows the constructor in
+`Compiler/PrsLib.HC`: five adjacent 128-byte records come from the
+current task's code heap. Each starts with the class hash type, pointer
+raw type, eight-byte size, and its pointer-star count. Only the base
+record then receives size zero and a `last_in_member_lst` pointer to
+its own `member_lst_and_root` slot. The four pointer companions retain
+their zeroed list fields.
+
+`MemberAdd` recognizes that empty-list sentinel. Its tree insertion
+already assigns the root slot, so it skips the duplicate store through
+the sentinel and appends normally through later real members. This
+preserves the reference's layout without treating a pointer field as
+a complete C++ `CMemberLst` object. Offset assertions cover the leading
+`next` field and the class's tail field. Null tails remain supported for
+the separate native function constructors.
+
+After failed completion of a forward class, `PrsClassDef` retains the
+sentinel restored by `ClassMemberLstDel`; it no longer overwrites it
+with null. That retry path is checked as native recovery behavior.
+The constructor still returns null if allocation fails, whereas the
+pinned constructor assumes allocation succeeds. Function-record
+construction and lazy per-task type registration remain separate gaps.
+The common lifecycle comparison and native retry checks are recorded in
+[Boot.md](Boot.md#compiler-class-records).
 
 ## HolyC assembler
 

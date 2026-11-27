@@ -265,7 +265,7 @@ registering primitive types. The six integer-view classes from
 `Kernel/KernelA.HH` are registered separately.
 The C++ initializer zeroes unused name bytes. The reference copies
 those bytes from temporary string storage; [Source layout](SourceLayout.md#compiler-primitive-types)
-records that difference and the remaining class-allocation gaps.
+records that difference and the remaining registration gaps.
 
 Registration still occurs in each native compiler child table when
 that table is first used. The reference instead builds one shared

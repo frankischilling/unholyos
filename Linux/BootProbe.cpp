@@ -899,6 +899,80 @@ static void BootAggregateReport(const CDrv &dv)
   SerialPutS("\r\n");
 }
 
+static void BootClassRecordsReport(const CDrv &dv)
+{
+  if (!BootFileProgramReport(dv, "/ClassRecordsProbe.HC").okay)
+    return;
+  constexpr auto *name = "CClassRecordsNativeRetry";
+  auto *table = adam_task->hash_table;
+  uint64_t checks = 0;
+  if (!HashFind(name, table, HTT_CLASS)) {
+    auto data_before = adam_task->data_heap->used_u8s;
+    auto code_before = adam_task->code_heap->used_u8s;
+    auto forward =
+        ExePutS("extern class CClassRecordsNativeRetry;", nullptr, 0);
+    auto *cls =
+        reinterpret_cast<CHashClass *>(HashFind(name, table, HTT_CLASS));
+    if (cls) {
+      auto *sentinel =
+          reinterpret_cast<CMemberLst *>(&cls->member_lst_and_root);
+      if (forward.okay &&
+          MSize(cls) == sizeof(CHashClass) * (PTR_STARS_NUM + 1) &&
+          (cls->flags & CF_EXTERN) && !cls->size && !cls->member_cnt &&
+          !cls->member_lst_and_root && cls->last_in_member_lst == sentinel)
+        checks |= 1;
+      auto data_forward = adam_task->data_heap->used_u8s;
+      auto code_forward = adam_task->code_heap->used_u8s;
+      auto invalid = ExePutS("class CClassRecordsNativeRetry {"
+                             "U8 first; I16 bad[-1];};",
+                             nullptr, 0);
+      if (!invalid.okay)
+        checks |= 2;
+      bool reset = HashFind(name, table, HTT_CLASS) == &cls->sym.hash &&
+                   (cls->flags & CF_EXTERN) && !cls->size && !cls->member_cnt &&
+                   !cls->member_lst_and_root && !cls->member_class_base_root &&
+                   cls->last_in_member_lst == sentinel;
+      if (reset)
+        checks |= 4;
+      if (adam_task->data_heap->used_u8s == data_forward &&
+          adam_task->code_heap->used_u8s == code_forward)
+        checks |= 8;
+      if (!invalid.okay && reset) {
+        auto retry = ExePutS("class CClassRecordsNativeRetry {"
+                             "U8 left; I64 right;};"
+                             "sizeof(CClassRecordsNativeRetry);",
+                             nullptr, 0);
+        auto *left = cls->member_lst_and_root;
+        auto *right = left ? left->next : nullptr;
+        if (retry.okay && retry.value == 9 &&
+            HashFind(name, table, HTT_CLASS) == &cls->sym.hash &&
+            !(cls->flags & CF_EXTERN) && cls->size == 9 &&
+            cls->member_cnt == 2 && left && right && left->str && right->str &&
+            !StrCmpCpp(reinterpret_cast<const uint8_t *>(left->str),
+                       reinterpret_cast<const uint8_t *>("left")) &&
+            !StrCmpCpp(reinterpret_cast<const uint8_t *>(right->str),
+                       reinterpret_cast<const uint8_t *>("right")) &&
+            cls->member_lst_and_root == left && left->next == right &&
+            !right->next && cls->last_in_member_lst == right)
+          checks |= 16;
+      }
+      if (HashFind(name, table, HTT_CLASS) == &cls->sym.hash) {
+        HashRemove(&cls->sym.hash, table);
+        HashDel(&cls->sym.hash);
+        if (!HashFind(name, table, HTT_CLASS))
+          checks |= 32;
+      }
+    }
+    if (adam_task->data_heap->used_u8s == data_before)
+      checks |= 64;
+    if (adam_task->code_heap->used_u8s == code_before)
+      checks |= 128;
+  }
+  SerialPutS("UnholyOS: class record recovery checks ");
+  SerialPutHex(checks);
+  SerialPutS("\r\n");
+}
+
 static void BootCompoundReport(const CDrv &dv)
 {
   if (!BootFileProgramReport(dv, "/CompoundProbe.HC").okay)
@@ -2055,6 +2129,7 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/MemSetProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ClassMeta.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ClassReportProbe.HC");
+    BootClassRecordsReport(*adam_task->cur_dv);
     BootVariadicReport(*adam_task->cur_dv, *adam_task, "/LastClassProbe.HC",
                        "/LastClassProbe.BIN.Z",
                        "Cmp(\"::/LastClassProbe.HC\",,\"B:/LastClassProbe.BIN.Z\");");

@@ -99,7 +99,6 @@ static CHashClass *PrsClassDef(CCmpCtrl &cc, bool overlay, bool forward,
   if (!okay) {
     if (reuse) {
       ClassMemberLstDel(cls);
-      cls->last_in_member_lst = nullptr;
       cls->base_class = nullptr;
     } else {
       HashRemove(&cls->sym.hash, table);
