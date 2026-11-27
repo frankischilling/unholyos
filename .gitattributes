@@ -162,3 +162,5 @@ Linux/Fixtures/FormatMissingArgsProbe.HC text eol=lf
 Linux/Fixtures/InternalTypesProbe.HC text eol=lf
 Linux/Fixtures/InternalTypesAOTProbe.HC text eol=lf
 Linux/Fixtures/ClassRecordsProbe.HC text eol=lf
+Linux/Fixtures/FunctionRecordsProbe.HC text eol=lf
+Linux/Fixtures/FunctionRecordsAOTProbe.HC text eol=lf

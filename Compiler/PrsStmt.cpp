@@ -752,8 +752,7 @@ static bool PrsFun(CCmpCtrl &cc, CHashClass &type, char *name,
                    uint32_t visibility, uint16_t flags, CAOT *aot,
                    const CPrsDecl &decl)
 {
-  auto *heap = CurrentTask()->data_heap;
-  auto *fun = reinterpret_cast<CHashFun *>(CAlloc(sizeof(CHashFun), heap));
+  auto *fun = PrsFunNew();
   if (!fun || ClassRawType(type) == RT_AGGREGATE) {
     Free(fun);
     Free(name);

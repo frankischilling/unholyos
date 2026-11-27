@@ -1810,10 +1810,11 @@ static CTestHeap VerifyHeap(CMonitor &vm, uint64_t heap, uint64_t pool,
   return result;
 }
 
-static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
-                                   uint64_t code_heap, uint64_t data_heap,
-                                   const CTestHeap &code, const CTestHeap &data,
-                                   uint64_t inherited_table, bool terminal)
+static void VerifyTaskCompilerRecords(CMonitor &vm, uint64_t task,
+                                      uint64_t code_heap, uint64_t data_heap,
+                                      const CTestHeap &code,
+                                      const CTestHeap &data,
+                                      uint64_t inherited_table, bool terminal)
 {
   auto contains = [](const BlockRanges &ranges, uint64_t address,
                      uint64_t bytes) {
@@ -1837,6 +1838,40 @@ static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
     allocation(header[3], 1024 * 8, data_heap, data.ranges);
     return header;
   };
+  auto read_name = [&](uint64_t address) {
+    Check(address >= 16 && contains(data.ranges, address - 16, 16),
+          "Startup compiler name is outside its data heap");
+    const auto header = ReadPhysical<2>(vm, address - 16);
+    Check(header[0] == data_heap && header[1] >= 24 && header[1] <= 64 &&
+              !(header[1] & 7) &&
+              contains(data.ranges, address - 16, header[1]),
+          "Invalid startup compiler name allocation");
+    std::string name;
+    bool ended = false;
+    for (uint64_t offset = 0; offset < header[1] - 16 && !ended; offset += 8) {
+      auto word = ReadPhysical<1>(vm, address + offset)[0];
+      for (unsigned byte = 0; byte < 8; ++byte, word >>= 8) {
+        if (!(word & 255)) {
+          ended = true;
+          break;
+        }
+        name.push_back(char(word));
+      }
+    }
+    Check(ended && !name.empty() &&
+              CompilerAllocationSize(name.size() + 1) == header[1],
+          "Unterminated startup compiler name or incorrect allocation size");
+    return name;
+  };
+  struct CRecordMembers
+  {
+    uint64_t address, first, last;
+    uint32_t count;
+    std::string name;
+    bool callbacks;
+  };
+  std::vector<CRecordMembers> owners;
+  std::set<uint64_t> class_types;
   const auto table = table_header(ReadPhysical<1>(vm, task + 0x3D0)[0]);
   if (!terminal) {
     Check(table[0] == inherited_table && !code.used && !code.alloced,
@@ -1931,29 +1966,9 @@ static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
         const auto type = uint32_t(entry[2]);
         if ((type & 0x1FFFF) == 0x10 || (type & 0x1FFFF) == 0x20) {
           allocation(address, 5 * 128, code_heap, code.ranges);
-          Check(entry[1] >= 16 && contains(data.ranges, entry[1] - 16, 16),
-                "Startup class name is outside its data heap");
-          const auto name_header = ReadPhysical<2>(vm, entry[1] - 16);
-          Check(name_header[0] == data_heap && name_header[1] >= 24 &&
-                    name_header[1] <= 64 && !(name_header[1] & 7) &&
-                    contains(data.ranges, entry[1] - 16, name_header[1]),
-                "Invalid startup class name allocation");
-          std::string name;
-          bool ended = false;
-          for (uint64_t offset = 0; offset < name_header[1] - 16 && !ended;
-               offset += 8) {
-            auto word = ReadPhysical<1>(vm, entry[1] + offset)[0];
-            for (unsigned byte = 0; byte < 8; ++byte, word >>= 8) {
-              if (!(word & 255)) {
-                ended = true;
-                break;
-              }
-              name.push_back(char(word));
-            }
-          }
+          const auto name = read_name(entry[1]);
           const auto found = expected.find(name);
-          Check(ended && found != expected.end() && found->second == type &&
-                    CompilerAllocationSize(name.size() + 1) == name_header[1],
+          Check(found != expected.end() && found->second == type,
                 "Unexpected, duplicated or mistyped startup class name");
           uint64_t hash = 0;
           for (unsigned char ch : name)
@@ -1973,14 +1988,247 @@ static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
                              block.begin() + stars * 16),
                   "Startup class pointer companion differs");
           }
+          for (uint64_t stars = 0; stars <= 4; ++stars)
+            class_types.insert(address + stars * 128);
+          owners.push_back(
+              {address, block[11], block[13], uint32_t(block[10]), name, true});
           expected.erase(found);
           used += CompilerAllocationSize(5 * 128);
         }
         address = entry[0];
       }
   }
-  Check(expected.empty() && used == class_count * 656 && code.used == used,
-        "Startup terminal code usage differs from its owned class records");
+  Check(expected.empty() && used == class_count * 656,
+        "Startup terminal class records are incomplete");
+  constexpr std::string_view function_names =
+      "Print MStrPrint StrPrint CatPrint CAlloc MAlloc Now Struct2Date "
+      "Date2Struct YearStartDate DayOfWeek FirstDayOfMon LastDayOfMon "
+      "FirstDayOfYear LastDayOfYear Cd IsDir Dir DirCur PutDirLink FilesFind "
+      "FileFind Load FileRead FileWrite Let2Drv BlkRead Fmt BlkWrite FSize "
+      "BlkDevNextFreeSlot BlkDevAdd Let2Drv FOpen FClose FBlkRead FBlkWrite "
+      "FileAttr CopySingle Del Copy Move CopyTree DelTree DirMk ScanFlags "
+      "FilesFindMatch DirEntryDel DirEntryDel2 DirTreeDel DirTreeDel2 "
+      "DirContextNew DirContextDel Str2I64 Str2F64 Str2Date StrScan SysTry "
+      "SysUntry throw Caller PutExcept Break BreakLock BreakUnlock YorN Free "
+      "MSize MSize2 HashFind HashVal MemberFind MemberMetaData MemberMetaFind "
+      "StrNew "
+      "MStrUtil ScaleIndent Spaces2Tabs StrFind StrFirstOcc StrFirstRem "
+      "StrICmp "
+      "StrIMatch StrLastOcc StrLastRem StrMatch StrNCmp StrNICmp StrOcc "
+      "StrUtil "
+      "Tabs2Spaces StrCpy StrLen QueInit QueIns QueInsRev QueRem FifoU8New "
+      "FifoU8Del FifoU8Ins FifoU8Rem FifoU8Peek FifoU8Flush FifoU8Cnt "
+      "FifoI64New FifoI64Del FifoI64Ins FifoI64Rem FifoI64Peek FifoI64Flush "
+      "FifoI64Cnt StrCmp MemCmp MemCpy MemSet MemSetU8 MemSetU16 MemSetU32 "
+      "MemSetI64 PutHex PutChars PutS tS Busy SleepUntil Sleep Fs Gs ChkPtr "
+      "ClassRep2 ClassRep ClassRepD GetRFlags Cos MaxI64 MinI64 Sin SqrI64 "
+      "Sqrt "
+      "ToI64 ToF64 JobDel TaskRstAwaitingMsg TaskExe TaskText TaskMsg "
+      "JobResScan JobResGet TaskWait PostMsg PostMsgWait Msg JobsHndlr "
+      "SrvTaskCont FlushMsgs Char2ScanCode ScanCode2Char KbdTypeMatic GridInit "
+      "MsSet GrPaletteColorSet GrPaletteColorGet GrPaletteGet GrPaletteSet "
+      "GrScaleZoom WinHorz WinVert WinRefocus WinToTop WinFocus WinTileHorz "
+      "WinTileVert WinMax WinBorder WinScrollNull WinScrollRestore "
+      "CtrlFindUnique CtrlInside WinScrollsInit ViewAnglesNew ViewAnglesDel "
+      "AutoComplete MenuSubEntryFind MenuEntryFind MenuNew MenuFile MenuDel "
+      "MenuPush MenuFilePush MenuPop ScanCode2KeyName SettingsPush SettingsPop "
+      "WinZBufUpdate TextChar TextLenStr TextLenAttrStr TextLenAttr TextPrint "
+      "TextRect TextBorder DocNew DocRead DocSave DocType Type DocPut "
+      "DocDisplay DocBorder DocDel DocRecalc DocMax DocDataFmt DocDataScan "
+      "DocForm DocEd DocFormFwd DocFormBwd View HomeSet ToUpper StrCpy Define "
+      "DefineLoad DefinePrint DefineCnt DefineSub DefineLstLoad DefineMatch "
+      "Color2Str Str2ColorU16 Str2ColorU32 DocPutKey DocTermNew DocGetKey "
+      "DocScanLine GetStr GetI64 GetF64 GetDate GetS UserCmdLine DocLock "
+      "DocUnlock DocBottom DocClear DocCursor DocHighlightCursor DocScroll "
+      "DocEntryRun DocPrint DrawStdMs PaletteSetStd ClampI64 SignI64 Clamp Min "
+      "Max Pow10I64 FloorU64 CeilU64 RoundI64 FloorI64 CeilI64 RandI16 RandU16 "
+      "RandI32 RandU32 RandI64 RandU64 Rand Seed IsPixCovered0 GrPlot0 GrPeek0 "
+      "GrBlot GrRect GrRectB GrClamp GrPlot GrFillCircle GrPlot3B GrPlot3 "
+      "SpriteSize DC2Sprite Sprite3 Sprite3B GrBlot3 GrHLine GrVLine "
+      "GrFillTri0 "
+      "GrFillPoly3 GrRect3 GrBorder GrArrow3 GrPutChar GrPrint PressAKey "
+      "DCSymmetrySet DCSymmetry3Set DCReflect DocSprite Sprite GrPeek "
+      "GrFloodFill GrFloodFill3 GrLine GrLine3 Circle Ellipse GrCircle "
+      "GrEllipse GrCircle3 GrEllipse3 Arg Line RegPoly GrRegPoly GrRegPoly3 "
+      "Bezier2 BSpline2 Gr2Bezier Gr2Bezier3 Gr2BSpline Gr2BSpline3 Bezier3 "
+      "BSpline3 Gr3Bezier Gr3Bezier3 Gr3BSpline Gr3BSpline3 D3I32Dist "
+      "D3I32DistSqr D3I32NormSqr DCThickScale ClipLine Mat4x4MulXYZ "
+      "DCTransform "
+      "Mat4x4IdentEqu Mat4x4IdentNew Mat4x4NormSqr65536 DCMat4x4Set DCLighting "
+      "DCFill DCClear DCRst DCExtentsInit DCAlias DCNew DCDel DCSize "
+      "DCDepthBufRst DCDepthBufAlloc DCCopy DCMono DCColorChg DCSave DCLoad "
+      "GRWrite GRRead DCExt DCDiff DocGR DCScrnCapture GRScrnCaptureRead "
+      "GRScrnCaptureWrite D3I32Norm Mat4x4MulMat4x4Equ Mat4x4MulMat4x4New "
+      "Mat4x4Equ Mat4x4RotX Mat4x4RotY Mat4x4RotZ Mat4x4Scale "
+      "Mat4x4TranslationEqu Mat4x4TranslationAdd Refresh Mat4x4New PutKey "
+      "ScanChar ScanKey GetKey GetChar ScanMsg GetMsg Yield Spawn Exit "
+      "TaskValidate Suspend IsSuspended TaskQueIns TaskQueRem SingleUser "
+      "IsSingleUser Ona2Freq Freq2Ona Snd ScrnCast SndRst SndTaskEndCB tM Beat "
+      "MusicSetOctave MusicSetMeter MusicSetNoteLen Note2Ona Ona2Note "
+      "Ona2Octave Play MusicSettingsRst SndShift AUWrite Beep Mute IsMute Call "
+      "StreamPrint StreamDir StreamExePrint RedSeaISO Cmp ExeFile ExePutS";
+  std::multiset<std::string> expected_functions;
+  std::istringstream declarations{std::string(function_names)};
+  for (std::string name; declarations >> name;)
+    expected_functions.insert(name);
+  constexpr size_t function_count = 424;
+  Check(expected_functions.size() == function_count,
+        "Invalid startup function declaration inventory");
+  constexpr struct
+  {
+    const char *name;
+    uint32_t args;
+  } callbacks[]{{"CDocEntry.left_cb", 2},
+                {"CDocEntry.right_cb", 2},
+                {"CDocEntry.tag_cb", 3},
+                {"CDoc.left_click_link", 2},
+                {"CDoc.right_click_link", 2},
+                {"CDoc.user_put_key", 4},
+                {"CGrGlbls.fp_final_scrn_update", 1},
+                {"CGrGlbls.fp_draw_ms", 3},
+                {"CGrGlbls.fp_draw_grab_ms", 4},
+                {"CDC.transform", 4},
+                {"CTask.draw_it", 2},
+                {"CTask.task_end_cb", 0},
+                {"CTaskSettings.draw_it", 2},
+                {"CTaskSettings.task_end_cb", 0},
+                {"CCtrl.update_derived_vals", 1},
+                {"CCtrl.draw_it", 2},
+                {"CCtrl.inside_ctrl", 3},
+                {"CCtrl.left_click", 4},
+                {"CCtrl.right_click", 4},
+                {"CCtrl.wheel_chg", 2},
+                {"CCPU.profiler_timer_irq", 1},
+                {"Circle.fp_plot", 4},
+                {"Ellipse.fp_plot", 4},
+                {"Line.fp_plot", 4},
+                {"RegPoly.fp_plot", 4},
+                {"Bezier2.fp_plot", 4},
+                {"BSpline2.fp_plot", 4},
+                {"Bezier3.fp_plot", 4},
+                {"BSpline3.fp_plot", 4}};
+  static_assert(std::size(callbacks) == 29);
+  std::map<std::string, uint32_t> expected_callbacks;
+  for (const auto &callback : callbacks)
+    expected_callbacks.emplace(callback.name, callback.args);
+  std::set<uint64_t> function_blocks;
+  uint64_t function_used = 0;
+  auto function_record = [&](uint64_t address, const std::string &name,
+                             bool named, uint32_t args) {
+    constexpr uint64_t bytes = 5 * 168, charged = bytes + 16;
+    Check(
+        address >= 16 && contains(code.ranges, address - 16, charged) &&
+            function_blocks.insert(address).second,
+        ("Startup function block is repeated or outside its code heap: " + name)
+            .c_str());
+    const auto memory = ReadPhysical<107>(vm, address - 16);
+    Check(memory[0] == code_heap && memory[1] == charged,
+          ("Startup function block has the wrong allocation or owner: " + name)
+              .c_str());
+    const auto block = std::span(memory).subspan(2);
+    const auto type = uint32_t(block[2]);
+    const auto flags = uint16_t(block[10] >> 48);
+    Check(type == (named ? 0x01000040u : 0x40u) &&
+              ((block[10] >> 32) & 0xFFFF) == (10u << 8) && !block[3] &&
+              !block[4] && !block[5] && !block[7] && !block[8] && !block[9] &&
+              !block[14] && !block[15] && class_types.contains(block[16]) &&
+              !(block[17] >> 32) && !block[18] && !block[20] &&
+              uint32_t(block[10]) == uint32_t(block[17]) &&
+              (named ? (flags & 0x2000) && !(flags & 0xFFF)
+                     : flags == 0x8000 && !block[0] && !block[1] && !block[6] &&
+                           !block[19] && block[17] == args),
+          ("Startup function base fields differ: " + name).c_str());
+    if (named) {
+      Check(read_name(block[1]) == name,
+            "Startup function hash and allocation names differ");
+      if (block[6])
+        read_name(block[6]);
+    }
+    for (uint64_t stars = 1; stars <= 4; ++stars) {
+      std::array<uint64_t, 21> companion{};
+      companion[2] = 0x40;
+      companion[8] = 8;
+      companion[10] = (stars << 32) | (10ULL << 40);
+      Check(std::equal(companion.begin(), companion.end(),
+                       block.begin() + stars * 21),
+            ("Startup function pointer companion differs: " + name).c_str());
+    }
+    owners.push_back(
+        {address, block[11], block[13], uint32_t(block[10]), name, named});
+    function_used += charged;
+  };
+  for (uint64_t bucket = 0; bucket < 1024; bucket += 64) {
+    const auto entries = ReadPhysical<64>(vm, table[3] + bucket * 8);
+    for (size_t i = 0; i < entries.size(); ++i)
+      for (auto address = entries[i]; address;) {
+        Check(seen.size() < 2048 && seen.insert(address).second &&
+                  (contains(code.ranges, address, 24) ||
+                   contains(data.ranges, address, 24)),
+              "Invalid or repeated startup function hash entry");
+        const auto entry = ReadPhysical<3>(vm, address);
+        if ((uint32_t(entry[2]) & 0x1FFFF) == 0x40) {
+          const auto name = read_name(entry[1]);
+          const auto found = expected_functions.find(name);
+          Check(found != expected_functions.end(),
+                "Unexpected or duplicated startup function declaration");
+          uint64_t hash = 0;
+          for (unsigned char ch : name)
+            hash = std::rotl(hash, 1) + ch;
+          hash += (hash >> 16) + ((hash >> 15) & 1);
+          Check((hash & 1023) == bucket + i,
+                "Startup function is in the wrong hash bucket");
+          function_record(address, name, true, 0);
+          expected_functions.erase(found);
+        }
+        address = entry[0];
+      }
+  }
+  Check(expected_functions.empty() && function_blocks.size() == function_count,
+        "Startup terminal function declarations are incomplete");
+  std::set<uint64_t> members;
+  for (size_t owner_index = 0; owner_index < owners.size(); ++owner_index) {
+    const auto owner = owners[owner_index];
+    Check(owner.count <= 512, "Startup compiler member count is unbounded");
+    uint64_t count = 0, tail = owner.address + 88;
+    for (auto address = owner.first; address;) {
+      Check(address >= 16 && contains(data.ranges, address - 16, 160) &&
+                count < owner.count && members.size() < 8192 &&
+                members.insert(address).second,
+            "Invalid or repeated startup compiler member");
+      const auto memory = ReadPhysical<20>(vm, address - 16);
+      Check(memory[0] == data_heap && memory[1] == 160,
+            "Startup compiler member has the wrong allocation or owner");
+      const auto member = std::span(memory).subspan(2);
+      Check(class_types.contains(member[6]) && class_types.contains(member[7]),
+            "Startup compiler member uses an unowned class");
+      if ((member[9] >> 32) & 8) {
+        Check(owner.callbacks && member[17] >= 168,
+              "Unexpected nested startup callback or missing function pointer");
+        const auto name = owner.name + "." + read_name(member[5]);
+        const auto found = expected_callbacks.find(name);
+        Check(found != expected_callbacks.end(),
+              "Unexpected or duplicated startup callback signature");
+        function_record(member[17] - 168, name, false, found->second);
+        expected_callbacks.erase(found);
+      } else
+        Check(!member[17], "Noncallback startup member owns a function record");
+      ++count;
+      tail = address;
+      address = member[0];
+    }
+    Check(count == owner.count && tail == owner.last,
+          ("Startup compiler member count or tail differs: " + owner.name)
+              .c_str());
+  }
+  const auto total_functions = function_count + std::size(callbacks);
+  Check(expected_callbacks.empty() &&
+            function_blocks.size() == total_functions &&
+            function_used == total_functions * 856 &&
+            code.used == used + function_used,
+        "Startup terminal code usage differs from its owned compiler records");
+  std::cout << "Verified startup function records " << function_count
+            << ", callback signatures " << std::size(callbacks)
+            << ", code heap bytes " << function_used << '\n';
   std::cout << "Verified startup class records " << class_count
             << ", code heap bytes " << used << '\n';
 }
@@ -2240,9 +2488,9 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
       Check(data_hc[0] == expected_data_hc &&
                 task_data.alloced > 256 * 1024,
             "Invalid startup task data heap usage");
-      VerifyTaskClassRecords(vm, task, heaps[0], heaps[1], task_code, task_data,
-                             ReadPhysical<1>(vm, adam + 0x3D0)[0],
-                             task == left || task == right);
+      VerifyTaskCompilerRecords(vm, task, heaps[0], heaps[1], task_code,
+                                task_data, ReadPhysical<1>(vm, adam + 0x3D0)[0],
+                                task == left || task == right);
       data_used += code_hc[1] + data_hc[1];
       data_alloced += task_data.alloced;
       data_used_ranges.insert(data_used_ranges.end(), task_data.ranges.begin(),
@@ -2926,6 +3174,32 @@ constexpr std::string_view class_records_output = "CR heaps 1\n"
 constexpr CTextProbe class_records_probes[]{
     {"class-records", "/ClassRecordsProbe.HC", "", "CR heaps ", "CR DONE",
      class_records_output}};
+
+constexpr std::string_view function_records_common_output =
+    "FR heaps 1\n"
+    "FR named F pointers FFFF\n"
+    "FR args 7\n"
+    "FR callbacks F pointers FFFF\n"
+    "FR behavior FF stack F\n"
+    "FR cleanup 1F heap 3\n";
+const std::string function_records_source_output =
+    std::string(function_records_common_output) +
+    "FR image F phase 0\nFR DONE\n";
+const std::string function_records_module_output =
+    std::string(function_records_common_output) +
+    "FR image F phase 1\nFR DONE\n";
+const CTextProbe function_records_probes[]{
+    {"function-records", "/FunctionRecordsProbe.HC", "", "FR heaps ", "FR DONE",
+     function_records_source_output},
+    {"function-records-aot", "/FunctionRecordsProbe.BIN.Z", "", "FR heaps ",
+     "FR DONE", function_records_module_output}};
+const std::string function_records_aot_output =
+    function_records_module_output +
+    "FR AOT compile 0\nFR AOT load 1\nFR AOT DONE\n";
+const CTextProbe function_records_reference_probes[]{
+    function_records_probes[0],
+    {"function-records-aot", "/FunctionRecordsAOTProbe.HC", "", "FR heaps ",
+     "FR AOT DONE", function_records_aot_output}};
 
 static void CheckBootProbeOrder(const std::string &serial,
                                 std::span<const char *const> paths)
@@ -6249,6 +6523,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--internal-types-reference" ||
        std::string_view(argv[1]) == "--class-records" ||
        std::string_view(argv[1]) == "--class-records-reference" ||
+       std::string_view(argv[1]) == "--function-records" ||
+       std::string_view(argv[1]) == "--function-records-reference" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -6295,6 +6571,8 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--internal-types");
     bool class_records_probe =
         std::string_view(argv[1]).starts_with("--class-records");
+    bool function_records_probe =
+        std::string_view(argv[1]).starts_with("--function-records");
     const bool source_probe = compiler_defines_probe || string_defines_probe ||
                               system_defines_probe || color_conversions_probe ||
                               format_missing_args_probe || class_records_probe;
@@ -6321,6 +6599,8 @@ int main(int argc, char **argv)
       text_probes = internal_types_probes;
     else if (class_records_probe)
       text_probes = class_records_probes;
+    else if (function_records_probe)
+      text_probes = function_records_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -6328,13 +6608,15 @@ int main(int argc, char **argv)
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
-      if ((source_probe || internal_types_probe) && !reference) {
+      if ((source_probe || internal_types_probe || function_records_probe) &&
+          !reference) {
         const auto &probe = text_probes[0];
         VerifyHostModuleMedia(argv[3],
                               std::string("Linux/Fixtures") + probe.source,
                               probe.source + 1);
       }
-      const char *memory = class_records_probe ? "3072" : "512";
+      const bool separate_heaps = class_records_probe || function_records_probe;
+      const char *memory = separate_heaps ? "3072" : "512";
       CMonitor vm(argv[2], argv[3], dir, "pc", memory, false, {}, false,
                   reference);
       vm.Connect();
@@ -6349,6 +6631,14 @@ int main(int argc, char **argv)
           CheckBootSourceProbe(output, text_probes[0], dir);
           if (class_records_probe)
             CheckClassRecordRecovery(output);
+        } else if (function_records_probe) {
+          for (const auto &probe : text_probes)
+            CheckBootSourceProbe(output, probe, dir);
+          const char *paths[]{text_probes[0].source, text_probes[1].source};
+          CheckBootProbeOrder(output, paths);
+          CaptureGuestFile(vm, dir, output, "FunctionRecordsProbe.BIN.Z");
+          std::cout
+              << "Function records matched in source and loaded AOT code\n";
         } else {
           RecordTextProbes(output, text_probes, dir);
           if (assert_warning) {
@@ -6366,13 +6656,20 @@ int main(int argc, char **argv)
             std::cout << "Text probe sources and compiled modules matched\n";
           }
         }
-      } else if (internal_types_probe && reference) {
-        const CModuleFile source[]{
-            {fs::absolute("Linux/Fixtures/InternalTypesProbe.HC"),
-             "InternalTypesProbe.HC", "internal-types-source"}};
+      } else if ((internal_types_probe || function_records_probe) &&
+                 reference) {
+        const CModuleFile source[]{{fs::absolute(std::string("Linux/Fixtures") +
+                                                 text_probes[0].source),
+                                    text_probes[0].source + 1,
+                                    function_records_probe
+                                        ? "function-records-source"
+                                        : "internal-types-source"}};
+        const std::span<const CTextProbe> probes =
+            function_records_probe ? function_records_reference_probes
+                                   : internal_types_reference_probes;
         DriveCharacterGraphics(vm, dir, "", true, false, false, false, false,
-                               false, false, false, false,
-                               internal_types_reference_probes, source);
+                               false, false, false, false, probes, source,
+                               separate_heaps ? 0xC0000000ULL : 0x20000000ULL);
       } else if (character || tic || breaks || screen_capture || spline ||
                  flood_fill || blot || sprite_flood || music_demo ||
                  !text_probes.empty())
@@ -6380,7 +6677,7 @@ int main(int argc, char **argv)
             vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
             tic, breaks, screen_capture, spline, flood_fill, blot, sprite_flood,
             music_demo, text_probes, {},
-            class_records_probe && reference ? 0xC0000000ULL : 0x20000000ULL);
+            separate_heaps && reference ? 0xC0000000ULL : 0x20000000ULL);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");
@@ -6506,6 +6803,8 @@ int main(int argc, char **argv)
               << " --internal-types[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --class-records[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --function-records[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]

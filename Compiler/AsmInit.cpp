@@ -2136,6 +2136,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"HashFind", HashPtr, FF_RET1,
        {{"needle_str", U8Ptr}, {"haystack_table", HashTablePtr}, {"mask", I64},
         {"instance", I64, true, 1}}, "_HASH_FIND"},
+      {"HashVal", I64, FF_RET1, {{"tmph", HashPtr}}},
       {"MemberFind", MemberPtr, FF_RET1,
        {{"needle_str", U8Ptr}, {"haystack_class", HashClassPtr}}},
       {"MemberMetaData", I64, FF_RET1,
@@ -2759,8 +2760,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
         HashFind(header.name, task->hash_table, HTT_EXPORT_SYS_SYM));
     if (!symbol && !(header.flags & FF_INTERNAL))
       continue;
-    auto *fun =
-        reinterpret_cast<CHashFun *>(CAlloc(sizeof(CHashFun), task->data_heap));
+    auto *fun = PrsFunNew();
     if (!fun)
       return false;
     fun->cls.sym.hash.type = HTT_FUN | HTF_PUBLIC;

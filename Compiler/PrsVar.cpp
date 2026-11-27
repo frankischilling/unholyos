@@ -33,15 +33,11 @@ void CPrsDeclarator::Bind(CMemberLst &member)
 
 CHashFun *PrsFunPtrNew(CHashClass &result, unsigned stars, uint16_t flags)
 {
-  auto *fun = reinterpret_cast<CHashFun *>(
-      CAlloc(sizeof(CHashFun) * (stars + 1), CurrentTask()->data_heap));
+  auto *fun = PrsFunNew();
   if (!fun)
     return nullptr;
-  fun->cls.sym.hash.type = HTT_FUN;
   fun->cls.flags = flags;
   fun->return_class = &result;
-  for (unsigned i = 1; i <= stars; ++i)
-    fun[i].cls.ptr_stars_cnt = i;
   return fun + stars;
 }
 
