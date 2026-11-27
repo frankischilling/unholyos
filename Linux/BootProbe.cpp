@@ -1580,6 +1580,9 @@ void BootProbe()
     BootVariadicReport(*adam_task->cur_dv, *adam_task, "/MathHelpersProbe.HC",
                        "/MathHelpersProbe.BIN.Z",
                        "Cmp(\"::/MathHelpersProbe.HC\",,\"B:/MathHelpersProbe.BIN.Z\");");
+    BootVariadicReport(*adam_task->cur_dv, *adam_task, "/MusicPrecision.HC",
+                       "/MusicPrecision.BIN.Z",
+                       "Cmp(\"::/MusicPrecision.HC\",,\"B:/MusicPrecision.BIN.Z\");");
     if (BootFileProgramReport(*adam_task->cur_dv, "/FifoProbe.HC").okay) {
       auto *fun = reinterpret_cast<CHashFun *>(
           HashFind("FifoProbe", adam_task->hash_table, HTT_FUN));

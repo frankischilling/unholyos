@@ -3864,6 +3864,8 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/MathHelpersProbe.HC", math_helpers_output, '1');
     CheckProgramOutput(boot, "/MathHelpersProbe.BIN.Z", math_helpers_output,
                        '1');
+    CheckProgramOutput(boot, "/MusicPrecision.HC", music_precision_output, '1');
+    CheckProgramOutput(boot, "/MusicPrecision.BIN.Z", music_precision_output, '1');
     CheckProgramOutput(boot, "/FifoProbe.HC", "FIFO probe 1FF\n", '1');
     Check(boot.find("UnholyOS: FIFO heap cleanup 0x0000000000000001") !=
           std::string::npos, "FIFO allocations leaked");
@@ -3988,6 +3990,10 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       CheckProgramOutput(output, "/MathHelpersProbe.HC", math_helpers_output,
                          '1');
       CheckProgramOutput(output, "/MathHelpersProbe.BIN.Z", math_helpers_output,
+                         '1');
+      CheckProgramOutput(output, "/MusicPrecision.HC", music_precision_output,
+                         '1');
+      CheckProgramOutput(output, "/MusicPrecision.BIN.Z", music_precision_output,
                          '1');
       CheckProgramOutput(output, "/FifoProbe.HC", "FIFO probe 1FF\n", '1');
       Check(output.find("UnholyOS: FIFO heap cleanup 0x0000000000000001") !=
@@ -4664,6 +4670,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--character-graphics-reference" ||
        std::string_view(argv[1]) == "--music" ||
        std::string_view(argv[1]) == "--music-reference" ||
+       std::string_view(argv[1]) == "--music-precision" ||
+       std::string_view(argv[1]) == "--music-precision-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
        std::string_view(argv[1]) == "--tic-tac-toe-reference" ||
        std::string_view(argv[1]) == "--break" ||
@@ -4682,7 +4690,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--database-reference" ||
        std::string_view(argv[1]) == "--form")) {
     bool character = std::string_view(argv[1]).starts_with("--character-graphics");
-    bool music_demo = std::string_view(argv[1]).starts_with("--music");
+    bool music_precision = std::string_view(argv[1]).starts_with("--music-precision");
+    bool music_demo = std::string_view(argv[1]).starts_with("--music") && !music_precision;
     bool tic = std::string_view(argv[1]).starts_with("--tic-tac-toe");
     bool breaks = std::string_view(argv[1]).starts_with("--break");
     bool screen_capture = std::string_view(argv[1]).starts_with("--screen-capture");
@@ -4700,19 +4709,24 @@ int main(int argc, char **argv)
       fs::create_directories(dir);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
-      if (math && !reference) {
+      if ((math || music_precision) && !reference) {
         auto output = vm.Boot(dir / "serial.log");
-        CheckProgramOutput(output, "/MathHelpersProbe.HC", math_helpers_output,
-                           '1');
-        CheckProgramOutput(output, "/MathHelpersProbe.BIN.Z",
-                           math_helpers_output, '1');
-        std::cout << math_helpers_output
-                  << "Math helper source and compiled module matched\n";
+        const auto expected = music_precision ? music_precision_output : math_helpers_output;
+        CheckProgramOutput(output, music_precision ? "/MusicPrecision.HC"
+                                                   : "/MathHelpersProbe.HC",
+                           expected, '1');
+        CheckProgramOutput(output, music_precision ? "/MusicPrecision.BIN.Z"
+                                                   : "/MathHelpersProbe.BIN.Z",
+                           expected, '1');
+        std::cout << expected << (music_precision
+            ? "Music precision source and compiled module matched\n"
+            : "Math helper source and compiled module matched\n");
       } else if (character || tic || breaks || screen_capture || spline ||
-                 flood_fill || blot || math || sprite_flood || music_demo)
+                 flood_fill || blot || math || sprite_flood || music_demo || music_precision)
         DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
                                reference, tic, breaks, screen_capture, spline,
-                               flood_fill, blot, math, sprite_flood, music_demo);
+                               flood_fill, blot, math, sprite_flood, music_demo,
+                               music_precision);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");
@@ -4825,6 +4839,8 @@ int main(int argc, char **argv)
               << "       " << argv[0]
               << " --character-graphics[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0] << " --music[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --music-precision[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --tic-tac-toe[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
