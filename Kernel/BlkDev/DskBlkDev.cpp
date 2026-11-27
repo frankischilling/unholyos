@@ -1,6 +1,5 @@
 #include "../KernelB.hpp"
 
-static uint64_t slot_flags;
 uint64_t disk_lock_flags;
 
 CBlkDev *BlkDevLockTarget(CBlkDev *bd)
@@ -63,6 +62,10 @@ bool BlkDevEnsureInitialized(CBlkDev &bd)
 {
   if (bd.flags&BDF_INITIALIZED) return true;
   if (bd.flags&BDF_INIT_IN_PROGRESS) return false;
+  if (blkdev.drvs)
+    for (size_t i=0;i<DRVS_NUM;i++)
+      if (blkdev.drvs[i].bd==&bd && (blkdev.drvs[i].fat_blk_dirty&1))
+        return false;
   bd.flags|=BDF_INIT_IN_PROGRESS;
   DskCacheInvalidateDevice(&bd);
   DrvFATCacheResetDevice(&bd);
@@ -72,7 +75,9 @@ bool BlkDevEnsureInitialized(CBlkDev &bd)
       for (size_t i=0;i<DRVS_NUM;i++) {
         auto &dv=blkdev.drvs[i];
         if (dv.dv_signature==DRV_SIGNATURE_VAL && dv.bd==&bd) {
+          uint16_t disabled=dv.fs_type&~FSG_TYPE_MASK;
           res=bd.RAM_dsk && RedSeaInit(dv) && DrvFATCacheInit(dv);
+          dv.fs_type|=disabled;
           if (!res) break;
         }
       }
@@ -83,10 +88,11 @@ bool BlkDevEnsureInitialized(CBlkDev &bd)
         for (size_t i=0;i<DRVS_NUM;i++) {
           auto &dv=blkdev.drvs[i];
           if (dv.dv_signature==DRV_SIGNATURE_VAL && dv.bd==&bd &&
-              dv.fs_type==FSt_FAT32 &&
-              (!FAT32Init(dv) || !DrvFATCacheInit(dv))) {
-            res=false;
-            break;
+              (dv.fs_type&FSG_TYPE_MASK)==FSt_FAT32) {
+            uint16_t disabled=dv.fs_type&~FSG_TYPE_MASK;
+            res=FAT32Init(dv) && DrvFATCacheInit(dv);
+            dv.fs_type|=disabled;
+            if (!res) break;
           }
         }
       break;
@@ -95,10 +101,11 @@ bool BlkDevEnsureInitialized(CBlkDev &bd)
       if (res)
         for (size_t i=0;i<DRVS_NUM;i++) {
           auto &dv=blkdev.drvs[i];
-          if (dv.dv_signature==DRV_SIGNATURE_VAL && dv.bd==&bd &&
-              (!ISOInit(dv) || !DrvFATCacheInit(dv))) {
-            res=false;
-            break;
+          if (dv.dv_signature==DRV_SIGNATURE_VAL && dv.bd==&bd) {
+            uint16_t disabled=dv.fs_type&~FSG_TYPE_MASK;
+            res=ISOInit(dv) && DrvFATCacheInit(dv);
+            dv.fs_type|=disabled;
+            if (!res) break;
           }
         }
       break;
@@ -129,7 +136,7 @@ CBlkDev *BlkDevNextFreeSlot(uint8_t first_drv_let,uint32_t type)
 {
   if (!blkdev.blkdevs)
     return nullptr;
-  CMemLock lock(slot_flags);
+  CMemLock lock(mount_flags);
   for (size_t i=0;i<BLKDEVS_NUM;i++) {
     auto *res=&blkdev.blkdevs[i];
     if (res->bd_signature!=BD_SIGNATURE_VAL) {
@@ -155,6 +162,60 @@ CBlkDev *BlkDevNextFreeSlot(uint8_t first_drv_let,uint32_t type)
     }
   }
   return nullptr;
+}
+
+bool BlkDevDeleteReady(const CBlkDev *bd)
+{
+  if (!bd || !blkdev.blkdevs || !blkdev.drvs) return false;
+  bool found=false;
+  for (size_t i=0;i<BLKDEVS_NUM;i++)
+    if (bd==&blkdev.blkdevs[i]) {
+      found=true;
+      break;
+    }
+  if (!found || (bd->locked_flags&1) || bd->owning_task ||
+      (bd->flags&BDF_INIT_IN_PROGRESS) || bd->file_dsk)
+    return false;
+  auto *lock_bd=BlkDevLockTarget(const_cast<CBlkDev *>(bd));
+  if (bd->bd_signature==BD_SIGNATURE_VAL &&
+      (!lock_bd || (lock_bd->locked_flags&1) || lock_bd->owning_task))
+    return false;
+  auto *owned_ram=BlkDevOwnedRAM(bd);
+  for (size_t i=0;i<BLKDEVS_NUM;i++) {
+    const auto &other=blkdev.blkdevs[i];
+    if (&other==bd || other.bd_signature!=BD_SIGNATURE_VAL) continue;
+    if (other.lock_fwding==bd ||
+        (other.file_dsk && other.file_dsk->dv && other.file_dsk->dv->bd==bd) ||
+        (owned_ram && other.RAM_dsk==owned_ram))
+      return false;
+  }
+  for (size_t i=0;i<DRVS_NUM;i++)
+    if (blkdev.drvs[i].bd==bd && !DrvDeleteReady(&blkdev.drvs[i]))
+      return false;
+  return true;
+}
+
+void BlkDevDelete(CBlkDev &bd,uint8_t *keep_ram)
+{
+  DskCacheInvalidateDevice(&bd);
+  for (size_t i=0;i<DRVS_NUM;i++)
+    if (blkdev.drvs[i].bd==&bd) DrvDelete(blkdev.drvs[i]);
+  BlkDevReleaseRAM(bd,keep_ram);
+  Free(bd.file_dsk_name);
+  Free(bd.dev_id_record);
+  MemSet(&bd,0,sizeof(bd));
+}
+
+extern "C" void BlkDevDelCpp(CBlkDev *bd)
+{
+  bool okay;
+  {
+    CMemLock mount(mount_flags);
+    CMemLock lock(disk_lock_flags);
+    okay=BlkDevDeleteReady(bd);
+    if (okay) BlkDevDelete(*bd);
+  }
+  if (!okay) RaiseHolyC(0x7665446B6C42); // BlkDev
 }
 
 extern "C" CBlkDev *BlkDevNextFreeSlotCpp(uint8_t first_drv_let,int64_t type)

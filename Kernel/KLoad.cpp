@@ -121,6 +121,12 @@ void DrvMakeFreeSlotHC();
 void DrvNextFreeLetHC();
 void DrvChkHC();
 void DrvFATBlkAllocHC();
+void DrvEnableHC();
+void DrvDelHC();
+void DrvBlkDevDelHC();
+void BlkDevDelHC();
+void DskCacheInvalidateHC();
+void DskChgHC();
 void DrvFATBlkCleanHC();
 void DrvFATBlkSetHC();
 void Drv2LetHC();
@@ -1006,6 +1012,12 @@ bool LoadKernel(CTask &task)
       {"DrvNextFreeLet", reinterpret_cast<uintptr_t>(DrvNextFreeLetHC)},
       {"DrvChk", reinterpret_cast<uintptr_t>(DrvChkHC)},
       {"DrvFATBlkAlloc", reinterpret_cast<uintptr_t>(DrvFATBlkAllocHC)},
+      {"DrvEnable", reinterpret_cast<uintptr_t>(DrvEnableHC)},
+      {"DrvDel", reinterpret_cast<uintptr_t>(DrvDelHC)},
+      {"DrvBlkDevDel", reinterpret_cast<uintptr_t>(DrvBlkDevDelHC)},
+      {"BlkDevDel", reinterpret_cast<uintptr_t>(BlkDevDelHC)},
+      {"DskCacheInvalidate", reinterpret_cast<uintptr_t>(DskCacheInvalidateHC)},
+      {"DskChg", reinterpret_cast<uintptr_t>(DskChgHC)},
       {"DrvFATBlkClean", reinterpret_cast<uintptr_t>(DrvFATBlkCleanHC)},
       {"DrvFATBlkSet", reinterpret_cast<uintptr_t>(DrvFATBlkSetHC)},
       {"Drv2Let", reinterpret_cast<uintptr_t>(Drv2LetHC)},

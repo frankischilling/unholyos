@@ -1628,8 +1628,8 @@ invalidate affected blocks after a failed ATA write. RedSea RAM
 mutations invalidate cached entries before direct bitmap or data
 writes. Device reset and RAM replacement invalidate cached state.
 Reinitialization covers existing RAM, ATA and ATAPI devices; the
-reference's removable-media sequence, file-backed devices, full
-device deletion and exception paths remain incomplete.
+reference's removable-media sequence, file-backed devices and full
+exception paths remain incomplete.
 
 ## Per-drive FAT and bitmap cache
 
@@ -1658,9 +1658,34 @@ Mounting publishes a stable buffer only after successful geometry and
 initial sector reads. Temporary drives are not retained in the cache.
 Normal replacement refuses dirty state; explicit reset and format
 discard it. Direct writes through an arbitrary guest RAM pointer
-cannot be intercepted. Complete drive/device deletion, RedSea free
-lists, persistent FSInfo ownership and full media-change/error paths
-remain outstanding.
+cannot be intercepted. RedSea free-list allocation, persistent FSInfo
+ownership and full media-change/error paths remain outstanding.
+
+## Drive and device lifecycle
+
+`DrvEnable` changes bit 15 of the filesystem type and returns the
+previous enabled state. Disabled drives retain their geometry and raw
+block access. The enabled state survives device reinitialization.
+`DrvDel`, `DrvBlkDevDel` and `BlkDevDel` invalidate cached blocks and
+resident files, release drive metadata, and clear the reference-sized
+records. Drive aliases are restored to their canonical slots. RAM
+replacement uses the same teardown path and tracks the actual owned
+allocation separately from caller-provided memory.
+
+Deletion refuses locked or dirty drives and devices with forwarding
+or backing-file dependents. Native-owned RAM is freed; caller-owned
+RAM is retained. Disabling a drive with pending allocation-sector
+writes is also rejected. These guards deliberately differ from the
+reference's less restricted deletion and enable operations. Ordinary
+open `CFile` handles and task current-directory references are not
+globally tracked, so callers must close files and change drives before
+teardown. File-backed devices are not yet supported and a live backing
+file prevents deletion.
+
+`DskCacheInvalidate` and `DskChg` ensure initialization, clear applicable
+cached state, refresh removable ATAPI metadata, and reset the current
+directory to the root on disk change. The read-only override is respected.
+Complete removable-media failure/retry behavior remains unverified.
 
 ## Remaining structural work
 

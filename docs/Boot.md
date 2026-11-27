@@ -3683,6 +3683,43 @@ GCC 13.3.0 and Clang 20.1.2 run under QEMU 8.2.2, `pc`, `qemu64`,
 512 MiB, one vCPU. See [Source layout](SourceLayout.md) for native
 protective differences and remaining lifecycle work.
 
+## Drive and block device lifecycle
+
+The same `StorageLifecycleProbe.HC` runs under native GCC, native
+Clang and the pinned reference, with 13 matching checks:
+
+```text
+Storage lifecycle 1FFF
+```
+
+The checks cover enabling and disabling a drive, raw access while
+disabled, cache invalidation, disk change, drive and block device
+deletion and slot reuse. `StorageLifecycleNativeProbe.HC` adds five
+native protection checks, including exact `BlkDev`, `Drv`, `Drv`
+exception diagnostics, alias cleanup and preservation of borrowed RAM:
+
+```text
+Storage lifecycle native 1F
+```
+
+Native media verifies both packaged fixtures (3144 and 1650 bytes).
+The shared fixture SHA-256 is
+`783f77690f39103a479c8b0f09a40046880b379f4ca658e8c2dd67c749d08b46`;
+the native fixture SHA-256 is
+`d067d180aee74d187499f9f0b0bdae0334af533574ad8ac3140a324fc12545b1`.
+
+```sh
+make -j4 test-storage-lifecycle
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-storage-lifecycle
+build/Linux/TestBoot --storage-lifecycle-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/lifecycle-reference
+```
+
+All three focused runs exited successfully with GCC 13.3.0, Clang
+20.1.2 and QEMU 8.2.2, `pc`, `qemu64`, 512 MiB and one vCPU.
+These checks do not establish safe teardown with arbitrary open streams
+or file-backed devices; see [Source layout](SourceLayout.md).
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

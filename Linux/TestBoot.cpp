@@ -3066,6 +3066,12 @@ constexpr CTextProbe fat_cluster_probes[]{
 constexpr CTextProbe disk_cache_probes[]{
     {"disk-cache", "/DiskCacheProbe.HC", "", "Disk cache ",
      "Disk cache ", "Disk cache 3FFFF\n", {}, true}};
+constexpr std::string_view storage_lifecycle_exceptions[]{"BlkDev", "Drv", "Drv"};
+constexpr CTextProbe storage_lifecycle_probes[]{
+    {"storage-lifecycle", "/StorageLifecycleProbe.HC", "", "Storage lifecycle ",
+     "Storage lifecycle ", "Storage lifecycle 1FFF\n", {}, true},
+    {"storage-lifecycle-native", "/StorageLifecycleNativeProbe.HC", "", "Storage lifecycle native ",
+     "Storage lifecycle native ", "Storage lifecycle native 1F\n", storage_lifecycle_exceptions, true}};
 
 constexpr CTextProbe fat_sector_cache_probes[]{
     {"fat-sector-cache", "/FatSectorCacheProbe.HC", "", "FAT sector cache ",
@@ -4139,6 +4145,8 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   auto vert = ReadPhysical<1>(vm, horz)[0];
   const auto doc = ReadPhysical<1>(vm, left + put_doc)[0];
   const auto refresh_count = guest_state("winmgr", left);
+  // KernelA.hpp: CSema is 128 bytes; SEMA_REFRESH_IN_PROGRESS is 8.
+  const auto refresh_flags = guest_state("sys_semas", left) + 8 * 128;
   const auto vert_state = ReadPhysical<1>(vm, vert + 0x68)[0];
   auto wait_scroll = [&](auto ready, const char *error) {
     for (unsigned i = 0; i < 80; ++i) {
@@ -4178,6 +4186,31 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
              std::array<uint64_t, 2>{uint64_t(x), uint64_t(y)};
     }, "Guest mouse did not reach the scrollbar target");
   };
+  auto check_scroll_window = [&](const char *error) {
+    // DrawCtrls temporarily expands the task bounds to draw on its border.
+    // A released thumb and a completed refresh counter do not prevent the
+    // next refresh from being in progress at the instant of a memory read.
+    // Pause the guest and accept the first snapshot outside GrUpdateScrn;
+    // do not wait for the expected geometry (a real resize must fail).
+    for (unsigned i = 0; i < 80; ++i) {
+      vm.Command(R"({"execute":"stop"})");
+      const bool refreshing = ReadPhysical<1>(vm, refresh_flags)[0] & 1;
+      const auto geometry = ReadPhysical<4>(vm, left + win_left);
+      vm.Command(R"({"execute":"cont"})");
+      if (!refreshing) {
+        if (geometry != scroll_window) {
+          std::ostringstream detail;
+          detail << error << "; expected 4,27,5,18, got " << geometry[0]
+                 << ',' << geometry[1] << ',' << geometry[2] << ',' << geometry[3];
+          throw std::runtime_error(detail.str());
+        }
+        return;
+      }
+      std::this_thread::sleep_for(10ms);
+    }
+    throw std::runtime_error("Could not sample scrollbar geometry outside a refresh");
+  };
+  check_scroll_window("The scrollbar window did not start at the requested size");
   wait_view(top_line, 48, "The scrollbar document did not start at its end");
   MouseButton(vm, "wheel-up", true);
   MouseButton(vm, "wheel-up", false);
@@ -4213,8 +4246,7 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   MouseButton(vm, "left", false);
   wait_button(false);
   wait_mem(vert + ctrl_flags, 7, "The vertical thumb did not release");
-  Check(ReadPhysical<4>(vm, left + win_left) == scroll_window,
-        "The vertical thumb resized the window");
+  check_scroll_window("The vertical thumb resized the window");
 
   wait_refresh();
   grab_thumb(horz);
@@ -4227,8 +4259,7 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   wait_mem(horz + ctrl_flags, 7, "The horizontal thumb did not release");
   wait_text("27 ABC", false, 1, 5, 4, 120);
   wait_view(line_start, 0, "The cursor did not restore the viewport");
-  Check(ReadPhysical<4>(vm, left + win_left) == scroll_window,
-        "The horizontal thumb resized the window");
+  check_scroll_window("The horizontal thumb resized the window");
   key("q");
   std::cout << "Scrollbar thumbs and wheel scrolled the terminal document\n";
 }
@@ -6451,6 +6482,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--cluster-entry-reference" ||
        std::string_view(argv[1]) == "--disk-cache" ||
        std::string_view(argv[1]) == "--disk-cache-reference" ||
+       std::string_view(argv[1]) == "--storage-lifecycle" ||
+       std::string_view(argv[1]) == "--storage-lifecycle-reference" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -6505,11 +6538,13 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--cluster-entry");
     bool disk_cache_probe =
         std::string_view(argv[1]).starts_with("--disk-cache");
+    bool storage_lifecycle_probe =
+        std::string_view(argv[1]).starts_with("--storage-lifecycle");
     const bool source_probe = compiler_defines_probe || string_defines_probe ||
                               system_defines_probe || color_conversions_probe ||
                               format_missing_args_probe || class_records_probe ||
                               list_utilities_probe || storage_services_probe ||
-                              cluster_entry_probe || disk_cache_probe;
+                              cluster_entry_probe || disk_cache_probe || storage_lifecycle_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6541,7 +6576,11 @@ int main(int argc, char **argv)
       text_probes = cluster_entry_probes;
     else if (disk_cache_probe)
       text_probes = disk_cache_probes;
+    else if (storage_lifecycle_probe)
+      text_probes = storage_lifecycle_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
+    if (storage_lifecycle_probe && reference)
+      text_probes=text_probes.first(1);
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
@@ -6691,8 +6730,10 @@ int main(int argc, char **argv)
       return 1;
     }
   }
-  if ((argc == 4 || argc == 5) && std::string_view(argv[1]) == "--digits") {
-    char path[] = "/tmp/unholyos-digits-XXXXXX";
+  if ((argc == 4 || argc == 5) &&
+      (std::string_view(argv[1]) == "--digits" ||
+       std::string_view(argv[1]) == "--user-task")) {
+    char path[] = "/tmp/unholyos-user-task-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
@@ -6701,7 +6742,10 @@ int main(int argc, char **argv)
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false);
       vm.Connect();
       auto output = vm.Boot(dir / "serial.log");
-      DriveDigits(vm, dir, output);
+      if (std::string_view(argv[1]) == "--digits")
+        DriveDigits(vm, dir, output);
+      else
+        DriveUserTask(vm, dir, output);
       vm.Command(R"({"execute":"quit"})");
       if (argc == 4)
         fs::remove_all(dir);
@@ -6736,6 +6780,7 @@ int main(int argc, char **argv)
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"
               << " --cluster-entry[-reference] qemu image.iso [capture-dir]\n"
               << " --disk-cache[-reference] qemu image.iso [capture-dir]\n"
+              << " --storage-lifecycle[-reference] qemu image.iso [capture-dir]\n"
               << " --fat32-cluster[-reference] qemu image.iso disk.img [capture-dir]\n"
               << " --fat-sector-cache[-reference] qemu image.iso disk.img [capture-dir]\n"
               << "       " << argv[0]
@@ -6752,6 +6797,8 @@ int main(int argc, char **argv)
               << " --load-pass2[-reference] qemu image.iso consumer.BIN provider.BIN [capture-dir]\n"
               << "       " << argv[0]
               << " --digits qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --user-task qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --character-graphics[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0] << " --music[-reference] qemu image.iso [capture-dir]\n"

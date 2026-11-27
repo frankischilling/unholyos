@@ -224,6 +224,8 @@ constexpr unsigned BOOT_SRC_DVD = 4;
 constexpr uint32_t BDT_NULL = 0, BDT_RAM = 1, BDT_ATA = 2,
                    BDT_ISO_FILE_READ = 3, BDT_ISO_FILE_WRITE = 4, BDT_ATAPI = 5;
 constexpr uint16_t FSt_REDSEA = 1, FSt_FAT32 = 2;
+constexpr uint16_t FSG_TYPE_MASK = 0x7FFF;
+constexpr unsigned FStf_DISABLE = 15;
 constexpr uint8_t MBR_PT_REDSEA = 0x88;
 constexpr uint32_t BD_SIGNATURE_VAL = 0x56534442;  // BDSV
 constexpr uint32_t DRV_SIGNATURE_VAL = 0x56535644; // DVSV
@@ -317,6 +319,12 @@ struct [[gnu::packed]] CBlkDev
   CTask *owning_task;
   double last_time;
   uint32_t max_reads, max_writes;
+};
+
+struct CFreeLst
+{
+  CFreeLst *next, *last;
+  int64_t start, size;
 };
 
 struct CDrv
