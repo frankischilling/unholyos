@@ -185,135 +185,77 @@ void DocDataFmt(CDoc &doc, CDocEntry &entry, int64_t d)
     doc.cur_col = len;
 }
 
-// StrScan reads the field according to its format, including any literal prefix.
-// A string conversion takes a pointer to the destination pointer.
-static bool ScanField(const CDocEntry &entry, char *text, uint64_t &value,
-                      char *&string)
-{
-  const char *fmt = entry.aux_str;
-  while (*fmt && *fmt != '%') {
-    if (*text)
-      text++;
-    fmt++;
-  }
-  if (*fmt++ != '%')
-    return false;
-  if (*fmt == '-')
-    fmt++;
-  size_t width = 0;
-  while ('0' <= *fmt && *fmt <= '9')
-    width = width * 10 + *fmt++ - '0';
-  if (*fmt == '.') {
-    fmt++;
-    while ('0' <= *fmt && *fmt <= '9')
-      fmt++;
-  }
-  if (!*fmt)
-    return false;
-  char kind = *fmt++;
-  size_t len = StrLen(text);
-  if (width && width < len)
-    len = width;
-  else if (!width && *fmt)
-    for (size_t i = 0; i < len; i++)
-      if (text[i] == *fmt) {
-        len = i;
-        break;
-      }
-  text[len] = 0;
-  switch (kind) {
-  case 's': string = text; return true;
-  case 'c': value = uint8_t(*text); return true;
-  case 'C':
-    value = *text >= 'a' && *text <= 'z' ? *text - ('a' - 'A') : uint8_t(*text);
-    return true;
-  case 'd': value = Str2I64Cpp(text, 10, nullptr); return true;
-  case 'X': value = Str2I64Cpp(text, 16, nullptr); return true;
-  case 'b': value = Str2I64Cpp(text, 2, nullptr); return true;
-  case 'f': case 'e': case 'g': case 'n':
-    value = Str2F64Cpp(text, nullptr);
-    return true;
-  case 'D': value = Str2DateCpp(text); return true;
-  default: return false;
-  }
-}
-
 bool DocDataScan(CDoc &doc, CDocEntry &entry)
 {
   auto &base = entry.base;
-  if (!base.tag ||
-      (base.Type() != DOCT_CHECK_BOX && !(base.de_flags & DOCEF_LST) &&
-       (base.Type() != DOCT_DATA || !(base.de_flags & DOCEF_AUX_STR) ||
-        !entry.aux_str)))
+  if (base.Type() != DOCT_CHECK_BOX && !(base.de_flags & DOCEF_LST) &&
+      (base.Type() != DOCT_DATA || !(base.de_flags & DOCEF_AUX_STR) ||
+       !entry.aux_str))
     return false;
-  CDocLock lock(doc);
   uint8_t *ptr;
   size_t size;
   if (!DataAddress(entry, ptr, size))
     return false;
   uint64_t value = 0;
-  if (base.Type() == DOCT_CHECK_BOX)
-    value = bool(base.de_flags & DOCEF_CHECKED_COLLAPSED);
-  else if (base.de_flags & DOCEF_LST) {
-    auto *list = DataList(doc, entry);
-    size_t len = StrLen(base.tag);
-    if (!list || len < 2 || *base.tag != '[' || base.tag[len - 1] != ']')
+  if (base.Type() == DOCT_DATA) {
+    if (!base.tag)
       return false;
-    int64_t i = 0;
-    for (; i < list->cnt; i++) {
-      auto *label = list->sub_idx[i];
-      if (StrLen(label) != len - 2)
-        continue;
-      size_t j = 0;
-      while (j < len - 2 && label[j] == base.tag[j + 1])
-        j++;
-      if (j == len - 2)
-        break;
-    }
-    value = i == list->cnt ? uint64_t(-1) : uint64_t(i);
-  } else {
     size_t len = StrLen(base.tag);
-    if ((base.de_flags & DOCEF_HAS_TERMINATOR) && len)
-      len--;
+    bool terminator = base.de_flags & DOCEF_HAS_TERMINATOR;
+    if (terminator) {
+      if (!len)
+        return false;
+      base.tag[--len] = 0;
+    }
     if (entry.len < 0 || len < base.min_col)
       return false;
     if (len > size_t(entry.len) + base.min_col)
-      len = size_t(entry.len) + base.min_col;
-    auto *text = reinterpret_cast<char *>(MAlloc(len + 1, MemTaskHeap(doc.mem_task)));
-    if (!text)
-      return false;
-    MemCpy(text, base.tag, len);
-    text[len] = 0;
-    char *string = nullptr;
-    bool okay = ScanField(entry, text, value, string);
-    if (okay && string) {
+      base.tag[size_t(entry.len) + base.min_col] = 0;
+    if (entry.raw_type <= RT_U32) {
+      uint64_t args[]{reinterpret_cast<uintptr_t>(&value),
+                      reinterpret_cast<uintptr_t>(entry.my_fmt_data)};
+      StrScanCpp(base.tag, entry.aux_str, 2, args);
+      if (terminator)
+        base.tag[len] = '_';
+    } else {
       if (base.de_flags & DOCEF_REMALLOC_DATA) {
-        auto *data = reinterpret_cast<uint8_t *>(StrNew(string, MemTaskHeap(doc.mem_task)));
-        if (data) {
-          Free(entry.data);
-          entry.data = data;
-        } else
-          okay = false;
+        auto *data = MAlloc(len - base.min_col + 8, MemTaskHeap(doc.mem_task));
+        if (!data)
+          RaiseHolyC(0x6D654D74754FULL); // OutMem
+        MemCpy(data, base.tag + base.min_col, len - base.min_col + 1);
+        Free(entry.data);
+        entry.data = data;
+        entry.len = MSize(data) - 1;
       } else {
-        char *dst;
-        auto count = StrLen(string) + 1;
-        if (size != sizeof(dst))
-          okay = false;
-        else {
-          MemCpy(&dst, ptr, sizeof(dst));
-          if (!ChkPtrRange(dst, count))
-            okay = false;
-          else
-            MemCpy(dst, string, count);
-        }
+        uint64_t args[]{reinterpret_cast<uintptr_t>(ptr),
+                        reinterpret_cast<uintptr_t>(entry.my_fmt_data)};
+        StrScanCpp(base.tag, entry.aux_str, 2, args);
       }
-      Free(text);
-      return okay;
+      if (terminator)
+        base.tag[len] = '_';
+      return true;
     }
-    Free(text);
-    if (!okay)
-      return false;
-  }
+  } else if (base.de_flags & DOCEF_LST) {
+    auto *list = base.tag && (base.de_flags & DOCEF_DEFINE)
+                     ? DataList(doc, entry)
+                     : nullptr;
+    if (list) {
+      auto *label = StrNew(base.tag, CurrentTask()->data_heap);
+      if (!label)
+        RaiseHolyC(0x6D654D74754FULL); // OutMem
+      auto *start = label;
+      if (*start == '[') {
+        start++;
+        size_t len = StrLen(start);
+        if (len && start[len - 1] == ']')
+          start[len - 1] = 0;
+      }
+      value = LstMatchCpp(reinterpret_cast<const uint8_t *>(start),
+                          reinterpret_cast<const uint8_t *>(list->data), 0);
+      Free(label);
+    }
+  } else
+    value = bool(base.de_flags & DOCEF_CHECKED_COLLAPSED);
   MemCpy(ptr, &value, size);
   return true;
 }

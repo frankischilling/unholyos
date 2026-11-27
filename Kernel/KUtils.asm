@@ -3,7 +3,9 @@ GLOBAL _MEMCPY,_MEMSET,_MEMSET_U16,_MEMSET_U32,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_
 GLOBAL memcpy,memset
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
-GLOBAL Str2I64HC,Str2DateHC
+GLOBAL Spaces2TabsHC,StrUtilHC,StrFirstOccHC,StrFirstRemHC,StrLastOccHC,StrLastRemHC
+GLOBAL StrFindHC,Tabs2SpacesHC,ScaleIndentHC,MStrUtilHC
+GLOBAL Str2I64HC,Str2DateHC,StrScanHC
 GLOBAL Str2F64HC,ChkPtrHC,ClassRep2HC,ClassRepHC,ClassRepDHC
 GLOBAL DocMaxHC,DocDataFmtHC,DocDataScanHC
 GLOBAL DocFormHC,DocEdHC,DocFormFwdHC,DocFormBwdHC,ViewHC,HomeSetHC,ToUpperHC
@@ -192,6 +194,8 @@ EXTERN DCSymmetrySetCpp,RefreshCpp
 EXTERN ScanCharCpp,ScanKeyCpp,GetKeyCpp,GetCharCpp
 EXTERN MAllocCpp,FreeCpp,MSizeCpp,MSize2Cpp,MHeapCtrlCpp,CAllocCpp,MAllocIdentCpp
 EXTERN StrNewCpp,AStrNewCpp,StrCpyCpp,StrCmpCpp,StrIMatchCpp,StrOccCpp
+EXTERN Spaces2TabsCpp,StrUtilCpp,StrFirstOccCpp,StrFirstRemCpp,StrLastOccCpp,StrLastRemCpp
+EXTERN StrFindCpp,Tabs2SpacesCpp,ScaleIndentCpp,MStrUtilCpp
 EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
 EXTERN HashRemDelCpp,HashValCpp,HashDelCpp,HashTableDelCpp,HashSrcFileSetCpp,SysSymImportsResolveCpp
 EXTERN MemberMetaDataCpp,MemberMetaFindCpp,MemberFindCpp
@@ -207,7 +211,7 @@ EXTERN QSortCpp,QSortI64Cpp,LstMatchCpp
 EXTERN FileReadCpp,FileNameAbsCpp,DirNameAbsCpp,DirCurCpp,DirFileCpp,ExtChgCpp,ExtDftCpp
 EXTERN CdCpp,IsDirCpp,DirCpp,PutDirLinkCpp,FilesFindCpp,FileFindCpp,FilesFindMatchCpp
 EXTERN DirEntryDelCpp,DirEntryDel2Cpp,DirTreeDelCpp,DirTreeDel2Cpp
-EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp,Str2DateCpp
+EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp,Str2DateCpp,StrScanCpp
 EXTERN Str2F64Cpp,ChkPtrCpp,ClassRep2Cpp,ClassRepCpp,ClassRepDCpp
 EXTERN DocMaxCpp,DocDataFmtCpp,DocDataScanCpp
 EXTERN DocFormCpp,DocEdCpp,DocFormFwdCpp,DocFormBwdCpp,ViewCpp,HomeSetCpp,ToUpperCpp
@@ -549,6 +553,16 @@ HOLYC_CPP _STRCPY,StrCpyCpp,2
 HOLYC_CPP _STRCMP,StrCmpCpp,2
 HOLYC_CPP _STRIMATCH,StrIMatchCpp,2
 HOLYC_CPP StrOccHC,StrOccCpp,2
+HOLYC_CPP Spaces2TabsHC,Spaces2TabsCpp,2
+HOLYC_CPP StrUtilHC,StrUtilCpp,2
+HOLYC_CPP StrFirstOccHC,StrFirstOccCpp,2
+HOLYC_CPP StrFirstRemHC,StrFirstRemCpp,3
+HOLYC_CPP StrLastOccHC,StrLastOccCpp,2
+HOLYC_CPP StrLastRemHC,StrLastRemCpp,3
+HOLYC_CPP StrFindHC,StrFindCpp,3
+HOLYC_CPP Tabs2SpacesHC,Tabs2SpacesCpp,1
+HOLYC_CPP ScaleIndentHC,ScaleIndentCpp,2
+HOLYC_CPP MStrUtilHC,MStrUtilCpp,3
 HOLYC_CPP _HASH_ADD,HashAddCpp,2
 HOLYC_CPP _HASH_ADD_AFTER,HashAddAfterCpp,3
 HOLYC_CPP _HASH_FIND,HashFindCpp,4
@@ -620,6 +634,7 @@ HOLYC_CPP DirContextDelHC,DirContextDelCpp,2
 HOLYC_CPP Str2I64HC,Str2I64Cpp,3
 HOLYC_CPP Str2DateHC,Str2DateCpp,1
 HOLYC_CPP Str2F64HC,Str2F64Cpp,2
+HOLYC_PRINT StrScanHC,StrScanCpp,2
 HOLYC_CPP ChkPtrHC,ChkPtrCpp,1
 HOLYC_CPP ClassRep2HC,ClassRep2Cpp,8
 HOLYC_CPP ClassRepHC,ClassRepCpp,5

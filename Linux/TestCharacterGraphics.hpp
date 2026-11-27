@@ -77,16 +77,22 @@ constexpr std::string_view sprite_flood_output =
     "sprite flood single 026661834AEEFF05 66901F20C6B79EE1\n"
     "sprite flood F\n";
 
+constexpr CTextProbe math_probes[]{{"math-helpers", "/MathHelpersProbe.HC",
+                                    "/MathHelpersProbe.BIN.Z", "round -21 ",
+                                    "Math helpers done", math_helpers_output}};
+constexpr CTextProbe music_precision_probes[]{
+    {"music-precision", "/MusicPrecision.HC", "/MusicPrecision.BIN.Z",
+     "MP initial ", "MP DONE", music_precision_output}};
+
 // Uses the same QMP input and physical-memory readers as the boot tests.
 static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
                                    const std::string &boot, bool reference,
                                    bool tic = false, bool breaks = false,
-                                   bool screen_capture = false, bool spline = false,
-                                   bool flood_fill = false, bool blot = false,
-                                   bool math = false,
-                                   bool sprite_flood = false,
+                                   bool screen_capture = false,
+                                   bool spline = false, bool flood_fill = false,
+                                   bool blot = false, bool sprite_flood = false,
                                    bool music_demo = false,
-                                   bool music_precision = false)
+                                   std::span<const CTextProbe> text_probes = {})
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -385,9 +391,15 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
     snapshot("capture-cleanup");
     std::cout << "Original ScrnCapture.HC saved, replayed and cleared a GR image\n";
   }
-  auto upload = [&](const fs::path &source) {
-    Check(fs::file_size(source) < 4096, "Probe exceeds guest buffer");
-    cmd("U8 *cgprobe=CAlloc(4096);");
+  bool probe_declared = false;
+  auto upload = [&](const fs::path &source, bool clear = false) {
+    auto expected = FileRead(source);
+    Check(!expected.empty() && expected.size() <= 64 * 1024,
+          "Reference probe must contain at most 64 KiB of source");
+    const size_t allocation = (expected.size() + 1 + 4095) & ~size_t(4095);
+    cmd(std::string(probe_declared ? "cgprobe" : "U8 *cgprobe") + "=CAlloc(" +
+        std::to_string(allocation) + ");");
+    probe_declared = true;
     cmd(R"("CGPROBE:%X:END\n",cgprobe;)");
     const std::regex pattern("CGPROBE:([0-9A-Fa-f]+):END");
     std::smatch match;
@@ -397,7 +409,8 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
       return std::regex_search(screen, match, pattern);
     }, "Missing reference probe buffer address");
     auto addr = std::stoull(match[1].str(), nullptr, 16);
-    Check(addr && addr < 0x20000000 - 4096, "Invalid reference probe buffer");
+    Check(addr && addr <= 0x20000000 - allocation,
+          "Invalid reference probe buffer");
     char payload[] = "/tmp/unholyos-character-probe-XXXXXX";
     int fd = mkstemp(payload);
     Check(fd >= 0, "Cannot create reference probe transfer file");
@@ -421,32 +434,80 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
     fs::remove(payload);
     Check(done == child && WIFEXITED(status) && WEXITSTATUS(status) == 0,
           "GDB could not restore the reference probe");
-    auto uploaded = dir / "reference-probe-source.bin";
+    auto uploaded = dir / (source.stem().string() + "-uploaded.bin");
     vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
                std::to_string(addr) + R"(,"size":)" +
-               std::to_string(fs::file_size(source) + 1) +
-               R"(,"filename":")" + uploaded.string() + R"("}})");
-    auto expected = FileRead(source);
+               std::to_string(expected.size() + 1) + R"(,"filename":")" +
+               uploaded.string() + R"("}})");
     expected.push_back(0);
     Check(FileRead(uploaded) == expected, "Reference probe transfer changed source bytes");
-    cmd("ExePutS(cgprobe);Free(cgprobe);");
+    cmd(clear ? "DocClear(,1);ExePutS(cgprobe);Free(cgprobe);"
+              : "ExePutS(cgprobe);Free(cgprobe);");
   };
-  if (math || music_precision) {
-    upload(fs::absolute(music_precision ? "Linux/Fixtures/MusicPrecision.HC"
-                                       : "Linux/Fixtures/MathHelpersProbe.HC"));
-    const auto cells = wait_text(music_precision ? "MP DONE" : "Math helpers done");
-    const auto screen = visible(cells);
-    const auto expected = music_precision ? music_precision_output : math_helpers_output;
-    auto lines = expected;
-    while (!lines.empty()) {
-      const auto end = lines.find('\n');
-      Check(screen.find(lines.substr(0, end)) != std::string::npos,
-            music_precision ? "Music precision differs from the pinned reference"
-                            : "Math helper output differs from the pinned reference");
-      lines.remove_prefix(end + 1);
+  if (!text_probes.empty()) {
+    std::string failures;
+    for (const auto &probe : text_probes) {
+      vm.ResetDeadline(150s);
+      cmd("DocClear(,1);");
+      upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
+      const auto cells = wait(
+          [&](const Cells &cells) {
+            const auto screen = visible(cells);
+            return screen.find(probe.finish) != std::string::npos &&
+                   screen.find("T:/Home>") != std::string::npos;
+          },
+          "Missing completed reference text probe");
+      const auto screen = visible(cells);
+      std::ofstream screen_file(
+          dir / (std::string(probe.name) + "-reference-screen.txt"));
+      screen_file << screen;
+      screen_file.close();
+      Check(bool(screen_file), "Could not record reference text screen");
+      snapshot(probe.name);
+      const auto first = screen.find(probe.first);
+      Check(first != std::string::npos,
+            "Missing first reference text probe line");
+      Check(first / 81 == 2 && first % 81 == 1,
+            "Reference text probe did not begin at the cleared window origin");
+      const auto finish = screen.find(probe.finish, first);
+      Check(finish != std::string::npos,
+            "Missing last reference text probe line");
+      auto terminal_line = [&](size_t row) {
+        auto line = std::string_view(screen).substr(row * 81 + first % 81,
+                                                    80 - first % 81);
+        const auto end = line.find_last_not_of(' ');
+        return line.substr(0, end == std::string_view::npos ? 0 : end + 1);
+      };
+      std::string output;
+      for (size_t row = first / 81; row <= finish / 81; row++) {
+        output.append(terminal_line(row));
+        output += '\n';
+      }
+      const auto prompt = screen.find("T:/Home>", finish);
+      Check(prompt != std::string::npos && prompt % 81 == first % 81 &&
+                terminal_line(prompt / 81) == "T:/Home>",
+            "Reference probe did not return to an empty command prompt");
+      bool timed = false;
+      const std::regex timing(R"([0-9]+\.[0-9]{6}s)");
+      for (size_t row = finish / 81 + 1; row < prompt / 81; row++) {
+        const auto line = terminal_line(row);
+        if (line.empty())
+          continue;
+        Check(!timed && std::regex_match(line.begin(), line.end(), timing),
+              "Unexpected reference output after the text probe");
+        timed = true;
+      }
+      std::ofstream file(dir / (std::string(probe.name) + "-reference.txt"));
+      file << output;
+      file.close();
+      Check(bool(file), "Could not record reference text probe output");
+      std::cout << output;
+      if (output != probe.expected)
+        failures +=
+            std::string("Reference output differs: ") + probe.source + "\n";
     }
-    snapshot(music_precision ? "music-precision" : "math-helpers");
-    std::cout << expected;
+    if (!failures.empty())
+      throw std::runtime_error(failures);
     return;
   }
   if (screen_capture) {

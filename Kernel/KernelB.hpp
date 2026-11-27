@@ -22,10 +22,29 @@ inline size_t StrLen(const char *str)
 }
 
 extern "C" int64_t StrCmpCpp(const uint8_t *a, const uint8_t *b);
+extern "C" const char *StrMatchCpp(const char *needle, const char *haystack);
+extern "C" int64_t Spaces2TabsCpp(char *dst, const char *src);
+extern "C" char *StrUtilCpp(char *src, int64_t flags);
+extern "C" char *StrFirstOccCpp(char *src, const uint8_t *marker);
+extern "C" char *StrFirstRemCpp(char *src, const uint8_t *marker, char *dst);
+extern "C" char *StrLastOccCpp(char *src, const uint8_t *marker);
+extern "C" char *StrLastRemCpp(char *src, const uint8_t *marker, char *dst);
+extern "C" const char *StrFindCpp(const char *needle, const char *haystack,
+                                  int64_t flags);
+extern "C" char *Tabs2SpacesCpp(const char *src);
+extern "C" char *ScaleIndentCpp(const char *src, uint64_t indent_scale_factor);
+extern "C" char *MStrUtilCpp(const char *src, int64_t flags,
+                             uint64_t indent_scale_factor);
 extern "C" int64_t Str2I64Cpp(const char *text, int64_t radix,
                               const char **end);
 extern "C" uint64_t Str2F64Cpp(const char *text, const char **end);
 extern "C" uint64_t Str2DateCpp(const char *src);
+extern "C" char *StrScanCpp(char *src, const char *fmt, int64_t argc,
+                            const uint64_t *argv);
+extern "C" int64_t LstMatchCpp(const uint8_t *needle, const uint8_t *list,
+                               uint64_t flags);
+extern "C" int64_t DefineMatchCpp(const uint8_t *needle, const char *name,
+                                  uint64_t flags);
 bool ChkPtr(const void *ptr);
 bool ChkPtrRange(const void *ptr, size_t size);
 extern "C" uint64_t ChkPtrCpp(const void *ptr);

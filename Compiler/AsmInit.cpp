@@ -529,6 +529,8 @@ static bool CmpKernelCallback(CHashTable *table, CHashClass &record,
 
 static bool CmpDocData(CHashTable *table, CHashClass &task)
 {
+  static_assert(offsetof(CDocEntry,define_str)==128 &&
+                offsetof(CDocEntry,my_fmt_data)==160);
   auto *doc = CmpKernelClass(table, "CDoc", sizeof(CDoc));
   auto *entry = CmpKernelClass(table, "CDocEntry", sizeof(CDocEntry));
   auto *bin = CmpKernelClass(table, "CDocBin", sizeof(CDocBin));
@@ -572,6 +574,8 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
       {"min_col", entry, FindType("U32", table), offsetof(CDocEntry, base) + offsetof(CDocEntryBase, min_col)},
       {"max_col", entry, FindType("U32", table), offsetof(CDocEntry, base) + offsetof(CDocEntryBase, max_col)},
       {"aux_str", entry, u8ptr, offsetof(CDocEntry, aux_str)},
+      {"define_str", entry, u8ptr, offsetof(CDocEntry, define_str)},
+      {"my_fmt_data", entry, u8ptr, offsetof(CDocEntry, my_fmt_data)},
       {"raw_type", entry, FindType("U8", table), offsetof(CDocEntry, raw_type)},
       {"len", entry, i32, offsetof(CDocEntry, len)},
       {"data", entry, u8ptr, offsetof(CDocEntry, data)},
@@ -865,11 +869,53 @@ static CHashClass *CmpExceptData(CHashTable *table)
   return cls;
 }
 
+static CHashClass *CmpHeapData(CHashTable *table, CHashClass *task)
+{
+  auto *cls = CmpKernelClass(table, "CHeapCtrl", sizeof(CHeapCtrl));
+  if (!cls)
+    return nullptr;
+  auto *heap = CurrentTask()->data_heap;
+  auto *u32 = FindType("U32", table);
+  auto *i64 = FindType("I64", table);
+  static_assert(sizeof(CHeapCtrl) == 0x460 &&
+                offsetof(CHeapCtrl, hc_signature) == 8 &&
+                offsetof(CHeapCtrl, locked_flags) == 0x10 &&
+                offsetof(CHeapCtrl, alloced_u8s) == 0x18 &&
+                offsetof(CHeapCtrl, used_u8s) == 0x20 &&
+                offsetof(CHeapCtrl, mem_task) == 0x28);
+  const struct
+  {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+  } members[]{
+      {"hc_signature", u32, offsetof(CHeapCtrl, hc_signature)},
+      {"pad", u32, offsetof(CHeapCtrl, pad)},
+      {"locked_flags", i64, offsetof(CHeapCtrl, locked_flags)},
+      {"alloced_u8s", i64, offsetof(CHeapCtrl, alloced_u8s)},
+      {"used_u8s", i64, offsetof(CHeapCtrl, used_u8s)},
+      {"mem_task", task + 1, offsetof(CHeapCtrl, mem_task)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    if (!name || !MemberAdd(*cls, name, *member.type, member.offset)) {
+      Free(name);
+      return nullptr;
+    }
+  }
+  return cls;
+}
+
 static bool CmpTaskData(CHashTable *table, CHashClass *cls)
 {
   auto *except = CmpExceptData(table);
   if (!except)
     return false;
+  auto *hc = CmpHeapData(table, cls);
+  if (!hc)
+    return false;
+  static_assert(offsetof(CTask, code_heap) == 0x20 &&
+                offsetof(CTask, data_heap) == 0x28);
   auto *heap = CurrentTask()->data_heap;
   auto *u32 = FindType("U32", table);
   auto *i64 = FindType("I64", table);
@@ -898,6 +944,8 @@ static bool CmpTaskData(CHashTable *table, CHashClass *cls)
       {"wake_jiffy", i64, offsetof(CTask, wake_jiffy)},
       {"task_flags", u32, offsetof(CTask, task_flags)},
       {"display_flags", u32, offsetof(CTask, display_flags)},
+      {"code_heap", hc + 1, offsetof(CTask, code_heap)},
+      {"data_heap", hc + 1, offsetof(CTask, data_heap)},
       {"text_attr", u8, offsetof(CTask, text_attr)},
       {"border_attr", u8, offsetof(CTask, border_attr)},
       {"border_src", u8, offsetof(CTask, border_src)},
@@ -2021,6 +2069,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Str2I64", I64, FF_RET1, {{"st", U8Ptr}, {"radix", I64, true, 10}, {"_end_ptr", U8PtrPtr, true}}},
       {"Str2F64", F64, FF_RET1, {{"src", U8Ptr}, {"_end_ptr", U8PtrPtr, true}}},
       {"Str2Date", Date, FF_RET1, {{"src", U8Ptr}}},
+      {"StrScan", U8Ptr, FF_DOT_DOT_DOT, {{"src", U8Ptr}, {"fmt", U8Ptr}}},
       {"SysTry", U0, FF_RET1, {{"catch_start", U8Ptr}, {"untry_start", U8Ptr}}},
       {"SysUntry", U0, FF_RET1, {}},
       {"throw", U0, FF_RET1, {{"ch", I64, true}, {"no_log", Bool, true}}},
@@ -2031,6 +2080,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"BreakUnlock", Bool, FF_RET1, {{"task", TaskPtr, true}}},
       {"YorN", Bool, FF_RET1, {}},
       {"Free", U0, FF_RET1, {{"addr", U8Ptr}}, "_FREE"},
+      {"MSize", I64, FF_RET1, {{"src", U8Ptr}}, "_MSIZE"},
+      {"MSize2", I64, FF_RET1, {{"src", U8Ptr}}, "_MSIZE2"},
       {"HashFind", HashPtr, FF_RET1,
        {{"needle_str", U8Ptr}, {"haystack_table", HashTablePtr}, {"mask", I64},
         {"instance", I64, true, 1}}, "_HASH_FIND"},
@@ -2042,6 +2093,25 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"needle_str", U8Ptr}, {"haystack_member_lst", MemberPtr}}},
       {"StrNew", U8Ptr, FF_RET1,
        {{"buf", U8Ptr}, {"mem_task", TaskPtr, true}}},
+      {"MStrUtil", U8Ptr, FF_RET1,
+       {{"src", U8Ptr}, {"flags", I64}, {"indent_scale_factor", F64, true}}},
+      {"ScaleIndent", U8Ptr, FF_RET1,
+       {{"src", U8Ptr}, {"indent_scale_factor", F64}}},
+      {"Spaces2Tabs", I64, FF_RET1, {{"dst", U8Ptr}, {"src", U8Ptr}}},
+      {"StrFind", U8Ptr, FF_RET1,
+       {{"needle", U8Ptr}, {"haystack_str", U8Ptr}, {"flags", I64, true}}},
+      {"StrFirstOcc", U8Ptr, FF_RET1, {{"src", U8Ptr}, {"marker", U8Ptr}}},
+      {"StrFirstRem", U8Ptr, FF_RET1,
+       {{"src", U8Ptr}, {"marker", U8Ptr}, {"dst", U8Ptr, true}}},
+      {"StrIMatch", U8Ptr, FF_RET1,
+       {{"needle", U8Ptr}, {"haystack_str", U8Ptr}}, "_STRIMATCH"},
+      {"StrLastOcc", U8Ptr, FF_RET1, {{"src", U8Ptr}, {"marker", U8Ptr}}},
+      {"StrLastRem", U8Ptr, FF_RET1,
+       {{"src", U8Ptr}, {"marker", U8Ptr}, {"dst", U8Ptr, true}}},
+      {"StrMatch", U8Ptr, FF_RET1,
+       {{"needle", U8Ptr}, {"haystack_str", U8Ptr}}, "_STRMATCH"},
+      {"StrUtil", U8Ptr, FF_RET1, {{"src", U8Ptr}, {"flags", I64}}},
+      {"Tabs2Spaces", U8Ptr, FF_RET1, {{"src", U8Ptr}}},
       {"StrCpy", U0, FF_RET1, {{"dst", U8Ptr}, {"src", U8Ptr}}, "_STRCPY"},
       {"StrLen", I64, FF_INTERNAL, {{"st", U8Ptr}}, nullptr, IC_STRLEN},
       {"QueInit", U0, FF_INTERNAL, {{"head", QuePtr}}, nullptr, IC_QUE_INIT},
@@ -2814,6 +2884,14 @@ static bool CmpFillHash(CHashTable *table)
       {"F64_MAX", "(0x7FEFFFFFFFFFFFFF(F64))"},
       {"HTT_CLASS", "0x10"}, {"HTT_INTERNAL_TYPE", "0x20"},
       {"HTT_FUN", "0x40"}, {"MLMF_IS_STR", "1"},
+      {"SUF_REM_CTRL_CHARS", "0x001"}, {"SUF_REM_LEADING", "0x002"},
+      {"SUF_REM_TRAILING", "0x004"}, {"SUF_REM_SPACES", "0x008"},
+      {"SUF_SINGLE_SPACE", "0x010"}, {"SUF_TO_UPPER", "0x020"},
+      {"SUF_TO_LOWER", "0x040"}, {"SUF_S2T", "0x080"},
+      {"SUF_T2S", "0x100"}, {"SUF_SCALE_INDENT", "0x200"},
+      {"SUF_SAFE_DOLLAR", "0x400"}, {"SFF_IGNORE_CASE", "1"},
+      {"SFF_WHOLE_LABELS_BEFORE", "2"}, {"SFF_WHOLE_LABELS_AFTER", "4"},
+      {"SFG_WHOLE_LABELS", "6"},
       {"pi", "(0x400921FB54442D18(F64))"},
       {"BLACK","0"}, {"BLUE","1"}, {"GREEN","2"}, {"CYAN","3"},
       {"RED","4"}, {"PURPLE","5"}, {"BROWN","6"}, {"LTGRAY","7"},
@@ -2885,9 +2963,16 @@ static bool CmpFillHash(CHashTable *table)
       {"DOCF_BWD_MOVEMENT", "0x40000"},
       {"DOCF_DO_FULL_REFRESH", "0x200000"}, {"TASKf_IDLE", "3"},
       {"RECALCt_FIND_CURSOR", "1"},
-      {"DOCT_DATA", "30"}, {"DOCT_TREE", "36"},
+      {"DOCT_DATA", "30"}, {"DOCT_CHECK_BOX", "31"}, {"DOCT_LST", "32"},
+      {"DOCT_TREE", "36"},
+      {"DOCEF_TAG", "1"}, {"DOCEF_AUX_STR", "4"}, {"DOCEF_DEFINE", "8"},
+      {"DOCEF_CHECKED_COLLAPSED", "(1<<43)"},
       {"DOCEF_REFRESH_DATA", "(1<<45)"}, {"DOCEF_UPDATE_DATA", "(1<<46)"},
       {"DOCEF_DEREF_DATA", "(1<<47)"}, {"DOCEF_HAS_TERMINATOR", "(1<<49)"},
+      {"DOCEF_REMALLOC_DATA", "(1<<48)"}, {"DOCEF_LST", "(1<<53)"},
+      {"RT_I8", "4"}, {"RT_U8", "5"}, {"RT_I16", "6"}, {"RT_U16", "7"},
+      {"RT_I32", "8"}, {"RT_U32", "9"}, {"RT_I64", "10"}, {"RT_PTR", "10"},
+      {"RT_U64", "11"}, {"RT_F64", "14"},
       {"RECALCt_TO_SCRN", "2"},
       {"RECALCF_HAS_CURSOR", "0x100"},
       {"DISPLAYf_SHOW", "0"},
