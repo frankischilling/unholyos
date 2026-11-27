@@ -64,9 +64,10 @@ extern "C" void FmtCpp(uint8_t drv_let, uint8_t quick, uint8_t confirm, int64_t 
     if (type==FSt_FAT32) PutS("Using RedSea File System.\n");
     CDiskLock lock(*dv);
     ResidentDriveClear(dv->drv_let);
+    DrvFATCacheReset(*dv);
     auto root=dv->bd->init_root_dir_blks;
     res=(quick || BlkWriteZero(*dv,dv->drv_offset,dv->size)) &&
-        RedSeaFormatRAM(*dv,root>0?root:1);
+        RedSeaFormatRAM(*dv,root>0?root:1) && DrvFATCacheInit(*dv);
   } else {
     PutS("File System Not Supported\n");
     return;

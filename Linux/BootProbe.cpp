@@ -2068,6 +2068,8 @@ void BootProbe()
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32StreamProbe.HC");
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32TreeProbe.HC");
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32ClusterProbe.HC");
+      BootFileProgramReport(*adam_task->cur_dv,"/FatSectorCacheProbe.HC");
+      BootFileProgramReport(*adam_task->cur_dv,"/FatSectorCacheNativeProbe.HC");
     }
     BootFileProgramReport(*adam_task->cur_dv,"/Fat32RejectProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ArcProbe.HC");

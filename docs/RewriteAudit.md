@@ -21,11 +21,13 @@ part of the full rewrite.
 
 ## Remaining kernel work
 
-- `Kernel/BlkDev/FileSysISO.HC`: restore the ISO filesystem and its
-  mount and file operations. `DskCache.cpp` now supplies the block cache,
-  and drive and device locking use task ownership. The per-drive FAT
-  sector cache, RedSea free lists and complete media lifecycle remain
-  separate work. `DskClus.cpp` supplies cluster traversal, allocation,
+- `Kernel/BlkDev/FileSysISO.HC` is present in the reference tree, but is
+  not included by `MakeBlkDev.HC`; `KernelA.HH` marks `FSt_ISO9660`
+  unsupported. Preserve that active-build distinction rather than
+  enabling a general ISO9660 filesystem. The active RedSea ISO path,
+  file-backed devices and media lifecycle still need work.
+  `DskCache.cpp` now supplies the block cache and drive and device
+  locking use task ownership. `DskClus.cpp` supplies cluster traversal, allocation,
   reads and writes, and `DirNew` publishes RedSea and FAT32 directory
   entries. Complete chain ownership and error recovery, mount lifecycle,
   removable media and multi-CPU locking still need work.

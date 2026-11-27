@@ -36,6 +36,7 @@ bool RedSeaFormatRAM(CDrv &dv, size_t root_blocks)
   if (!map_blocks || root_blocks >= blocks ||
       map_blocks + 1 > blocks - root_blocks)
     return false;
+  DrvFATCacheReset(dv);
   DskCacheInvalidateDevice(dv.bd);
   auto *base = dv.bd->RAM_dsk + size_t(dv.drv_offset) * BLK_SIZE;
   uint64_t root = dv.drv_offset + map_blocks + 1;
@@ -136,12 +137,44 @@ static uint8_t *RedSeaBlock(const CDrv &dv, uint64_t cluster)
 static bool RedSeaClusterUsed(const CDrv &dv, uint64_t cluster)
 {
   auto bit = cluster - dv.data_area;
+  if (dv.cur_fat_blk) {
+    auto index=bit/(BLK_SIZE*8);
+    auto offset=(bit/8)%BLK_SIZE;
+    if (index==uint64_t(dv.cur_fat_blk_num))
+      return reinterpret_cast<const uint8_t *>(dv.cur_fat_blk)[offset] &
+             (uint8_t{1} << (bit % 8));
+    uint8_t value;
+    if (!DrvFATRead(dv,index,&value,offset,1))
+      return true; // Do not allocate from an unreadable bitmap sector.
+    return value & (uint8_t{1} << (bit % 8));
+  }
   return RedSeaBlock(dv, dv.fat1)[bit / 8] & (uint8_t{1} << (bit % 8));
+}
+
+static bool RedSeaNativeWriteReady(CDrv &dv)
+{
+  if (!dv.bd || dv.bd->type!=BDT_RAM || !dv.bd->RAM_dsk ||
+      (dv.bd->flags&BDF_READ_ONLY) || (dv.fat_blk_dirty&1)) return false;
+  // Unpublished RAM images (the opcode probe and ISO construction) have no
+  // registered device to initialize and deliberately remain uncached.
+  if (dv.dv_signature==DRV_SIGNATURE_VAL && !BlkDevEnsureInitialized(*dv.bd))
+    return false;
+  if (dv.drv_offset<0 || dv.size<=0 || dv.bd->max_blk<0 ||
+      uint64_t(dv.bd->max_blk)>=SIZE_MAX/BLK_SIZE ||
+      uint64_t(dv.drv_offset)+dv.size>uint64_t(dv.bd->max_blk)+1 ||
+      dv.fat1<=dv.drv_offset || dv.fat2!=dv.fat1 ||
+      dv.data_area<dv.fat1 || uint64_t(dv.data_area)>=uint64_t(dv.drv_offset)+dv.size)
+    return false;
+  uint64_t map_blocks=uint64_t(dv.data_area)-dv.fat1+1;
+  if ((uint64_t(dv.drv_offset)+dv.size-dv.data_area-1)/(BLK_SIZE*8)>=map_blocks)
+    return false;
+  return DrvFATWriteAllowed(dv.bd,uint64_t(dv.fat1)*BLK_SIZE,map_blocks*BLK_SIZE);
 }
 
 static void RedSeaMark(const CDrv &dv, uint64_t cluster, uint64_t blocks,
                        bool used)
 {
+  if (!blocks) return;
   auto *map = RedSeaBlock(dv, dv.fat1);
   for (uint64_t i = 0; i < blocks; i++) {
     auto bit = cluster + i - dv.data_area;
@@ -150,6 +183,16 @@ static void RedSeaMark(const CDrv &dv, uint64_t cluster, uint64_t blocks,
       map[bit / 8] |= mask;
     else
       map[bit / 8] &= ~mask;
+  }
+  // Native bitmap updates remain immediately visible in RAM, including for
+  // temporary ISO construction drives. Keep a mounted sector in sync.
+  auto first=(cluster-dv.data_area)/8;
+  auto last=(cluster-dv.data_area+blocks-1)/8;
+  DrvFATWriteThrough(dv.bd,map+first,uint64_t(dv.fat1)*BLK_SIZE+first,
+                     last-first+1,true);
+  if (dv.cur_fat_blk) {
+    uint8_t value;
+    DrvFATRead(dv,last/BLK_SIZE,&value,last%BLK_SIZE,1);
   }
 }
 
@@ -257,7 +300,8 @@ extern "C" void RedSeaFreeClusCpp(CDrv *dv, int64_t c, int64_t cnt)
   }
   CDiskLock lock(*dv);
   DskCacheInvalidateDevice(dv->bd);
-  if (!RedSeaRAMGeometry(*dv) || !RedSeaClusterRange(*dv, c, cnt))
+  if (!RedSeaNativeWriteReady(*dv) || !RedSeaRAMGeometry(*dv) ||
+      !RedSeaClusterRange(*dv, c, cnt))
     return;
   auto *root = RedSeaAllocatedDir(*dv, {uint64_t(dv->root_clus), nullptr});
   if (root && !RedSeaOverlap(c, cnt, dv->root_clus, RedSeaBlocks(root->size)))
@@ -273,7 +317,7 @@ extern "C" int64_t RedSeaAllocClusCpp(CDrv *dv, int64_t cnt)
   {
     CDiskLock lock(*dv);
     DskCacheInvalidateDevice(dv->bd);
-    if (RedSeaRAMGeometry(*dv) && cnt<=dv->size &&
+    if (RedSeaNativeWriteReady(*dv) && RedSeaRAMGeometry(*dv) && cnt<=dv->size &&
         RedSeaAllocatedDir(*dv,{uint64_t(dv->root_clus),nullptr}))
       c=RedSeaAllocClus(*dv,cnt);
   }
@@ -524,7 +568,8 @@ extern "C" uint64_t RedSeaDirNewCpp(CDrv *dv, const char *cur_dir,
     CDiskLock lock(*dv);
     DskCacheInvalidateDevice(dv->bd);
     size_t depth;
-    if (RedSeaRAMGeometry(*dv) && RedSeaDirPath(*dv, cur_dir, dirs, depth))
+    if (RedSeaNativeWriteReady(*dv) && RedSeaRAMGeometry(*dv) &&
+        RedSeaDirPath(*dv, cur_dir, dirs, depth))
       RedSeaDirPut(*dv, dirs, depth, record, free_old_chain);
   }
   Free(dirs);
@@ -565,6 +610,7 @@ bool RedSeaStreamPrepare(CDrv &dv, const char *path, CDirEntry &de, int64_t cnt)
 {
   CDiskLock lock(dv);
   DskCacheInvalidateDevice(dv.bd);
+  if (!RedSeaNativeWriteReady(dv)) return false;
   CRedSeaDir dir;
   CRedSeaDirEntry entry{};
   if (!RedSeaStreamDir(dv, path, dir, entry.name) || cnt > dv.size)
@@ -591,6 +637,7 @@ bool RedSeaStreamCommit(CDrv &dv, const char *path, CDirEntry &de, bool new_file
 {
   CDiskLock lock(dv);
   DskCacheInvalidateDevice(dv.bd);
+  if (!RedSeaNativeWriteReady(dv)) return false;
   CRedSeaDir dir;
   char name[CDIR_FILENAME_LEN];
   if (!RedSeaStreamDir(dv, path, dir, name) || !RedSeaNameEq(de.name, name) ||
@@ -620,6 +667,7 @@ static uint64_t RedSeaWrite(CDrv &dv, const char *path, const uint8_t *data,
     return 0;
   CDiskLock lock(dv);
   DskCacheInvalidateDevice(dv.bd);
+  if (!RedSeaNativeWriteReady(dv)) return 0;
   CRedSeaDir dir{uint64_t(dv.root_clus), nullptr};
   for (;;) {
     const char *part = path;
@@ -673,6 +721,7 @@ int64_t RedSeaFilesDel(CDrv &dv, const char *cur_dir, const char *mask,
     return 0;
   CDiskLock lock(dv);
   DskCacheInvalidateDevice(dv.bd);
+  if (!RedSeaNativeWriteReady(dv)) return 0;
   uint64_t cluster;
   if (!RedSeaDirClus(dv, cur_dir, StrLen(cur_dir), cluster))
     return 0;

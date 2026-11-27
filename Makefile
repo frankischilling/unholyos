@@ -103,6 +103,8 @@ FAT_CLUSTER_PROBE := Linux/Fixtures/Fat32ClusterProbe.HC
 FAT_CLUSTER_TEST_ISO := $(BUILD)/fat32-cluster-test.iso
 DISK_CACHE_PROBE := Linux/Fixtures/DiskCacheProbe.HC
 DISK_CACHE_TEST_ISO := $(BUILD)/disk-cache-test.iso
+FAT_SECTOR_CACHE_PROBE := $(addprefix Linux/Fixtures/,FatSectorCacheProbe.HC FatSectorCacheNativeProbe.HC)
+FAT_SECTOR_CACHE_TEST_ISO := $(BUILD)/fat-sector-cache-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
 FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
@@ -335,6 +337,9 @@ $(FAT_CLUSTER_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_CL
 $(DISK_CACHE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(DISK_CACHE_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(DISK_CACHE_PROBE)
 
+$(FAT_SECTOR_CACHE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_SECTOR_CACHE_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(FAT_SECTOR_CACHE_PROBE))
+
 $(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
 
@@ -440,6 +445,12 @@ test-disk-cache: $(DISK_CACHE_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --disk-cache "$(QEMU)" $(DISK_CACHE_TEST_ISO)
 
 test: test-disk-cache
+
+.PHONY: test-fat-sector-cache
+test-fat-sector-cache: $(FAT_SECTOR_CACHE_TEST_ISO) $(FAT_WRITE_DISK) $(BOOT_TEST)
+	$(BOOT_TEST) --fat-sector-cache "$(QEMU)" $(FAT_SECTOR_CACHE_TEST_ISO) $(FAT_WRITE_DISK)
+
+test: test-fat-sector-cache
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio

@@ -2199,6 +2199,50 @@ static uint64_t VerifyDiskCache(CMonitor &vm, uint64_t disk, uint64_t owner,
   return used;
 }
 
+static uint64_t VerifyDriveSectorCaches(CMonitor &vm, uint64_t disk,
+                                         uint64_t owner,
+                                         const BlockRanges &ranges)
+{
+  constexpr uint64_t drive_count = 26, drive_size = 160, sector_size = 512;
+  const auto drives = ReadPhysical<1>(vm, disk + 88)[0];
+  const auto boot_drive = ReadPhysical<1>(vm, 0x100368)[0];
+  auto allocation = [&](uint64_t ptr, uint64_t bytes) {
+    const auto size = CompilerAllocationSize(bytes);
+    Check(ptr >= 16 && !(ptr & 7) &&
+              std::any_of(ranges.begin(), ranges.end(), [&](const auto &range) {
+                return ptr - 16 >= range.first && ptr - 16 <= range.second &&
+                       size <= range.second - (ptr - 16);
+              }) &&
+              ReadPhysical<2>(vm, ptr - 16) ==
+                  std::array<uint64_t, 2>{owner, size},
+          "Invalid boot drive or FAT sector cache allocation");
+    return size;
+  };
+  allocation(drives, drive_count * drive_size);
+  uint64_t used = 0, mounted = 0;
+  for (uint64_t i = 0; i < drive_count; ++i) {
+    const auto addr = drives + i * drive_size;
+    const auto drv = ReadPhysical<18>(vm, addr);
+    if (uint32_t(drv[1]) != 0x56535644) {
+      Check(!drv[17], "Unmounted drive retains a FAT sector allocation");
+      continue;
+    }
+    // The fixed-area boot tests have no attached writable IDE disk.
+    Check(addr == boot_drive && (drv[1] >> 48) == 1 &&
+              drv[6] == drv[7] && drv[6] > drv[2] &&
+              drv[9] >= drv[6] && !drv[15] &&
+              drv[16] <= drv[9] - drv[6],
+          "Unexpected mounted drive or dirty boot FAT sector cache");
+    used += allocation(drv[17], sector_size);
+    ++mounted;
+  }
+  Check(mounted == (boot_drive ? 1u : 0u),
+        "Missing boot drive FAT sector cache");
+  std::cout << "Verified mounted drive sector caches " << mounted
+            << ", heap bytes " << used << '\n';
+  return used;
+}
+
 static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
                         const std::string &output, uint64_t range_bytes,
                         uint64_t symbol_used,
@@ -2282,10 +2326,13 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   const uint64_t cache_used =
       VerifyDiskCache(vm, disk, expected_data_hc, pool ? data_bytes : code_bytes,
                       pool ? data.ranges : code.ranges);
+  const uint64_t sector_cache_used =
+      VerifyDriveSectorCaches(vm, disk, expected_data_hc,
+                              pool ? data.ranges : code.ranges);
   const uint64_t boot_used = range_bytes + late_used + symbol_used +
                              drive_used + allocation[1] + graphics_used +
                              asm_hash_used + raw_used + fifo_used +
-                             compiler.data_used + cache_used;
+                             compiler.data_used + cache_used + sector_cache_used;
   uint64_t code_used = 0x42840 + fault_used + compiler.code_used +
                        (pool ? 0x5E8 : boot_used);
   uint64_t data_used = boot_used, data_alloced = 0;
@@ -3019,6 +3066,12 @@ constexpr CTextProbe fat_cluster_probes[]{
 constexpr CTextProbe disk_cache_probes[]{
     {"disk-cache", "/DiskCacheProbe.HC", "", "Disk cache ",
      "Disk cache ", "Disk cache 3FFFF\n", {}, true}};
+
+constexpr CTextProbe fat_sector_cache_probes[]{
+    {"fat-sector-cache", "/FatSectorCacheProbe.HC", "", "FAT sector cache ",
+     "FAT sector cache ", "FAT sector cache FF 3FF\n", {}, true},
+    {"fat-sector-native", "/FatSectorCacheNativeProbe.HC", "",
+     "FAT sector native ", "FAT sector native ", "FAT sector native 3F\n", {}, true}};
 
 static void CheckBootProbeOrder(const std::string &serial,
                                 std::span<const char *const> paths)
@@ -6212,24 +6265,37 @@ int main(int argc, char **argv)
   }
   if ((argc==5 || argc==6) &&
       (std::string_view(argv[1])=="--fat32-cluster" ||
-       std::string_view(argv[1])=="--fat32-cluster-reference")) {
+       std::string_view(argv[1])=="--fat32-cluster-reference" ||
+       std::string_view(argv[1])=="--fat-sector-cache" ||
+       std::string_view(argv[1])=="--fat-sector-cache-reference")) {
     bool reference=std::string_view(argv[1]).ends_with("-reference");
+    bool sector_cache=std::string_view(argv[1]).starts_with("--fat-sector-cache");
+    std::span<const CTextProbe> probes=sector_cache
+        ? std::span<const CTextProbe>(fat_sector_cache_probes)
+        : std::span<const CTextProbe>(fat_cluster_probes);
     char path[]="/tmp/unholyos-fat32-cluster-XXXXXX";
     if (argc==5 && !mkdtemp(path)) return 1;
     fs::path dir=argc==6 ? fs::absolute(argv[5]) : fs::path(path);
     try {
       fs::create_directories(dir);
+      const auto original=sector_cache?FileRead(argv[4]):std::vector<uint8_t>{};
       if (!reference)
-        VerifyHostModuleMedia(argv[3],"Linux/Fixtures/Fat32ClusterProbe.HC",
-                              "Fat32ClusterProbe.HC");
+        for (const auto &probe:probes)
+          VerifyHostModuleMedia(argv[3],std::string("Linux/Fixtures")+probe.source,
+                                probe.source+1);
       CMonitor vm(argv[2],argv[3],dir,"pc","512",false,argv[4],false,reference);
       vm.Connect();
       if (reference)
         DriveCharacterGraphics(vm,dir,"",true,false,false,false,false,false,
-                               false,false,false,fat_cluster_probes);
-      else
-        CheckBootSourceProbe(vm.Boot(dir/"serial.log"),fat_cluster_probes[0],dir);
+                               false,false,false,probes.first(1));
+      else {
+        auto boot=vm.Boot(dir/"serial.log");
+        for (const auto &probe:probes)
+          CheckBootSourceProbe(boot,probe,dir);
+      }
       vm.Quit();
+      if (sector_cache)
+        Check(FileRead(argv[4])==original,"Original FAT32 snapshot was modified");
       if (argc==5) fs::remove_all(dir);
       return 0;
     } catch (const std::exception &error) {
@@ -6668,6 +6734,7 @@ int main(int argc, char **argv)
               << " --cluster-entry[-reference] qemu image.iso [capture-dir]\n"
               << " --disk-cache[-reference] qemu image.iso [capture-dir]\n"
               << " --fat32-cluster[-reference] qemu image.iso disk.img [capture-dir]\n"
+              << " --fat-sector-cache[-reference] qemu image.iso disk.img [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]

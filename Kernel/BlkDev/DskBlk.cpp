@@ -46,14 +46,16 @@ bool BlkDevReadBytes(CBlkDev &bd, uint8_t *buf, uint64_t pos,
 }
 
 bool BlkDevWriteBytes(CBlkDev &bd, const uint8_t *buf, uint64_t pos,
-                      size_t bytes)
+                      size_t bytes,const CDrv *fat_origin)
 {
   CDiskLock lock(bd);
   if (bd.flags&BDF_READ_ONLY && !(bd.flags&BDF_READ_ONLY_OVERRIDE))
     return false;
+  if (!DrvFATWriteAllowed(&bd,pos,bytes,fat_origin)) return false;
   if (bd.type==BDT_ATA) {
     bool res=ATAWriteBytes(bd,buf,pos,bytes);
     DskCacheWriteThrough(&bd,buf,pos,bytes,res);
+    DrvFATWriteThrough(&bd,buf,pos,bytes,res,fat_origin);
     return res;
   }
   if (bd.type!=BDT_RAM || !bd.RAM_dsk || bd.max_blk<0 ||
@@ -64,6 +66,7 @@ bool BlkDevWriteBytes(CBlkDev &bd, const uint8_t *buf, uint64_t pos,
     return false;
   MemCpy(bd.RAM_dsk+pos,buf,bytes);
   DskCacheWriteThrough(&bd,buf,pos,bytes,true);
+  DrvFATWriteThrough(&bd,buf,pos,bytes,true,fat_origin);
   return true;
 }
 

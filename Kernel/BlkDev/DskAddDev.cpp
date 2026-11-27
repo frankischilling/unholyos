@@ -93,11 +93,13 @@ static int64_t BlkDevAddATA(CBlkDev *bd,int64_t prt_num,bool whole_drv)
     drive.size=size;
     drive.prt_num=current;
     drive.drv_let=letter;
-    if (!FAT32Init(drive))
+    if (!FAT32Init(drive) || !DrvFATCacheInit(drive))
       continue;
+    auto &target=*blkdev.let_to_drv[letter-'A'];
+    DrvFATCacheDrop(target);
     drive.dv_signature=DRV_SIGNATURE_VAL;
     drive.bd=bd;
-    MemCpy(blkdev.let_to_drv[letter-'A'],&drive,sizeof(drive));
+    MemCpy(&target,&drive,sizeof(drive));
     res++;
     letter++;
   }
@@ -135,7 +137,8 @@ extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole_drv,
   }
   auto &target = *blkdev.let_to_drv[letter - 'A'];
   if (target.dv_signature==DRV_SIGNATURE_VAL &&
-      ((target.locked_flags&1) || (target.bd && (target.bd->locked_flags&1))))
+      ((target.locked_flags&1) || (target.fat_blk_dirty&1) ||
+       (target.bd && (target.bd->locked_flags&1))))
     return 0;
 
   CBlkDev device;
@@ -162,7 +165,8 @@ extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole_drv,
   size_t root_blocks =
       device.init_root_dir_blks > 0 ? size_t(device.init_root_dir_blks) : 1;
   if (!(owned ? RedSeaFormatRAM(drive, root_blocks)
-              : RedSeaInit(drive) || RedSeaFormatRAM(drive, root_blocks))) {
+              : RedSeaInit(drive) || RedSeaFormatRAM(drive, root_blocks)) ||
+      !DrvFATCacheInit(drive)) {
     if (owned)
       Free(device.RAM_dsk);
     return 0;
@@ -185,6 +189,7 @@ extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole_drv,
       break;
     }
   }
+  DrvFATCacheDrop(target);
   MemCpy(bd, &device, sizeof(device));
   drive.bd = bd;
   MemCpy(&target, &drive, sizeof(target));
@@ -202,7 +207,8 @@ CDrv *BlkDevsInitAll()
 
   auto *drive = blkdev.let_to_drv[blkdev.boot_drv_let - 'A'];
   drive->bd = dvd;
-  if (!ISOInit(*drive)) {
+  if (!ISOInit(*drive) || !DrvFATCacheInit(*drive)) {
+    DrvFATCacheDrop(*drive);
     MemSet(drive, 0, sizeof(*drive));
     return nullptr;
   }

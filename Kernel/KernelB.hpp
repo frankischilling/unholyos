@@ -534,6 +534,17 @@ private:
 };
 
 extern "C" CDrv *DrvMakeFreeSlotCpp(uint8_t drv_let);
+extern "C" void DrvFATBlkAllocCpp(CDrv *dv);
+extern "C" void DrvFATBlkCleanCpp(CDrv *dv,int64_t fat_sel=3);
+extern "C" void DrvFATBlkSetCpp(CDrv *dv,int64_t c,int64_t fat_sel=3);
+bool DrvFATCacheInit(CDrv &dv);
+void DrvFATCacheDrop(CDrv &dv);
+void DrvFATCacheReset(CDrv &dv);
+void DrvFATCacheResetDevice(CBlkDev *bd,bool controller=false);
+bool DrvFATRead(const CDrv &dv,uint64_t index,void *buf,size_t offset,size_t bytes);
+bool DrvFATWriteAllowed(CBlkDev *bd,uint64_t pos,size_t bytes,const CDrv *origin=nullptr);
+void DrvFATWriteThrough(CBlkDev *bd,const uint8_t *buf,uint64_t pos,size_t bytes,
+                        bool okay,const CDrv *origin=nullptr);
 extern "C" uint64_t DrvNextFreeLetCpp(uint8_t first_drv_let);
 extern "C" CDrv *DrvChkCpp(CDrv *dv,uint8_t except);
 extern "C" uint64_t Drv2LetCpp(CDrv *dv);
@@ -555,7 +566,7 @@ extern "C" CBlkDev *Let2BlkDevCpp(uint8_t drv_let,uint8_t except);
 bool BlkDevReadBytes(CBlkDev &bd, uint8_t *buf, uint64_t pos,
                      size_t bytes);
 bool BlkDevWriteBytes(CBlkDev &bd, const uint8_t *buf, uint64_t pos,
-                      size_t bytes);
+                      size_t bytes,const CDrv *fat_origin=nullptr);
 uint64_t Now();
 bool ISOInit(CDrv &dv);
 bool RedSeaInit(CDrv &dv);
