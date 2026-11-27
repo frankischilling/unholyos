@@ -2927,6 +2927,10 @@ constexpr CTextProbe class_records_probes[]{
     {"class-records", "/ClassRecordsProbe.HC", "", "CR heaps ", "CR DONE",
      class_records_output}};
 
+constexpr CTextProbe list_utilities_probes[]{
+    {"list-utilities", "/ListUtilitiesProbe.HC", "", "LU linked ", "LU DONE",
+     "LU linked 7F\nLU queue 7F\nLU DONE\n"}};
+
 static void CheckBootProbeOrder(const std::string &serial,
                                 std::span<const char *const> paths)
 {
@@ -6249,6 +6253,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--internal-types-reference" ||
        std::string_view(argv[1]) == "--class-records" ||
        std::string_view(argv[1]) == "--class-records-reference" ||
+       std::string_view(argv[1]) == "--list-utilities" ||
+       std::string_view(argv[1]) == "--list-utilities-reference" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -6295,9 +6301,12 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--internal-types");
     bool class_records_probe =
         std::string_view(argv[1]).starts_with("--class-records");
+    bool list_utilities_probe =
+        std::string_view(argv[1]).starts_with("--list-utilities");
     const bool source_probe = compiler_defines_probe || string_defines_probe ||
                               system_defines_probe || color_conversions_probe ||
-                              format_missing_args_probe || class_records_probe;
+                              format_missing_args_probe || class_records_probe ||
+                              list_utilities_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6321,6 +6330,8 @@ int main(int argc, char **argv)
       text_probes = internal_types_probes;
     else if (class_records_probe)
       text_probes = class_records_probes;
+    else if (list_utilities_probe)
+      text_probes = list_utilities_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -6506,6 +6517,7 @@ int main(int argc, char **argv)
               << " --internal-types[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --class-records[-reference] qemu image.iso [capture-dir]\n"
+              << " --list-utilities[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]

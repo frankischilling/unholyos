@@ -3465,6 +3465,50 @@ an empty `T:/Home>` prompt, then exited and released the port.
 recovery check. The pull request records the exact tested commit and the
 GCC and Clang CI results.
 
+## Linked lists and queues
+
+`ListUtilitiesProbe.HC` exercises Terry A. Davis's
+`Kernel/KDataTypes.HC` functions against the pinned TempleOS guest and
+UnholyOS. Both native builds and the reference produced the same trace:
+
+```text
+LU linked 7F
+LU queue 7F
+LU DONE
+```
+
+The fourteen checks cover empty lists and queues, counts, allocator-inclusive
+sizes, independent copies of differently sized nodes and the queue head,
+payload bytes, forward and backward links, default and explicit task
+arguments, and the original heap usage after deletion. The copied
+allocations remain independent of the source nodes. Allocation exhaustion
+and arbitrary invalid pointers were not compared.
+
+The source is 3,774 bytes with SHA-256
+`01bd183df0ca08c7077ee790d11a541346a76c0f4c2f11cd31ce86ec7df76b0a`.
+The reference upload readback contains those same bytes followed by a
+single NUL. The common 33-byte trace hashes to
+`812db9506769aefa07535a2aa53483a6ee88973dd18d1d32a3fc8820cb6b782c`.
+
+```sh
+make -j4 all test-list-utilities
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 all test-list-utilities
+build/Linux/TestBoot --list-utilities-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/list-utilities-reference
+```
+
+The local Clang build used the installed Clang 20.1.2 executable by its
+absolute path. GCC 13.3.0, NASM 2.16.01 and QEMU 8.2.2 were used.
+The driver booted each ISO with `-machine pc -cpu qemu64 -m 512 -boot d
+-cdrom <iso> -display none -monitor none -qmp stdio -no-reboot`, with a
+serial capture and the reference's additional debug console and GDB
+connection for fixture upload. Both native tests reached the kernel and
+completed the HolyC probe. The reference returned to its empty
+`T:/Home>` prompt. The native images are
+`build/list-utilities-test.iso` and `build/clang/list-utilities-test.iso`.
+The standard ISOs also built successfully. The focused test runs as part
+of `make test`.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

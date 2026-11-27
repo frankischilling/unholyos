@@ -628,6 +628,13 @@ extern "C" void HashSrcFileSetCpp(const CCmpCtrl *cc, CHashSrcSym *sym,
                                    int64_t line_offset);
 void ClassMemberLstDel(CHashClass *cls);
 extern "C" void LinkedLstDelCpp(void *node);
+extern "C" uint8_t *LinkedLstCopyCpp(const void *node,CTask *mem_task);
+extern "C" int64_t LinkedLstCntCpp(const void *node);
+extern "C" uint64_t LinkedLstSizeCpp(const void *node);
+extern "C" void QueDelCpp(CQue *head,uint8_t remove);
+extern "C" CQue *QueCopyCpp(CQue *head,CTask *mem_task);
+extern "C" int64_t QueCntCpp(CQue *head);
+extern "C" int64_t QueSizeCpp(CQue *head);
 extern "C" char *MStrPrintCpp(const char *fmt, int64_t argc,
                               const uint64_t *argv);
 

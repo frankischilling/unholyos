@@ -1510,6 +1510,29 @@ rests instead of reading outside that array. SMP synchronization,
 `CurSongTask`, the waveform functions, `Noise`, and `Sweep` remain
 pending. Terry A. Davis's original song stays in `Demo/Snd/OhGreat.HC`.
 
+## Linked lists and queues
+
+`Kernel/KDataTypes.cpp` follows the order of Terry A. Davis's
+`Kernel/KDataTypes.HC` list and queue routines. `LinkedLstCopy` copies the
+entire allocated payload of each node with `MAllocIdent` and replaces
+its first pointer with the next copied node. `LinkedLstCnt` counts nodes
+through that pointer. `QueCopy` copies the allocated head and each entry,
+initializes the new head, and inserts entries in the original order.
+`QueCnt` and `QueSize` exclude the sentinel head; both size routines
+include the allocator overhead through `MSize2`.
+
+The native list implementation reads and writes link fields with
+`MemCpy` so packed records do not require C++ pointer alignment.
+The copy routines use the existing allocator's task or heap selection.
+If allocation fails, they free the partially copied list or queue and
+return null. The reference assumes allocation succeeds. The public
+HolyC adapters follow the existing `KUtils.asm` convention with one
+or two stack arguments and the original names exported by `KLoad.cpp`.
+`Compiler/AsmInit.cpp` registers all eight list and queue functions
+with the declarations and defaults in `Kernel/KernelC.HH`.
+The matching guest test covers empty lists, allocated payloads, link
+order, ownership and cleanup. See [Boot.md](Boot.md#linked-lists-and-queues).
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. Earlier reports now cover the kernel state before compiler loading and the loaded compiler image; the opcode-resource probe runs before the module entry. These reports remain in `Linux/BootProbe.cpp`. [Source structure verification](SourceStructureVerification.md) records the earlier layout review; the compiler load cutover requires its own runtime evidence in [Boot.md](Boot.md).

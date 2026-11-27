@@ -16,6 +16,35 @@ extern "C" void LinkedLstDelCpp(void *node)
   }
 }
 
+extern "C" uint8_t *LinkedLstCopyCpp(const void *node,CTask *mem_task)
+{
+  uint8_t *res=nullptr,*tmp;
+  void *slot=&res;
+  while (node) {
+    tmp=MAllocIdentCpp(node,mem_task);
+    if (!tmp) {
+      LinkedLstDelCpp(res);
+      return nullptr;
+    }
+    void *next=nullptr;
+    MemCpy(tmp,&next,sizeof(next));
+    MemCpy(slot,&tmp,sizeof(tmp));
+    slot=tmp;
+    node=LinkedLstNext(node);
+  }
+  return res;
+}
+
+extern "C" int64_t LinkedLstCntCpp(const void *node)
+{
+  int64_t res=0;
+  while (node) {
+    res++;
+    node=LinkedLstNext(node);
+  }
+  return res;
+}
+
 extern "C" uint64_t LinkedLstSizeCpp(const void *node)
 {
   uint64_t size = 0;
@@ -40,6 +69,48 @@ template <typename T> static void QueDel(T *head, bool remove)
 extern "C" void QueDelCpp(CQue *head, uint8_t remove)
 {
   QueDel(head, remove != 0);
+}
+
+extern "C" CQue *QueCopyCpp(CQue *head,CTask *mem_task)
+{
+  auto *res=reinterpret_cast<CQue *>(MAllocIdentCpp(head,mem_task));
+  if (!res)
+    return nullptr;
+  QueInit(res->next,res->last);
+  CQue *tmpq=head->next,*tmpq1;
+  while (tmpq!=head) {
+    tmpq1=reinterpret_cast<CQue *>(MAllocIdentCpp(tmpq,mem_task));
+    if (!tmpq1) {
+      QueDel(res,false);
+      Free(res);
+      return nullptr;
+    }
+    QueIns(*tmpq1,*res->last);
+    tmpq=tmpq->next;
+  }
+  return res;
+}
+
+extern "C" int64_t QueCntCpp(CQue *head)
+{
+  CQue *tmpq=head->next;
+  int64_t res=0;
+  while (tmpq!=head) {
+    res++;
+    tmpq=tmpq->next;
+  }
+  return res;
+}
+
+extern "C" int64_t QueSizeCpp(CQue *head)
+{
+  CQue *tmpq=head->next;
+  uint64_t res=0;
+  while (tmpq!=head) {
+    res+=MSize2(tmpq);
+    tmpq=tmpq->next;
+  }
+  return static_cast<int64_t>(res);
 }
 
 extern "C" CQueVectU8 *QueVectU8NewCpp(int64_t min_idx)
