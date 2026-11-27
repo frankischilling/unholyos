@@ -2054,6 +2054,11 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/FileBackedRedSeaProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FileBackedRedSeaWriteProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FileBackedRedSeaNativeProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/NestedRedSeaProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/RedSeaFreeListProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/RedSeaISOImageProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/NestedRedSeaNativeProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/OpticalImageProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ListUtilitiesProbe.HC");
     CRedSeaDirEntry optimizer_entry;
     size_t optimizer_prefix;
@@ -2082,6 +2087,7 @@ void BootProbe()
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32ClusterProbe.HC");
       BootFileProgramReport(*adam_task->cur_dv,"/FatSectorCacheProbe.HC");
       BootFileProgramReport(*adam_task->cur_dv,"/FatSectorCacheNativeProbe.HC");
+      BootFileProgramReport(*adam_task->cur_dv,"/Fat32ImageProbe.HC");
     }
     BootFileProgramReport(*adam_task->cur_dv,"/Fat32RejectProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ArcProbe.HC");

@@ -1883,6 +1883,7 @@ static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
                                        "CDirEntry",
                                        "CDirContext",
                                        "CDrv",
+                                       "CFreeLst",
                                        "CBlkDev",
                                        "CFile",
                                        "CBlkDevGlbls",
@@ -1920,7 +1921,7 @@ static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 82);
+  static_assert(class_count == 83);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -5320,7 +5321,24 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
                            const fs::path &kernel, const char *memory,
                            const std::string &output)
 {
-  CheckProgramOutput(output, "/RedSeaISOProbe.HC", "ISO probe 1 1 0 0 0\n", '1');
+  auto report=ProgramOutput(output,"/RedSeaISOProbe.HC",'1');
+  constexpr std::string_view result="ISO probe 1 1 0 0 0\n";
+  Check(report.ends_with(result),"Guest ISO builder result differed");
+  report.remove_suffix(result.size());
+  size_t copied=0;
+  while (!report.empty()) {
+    auto end=report.find('\n');
+    Check(end!=std::string_view::npos,"Incomplete ISO copy diagnostic");
+    auto line=report.substr(0,end);
+    if (line.starts_with("Copying ")) {
+      Check(line.find(" to Q:/")!=std::string_view::npos,
+            "ISO copy did not target mounted writable image");
+      copied++;
+    } else
+      Check(line.starts_with("Make Directory:"),"Unexpected ISO copy diagnostic");
+    report.remove_prefix(end+1);
+  }
+  Check(copied>0,"Guest ISO builder did not copy through mounted image");
   auto image = CaptureGuestFile(vm, dir, output, "GuestBuild.ISO.C");
   auto media = VerifyMedia(image, kernel);
   auto original = VerifyMedia(source, kernel);
@@ -6305,6 +6323,43 @@ int main(int argc, char **argv)
     }
   }
   if ((argc==5 || argc==6) &&
+      (std::string_view(argv[1])=="--fat32-image" ||
+       std::string_view(argv[1])=="--fat32-image-reference")) {
+    bool reference=std::string_view(argv[1]).ends_with("-reference");
+    char path[]="/tmp/unholyos-fat32-image-XXXXXX";
+    if (argc==5 && !mkdtemp(path)) return 1;
+    fs::path dir=argc==6?fs::absolute(argv[5]):fs::path(path);
+    try {
+      fs::create_directories(dir);
+      auto original=FileRead(argv[4]);
+      auto disk=dir/"owned.img";
+      fs::copy_file(argv[4],disk);
+      if (!reference)
+        VerifyHostModuleMedia(argv[3],"Linux/Fixtures/Fat32ImageProbe.HC",
+                              "Fat32ImageProbe.HC");
+      for (unsigned pass=0;pass<2;pass++) {
+        auto run=dir/(pass?"reboot":"write");
+        fs::create_directory(run);
+        CMonitor vm(argv[2],argv[3],run,"pc","512",false,disk,true,reference);
+        vm.Connect();
+        if (reference)
+          DriveCharacterGraphics(vm,run,"",true,false,false,false,false,false,
+                                 false,false,false,
+                                 std::span<const CTextProbe>(fat32_image_probes).subspan(pass,1));
+        else
+          CheckBootSourceProbe(vm.Boot(run/"serial.log"),fat32_image_probes[pass],run);
+        vm.Quit();
+        Check(FileRead(disk)!=original,"FAT32 image did not reach disk");
+      }
+      Check(FileRead(argv[4])==original,"Original FAT32 image was modified");
+      if (argc==5) fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr<<error.what()<<'\n'<<"Evidence: "<<dir<<'\n';
+      return 1;
+    }
+  }
+  if ((argc==5 || argc==6) &&
       (std::string_view(argv[1])=="--fat32-cluster" ||
        std::string_view(argv[1])=="--fat32-cluster-reference" ||
        std::string_view(argv[1])=="--fat-sector-cache" ||
@@ -6499,6 +6554,9 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--storage-lifecycle-reference" ||
        std::string_view(argv[1]) == "--file-backed-redsea" ||
        std::string_view(argv[1]) == "--file-backed-redsea-reference" ||
+       std::string_view(argv[1]) == "--nested-redsea" ||
+       std::string_view(argv[1]) == "--nested-redsea-reference" ||
+       std::string_view(argv[1]) == "--optical-image" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -6559,12 +6617,15 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--storage-lifecycle");
     bool file_backed_redsea_probe =
         std::string_view(argv[1]).starts_with("--file-backed-redsea");
+    bool nested_redsea_probe =
+        std::string_view(argv[1]).starts_with("--nested-redsea");
+    bool optical_image_probe = std::string_view(argv[1]) == "--optical-image";
     const bool source_probe = compiler_defines_probe || string_defines_probe ||
                               system_defines_probe || color_conversions_probe ||
                               format_missing_args_probe || class_records_probe ||
                               list_utilities_probe || storage_services_probe ||
                               cluster_entry_probe || disk_cache_probe || storage_lifecycle_probe ||
-                              file_backed_redsea_probe || optimizer_probe;
+                              file_backed_redsea_probe || nested_redsea_probe || optical_image_probe || optimizer_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6603,10 +6664,16 @@ int main(int argc, char **argv)
       text_probes = storage_lifecycle_probes;
     else if (file_backed_redsea_probe)
       text_probes = file_backed_redsea_probes;
+    else if (nested_redsea_probe)
+      text_probes = nested_redsea_probes;
+    else if (optical_image_probe)
+      text_probes = optical_image_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     if (storage_lifecycle_probe && reference)
       text_probes=text_probes.first(1);
     if (file_backed_redsea_probe && reference)
+      text_probes=text_probes.first(2);
+    if (nested_redsea_probe && reference)
       text_probes=text_probes.first(2);
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -6814,6 +6881,9 @@ int main(int argc, char **argv)
               << " --disk-cache[-reference] qemu image.iso [capture-dir]\n"
               << " --storage-lifecycle[-reference] qemu image.iso [capture-dir]\n"
               << " --file-backed-redsea[-reference] qemu image.iso [capture-dir]\n"
+              << " --nested-redsea[-reference] qemu image.iso [capture-dir]\n"
+              << " --optical-image qemu image.iso [capture-dir]\n"
+              << " --fat32-image[-reference] qemu image.iso disk.img [capture-dir]\n"
               << " --fat32-cluster[-reference] qemu image.iso disk.img [capture-dir]\n"
               << " --fat-sector-cache[-reference] qemu image.iso disk.img [capture-dir]\n"
               << "       " << argv[0]

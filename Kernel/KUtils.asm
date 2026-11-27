@@ -91,6 +91,7 @@ GLOBAL FAT32AllocContiguousClusHC
 GLOBAL FAT32FreeClusHC
 GLOBAL RedSeaAllocClusHC
 GLOBAL RedSeaFreeClusHC
+GLOBAL RedSeaFreeFreeLstHC,RedSeaFreeLstBuildHC,RedSeaValidateHC,RedSeaFmtHC
 GLOBAL FAT32DirNewHC
 GLOBAL RedSeaDirNewHC
 GLOBAL DirNewHC
@@ -100,7 +101,7 @@ GLOBAL FSizeHC,FOpenHC,FCloseHC,FBlkReadHC,FBlkWriteHC
 GLOBAL FmtHC
 GLOBAL FileAttrHC,CopySingleHC
 GLOBAL DelHC,CopyHC,MoveHC,CopyTreeHC,DelTreeHC,DirMkHC,ScanFlagsHC
-GLOBAL RedSeaISOHC
+GLOBAL RedSeaISOHC,RedSeaISO9660HC
 GLOBAL SysUntryHC,PutExceptHC,YorNHC
 GLOBAL BreakHC,BreakLockHC,BreakUnlockHC
 EXTERN BreakCpp,BreakLockCpp,BreakUnlockCpp
@@ -345,6 +346,7 @@ EXTERN FAT32AllocContiguousClusCpp
 EXTERN FAT32FreeClusCpp
 EXTERN RedSeaAllocClusCpp
 EXTERN RedSeaFreeClusCpp
+EXTERN RedSeaFreeFreeLstCpp,RedSeaFreeLstBuildCpp,RedSeaValidateCpp,RedSeaFmtCpp
 EXTERN FAT32DirNewCpp
 EXTERN RedSeaDirNewCpp
 EXTERN DirNewCpp
@@ -358,7 +360,7 @@ EXTERN FmtCpp
 EXTERN FSizeCpp,FOpenCpp,FCloseCpp,FBlkReadCpp,FBlkWriteCpp
 EXTERN FileAttrCpp,CopySingleCpp
 EXTERN DelCpp,CopyCpp,MoveCpp,CopyTreeCpp,DelTreeCpp,DirMkCpp,ScanFlagsCpp
-EXTERN RedSeaISOCpp
+EXTERN RedSeaISOCpp,RedSeaISO9660Cpp
 EXTERN SysUntryCpp,PutExceptCpp,YorNCpp
 EXTERN StrPrintJoin,CatPrintCpp,MStrPrintCpp,PrintCpp,PrintErrCpp,PrintWarnCpp
 EXTERN PutCharsCpp,PutS,PutHexCpp,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineMatchCpp
@@ -752,6 +754,10 @@ HOLYC_CPP FAT32AllocContiguousClusHC,FAT32AllocContiguousClusCpp,2
 HOLYC_CPP FAT32FreeClusHC,FAT32FreeClusCpp,2
 HOLYC_CPP RedSeaAllocClusHC,RedSeaAllocClusCpp,2
 HOLYC_CPP RedSeaFreeClusHC,RedSeaFreeClusCpp,3
+HOLYC_CPP RedSeaFreeFreeLstHC,RedSeaFreeFreeLstCpp,1
+HOLYC_CPP RedSeaFreeLstBuildHC,RedSeaFreeLstBuildCpp,1
+HOLYC_CPP RedSeaValidateHC,RedSeaValidateCpp,1
+HOLYC_CPP RedSeaFmtHC,RedSeaFmtCpp,2
 HOLYC_CPP FAT32DirNewHC,FAT32DirNewCpp,4
 HOLYC_CPP RedSeaDirNewHC,RedSeaDirNewCpp,4
 HOLYC_CPP DirNewHC,DirNewCpp,4
@@ -794,6 +800,7 @@ HOLYC_CPP DelTreeHC,DelTreeCpp,2
 HOLYC_CPP DirMkHC,DirMkCpp,2
 HOLYC_CPP ScanFlagsHC,ScanFlagsCpp,3
 HOLYC_CPP RedSeaISOHC,RedSeaISOCpp,3
+HOLYC_CPP RedSeaISO9660HC,RedSeaISO9660Cpp,2
 HOLYC_CPP BlkDevNextFreeSlotHC,BlkDevNextFreeSlotCpp,2
 HOLYC_CPP BlkDevAddHC,BlkDevAddCpp,4
 HOLYC_CPP Let2DrvHC,Let2DrvCpp,2

@@ -114,6 +114,12 @@ OPTIMIZER_PROBE := Linux/Fixtures/OptimizerProbe.HC
 OPTIMIZER_AOT_PROBE := Linux/Fixtures/OptimizerAOTProbe.HC
 OPTIMIZER_TEST_ISO := $(BUILD)/optimizer-test.iso
 OPTIMIZER_AOT_TEST_ISO := $(BUILD)/optimizer-aot-test.iso
+NESTED_REDSEA_PROBES := $(addprefix Linux/Fixtures/,NestedRedSeaProbe.HC RedSeaFreeListProbe.HC RedSeaISOImageProbe.HC NestedRedSeaNativeProbe.HC)
+NESTED_REDSEA_TEST_ISO := $(BUILD)/nested-redsea-test.iso
+FAT32_IMAGE_PROBE := Linux/Fixtures/Fat32ImageProbe.HC
+FAT32_IMAGE_TEST_ISO := $(BUILD)/fat32-image-test.iso
+OPTICAL_IMAGE_PROBE := Linux/Fixtures/OpticalImageProbe.HC
+OPTICAL_IMAGE_TEST_ISO := $(BUILD)/optical-image-test.iso
 CHARACTER_GRAPHICS_PROBE := Linux/Fixtures/CharPanObserver.HC
 CHARACTER_GRAPHICS_TEST_ISO := $(BUILD)/character-graphics-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
@@ -373,6 +379,15 @@ $(OPTIMIZER_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(OPTIMIZE
 $(OPTIMIZER_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(OPTIMIZER_PROBE) $(OPTIMIZER_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(OPTIMIZER_PROBE) --file $(OPTIMIZER_AOT_PROBE)
 
+$(NESTED_REDSEA_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(NESTED_REDSEA_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(NESTED_REDSEA_PROBES))
+
+$(FAT32_IMAGE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT32_IMAGE_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT32_IMAGE_PROBE)
+
+$(OPTICAL_IMAGE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(OPTICAL_IMAGE_PROBE) $(FILE_BACKED_REDSEA_TEST_ISO) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(OPTICAL_IMAGE_PROBE) --file-at Embedded.ISO.C $(FILE_BACKED_REDSEA_TEST_ISO)
+
 $(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
 
@@ -507,6 +522,18 @@ test-optimizer: $(OPTIMIZER_TEST_ISO) $(OPTIMIZER_AOT_TEST_ISO) $(BOOT_TEST) tes
 	$(BOOT_TEST) --optimizer-aot "$(QEMU)" $(OPTIMIZER_AOT_TEST_ISO)
 
 test: test-optimizer
+
+.PHONY: test-nested-redsea test-fat32-image test-optical-image
+test-nested-redsea: $(NESTED_REDSEA_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --nested-redsea "$(QEMU)" $(NESTED_REDSEA_TEST_ISO)
+
+test-fat32-image: $(FAT32_IMAGE_TEST_ISO) $(FAT_WRITE_DISK) $(BOOT_TEST)
+	$(BOOT_TEST) --fat32-image "$(QEMU)" $(FAT32_IMAGE_TEST_ISO) $(FAT_WRITE_DISK)
+
+test-optical-image: $(OPTICAL_IMAGE_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --optical-image "$(QEMU)" $(OPTICAL_IMAGE_TEST_ISO)
+
+test: test-nested-redsea test-fat32-image test-optical-image
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio

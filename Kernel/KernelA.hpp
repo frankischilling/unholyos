@@ -704,6 +704,8 @@ static_assert(sizeof(CBlkDev) == 124 && offsetof(CBlkDev, base0) == 32 &&
               offsetof(CBlkDev, RAM_dsk) == 76);
 static_assert(sizeof(CDrv) == 160 && offsetof(CDrv, root_clus) == 64 &&
               offsetof(CDrv, bd) == 104);
+static_assert(sizeof(CFreeLst) == 32 && offsetof(CFreeLst, start) == 16 &&
+              offsetof(CFreeLst, size) == 24);
 static_assert(sizeof(CRedSeaBoot) == BLK_SIZE &&
               offsetof(CRedSeaBoot, signature2) == 510);
 static_assert(sizeof(CRedSeaDirEntry) == 64 &&

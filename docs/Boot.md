@@ -3796,6 +3796,53 @@ Native AOT execution is tested separately; reference AOT and instruction-byte
 parity are not established by these checks. See [Source layout](SourceLayout.md)
 for unimplemented optimizer stages.
 
+## Nested images, FAT32 backing, and mounted ISO generation
+
+The shared `NestedRedSeaProbe.HC`, `RedSeaFreeListProbe.HC`, and `Fat32ImageProbe.HC` fixtures run on
+both UnholyOS and the pinned TempleOS distribution. They cover nested
+writable images, forwarded locking, two levels of read-only remounts,
+contiguous FAT32 backing chains, raw write-through, and persistence of
+777-byte payloads. The FAT32 harness boots twice with the same temporary
+disk copy and checks that the source disk image remains unchanged.
+
+```text
+Nested RedSea 7F
+RedSea free list 7F
+FAT32 image 7F
+FAT32 image reboot 7
+```
+
+Native-only tests also cover nested boot-image
+creation and stage-one patching, failed allocation recovery, and guarded
+parent teardown. The optical test embeds a RedSea ISO in the test DVD,
+mounts it twice, compares reads, checks that disk change raises `Drv`
+while either mount is live, and verifies disk change after the last unmount.
+
+```text
+RedSea ISO image FF
+Nested RedSea native 7F
+Optical image 3F
+```
+
+```sh
+make -j6 test-nested-redsea test-fat32-image test-optical-image
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 \
+  test-nested-redsea test-fat32-image test-optical-image
+build/Linux/TestBoot --fat32-image-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/fat32-writable.img build/fat32-image-reference
+build/Linux/TestBoot --nested-redsea-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/nested-redsea-reference
+```
+
+The tests use QEMU 8.2.2, `pc`, `qemu64`, 512 MiB and one vCPU,
+with GCC 13.3.0 or Clang 20.1.2 and NASM 2.16.01. Native media are
+`build/nested-redsea-test.iso`, `build/fat32-image-test.iso`, and
+`build/optical-image-test.iso` (or the corresponding Clang build paths).
+The reference does not exercise the native lifetime safeguards or the
+UnholyOS-specific stage-one marker. See [Source layout](SourceLayout.md)
+for failure-path limits; the matching masks do not establish full storage
+parity.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |
