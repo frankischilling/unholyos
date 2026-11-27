@@ -3999,6 +3999,35 @@ This validates the selected math behavior and the original source's
 execution, not the entire `MakeAdam.HC` startup or every exceptional
 floating-point input.
 
+## Original Adam memory inspection
+
+`Adam/AMem.HC` retains the original 4216 bytes, SHA-256
+`d5300ea10cf53f5d8f4a382828e8beb9c7ab5e4cb05e49134b8f38b496bd2b1a`.
+The host verifies these bytes in both test ISOs. The shared
+`AdamMemProbe.HC` (2406 bytes, SHA-256
+`6f925070f7488d6ec713d98830c964e9a017b26e45f9a63bea73953baa3d8eb1`)
+checks heap layouts, task allocation and usage accounting, real
+free-list traversal, membership before and after allocation,
+caller-held locks, interrupt-state preservation, invalid task
+rejection, and allocations in both task heaps. At 512 and 3072 MiB,
+the reference and both native JIT builds produce `Adam memory FFF`.
+Both native AOT builds at both sizes compile with result 0, produce
+the same mask and load with result 1.
+
+```sh
+make -j6 test-adam-mem
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-adam-mem
+build/Linux/TestBoot --adam-mem-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/adam-mem-reference
+build/Linux/TestBoot --adam-mem-large-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/adam-mem-large-reference
+```
+
+Run the reference probes serially because the reference GDB injection
+uses a shared port. These checks cover the non-debug heap layout on
+one CPU; they do not establish remote `HeapRep` presentation, debug
+heap integrity checking, or SMP allocator parity.
+
 ## Nested images, FAT32 backing, and mounted ISO generation
 
 The shared `NestedRedSeaProbe.HC`, `RedSeaFreeListProbe.HC`, and `Fat32ImageProbe.HC` fixtures run on

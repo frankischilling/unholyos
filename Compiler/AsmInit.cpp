@@ -982,11 +982,16 @@ static CHashClass *CmpExceptData(CHashTable *table)
 static CHashClass *CmpHeapData(CHashTable *table, CHashClass *task)
 {
   auto *cls = CmpKernelClass(table, "CHeapCtrl", sizeof(CHeapCtrl));
-  if (!cls)
+  auto *unused = CmpKernelClass(table, "CMemUnused", sizeof(CMemUnused));
+  auto *used = CmpKernelClass(table, "CMemUsed", sizeof(CMemUsed));
+  auto *block = CmpKernelClass(table, "CMemBlk", sizeof(CMemBlk));
+  auto *pool = CmpKernelClass(table, "CBlkPool", sizeof(CBlkPool));
+  if (!cls || !unused || !used || !block || !pool)
     return nullptr;
   auto *heap = CurrentTask()->data_heap;
   auto *u32 = FindType("U32", table);
   auto *i64 = FindType("I64", table);
+  auto *u0 = FindType("U0", table);
   static_assert(sizeof(CHeapCtrl) == 0x460 &&
                 offsetof(CHeapCtrl, hc_signature) == 8 &&
                 offsetof(CHeapCtrl, locked_flags) == 0x10 &&
@@ -996,21 +1001,66 @@ static CHashClass *CmpHeapData(CHashTable *table, CHashClass *task)
   const struct
   {
     const char *name;
+    CHashClass *record;
     CHashClass *type;
     size_t offset;
+    size_t count = 0;
   } members[]{
-      {"hc_signature", u32, offsetof(CHeapCtrl, hc_signature)},
-      {"pad", u32, offsetof(CHeapCtrl, pad)},
-      {"locked_flags", i64, offsetof(CHeapCtrl, locked_flags)},
-      {"alloced_u8s", i64, offsetof(CHeapCtrl, alloced_u8s)},
-      {"used_u8s", i64, offsetof(CHeapCtrl, used_u8s)},
-      {"mem_task", task + 1, offsetof(CHeapCtrl, mem_task)},
+      // The non-debug heap layout retains zero-width reference members.
+      {"hc", unused, u0, 0},
+      {"caller1", unused, u0, 0},
+      {"caller2", unused, u0, 0},
+      {"next", unused, unused + 1, offsetof(CMemUnused, next)},
+      {"size", unused, i64, offsetof(CMemUnused, size)},
+      {"hc", used, cls + 1, offsetof(CMemUsed, hc)},
+      {"caller1", used, u0, 8},
+      {"caller2", used, u0, 8},
+      {"next", used, u0, 8},
+      {"last", used, u0, 8},
+      {"size", used, i64, offsetof(CMemUsed, size)},
+      {"start", used, u0, sizeof(CMemUsed)},
+      {"next", block, block + 1, offsetof(CMemBlk, next)},
+      {"last", block, block + 1, offsetof(CMemBlk, last)},
+      {"mb_signature", block, u32, offsetof(CMemBlk, mb_signature)},
+      {"pags", block, u32, offsetof(CMemBlk, pags)},
+      {"locked_flags", pool, i64, offsetof(CBlkPool, locked_flags)},
+      {"alloced_u8s", pool, i64, offsetof(CBlkPool, alloced_u8s)},
+      {"used_u8s", pool, i64, offsetof(CBlkPool, used_u8s)},
+      {"mem_free_lst", pool, block + 1, offsetof(CBlkPool, mem_free_lst)},
+      {"mem_free_2meg_lst", pool, block + 1, offsetof(CBlkPool, mem_free_2meg_lst)},
+      {"free_pag_hash", pool, block + 1, offsetof(CBlkPool, free_pag_hash), MEM_FREE_PAG_HASH_SIZE},
+      {"free_pag_hash2", pool, block + 1, offsetof(CBlkPool, free_pag_hash2), 64 - MEM_PAG_BITS},
+      {"bp", cls, pool + 1, offsetof(CHeapCtrl, bp)},
+      {"hc_signature", cls, u32, offsetof(CHeapCtrl, hc_signature)},
+      {"pad", cls, u32, offsetof(CHeapCtrl, pad)},
+      {"locked_flags", cls, i64, offsetof(CHeapCtrl, locked_flags)},
+      {"alloced_u8s", cls, i64, offsetof(CHeapCtrl, alloced_u8s)},
+      {"used_u8s", cls, i64, offsetof(CHeapCtrl, used_u8s)},
+      {"mem_task", cls, task + 1, offsetof(CHeapCtrl, mem_task)},
+      {"next_mem_blk", cls, block + 1, offsetof(CHeapCtrl, next_mem_blk)},
+      {"last_mem_blk", cls, block + 1, offsetof(CHeapCtrl, last_mem_blk)},
+      {"last_mergable", cls, block + 1, offsetof(CHeapCtrl, last_mergable)},
+      {"malloc_free_lst", cls, unused + 1, offsetof(CHeapCtrl, malloc_free_lst)},
+      {"next_um", cls, used + 1, offsetof(CHeapCtrl, next_um)},
+      {"last_um", cls, used + 1, offsetof(CHeapCtrl, last_um)},
+      {"heap_hash", cls, unused + 1, offsetof(CHeapCtrl, heap_hash), MEM_HEAP_HASH_SIZE / sizeof(void *)},
   };
   for (const auto &member : members) {
     auto *name = StrNew(member.name, heap);
-    if (!name || !MemberAdd(*cls, name, *member.type, member.offset)) {
+    auto *entry = name ? MemberAdd(*member.record, name, *member.type, member.offset) : nullptr;
+    if (!entry) {
       Free(name);
       return nullptr;
+    }
+    if (member.count) {
+      auto *axis = reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return nullptr;
+      axis->cnt = member.count;
+      axis->total_cnt = 1;
+      entry->dim.next = axis;
+      entry->dim.total_cnt = member.count;
+      entry->size = member.count * member.type->size;
     }
   }
   return cls;
@@ -3157,6 +3207,12 @@ static bool CmpFillHash(CHashTable *table)
     const char *name, *data;
   } defines[]{
       {"NULL", "0"}, {"TRUE", "1"}, {"FALSE", "0"}, {"ON", "1"}, {"OFF", "0"},
+      {"_CFG_HEAP_DBG", "FALSE"},
+      {"MEM_PAG_BITS", "9"},
+      {"MEM_PAG_SIZE", "(1<<MEM_PAG_BITS)"},
+      {"MEM_HEAP_HASH_SIZE", "1024"},
+      {"MEM_FREE_PAG_HASH_SIZE", "0x100"},
+      {"HClf_LOCKED", "0"},
       {"__DIR__", "#exe{StreamDir;}"},
       {"I64_MAX", "0x7FFFFFFFFFFFFFFF"},
       {"I64_MIN", "(-0x8000000000000000)"},

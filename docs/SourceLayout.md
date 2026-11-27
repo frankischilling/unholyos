@@ -1905,6 +1905,17 @@ offsets 0 and 8. The native compiler processes the original math file in
 the JIT and AOT test media; the full original startup sequence remains
 pending. The tested scope and reference comparison are in [Boot.md](Boot.md).
 
+## Original Adam memory inspection
+
+`Adam/AMem.HC` is preserved from the pinned reference. `CmpHeapData`
+registers the non-debug `CMemUnused`, `CMemUsed`, `CMemBlk`, `CBlkPool`
+and complete `CHeapCtrl` layouts, including the zero-width aliases and
+typed free-list arrays. The inspection functions operate on the native
+allocator's actual queues and counters. Their original bare assembly
+and locked bit operations preserve interrupt state and caller-held
+locks. `test-adam-mem` runs JIT and AOT probes at 512 and 3072 MiB.
+The debug heap layout and concurrent SMP behavior remain unimplemented.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. Earlier reports now cover the kernel state before compiler loading and the loaded compiler image; the opcode-resource probe runs before the module entry. These reports remain in `Linux/BootProbe.cpp`. [Source structure verification](SourceStructureVerification.md) records the earlier layout review; the compiler load cutover requires its own runtime evidence in [Boot.md](Boot.md).

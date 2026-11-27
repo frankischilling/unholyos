@@ -10,7 +10,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 68 | 8 |
 | `Compiler` | 33 | 33 | 0 |
-| `Adam` | 132 | 46 | 86 |
+| `Adam` | 132 | 47 | 85 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 22 | 181 |
 
@@ -85,6 +85,11 @@ part of the full rewrite.
   in both native JIT and AOT probes. Kernel floating math entries and
   `Complex` metadata supply its dependencies. This is not yet execution
   of the complete original Adam startup sequence.
+- Original `Adam/AMem.HC` also runs unchanged. The non-debug heap
+  metadata now includes memory blocks, used/unused allocations, block
+  pools, complete heap-controller fields and the free-list arrays.
+  Single- and separate-heap checks exercise its allocation accounting,
+  membership traversal and lock/interrupt restoration.
 - Move remaining Adam initialization to the guest startup path after
   compiler support permits the original project and startup files.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal

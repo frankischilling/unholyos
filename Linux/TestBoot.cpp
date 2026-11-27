@@ -1897,6 +1897,10 @@ static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
                                        "CBlkDevGlbls",
                                        "CCacheBlk",
                                        "CExcept",
+                                       "CMemUnused",
+                                       "CMemUsed",
+                                       "CMemBlk",
+                                       "CBlkPool",
                                        "CHeapCtrl",
                                        "CKbdStateGlbls",
                                        "CTextGlbls",
@@ -1929,7 +1933,7 @@ static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 84);
+  static_assert(class_count == 88);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -3109,6 +3113,13 @@ constexpr CTextProbe adam_math_probes[]{
 constexpr CTextProbe adam_math_aot_probes[]{
     {"adam-math-aot","/AdamMathAOTProbe.HC","","Adam math AOT compile ","Adam math AOT load ",
      "Adam math AOT compile 0\nAdam math 1FFF\nAdam math AOT load 1\n",{},true}};
+
+constexpr CTextProbe adam_mem_probes[]{
+    {"adam-mem","/AdamMemProbe.HC","","Adam memory ","Adam memory ",
+     "Adam memory FFF\n",{},true}};
+constexpr CTextProbe adam_mem_aot_probes[]{
+    {"adam-mem-aot","/AdamMemAOTProbe.HC","","Adam memory AOT compile ","Adam memory AOT load ",
+     "Adam memory AOT compile 0\nTask can't HeapRep on self.\nTask can't HeapRep on self.\nAdam memory FFF\nAdam memory AOT load 1\n",{},true}};
 
 constexpr CTextProbe uasm_probes[]{
     {"uasm","/UAsmProbe.HC","","UAsm probe ","UAsm probe ",
@@ -6617,6 +6628,12 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--adam-math" ||
        std::string_view(argv[1]) == "--adam-math-reference" ||
        std::string_view(argv[1]) == "--adam-math-aot" ||
+       std::string_view(argv[1]) == "--adam-mem" ||
+       std::string_view(argv[1]) == "--adam-mem-reference" ||
+       std::string_view(argv[1]) == "--adam-mem-aot" ||
+       std::string_view(argv[1]) == "--adam-mem-large" ||
+       std::string_view(argv[1]) == "--adam-mem-large-reference" ||
+       std::string_view(argv[1]) == "--adam-mem-large-aot" ||
        std::string_view(argv[1]) == "--uasm" ||
        std::string_view(argv[1]) == "--uasm-reference" ||
        std::string_view(argv[1]) == "--uasm-aot" ||
@@ -6693,6 +6710,9 @@ int main(int argc, char **argv)
     bool backend_aot=std::string_view(argv[1])=="--backend-aot";
     bool adam_math_probe=std::string_view(argv[1]).starts_with("--adam-math");
     bool adam_math_aot=std::string_view(argv[1])=="--adam-math-aot";
+    bool adam_mem_probe=std::string_view(argv[1]).starts_with("--adam-mem");
+    bool adam_mem_aot=adam_mem_probe && std::string_view(argv[1]).ends_with("-aot");
+    bool adam_mem_large=std::string_view(argv[1]).starts_with("--adam-mem-large");
     bool uasm_probe=std::string_view(argv[1]).starts_with("--uasm");
     bool uasm_aot=std::string_view(argv[1])=="--uasm-aot";
     bool storage_services_probe =
@@ -6713,7 +6733,7 @@ int main(int argc, char **argv)
                               format_missing_args_probe || class_records_probe ||
                               list_utilities_probe || storage_services_probe ||
                               cluster_entry_probe || disk_cache_probe || storage_lifecycle_probe ||
-                              file_backed_redsea_probe || nested_redsea_probe || optical_image_probe || optimizer_probe || register_allocation_probe || address_fold_probe || backend_probe || uasm_probe || adam_math_probe;
+                              file_backed_redsea_probe || nested_redsea_probe || optical_image_probe || optimizer_probe || register_allocation_probe || address_fold_probe || backend_probe || uasm_probe || adam_math_probe || adam_mem_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6756,6 +6776,9 @@ int main(int argc, char **argv)
     else if (adam_math_probe)
       text_probes=adam_math_aot?std::span<const CTextProbe>(adam_math_aot_probes):
                                std::span<const CTextProbe>(adam_math_probes);
+    else if (adam_mem_probe)
+      text_probes=adam_mem_aot?std::span<const CTextProbe>(adam_mem_aot_probes):
+                              std::span<const CTextProbe>(adam_mem_probes);
     else if (uasm_probe)
       text_probes=uasm_aot?std::span<const CTextProbe>(uasm_aot_probes):
                           std::span<const CTextProbe>(uasm_probes);
@@ -6820,11 +6843,16 @@ int main(int argc, char **argv)
                                 "AdamMathProbe.HC");
         if (adam_math_probe)
           VerifyHostModuleMedia(argv[3],"Adam/AMath.HC","AMath.HC","Adam");
+        if (adam_mem_aot)
+          VerifyHostModuleMedia(argv[3],"Linux/Fixtures/AdamMemProbe.HC",
+                                "AdamMemProbe.HC");
+        if (adam_mem_probe)
+          VerifyHostModuleMedia(argv[3],"Adam/AMem.HC","AMem.HC","Adam");
         if (uasm_aot)
           VerifyHostModuleMedia(argv[3],"Linux/Fixtures/UAsmProbe.HC",
                                 "UAsmProbe.HC");
       }
-      const char *memory = class_records_probe ? "3072" : "512";
+      const char *memory = class_records_probe || adam_mem_large ? "3072" : "512";
       CMonitor vm(argv[2], argv[3], dir, "pc", memory, false, {}, false,
                   reference);
       vm.Connect();
@@ -6871,7 +6899,7 @@ int main(int argc, char **argv)
             vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
             tic, breaks, screen_capture, spline, flood_fill, blot, sprite_flood,
             music_demo, text_probes, {},
-            class_records_probe && reference ? 0xC0000000ULL : 0x20000000ULL);
+            (class_records_probe || adam_mem_large) && reference ? 0xC0000000ULL : 0x20000000ULL);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");
@@ -7016,6 +7044,10 @@ int main(int argc, char **argv)
               << " --adam-math qemu image.iso [capture-dir]\n"
               << " --adam-math-reference qemu image.iso [capture-dir]\n"
               << " --adam-math-aot qemu image.iso [capture-dir]\n"
+              << " --adam-mem qemu image.iso [capture-dir]\n"
+              << " --adam-mem-reference qemu image.iso [capture-dir]\n"
+              << " --adam-mem-aot qemu image.iso [capture-dir]\n"
+              << " --adam-mem-large[-reference|-aot] qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"

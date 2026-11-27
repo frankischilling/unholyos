@@ -135,6 +135,11 @@ ADAM_MATH_PROBE := Linux/Fixtures/AdamMathProbe.HC
 ADAM_MATH_AOT_PROBE := Linux/Fixtures/AdamMathAOTProbe.HC
 ADAM_MATH_TEST_ISO := $(BUILD)/adam-math-test.iso
 ADAM_MATH_AOT_TEST_ISO := $(BUILD)/adam-math-aot-test.iso
+ADAM_MEM_SOURCE := Adam/AMem.HC
+ADAM_MEM_PROBE := Linux/Fixtures/AdamMemProbe.HC
+ADAM_MEM_AOT_PROBE := Linux/Fixtures/AdamMemAOTProbe.HC
+ADAM_MEM_TEST_ISO := $(BUILD)/adam-mem-test.iso
+ADAM_MEM_AOT_TEST_ISO := $(BUILD)/adam-mem-aot-test.iso
 UASM_PROBES := $(addprefix Linux/Fixtures/,UAsmProbe.HC UAsmNativeProbe.HC)
 UASM_TEST_ISO := $(BUILD)/uasm-test.iso
 UASM_AOT_PROBE := Linux/Fixtures/UAsmAOTProbe.HC
@@ -468,6 +473,12 @@ $(ADAM_MATH_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MAT
 $(ADAM_MATH_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MATH_SOURCE) $(ADAM_MATH_PROBE) $(ADAM_MATH_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file-at Adam/AMath.HC $(ADAM_MATH_SOURCE) --file $(ADAM_MATH_PROBE) --file $(ADAM_MATH_AOT_PROBE)
 
+$(ADAM_MEM_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_SOURCE) $(ADAM_MEM_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file-at Adam/AMem.HC $(ADAM_MEM_SOURCE) --file $(ADAM_MEM_PROBE)
+
+$(ADAM_MEM_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_SOURCE) $(ADAM_MEM_PROBE) $(ADAM_MEM_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file-at Adam/AMem.HC $(ADAM_MEM_SOURCE) --file $(ADAM_MEM_PROBE) --file $(ADAM_MEM_AOT_PROBE)
+
 $(UASM_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(UASM_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(UASM_PROBES))
 
@@ -645,6 +656,15 @@ test-adam-math: $(ADAM_MATH_TEST_ISO) $(ADAM_MATH_AOT_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --adam-math-aot "$(QEMU)" $(ADAM_MATH_AOT_TEST_ISO)
 
 test: test-adam-math
+
+.PHONY: test-adam-mem
+test-adam-mem: $(ADAM_MEM_TEST_ISO) $(ADAM_MEM_AOT_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --adam-mem "$(QEMU)" $(ADAM_MEM_TEST_ISO)
+	$(BOOT_TEST) --adam-mem-aot "$(QEMU)" $(ADAM_MEM_AOT_TEST_ISO)
+	$(BOOT_TEST) --adam-mem-large "$(QEMU)" $(ADAM_MEM_TEST_ISO)
+	$(BOOT_TEST) --adam-mem-large-aot "$(QEMU)" $(ADAM_MEM_AOT_TEST_ISO)
+
+test: test-adam-mem
 
 .PHONY: test-uasm
 test-uasm: $(UASM_TEST_ISO) $(UASM_AOT_TEST_ISO) $(BOOT_TEST)
