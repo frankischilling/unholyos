@@ -1995,6 +1995,68 @@ default x87 environment. Allocation exhaustion, invalid pointers,
 malformed widths, nonfinite indentation factors, altered x87 exception
 masks, and complete editor behavior remain outside this evidence.
 
+## String comparison entries
+
+`StringCompareProbe.HC` adds a sixth fixture to the focused strings
+image and the startup and guest-built ISO checks. Its 1,894 source bytes
+have SHA-256
+`56f178a2ab9593f2417ecd5abb8632d7a66c7bc05bd7a75fbcf6d4652d06988a`.
+The reference upload, including the terminating NUL, has SHA-256
+`8da433b7530380f778ee15ee12cebfd0c856c16060ef5b1b6c708ad3afeb57ff`.
+The complete 24-line, 489-byte reference trace has SHA-256
+`118f7dc8bcf3dc896cc9fcd6528055d643a94486d03a683f915346e677bbe08e`.
+
+The fixture checks 19 direct and function-pointer cases for `StrICmp`,
+`StrNCmp`, and `StrNICmp`: empty strings, ASCII case boundaries,
+prefixes, NUL termination, negative and minimum counts, overlapping
+strings, and high bytes. It also checks zero-count null pointers and
+the public `StrOcc` declaration. All 65,536 pairs of byte values feed
+a fingerprint for each comparison routine. Every possible `AL` value
+passes through the raw `TO_UPPER` entry with a fixed high-`RAX` sentinel.
+
+| Operation | Reference fingerprint |
+| --- | --- |
+| `StrICmp` byte pairs | `562AF89B93749399` |
+| `StrNCmp` byte pairs | `E94E7B76B0C5E825` |
+| `StrNICmp` byte pairs | `562AF89B93749399` |
+| Raw `TO_UPPER`, including preserved high bits | `ED25B86AE3E78265` |
+
+Native source and guest-compiled module output match all 24 reference
+lines. The previous five traces remain unchanged after replacing the
+float and date scanners' manual prefix checks with `StrNCmp`. Together,
+the six fixtures compare 95 lines in each execution mode. The reference
+uses the same source verification, terminal capture, ISO, and QEMU
+configuration described above.
+
+`Linux/TestStrCompare.cpp` separately checks the C++ adapters by linking
+the actual NASM `StrA` object into a host C++20 test. It verifies `RBX`
+preservation and exact stack restoration for 196,667 comparator calls,
+the full `RAX` result for all 256 uppercase inputs, exact edge-case
+results, and the four reference fingerprints. The unrelated output
+entries have explicit test-only link stubs. `make test` builds and runs
+this check with the selected host compiler.
+
+`FunctionPtrProbe` uses the shared source/module executor with its
+existing paths and compile command. Removing that duplicate test code
+keeps the image within the unchanged reference loader boundary at
+`0x96600`. Clang 20.1.2 links `__bss_end` at `0x9652B`, leaving 213
+bytes; GCC 13.3.0 links it at `0x8F36B`, leaving 29,333 bytes. The
+separate compiler and Adam load path remains incomplete, as recorded
+in [Source layout](SourceLayout.md#remaining-structural-work).
+
+```sh
+make -j4 build/strings-test.iso build/Linux/TestBoot build/Linux/TestStrCompare
+build/Linux/TestStrCompare
+build/Linux/TestBoot --strings qemu-system-x86_64 \
+  build/strings-test.iso build/string-compare-native
+build/Linux/TestBoot --strings-reference qemu-system-x86_64 \
+  /path/to/TOS_Distro.ISO build/string-compare-reference
+```
+
+The guest probes cover valid terminated strings and the reference's
+zero-count null-pointer case. They do not establish fault behavior for
+other invalid pointers or strings extending beyond accessible memory.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

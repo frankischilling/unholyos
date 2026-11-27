@@ -83,7 +83,7 @@ extern "C" uint64_t Str2F64Cpp(const char *src, const char **end)
     neg = true;
     ch = *src++;
   }
-  if (src[-1] == 'i' && src[0] == 'n' && src[1] == 'f') {
+  if (!StrNCmpCpp(src - 1, "inf", 3)) {
     d = 0x7FF0000000000000;
     src += 3;
     goto a2f_end;
@@ -156,16 +156,16 @@ extern "C" uint64_t Str2DateCpp(const char *_src)
     RaiseHolyC(0x6D654D74754FULL);
 
   MemSet(&ds, 0, sizeof(CDateStruct));
-  if (ptr[0] == 'S' && ptr[1] == 'M' && ptr[2] == '(') {
+  if (!StrNCmpCpp(ptr, "SM(", 3)) {
     ptr += 3;
     start_mon = true;
-  } else if (ptr[0] == 'E' && ptr[1] == 'M' && ptr[2] == '(') {
+  } else if (!StrNCmpCpp(ptr, "EM(", 3)) {
     ptr += 3;
     end_mon = true;
-  } else if (ptr[0] == 'S' && ptr[1] == 'Y' && ptr[2] == '(') {
+  } else if (!StrNCmpCpp(ptr, "SY(", 3)) {
     ptr += 3;
     start_year = true;
-  } else if (ptr[0] == 'E' && ptr[1] == 'Y' && ptr[2] == '(') {
+  } else if (!StrNCmpCpp(ptr, "EY(", 3)) {
     ptr += 3;
     end_year = true;
   }
@@ -180,7 +180,7 @@ extern "C" uint64_t Str2DateCpp(const char *_src)
   } else {
     StrFirstRemCpp(ptr, reinterpret_cast<const uint8_t *>("/"), v);
     ds.mon = Str2I64Cpp(v, 10, nullptr);
-    if (StrFirstOccCpp(ptr, reinterpret_cast<const uint8_t *>("/"))) {
+    if (StrOccCpp(reinterpret_cast<const uint8_t *>(ptr), '/')) {
       StrFirstRemCpp(ptr, reinterpret_cast<const uint8_t *>("/"), v);
       ds.day_of_mon = Str2I64Cpp(v, 10, nullptr);
       ds.year = Str2I64Cpp(ptr, 10, &end);

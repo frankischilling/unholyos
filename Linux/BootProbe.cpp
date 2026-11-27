@@ -569,26 +569,36 @@ static void BootGridReport(const CDrv &dv)
   SerialPutS("UnholyOS: Grid restored the cursor and mouse grid\r\n");
 }
 
-static void BootFunctionPtrReport(const CDrv &dvd, CTask &task)
+static void BootVariadicReport(const CDrv &dvd, CTask &task, const char *source,
+                               const char *path, const char *compile)
 {
-  if (!BootFileProgramReport(dvd, "/FunctionPtrProbe.HC").okay)
+  if (!BootFileProgramReport(dvd, source).okay)
     return;
   auto *ram = MountedDrive('B');
   if (!ram)
     return;
-  auto compiled =
-      ExePutS("Cmp(\"::/FunctionPtrProbe.HC\",,\"B:/FunctionPtrProbe.BIN.Z\");",
-              nullptr, 0);
+  auto compiled = ExePutS(compile, nullptr, 0);
   if (!compiled.okay || compiled.value)
     return;
-  constexpr const char *path = "/FunctionPtrProbe.BIN.Z";
-  SerialPutS("UnholyOS: executing /FunctionPtrProbe.BIN.Z\r\n");
+  SerialPutS("UnholyOS: executing ");
+  SerialPutS(path);
+  SerialPutS("\r\n");
   auto *mod = Load(*ram, path, task, LDF_JUST_LOAD);
-  if (!mod || !LoadPass2(*mod))
-    return;
-  SerialPutS("UnholyOS: finished /FunctionPtrProbe.BIN.Z, checks "
-             "0x0000000000000001\r\n");
-  BootGuestFileReport(*ram, path);
+  bool okay = mod && LoadPass2(*mod);
+  SerialPutS("UnholyOS: finished ");
+  SerialPutS(path);
+  SerialPutS(", checks ");
+  SerialPutHex(okay);
+  SerialPutS("\r\n");
+  if (okay)
+    BootGuestFileReport(*ram, path);
+}
+
+static void BootFunctionPtrReport(const CDrv &dvd, CTask &task)
+{
+  BootVariadicReport(
+      dvd, task, "/FunctionPtrProbe.HC", "/FunctionPtrProbe.BIN.Z",
+      "Cmp(\"::/FunctionPtrProbe.HC\",,\"B:/FunctionPtrProbe.BIN.Z\");");
 }
 
 static void BootTryReport(const CDrv &dvd, CTask &task)
@@ -613,32 +623,6 @@ static void BootTryReport(const CDrv &dvd, CTask &task)
   SerialPutS("UnholyOS: finished /TryProbe.BIN.Z, checks "
              "0x0000000000000001\r\n");
   BootGuestFileReport(*ram, path);
-}
-
-static void BootVariadicReport(const CDrv &dvd, CTask &task,
-                               const char *source, const char *path,
-                               const char *compile)
-{
-  if (!BootFileProgramReport(dvd, source).okay)
-    return;
-  auto *ram = MountedDrive('B');
-  if (!ram)
-    return;
-  auto compiled = ExePutS(compile, nullptr, 0);
-  if (!compiled.okay || compiled.value)
-    return;
-  SerialPutS("UnholyOS: executing ");
-  SerialPutS(path);
-  SerialPutS("\r\n");
-  auto *mod = Load(*ram, path, task, LDF_JUST_LOAD);
-  bool okay = mod && LoadPass2(*mod);
-  SerialPutS("UnholyOS: finished ");
-  SerialPutS(path);
-  SerialPutS(", checks ");
-  SerialPutHex(okay);
-  SerialPutS("\r\n");
-  if (okay)
-    BootGuestFileReport(*ram, path);
 }
 
 extern "C" CBlkDev *BlkDevNextFreeSlotCpp(uint8_t letter, int64_t type);
@@ -1604,6 +1588,10 @@ void BootProbe()
         *adam_task->cur_dv, *adam_task, "/DateScanProbe.HC",
         "/DateScanProbe.BIN.Z",
         "Cmp(\"::/DateScanProbe.HC\",,\"B:/DateScanProbe.BIN.Z\");");
+    BootVariadicReport(
+        *adam_task->cur_dv, *adam_task, "/StringCompareProbe.HC",
+        "/StringCompareProbe.BIN.Z",
+        "Cmp(\"::/StringCompareProbe.HC\",,\"B:/StringCompareProbe.BIN.Z\");");
     if (BootFileProgramReport(*adam_task->cur_dv, "/FifoProbe.HC").okay) {
       auto *fun = reinterpret_cast<CHashFun *>(
           HashFind("FifoProbe", adam_task->hash_table, HTT_FUN));

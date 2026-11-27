@@ -1,6 +1,8 @@
 BITS 64
 SECTION .text
 GLOBAL PUT_HEX_U64,PUT_HEX_U32,PUT_HEX_U16,PUT_HEX_U8,PUT_CHARS,PUT_STR
+GLOBAL TO_UPPER,_STRICMP,_STRNCMP,_STRNICMP
+GLOBAL StrICmpCpp,StrNCmpCpp,StrNICmpCpp
 GLOBAL _STRMATCH,StrMatchCpp
 EXTERN PutHexHC,PutCharsHC,PutSHC
 
@@ -51,12 +53,156 @@ PUT_STR:
 	POP_C_REGS
 	RET
 
+; The reference comparisons use BL; preserve SysV's callee-saved RBX.
+StrICmpCpp:
+			PUSH	RBX
+			PUSH	RSI
+			PUSH	RDI
+			CALL	_STRICMP
+			POP	RBX
+			RET
+
+StrNCmpCpp:
+			PUSH	RBX
+			PUSH	RDX
+			PUSH	RSI
+			PUSH	RDI
+			CALL	_STRNCMP
+			POP	RBX
+			RET
+
+StrNICmpCpp:
+			PUSH	RBX
+			PUSH	RDX
+			PUSH	RSI
+			PUSH	RDI
+			CALL	_STRNICMP
+			POP	RBX
+			RET
+
 ; Map SysV arguments to the reference HolyC stack entry point.
 StrMatchCpp:
 		PUSH	RSI
 		PUSH	RDI
 		CALL	_STRMATCH
 		RET
+
+TO_UPPER:
+			CMP	AL,'a'
+			JB	.L05
+			CMP	AL,'z'
+			JA	.L05
+			ADD	AL,'A'-'a'
+.L05:		RET
+
+_STRICMP:
+			PUSH	RBP
+			MOV	RBP,RSP
+			PUSH	RSI
+			PUSH	RDI
+			MOV	RSI,[RBP+24]
+			MOV	RDI,[RBP+16]
+.L05:		LODSB
+			TEST	AL,AL
+			JZ	.L30
+			CMP	AL,'a'
+			JB	.L10
+			CMP	AL,'z'
+			JA	.L10
+			ADD	AL,'A'-'a'
+.L10:		MOV	BL,[RDI]
+			INC	RDI
+			CMP	BL,'a'
+			JB	.L15
+			CMP	BL,'z'
+			JA	.L15
+			ADD	BL,'A'-'a'
+.L15:		CMP	AL,BL
+			JE	.L05
+			JA	.L25
+.L20:		MOV	RAX,1
+			JMP	.L35
+.L25:		MOV	RAX,-1
+			JMP	.L35
+.L30:		MOV	BL,[RDI]
+			TEST	BL,BL
+			JNE	.L20
+			XOR	RAX,RAX
+.L35:		POP	RDI
+			POP	RSI
+			POP	RBP
+			RET	16
+
+_STRNCMP:
+			PUSH	RBP
+			MOV	RBP,RSP
+			PUSH	RSI
+			PUSH	RDI
+			MOV	RCX,[RBP+32]
+			MOV	RSI,[RBP+24]
+			MOV	RDI,[RBP+16]
+.L05:		TEST	RCX,RCX
+			JZ	.L25
+			DEC	RCX
+			LODSB
+			TEST	AL,AL
+			JZ	.L20
+			SCASB
+			JE	.L05
+			JA	.L15
+.L10:		MOV	RAX,1
+			JMP	.L30
+.L15:		MOV	RAX,-1
+			JMP	.L30
+.L20:		MOV	BL,[RDI]
+			TEST	BL,BL
+			JNE	.L10
+.L25:		XOR	RAX,RAX
+.L30:		POP	RDI
+			POP	RSI
+			POP	RBP
+			RET	24
+
+_STRNICMP:
+			PUSH	RBP
+			MOV	RBP,RSP
+			PUSH	RSI
+			PUSH	RDI
+			MOV	RCX,[RBP+32]
+			MOV	RSI,[RBP+24]
+			MOV	RDI,[RBP+16]
+.L05:		TEST	RCX,RCX
+			JZ	.L35
+			DEC	RCX
+			LODSB
+			TEST	AL,AL
+			JZ	.L30
+			CMP	AL,'a'
+			JB	.L10
+			CMP	AL,'z'
+			JA	.L10
+			ADD	AL,'A'-'a'
+.L10:		MOV	BL,[RDI]
+			INC	RDI
+			CMP	BL,'a'
+			JB	.L15
+			CMP	BL,'z'
+			JA	.L15
+			ADD	BL,'A'-'a'
+.L15:		CMP	AL,BL
+			JE	.L05
+			JA	.L25
+.L20:		MOV	RAX,1
+			JMP	.L40
+.L25:		MOV	RAX,-1
+			JMP	.L40
+.L30:		SCASB
+			JNE	.L20
+.L35:		XOR	RAX,RAX
+.L40:		POP	RDI
+			POP	RSI
+			POP	RBP
+			RET	24
 
 _STRMATCH:
 		PUSH	RBP

@@ -36,6 +36,7 @@ void _MEMCPY(), _MEMSET(), _MEMSET_U16(), _MEMSET_U32(), _MEMSET_I64(), _MEMCMP(
 void _MALLOC(), _FREE(), _MHEAP_CTRL(), _MSIZE(), _MSIZE2();
 void CAllocHC(), MAllocIdentHC(), StrNewHC(), AStrNewHC();
 void _STRCMP(), _STRCPY(), _STRIMATCH(), StrOccHC();
+void TO_UPPER(), _STRICMP(), _STRNCMP(), _STRNICMP();
 void _STRMATCH(), Spaces2TabsHC(), StrUtilHC(), StrFirstOccHC(), StrFirstRemHC();
 void StrLastOccHC(), StrLastRemHC(), StrFindHC(), Tabs2SpacesHC(), ScaleIndentHC();
 void MStrUtilHC();
@@ -619,6 +620,13 @@ bool LoadKernel(CTask &task)
       {"AStrNew", reinterpret_cast<uintptr_t>(AStrNewHC)},
       {"_STRCMP", reinterpret_cast<uintptr_t>(_STRCMP)},
       {"StrCmp", reinterpret_cast<uintptr_t>(_STRCMP)},
+      {"TO_UPPER", reinterpret_cast<uintptr_t>(TO_UPPER)},
+      {"_STRICMP", reinterpret_cast<uintptr_t>(_STRICMP)},
+      {"StrICmp", reinterpret_cast<uintptr_t>(_STRICMP)},
+      {"_STRNCMP", reinterpret_cast<uintptr_t>(_STRNCMP)},
+      {"StrNCmp", reinterpret_cast<uintptr_t>(_STRNCMP)},
+      {"_STRNICMP", reinterpret_cast<uintptr_t>(_STRNICMP)},
+      {"StrNICmp", reinterpret_cast<uintptr_t>(_STRNICMP)},
       {"_STRCPY", reinterpret_cast<uintptr_t>(_STRCPY)},
       {"StrCpy", reinterpret_cast<uintptr_t>(_STRCPY)},
       {"_STRIMATCH", reinterpret_cast<uintptr_t>(_STRIMATCH)},
