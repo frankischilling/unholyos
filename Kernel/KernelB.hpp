@@ -622,6 +622,8 @@ extern "C" char *MStrPrintCpp(const char *fmt, int64_t argc,
 
 struct CLoadedModule;
 constexpr unsigned LDF_NO_ABSS = 1, LDF_JUST_LOAD = 2, LDF_SILENT = 4;
+extern "C" CBinFile *LoadCpp(const char *filename, int64_t ld_flags,
+                             CBinFile *bfh_addr);
 bool LoadKernel(CTask &task);
 CLoadedModule *Load(const CDrv &dv, const char *path, CTask &task,
                     unsigned flags = 0);

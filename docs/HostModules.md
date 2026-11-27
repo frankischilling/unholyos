@@ -120,6 +120,66 @@ the stack before calling its System V C++ body. Its two `_STRCMP` adapters
 push arguments in HolyC order, let the callee remove them, preserve the
 System V callee-saved `RBX`, and clear the direction flag on return.
 
+## Public HolyC loader
+
+HolyC programs can call the declaration from `Kernel/KernelC.HH`:
+
+```c
+U8 *Load(U8 *filename,I64 ld_flags=0,CBinFile *bfh_addr=INVALID_PTR);
+```
+
+The result points to the 32-byte `CBinFile` header. Its payload starts
+32 bytes later. `Compiler/AsmInit.cpp` supplies the packed class members,
+signed `I64` header fields, constants, and argument defaults. Compile-time
+assertions check every native header offset. `Kernel/KLoad.asm::LoadHC`
+accepts the three HolyC stack arguments, calls `LoadCpp`, returns the
+header address in `RAX`, and removes 24 argument bytes. The internal C++
+loader still returns its own `CLoadedModule` descriptor.
+
+`LoadCpp` and that internal loader share image validation, placement,
+patch preparation, symbol registration, and entry execution in
+`Kernel/KLoad.cpp`. Public `Load` follows `Kernel/KLoad.HC::Load` through
+`ExtDft(filename,"BIN.Z")`, task-relative file lookup, and the existing
+compressed-file fallback. An omitted extension prefers `Name.BIN.Z` and
+can fall back to `Name.BIN`; an explicit `Name.BIN` selects that file.
+The module hash entry has `HTT_MODULE | HTF_PUBLIC` and stores the header
+address in `user_data0`. Its name follows `FileExtDot`, including the
+reference quirk that a qualifying dot in a directory can truncate the
+module name before the final basename. Each load registers its own image.
+
+| Flag | Loader behavior |
+| --- | --- |
+| `LDF_NO_ABSS` (`1`) | Skip `IET_ABS_ADDR`; other fixups still run |
+| `LDF_JUST_LOAD` (`2`) | Perform the first pass without running `IET_MAIN` |
+| `LDF_SILENT` (`4`) | Suppress the unresolved-import report |
+
+`INVALID_PTR` is `I64_MAX`. A supplied header address overrides the
+file's `org`; otherwise a non-sentinel `org` selects the destination.
+These destinations remain caller-owned, retain the file's original
+`org`, and are used without additional alignment. Automatic placement
+aligns the payload according to `module_align_bits`. If the current code
+and data heaps are the same and the requested alignment is at most eight
+bytes, the loader retains the file-read buffer. Other automatic loads
+allocate from the code heap with the header offset accounted for.
+
+The loader prepares its metadata before replacing caller-owned bytes.
+A missing file returns `NULL`; a rejected binary raises `BinModul`.
+The native parser retains its bounded record and extent validation, which
+rejects malformed inputs beyond the reference's checks. Allocation
+failure returns `NULL`. Invalid destination addresses, extreme alignment,
+and allocation-failure behavior have not been compared with TempleOS.
+
+`make test-load-api` executes the same `LoadApiProbe.HC` source and NASM
+consumer/provider bytes used by the pinned guest. GCC and Clang native
+builds match its path selection, header and hash identity, flags, low
+32-bit absolute relocation, explicit destinations, tested errors, and
+retained earlier images. The small-alignment test checks the resulting
+allocation's owner and capacity; retention of the exact temporary input
+pointer is established by source review. [Boot.md](Boot.md#public-holyc-load)
+records the commands, hashes, full trace, and limits. The raw public
+HolyC `LoadPass2` interface remains separate work; the existing C++
+descriptor overload has a different ABI.
+
 ## Compiler module ownership and startup
 
 The Makefile lists the compiler's 16 C++ sources and four assembly
@@ -245,7 +305,11 @@ binder still requires all of its imports before publishing its native
 dispatch table. The complete `StartOS.HC` and
 `Adam/MakeAdam.HC` startup sequence also remains unfinished.
 
-Both production compiler conversions passed with the explicit manifest:
+At the compiler-separation revision
+`2e9052c46dcd99dc2fe4c45527882dc3a631db74` (PR #81), both production
+compiler conversions passed with the explicit manifest. These hashes
+identify that revision; later compiler metadata changes produce different
+module bytes:
 
 | Build | `Compiler.BIN` bytes | SHA256 |
 | --- | ---: | --- |

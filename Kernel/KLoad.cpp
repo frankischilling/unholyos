@@ -161,7 +161,7 @@ void Mat4x4EquHC(),Mat4x4NewHC(),Mat4x4MulMat4x4EquHC(),Mat4x4MulMat4x4NewHC();
 void Mat4x4RotXHC(),Mat4x4RotYHC(),Mat4x4RotZHC(),Mat4x4ScaleHC();
 void Mat4x4TranslationEquHC(),Mat4x4TranslationAddHC(),DCSymmetrySetHC(),RefreshHC();
 void ScanCharHC(),ScanKeyHC(),GetKeyHC(),GetCharHC();
-void _HASH_REM_DEL(), SysSymImportsResolveHC();
+void _HASH_REM_DEL(), SysSymImportsResolveHC(), LoadHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
     DocWriteHC();
 void DocReadHC(), DocTypeHC(), TypeHC();
@@ -536,68 +536,110 @@ bool LoadCompilerImports(CLoadedModule &module, const int64_t *&status)
   return true;
 }
 
-static CLoadedModule *LoadImage(const uint8_t *input, size_t size,
-                                const char *path, CTask &task, unsigned flags)
+enum CLoadError : uint8_t
 {
+  LOAD_OK,
+  LOAD_BAD_IMAGE,
+  LOAD_NO_MEMORY
+};
+
+static char *LoadModuleName(const char *path, CHeapCtrl *hc)
+{
+  auto *name = StrNew(path, hc);
+  if (name)
+    if (auto *dot = FileExtDot(name))
+      name[dot - name] = 0;
+  return name;
+}
+
+static CLoadedModule *LoadImage(uint8_t *&input, size_t size, const char *path,
+                                CTask &task, unsigned flags, uintptr_t bfh_addr,
+                                CLoadError &error)
+{
+  error = LOAD_BAD_IMAGE;
   CBinFile header;
-  if (size < sizeof(header) || size > PTRDIFF_MAX)
+  if (!input || size < sizeof(header) || size > PTRDIFF_MAX)
     return nullptr;
   MemCpy(&header, input, sizeof(header));
   size_t count;
-  if (header.bin_signature != BIN_SIGNATURE_VAL ||
-      (header.org != INVALID_PTR && size > UINTPTR_MAX - header.org) ||
-      header.file_size != size || header.patch_table_offset < sizeof(header) ||
+  if (header.bin_signature != BIN_SIGNATURE_VAL || header.file_size != size ||
+      header.patch_table_offset < sizeof(header) ||
       header.patch_table_offset >= size || header.module_align_bits >= 63 ||
       !LoadRecords(input, header, nullptr, count) ||
       count > SIZE_MAX / sizeof(CLoadRecord))
     return nullptr;
+  if (bfh_addr == INVALID_PTR)
+    bfh_addr = header.org;
+  if (bfh_addr != INVALID_PTR && size > UINTPTR_MAX - bfh_addr)
+    return nullptr;
 
+  error = LOAD_NO_MEMORY;
   auto *module = reinterpret_cast<CLoadedModule *>(
       CAlloc(sizeof(CLoadedModule), task.data_heap));
   if (!module)
     return nullptr;
 
-  module->owns_image = header.org == INVALID_PTR;
-  if (module->owns_image) {
+  bool retained = false;
+  if (bfh_addr == INVALID_PTR) {
     size_t align = size_t{1} << header.module_align_bits;
-    if (align < 16)
-      align = 16;
-    module->image = MAllocAligned(size, align, task.code_heap,
-                                  (0 - sizeof(header)) & (align - 1));
+    if (task.code_heap == task.data_heap && align <= 8) {
+      module->image = input;
+      retained = true;
+    } else {
+      size_t misalignment = (0 - sizeof(header)) & (align - 1);
+      if (align < 16)
+        align = 16;
+      module->owns_image = true;
+      module->image = MAllocAligned(size, align, task.code_heap, misalignment);
+      if (!module->image) {
+        LoadDiscard(module);
+        return nullptr;
+      }
+    }
   } else {
-    module->image = reinterpret_cast<uint8_t *>(header.org);
-  }
-  if (!module->image) {
-    LoadDiscard(module);
-    return nullptr;
+    module->image = reinterpret_cast<uint8_t *>(bfh_addr);
   }
   module->records = reinterpret_cast<CLoadRecord *>(
       MAlloc(count * sizeof(CLoadRecord), task.data_heap));
-  if (!module->records ||
-      !LoadRecords(input, header, module->records, module->count) ||
-      !LoadPrepare(*module, task)) {
+  if (!module->records) {
+    LoadDiscard(module);
+    return nullptr;
+  }
+  if (!LoadRecords(input, header, module->records, module->count)) {
+    error = LOAD_BAD_IMAGE;
+    LoadDiscard(module);
+    return nullptr;
+  }
+  if (!LoadPrepare(*module, task)) {
     LoadDiscard(module);
     return nullptr;
   }
 
-  auto *entry = reinterpret_cast<CHashGeneric *>(
-      CAlloc(sizeof(CHashGeneric), task.data_heap));
-  auto *name = entry ? StrNew(path, task.data_heap) : nullptr;
-  if (!name) {
-    Free(entry);
-    LoadDiscard(module);
-    return nullptr;
+  CHashGeneric *entry = nullptr;
+  if (path) {
+    auto *name = LoadModuleName(path, task.data_heap);
+    if (!name) {
+      LoadDiscard(module);
+      return nullptr;
+    }
+    if (*name) {
+      entry = reinterpret_cast<CHashGeneric *>(
+          CAlloc(sizeof(CHashGeneric), task.data_heap));
+      if (!entry) {
+        Free(name);
+        LoadDiscard(module);
+        return nullptr;
+      }
+      entry->hash.str = name;
+      entry->hash.type = HTT_MODULE | HTF_PUBLIC;
+      entry->user_data0 = reinterpret_cast<uintptr_t>(module->image);
+    } else
+      Free(name);
   }
-  size_t len = StrLen(name);
-  if (len >= 2 && name[len - 2] == '.' && name[len - 1] == 'Z')
-    len -= 2;
-  if (len >= 4 && name[len - 4] == '.' && name[len - 3] == 'B' &&
-      name[len - 2] == 'I' && name[len - 1] == 'N')
-    len -= 4;
-  name[len] = 0;
-  // A module with ORG uses caller-owned memory. Prepare its patches before
-  // replacing those bytes.
-  MemCpy(module->image, input, size);
+  // Prepare all allocations before writing caller-owned memory or retaining
+  // the input. A failed preparation leaves that input with the caller.
+  if (!retained)
+    MemCpy(module->image, input, size);
   for (size_t i = 0; i < module->count; i++) {
     auto &rec = module->records[i];
     rec.raw = module->image + (rec.raw - input);
@@ -607,11 +649,17 @@ static CLoadedModule *LoadImage(const uint8_t *input, size_t size,
     if (rec.imported)
       rec.imported->entry.module_header_entry = rec.raw;
   }
-  entry->hash.str = name;
-  entry->hash.type = HTT_MODULE | HTF_PUBLIC;
-  entry->user_data0 = reinterpret_cast<uintptr_t>(module->image);
-  HashAdd(&entry->hash, task.hash_table);
+  if (retained)
+    module->owns_image = true;
+  else
+    Free(input);
+  input = nullptr;
+  error = LOAD_OK;
+  if (entry)
+    HashAdd(&entry->hash, task.hash_table);
   LoadPass1(*module, task.hash_table, flags);
+  if (!(flags & LDF_JUST_LOAD))
+    LoadPass2(*module);
   return module;
 }
 
@@ -638,12 +686,45 @@ CLoadedModule *Load(const CDrv &dv, const char *path, CTask &task,
   }
   size_t size;
   auto *data = FileRead(dv, path, size, task.data_heap);
-  auto *module = data ? LoadImage(data, size, path, task, flags) : nullptr;
+  CLoadError error;
+  auto *module =
+      data ? LoadImage(data, size, path, task, flags, INVALID_PTR, error)
+           : nullptr;
   Free(data);
   Free(with_extension);
-  if (module && !(flags & LDF_JUST_LOAD))
-    LoadPass2(*module);
   return module;
+}
+
+extern "C" CBinFile *LoadCpp(const char *filename, int64_t ld_flags,
+                             CBinFile *bfh_addr)
+{
+  auto &task = *CurrentTask();
+  auto *fbuf = ExtDftCpp(filename, "BIN.Z");
+  if (!fbuf)
+    return nullptr;
+  size_t size;
+  auto *data = FileReadCpp(fbuf, &size, nullptr);
+  if (!data) {
+    Free(fbuf);
+    return nullptr;
+  }
+  auto *absname = FileNameAbs(fbuf, task);
+  Free(fbuf);
+  if (!absname) {
+    Free(data);
+    return nullptr;
+  }
+  const char *path =
+      *absname && absname[1] == ':' && absname[2] ? absname + 2 : nullptr;
+  CLoadError error;
+  auto *module =
+      LoadImage(data, size, path, task, static_cast<unsigned>(ld_flags),
+                reinterpret_cast<uintptr_t>(bfh_addr), error);
+  Free(data);
+  Free(absname);
+  if (error == LOAD_BAD_IMAGE)
+    RaiseHolyC(0x6C75646F4D6E6942ULL); // BinModul
+  return module ? reinterpret_cast<CBinFile *>(module->image) : nullptr;
 }
 
 bool LoadKernel(CTask &task)
@@ -755,6 +836,7 @@ bool LoadKernel(CTask &task)
       {"_HASH_REM_DEL", reinterpret_cast<uintptr_t>(_HASH_REM_DEL)},
       {"SysSymImportsResolve",
        reinterpret_cast<uintptr_t>(SysSymImportsResolveHC)},
+      {"Load", reinterpret_cast<uintptr_t>(LoadHC)},
       {"Clamp", reinterpret_cast<uintptr_t>(ClampHC)},
       {"Min", reinterpret_cast<uintptr_t>(MinHC)},
       {"Max", reinterpret_cast<uintptr_t>(MaxHC)},

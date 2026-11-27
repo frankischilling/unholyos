@@ -734,6 +734,43 @@ static bool CmpDateData(CHashTable *table)
          CmpKernelGlobal(table, "mon_start_days2", u16, mon_start_days2, 12);
 }
 
+static bool CmpBinData(CHashTable *table)
+{
+  static_assert(sizeof(CBinFile) == 32 && offsetof(CBinFile, jmp) == 0 &&
+                offsetof(CBinFile, module_align_bits) == 2 &&
+                offsetof(CBinFile, reserved) == 3 &&
+                offsetof(CBinFile, bin_signature) == 4 &&
+                offsetof(CBinFile, org) == 8 &&
+                offsetof(CBinFile, patch_table_offset) == 16 &&
+                offsetof(CBinFile, file_size) == 24);
+  auto *bin = CmpKernelClass(table, "CBinFile", sizeof(CBinFile));
+  if (!bin)
+    return false;
+  auto *heap = CurrentTask()->data_heap;
+  const struct
+  {
+    const char *name, *type;
+    size_t offset;
+  } members[]{
+      {"jmp", "U16", offsetof(CBinFile, jmp)},
+      {"module_align_bits", "U8", offsetof(CBinFile, module_align_bits)},
+      {"reserved", "U8", offsetof(CBinFile, reserved)},
+      {"bin_signature", "U32", offsetof(CBinFile, bin_signature)},
+      {"org", "I64", offsetof(CBinFile, org)},
+      {"patch_table_offset", "I64", offsetof(CBinFile, patch_table_offset)},
+      {"file_size", "I64", offsetof(CBinFile, file_size)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    if (!name ||
+        !MemberAdd(*bin, name, *FindType(member.type, table), member.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool CmpDirData(CHashTable *table)
 {
   auto *entry = CmpKernelClass(table, "CDirEntry", sizeof(CDirEntry));
@@ -1933,6 +1970,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     DatePtr,
     FifoU8Ptr,
     FifoI64Ptr,
+    BinFilePtr,
     PlotFn,
   };
   CHashClass *types[]{
@@ -1976,6 +2014,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CDate", table) + 1,
       FindType("CFifoU8", table) + 1,
       FindType("CFifoI64", table) + 1,
+      FindType("CBinFile", table) + 1,
   };
   auto *task = CurrentTask();
   enum CDefaultKind : uint8_t { Numeric, String, LastClass };
@@ -2034,6 +2073,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"FilesFind", DirEntryPtr, FF_RET1, {{"files_find_mask", U8Ptr}, {"fuf_flags", I64, true}}},
       {"FileFind", Bool, FF_RET1,
        {{"filename", U8Ptr}, {"_de", DirEntryPtr, true}, {"fuf_flags", I64, true}}},
+      {"Load", U8Ptr, FF_RET1,
+       {{"filename", U8Ptr}, {"ld_flags", I64, true},
+        {"bfh_addr", BinFilePtr, true, INVALID_PTR}}},
       {"FileRead", U8Ptr, FF_RET1,
        {{"filename", U8Ptr}, {"_size", I64Ptr, true}, {"_attr", I64Ptr, true}}},
       {"FileWrite", I64, FF_RET1,
@@ -2892,6 +2934,9 @@ static bool CmpFillHash(CHashTable *table)
       {"__DIR__", "#exe{StreamDir;}"},
       {"I64_MAX", "0x7FFFFFFFFFFFFFFF"},
       {"I64_MIN", "(-0x8000000000000000)"},
+      {"INVALID_PTR", "I64_MAX"},
+      {"LDF_NO_ABSS", "1"}, {"LDF_JUST_LOAD", "2"}, {"LDF_SILENT", "4"},
+      {"BIN_SIGNATURE_VAL", "'TOSB'"},
       {"F64_MIN", "(0xFFEFFFFFFFFFFFFF(F64))"},
       {"F64_MAX", "(0x7FEFFFFFFFFFFFFF(F64))"},
       {"HTT_CLASS", "0x10"}, {"HTT_INTERNAL_TYPE", "0x20"},
@@ -3114,7 +3159,9 @@ static bool CmpFillHash(CHashTable *table)
     HashAdd(&entry->sym.hash,table);
   }
   auto *task = CmpKernelClass(table, "CTask", sizeof(CTask));
-  return task && CmpMemberData(table) && CmpRuntimeData(table) && CmpQueData(table) && CmpFifoData(table) && CmpDateData(table) && CmpDirData(table) &&
+  return task && CmpMemberData(table) && CmpRuntimeData(table) &&
+         CmpQueData(table) && CmpFifoData(table) && CmpDateData(table) &&
+         CmpBinData(table) && CmpDirData(table) &&
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) && CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&

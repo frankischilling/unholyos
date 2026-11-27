@@ -2201,9 +2201,9 @@ and cells, and screenshots. Both normalized traces have SHA-256
 
 These runs establish the fixture's TOSB and ABI behavior across the
 two loaders. Initialization of the separately loaded compiler is covered
-by the later compiler tests below. Adam remains linked into the boot
-image; the native HolyC `Load` API and guest C++20 build toolchain remain
-work for later increments.
+by the later compiler tests below. The public HolyC `Load` API has its
+own [common-source comparison](#public-holyc-load). Adam remains linked
+into the boot image, and the guest C++20 build toolchain remains unfinished.
 
 ## Native compiler bindings
 
@@ -2417,9 +2417,101 @@ The native guest probe uses the internal C++ loader. The pinned guest executes
 `LateImportLoadProbe.HC` through its public `Load` and an explicit
 declaration of the exported `LoadPass2` routine. This comparison targets
 generic module entry and deferred relocation behavior. The native public
-HolyC `Load` ABI, filename defaults, and caller-supplied destination
-address remain separate work. The compiler boot binder still rejects
-pending imports before publishing its dispatch table.
+HolyC `Load` ABI, filename defaults, and caller-supplied destinations
+have a separate [common-source comparison](#public-holyc-load). The compiler
+boot binder still rejects pending imports before publishing its dispatch table.
+
+## Public HolyC Load
+
+`LoadApiProbe.HC` ran unchanged from source through the public HolyC `Load`
+in both UnholyOS and pinned TempleOS. The native builds used GCC 13.3.0
+and Clang 20.1.2. All three focused runs produced these exact 104 normalized
+output bytes:
+
+```text
+LA paths 3F counts 1 33 17 33
+LA flags F
+LA override F F
+LA failures F
+LA small 7
+LA retained 3
+LA DONE
+```
+
+| Check | Observed behavior |
+| --- | --- |
+| Paths and defaults | Omitted flags run the entry; omitted destination uses `INVALID_PTR`. Relative paths, `.BIN.Z` fallback, and explicit `.BIN`/`.BIN.Z` precedence select the expected bytes. |
+| Headers and names | `Load` returns the image header, and the public `HTT_MODULE` record retains that header in `user_data0`. Module keys stop at the first qualifying dot, including a dot in a directory component. |
+| Relocations and flags | `LDF_JUST_LOAD` leaves the entry counter at zero. `LDF_NO_ABSS` leaves the absolute dword unchanged while the ordinary import still resolves. A separate image confirms that the absolute fixup preserves the upper dword. |
+| Caller destinations | Two deliberately unaligned destinations are used exactly as supplied. They override a different `org` and an overflowing unused `org`, preserve the header's original `org`, and retain adjacent guards, allocation owner, and capacity. |
+| Failures | A missing file returns null. A bad signature throws `BinModul`. Both leave the supplied destination untouched and publish no module record. |
+| Retained images | Later loads preserve the first image's counter and anchor. The original consumer file remains byte-identical. |
+
+The consumer's entry increments its own counter; its exported function
+calls the existing `LateImportTarget` provider with 7 and returns 42.
+The wrapper loads the provider first and checks the call's resolved
+displacement before executing it. Its variants are private RAM-file
+copies, and all loaded images and caller-owned destinations remain alive.
+
+The `small 7` row checks an eight-byte alignment request with equal code
+and data heaps. It observes a positive ordinary allocation size, the
+expected heap owner, capacity of at least `file_size+1`, and working
+relocations. Both implementations' source takes the branch that retains
+the `FileRead` allocation in this case. The original buffer's identity
+before `Load` returns is source evidence; the public wrapper cannot
+observe that intermediate pointer. The relevant reference paths are
+`Kernel/KLoad.HC::Load`, `Kernel/BlkDev/DskStrA.HC::FileExtDot`, and
+`Kernel/Mem/MAllocFree.HC`.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `LoadApiConsumer.BIN` | 208 | `0ab6c5e92f72dc64ddca376a75d27063be8e7b63d8791073afbcaca7db6e2b55` |
+| `LateImportProvider.BIN` | 80 | `bf3116c370a8a8ec1e200068b7f829cc75447b2c80e779f6b645423c484f4e24` |
+| Common `LoadApiProbe.HC` | 9,113 | `f27b3d351e988c659e7cc3ab131a117b755361e917dcd2d0c4a82cc088931a99` |
+| Normalized trace | 104 | `3524cc30c398264f08e29dc34d621f47a3b6c63dc31a05d2cd475d62ab52864f` |
+
+The native driver compares all three packaged files with the host inputs.
+The gated boot probe creates a fresh B: RAM drive, copies both BINs, and
+compares every byte read back before running the common source through
+`ExeFile`. The driver requires that staging marker, the complete trace,
+and `/LoadApiProbe.HC` completion with `checks 1`. The reference transport
+verifies both uploaded BINs and their RAM-file readbacks, plus the entire
+source and terminating NUL before `ExePutS`. It retains the terminal text
+and screenshot and requires an empty prompt after completion.
+
+The separate reference checkout stayed clean at
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`, verified through the Git Human
+Workflow helper before and after execution. The reference ISO SHA-256 is
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+All runs used QEMU 8.2.2 (`1:8.2.2+ds-0ubuntu1.18`),
+`-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`, one default vCPU,
+`-display none -monitor none -qmp stdio -no-reboot`, and a serial capture.
+The reference additionally used the debug console and GDB on port 45362;
+the VM exited and released that port afterward.
+
+```sh
+make -j6 test-load-api
+make -j6 BUILD=build-clang CXX=clang++ HOSTCXX=clang++ test-load-api
+build/Linux/TestBoot --load-api-reference qemu-system-x86_64 \
+  ../reference-media/TOS_Distro.ISO \
+  build/Linux/Fixtures/LoadApiConsumer.BIN \
+  build/Linux/Fixtures/LateImportProvider.BIN build/load-api-reference-first
+```
+
+The Clang command selected the installed Clang 20 binary for both compiler
+variables. The native ISOs were `build/load-api-test.iso` and
+`build-clang/load-api-test.iso`; the latter build is retained under
+`build/load-api-clang-rerun`. Both focused commands exited successfully;
+their logs are `build/load-api-gcc.log` and `build/load-api-clang.log`.
+Reference captures and the successful command log are under
+`build/load-api-reference-first` and `build/load-api-reference-first.log`.
+
+These checks cover source execution of the wrapper and the listed loader
+cases. They do not exercise allocation failure, truncated images, malformed
+patch tables, or higher-memory configurations. Only `I64_MAX` is the
+automatic destination sentinel; null and `-1` are not tested destinations.
+`make test` includes this fixture in the complete regression gate. The pull
+request records the exact tested commit and the GCC and Clang CI results.
 
 ## Loading the compiler from the boot volume
 
@@ -2442,8 +2534,10 @@ argument for the 24-byte `CExeResult`. The compiler's C++ entry is reached
 through the zero-argument HolyC `CInitHC` adapter. [Host modules](HostModules.md)
 records the ownership, ABI, manifest, and initialization differences.
 
-The local builds use GCC 13.3.0 or Clang 20.1.2, NASM 2.16.01, GNU ld 2.42,
-and QEMU 8.2.2 (`1:8.2.2+ds-0ubuntu1.18`). The focused commands are:
+The build sizes, patch counts, and boot results below record PR #81 at
+tested revision `2e9052c46dcd99dc2fe4c45527882dc3a631db74`. Those builds used
+GCC 13.3.0 or Clang 20.1.2, NASM 2.16.01, GNU ld 2.42, and QEMU 8.2.2
+(`1:8.2.2+ds-0ubuntu1.18`). The focused commands were:
 
 ```sh
 make -j6 all build/unholyos-startup-test.iso build/Linux/TestBoot
@@ -2463,7 +2557,7 @@ build/clang/Linux/TestBoot qemu-system-x86_64 build/clang/unholyos.iso \
 The local Clang commands set both compiler variables to the installed
 Clang 20 binary. The default build paths are `build/unholyos.iso` and
 `build/Compiler/Compiler.BIN`; the Clang paths are beneath `build/clang`.
-The compiler bytes are:
+The compiler bytes at that tested revision were:
 
 | Build | Bytes | SHA-256 |
 | --- | ---: | --- |
@@ -2501,8 +2595,8 @@ after `RLF_DOC`. The driver reconstructs every relocated compiler byte
 from the packaged image and live import addresses, then compares the
 hash reported before the entry runs. It also checks the retained patch
 records, module hash entry, code and data heap ownership, 16 dispatch
-targets, status word, and the single completed entry. The GCC module
-has 429 patch records and the Clang module has 630.
+targets, status word, and the single completed entry. At that revision,
+the GCC module had 429 patch records and the Clang module had 630.
 
 Both compiler builds passed all seven focused failure cases. Each case
 uses a private ISO copy and checks the diagnostic and live guest state:
