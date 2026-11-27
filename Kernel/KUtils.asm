@@ -40,6 +40,7 @@ GLOBAL StrPrintJoinHC,StrPrintHC,CatPrintHC,MStrPrintHC,PrintHC,PrintErrHC,Print
 GLOBAL PutSHC,PutHexHC
 GLOBAL PutCharsHC,IsRawHC,DefineLstLoadHC,DefineSubHC,DefineMatchHC
 GLOBAL DefineHC,DefineLoadHC,DefineCntHC,DefinePrintHC
+GLOBAL Color2StrHC,Str2ColorU16HC,Str2ColorU32HC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
 GLOBAL DocReadHC,DocTypeHC,TypeHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC,DocPutKeyHC
@@ -226,6 +227,7 @@ EXTERN SysUntryCpp,PutExceptCpp,YorNCpp
 EXTERN StrPrintJoin,CatPrintCpp,MStrPrintCpp,PrintCpp,PrintErrCpp,PrintWarnCpp
 EXTERN PutCharsCpp,PutS,PutHexCpp,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineMatchCpp
 EXTERN DefineCpp,DefineLoadCpp,DefineCntCpp,DefinePrintCpp
+EXTERN Color2StrCpp,Str2ColorU16Cpp,Str2ColorU32Cpp
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocReadCpp,DocTypeCpp,TypeCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp,DocPutKeyCpp
@@ -611,6 +613,9 @@ HOLYC_CPP DefineSubHC,DefineSubCpp,2
 HOLYC_CPP DefineCntHC,DefineCntCpp,1
 HOLYC_CPP DefineMatchHC,DefineMatchCpp,3
 HOLYC_PRINT DefinePrintHC,DefinePrintCpp,2
+HOLYC_CPP Color2StrHC,Color2StrCpp,2
+HOLYC_CPP Str2ColorU16HC,Str2ColorU16Cpp,1
+HOLYC_CPP Str2ColorU32HC,Str2ColorU32Cpp,1
 HOLYC_CPP WinHorzHC,WinHorzCpp,3
 HOLYC_CPP WinVertHC,WinVertCpp,3
 HOLYC_CPP WinRefocusHC,WinRefocusCpp,1

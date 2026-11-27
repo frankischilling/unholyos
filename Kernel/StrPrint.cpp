@@ -38,10 +38,8 @@ struct CPrintArgs
 
   uint64_t Take()
   {
-    if (!argv || count <= 0) {
-      error = STR_PRINT_ERROR;
-      return 0;
-    }
+    if (!argv || count <= 0)
+      RaiseHolyC(STR_PRINT_ERROR);
     count--;
     return *argv++;
   }

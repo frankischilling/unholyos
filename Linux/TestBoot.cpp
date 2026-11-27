@@ -2610,6 +2610,33 @@ constexpr CTextProbe system_defines_probes[]{
     {"system-defines", "/SystemDefinesProbe.HC", "", "SY lists ", "SY DONE",
      system_defines_output}};
 
+constexpr std::string_view color_conversions_exceptions[]{"StrPrint"};
+constexpr std::string_view color_conversions_output = "CC abi 3F\n"
+                                                      "CC names 16\n"
+                                                      "CC numeric 256\n"
+                                                      "CC u16 40\n"
+                                                      "CC u32 32\n"
+                                                      "CC format 18\n"
+                                                      "CC delimiters F\n"
+                                                      "CC shadow F\n"
+                                                      "CC heap 24 0 7\n"
+                                                      "CC DONE\n";
+constexpr CTextProbe color_conversions_probes[]{
+    {"color-conversions", "/ColorConversionsProbe.HC", "", "CC abi ", "CC DONE",
+     color_conversions_output, color_conversions_exceptions}};
+
+constexpr std::string_view format_missing_args_exceptions[]{
+    "StrPrint", "StrPrint", "StrPrint", "StrPrint",
+    "StrPrint", "StrPrint", "StrPrint", "StrPrint"};
+constexpr std::string_view format_missing_args_output = "FM errors FF\n"
+                                                        "FM bytes FF\n"
+                                                        "FM stack FF\n"
+                                                        "FM queue FF\n"
+                                                        "FM DONE\n";
+constexpr CTextProbe format_missing_args_probes[]{
+    {"format-missing-args", "/FormatMissingArgsProbe.HC", "", "FM errors ",
+     "FM DONE", format_missing_args_output, format_missing_args_exceptions}};
+
 static void CheckBootSourceProbe(const std::string &serial,
                                  const CTextProbe &probe, const fs::path &dir)
 {
@@ -5890,6 +5917,10 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--string-defines-reference" ||
        std::string_view(argv[1]) == "--system-defines" ||
        std::string_view(argv[1]) == "--system-defines-reference" ||
+       std::string_view(argv[1]) == "--color-conversions" ||
+       std::string_view(argv[1]) == "--color-conversions-reference" ||
+       std::string_view(argv[1]) == "--format-missing-args" ||
+       std::string_view(argv[1]) == "--format-missing-args-reference" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -5928,6 +5959,13 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--string-defines");
     bool system_defines_probe =
         std::string_view(argv[1]).starts_with("--system-defines");
+    bool color_conversions_probe =
+        std::string_view(argv[1]).starts_with("--color-conversions");
+    bool format_missing_args_probe =
+        std::string_view(argv[1]).starts_with("--format-missing-args");
+    const bool source_probe = compiler_defines_probe || string_defines_probe ||
+                              system_defines_probe || color_conversions_probe ||
+                              format_missing_args_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -5943,6 +5981,10 @@ int main(int argc, char **argv)
       text_probes = string_defines_probes;
     else if (system_defines_probe)
       text_probes = system_defines_probes;
+    else if (color_conversions_probe)
+      text_probes = color_conversions_probes;
+    else if (format_missing_args_probe)
+      text_probes = format_missing_args_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -5950,9 +5992,7 @@ int main(int argc, char **argv)
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
-      if ((compiler_defines_probe || string_defines_probe ||
-           system_defines_probe) &&
-          !reference) {
+      if (source_probe && !reference) {
         const auto &probe = text_probes[0];
         VerifyHostModuleMedia(argv[3],
                               std::string("Linux/Fixtures") + probe.source,
@@ -5967,7 +6007,7 @@ int main(int argc, char **argv)
                                           "/AssertWarningProbe.BIN.Z, checks "
                                           "0x0000000000000001\r\n")
                           : vm.Boot(dir / "serial.log");
-        if (compiler_defines_probe || string_defines_probe || system_defines_probe)
+        if (source_probe)
           CheckBootSourceProbe(output, text_probes[0], dir);
         else {
           RecordTextProbes(output, text_probes, dir);
@@ -6104,6 +6144,10 @@ int main(int argc, char **argv)
               << " --string-defines[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --system-defines[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --color-conversions[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --format-missing-args[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]

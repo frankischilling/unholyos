@@ -405,6 +405,7 @@ static_assert(sizeof(CBGR48) == 8 && offsetof(CBGR48, b) == 0 &&
 
 constexpr uint8_t TRANSPARENT = 0xFF, COLOR_INVALID = 16, COLOR_MONO = 0xFF;
 constexpr uint8_t ROPB_EQU = 0, ROPB_XOR = 1, ROPB_COLLISION = 2, ROPB_MONO = 3,
+                  ROPBF_HALF_RANGE_COLOR = 0x10, ROPBF_TWO_SIDED = 0x20,
                   ROPBF_DITHER = 0x40, ROPBF_PROBABILITY_DITHER = 0x80;
 constexpr uint32_t ROPF_HALF_RANGE_COLOR = 0x1000, ROPF_TWO_SIDED = 0x2000,
                    ROPF_DITHER = 0x40000000,
@@ -481,6 +482,10 @@ struct CDC
 
 static_assert(sizeof(CColorROPU16) == 2 && sizeof(CColorROPU32) == 4 &&
               sizeof(CD3I32) == 12 && sizeof(CGrSym) == 40);
+static_assert(offsetof(CColorROPU16, color) == 0 &&
+              offsetof(CColorROPU16, rop) == 1 &&
+              offsetof(CColorROPU32, c0) == 0 &&
+              offsetof(CColorROPU32, c1) == 2);
 static_assert(sizeof(CDC) == 408 && offsetof(CDC, flags) == 28 &&
               offsetof(CDC, palette) == 32 && offsetof(CDC, color) == 160 &&
               offsetof(CDC, ls) == 172 && offsetof(CDC, r) == 200 &&

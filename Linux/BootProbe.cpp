@@ -1970,6 +1970,8 @@ void BootProbe()
   SerialPutHex(SYS_RUN_LEVEL);
   SerialPutS("\r\n");
   if (adam_task->cur_dv) {
+    BootFileProgramReport(*adam_task->cur_dv, "/ColorConversionsProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/FormatMissingArgsProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/SystemDefinesProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/CompilerDefinesProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/StringDefinesProbe.HC");

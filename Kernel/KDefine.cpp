@@ -203,3 +203,115 @@ bool SysDefinesLoad()
       " \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0MP Crash\0Wake\0Dbg\0",
       nullptr);
 }
+
+// TempleOS Kernel/KDefine.HC color conversions, Terry A. Davis.
+extern "C" char *Color2StrCpp(char *buf, uint32_t color)
+{
+  const auto c = __builtin_bit_cast(CColorROPU32, color);
+  *buf = 0;
+  if (c.c0.rop & ROPBF_TWO_SIDED)
+    CatPrintCpp(buf, "TWO|", 0, nullptr);
+  if (c.c0.rop & ROPBF_HALF_RANGE_COLOR)
+    CatPrintCpp(buf, "HALF|", 0, nullptr);
+  if (c.c0.color < 16)
+    CatPrintCpp(buf, DefineSubCpp(c.c0.color, "ST_COLORS"), 0, nullptr);
+  else if (c.c0.color == TRANSPARENT)
+    CatPrintCpp(buf, "TRANSPARENT", 0, nullptr);
+  else
+    CatPrintCpp(buf, "INVALID", 0, nullptr);
+  if (color & ROPF_DITHER) {
+    CatPrintCpp(buf, "/", 0, nullptr);
+    if (c.c1.rop & ROPBF_TWO_SIDED)
+      CatPrintCpp(buf, "TWO|", 0, nullptr);
+    if (c.c1.rop & ROPBF_HALF_RANGE_COLOR)
+      CatPrintCpp(buf, "HALF|", 0, nullptr);
+    if (c.c1.color < 16)
+      CatPrintCpp(buf, DefineSubCpp(c.c1.color, "ST_COLORS"), 0, nullptr);
+    else if (c.c1.color == TRANSPARENT)
+      CatPrintCpp(buf, "TRANSPARENT", 0, nullptr);
+    else
+      CatPrintCpp(buf, "INVALID", 0, nullptr);
+  }
+  return buf;
+}
+
+// Keep the reference delimiter storage writable.
+static char str2color_default[] = "/,)}>";
+char *str2color_lst = str2color_default;
+
+extern "C" uint64_t Str2ColorU16Cpp(const char *st)
+{
+  constexpr uint64_t LMF_IGNORE_CASE = 1;
+  CColorROPU16 res{COLOR_INVALID, 0};
+  int64_t i;
+  const char *ptr;
+  char *ptr2, *st2;
+  if (!st)
+    return COLOR_INVALID;
+  while (true) {
+    if (!*st || StrOccCpp(reinterpret_cast<const uint8_t *>(str2color_lst),
+                          uint8_t(*st)))
+      return __builtin_bit_cast(uint16_t, res);
+    if (char_bmp_alpha[uint8_t(*st) / 32] &
+        (uint32_t{1} << (uint8_t(*st) % 32))) {
+      ptr = st;
+      while (char_bmp_alpha_numeric[uint8_t(*ptr) / 32] &
+             (uint32_t{1} << (uint8_t(*ptr) % 32)))
+        ptr++;
+      st2 = ptr2 = reinterpret_cast<char *>(
+          MAlloc(ptr - st + 1, CurrentTask()->data_heap));
+      while (st < ptr)
+        *ptr2++ = *st++;
+      *ptr2++ = 0;
+      if (!StrICmpCpp(st2, "TWO"))
+        res.rop |= ROPBF_TWO_SIDED;
+      else if (!StrICmpCpp(st2, "HALF"))
+        res.rop |= ROPBF_HALF_RANGE_COLOR;
+      else if ((i = DefineMatchCpp(reinterpret_cast<const uint8_t *>(st2),
+                                   "ST_COLORS", LMF_IGNORE_CASE)) >= 0)
+        res.color = static_cast<uint8_t>(i);
+      else if (!StrICmpCpp(st2, "TRANSPARENT"))
+        res.color = TRANSPARENT;
+      else {
+        Free(st2);
+        return COLOR_INVALID;
+      }
+      Free(st2);
+    } else if (*st == '+' || *st == '|' ||
+               (char_bmp_white_space[uint8_t(*st) / 32] &
+                (uint32_t{1} << (uint8_t(*st) % 32))))
+      st++;
+    else if ('0' <= *st && *st <= '9') {
+      i = Str2I64Cpp(st, 10, &ptr);
+      if (0 <= i && i <= 0xFF) {
+        res.color = static_cast<uint8_t>(i);
+        st = ptr;
+      } else
+        return COLOR_INVALID;
+    } else
+      return COLOR_INVALID;
+  }
+}
+
+extern "C" uint64_t Str2ColorU32Cpp(char *st)
+{
+  char *st2;
+  CColorROPU32 res{};
+  if (!st)
+    return COLOR_INVALID;
+  // The reference retains this temporary on every non-null input path.
+  st2 = reinterpret_cast<char *>(
+      MAlloc(StrLen(st) + 1, CurrentTask()->data_heap));
+  StrFirstRemCpp(st, reinterpret_cast<const uint8_t *>(str2color_lst), st2);
+  res.c0 = __builtin_bit_cast(CColorROPU16,
+                              static_cast<uint16_t>(Str2ColorU16Cpp(st2)));
+  if (*st) {
+    res.c1 = __builtin_bit_cast(CColorROPU16,
+                                static_cast<uint16_t>(Str2ColorU16Cpp(st)));
+    res.c1.rop |= ROPBF_DITHER;
+  }
+  if (res.c0.color == COLOR_INVALID || res.c1.color == COLOR_INVALID)
+    return COLOR_INVALID;
+  else
+    return __builtin_bit_cast(uint32_t, res);
+}
