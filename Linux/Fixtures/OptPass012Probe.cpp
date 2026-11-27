@@ -85,6 +85,20 @@ void IntegerProbe()
   auto minv=p.Add(IC_MIN_I64,RT_I64,two,neg);
   auto maxv=p.Add(IC_MAX_I64,RT_I64,two,neg);
   auto sqr=p.Add(IC_SQR_I64,RT_I64,neg);
+  auto usqr=p.Add(IC_SQR_U64,RT_U64,wide);
+  auto umin=p.Add(IC_MIN_U64,RT_U64,two,wide);
+  auto umax=p.Add(IC_MAX_U64,RT_U64,two,wide);
+  auto abs=p.Add(IC_ABS_I64,RT_I64,neg);
+  auto absmin=p.Add(IC_ABS_I64,RT_I64,min);
+  auto sign=p.Add(IC_SIGN_I64,RT_I64,neg);
+  auto signzero=p.Add(IC_SIGN_I64,RT_I64,zero);
+  auto signpos=p.Add(IC_SIGN_I64,RT_I64,three);
+  auto boolean=p.Add(IC_TO_BOOL,RT_I8,wide);
+  auto upper=p.Add(IC_TOUPPER,RT_I64,p.Int('z'));
+  auto unchanged=p.Add(IC_TOUPPER,RT_I64,p.Int(0x10061));
+  auto lowbit=p.Add(IC_BSF,RT_I64,p.Int(0x8000000000000010ULL));
+  auto highbit=p.Add(IC_BSR,RT_I64,p.Int(0x8000000000000010ULL));
+  auto scan_zero=p.Add(IC_BSF,RT_I64,zero);
   auto fault=p.Add(IC_DIV,RT_I64,one,zero);
   auto overflow=p.Add(IC_DIV,RT_I64,min,minus_one);
   auto rem_fault=p.Add(IC_MOD,RT_I64,min,minus_one);
@@ -111,6 +125,20 @@ void IntegerProbe()
   p.Value(minv,-17,"minimum intrinsic");
   p.Value(maxv,2,"maximum intrinsic");
   p.Value(sqr,289,"square intrinsic");
+  p.Value(usqr,1,"unsigned square wraps");
+  p.Value(umin,2,"unsigned minimum");
+  p.Value(umax,UINT64_MAX,"unsigned maximum");
+  p.Value(abs,17,"integer absolute");
+  p.Value(absmin,INT64_MIN,"integer absolute wraps");
+  p.Value(sign,-1,"negative sign");
+  p.Value(signzero,0,"zero sign");
+  p.Value(signpos,1,"positive sign");
+  p.Value(boolean,1,"integer Boolean conversion");
+  p.Value(upper,'Z',"ASCII uppercase");
+  p.Value(unchanged,0x10061,"uppercase uses full character value");
+  p.Value(lowbit,4,"low bit scan");
+  p.Value(highbit,63,"high bit scan");
+  p.Value(scan_zero,UINT64_MAX,"zero bit scan");
   Check(p.code[fault].code==IC_DIV && p.code[overflow].code==IC_DIV &&
         p.code[rem_fault].code==IC_MOD,"division faults stay executable");
 }
@@ -137,6 +165,11 @@ void FloatProbe()
   auto rounded=p.Add(IC_ADD,RT_F64,one,p.Float(0x1p-25));
   auto fractional=p.Add(IC_TO_I64,RT_I64,y);
   auto nan=p.Add(IC_LESS,RT_I64,p.Float(std::bit_cast<double>(0x7FF8000000000000ULL)),one);
+  auto sqr=p.Add(IC_SQR,RT_F64,p.Float(-2.5));
+  auto abs=p.Add(IC_ABS,RT_F64,p.Float(-2.5));
+  auto abszero=p.Add(IC_ABS,RT_F64,negzero);
+  auto rounded_sqr=p.Add(IC_SQR,RT_F64,p.Float(1.0000000000000002));
+  auto absnan=p.Add(IC_ABS,RT_F64,p.Float(std::bit_cast<double>(0xFFF8000000000000ULL)));
   p.Run();
   p.FloatValue(add,8.5,"mixed exact floating add");
   p.FloatValue(sub,1.0,"exact floating subtract");
@@ -150,6 +183,11 @@ void FloatProbe()
   p.Value(not_zero,0,"raw floating truth");
   p.Value(to_int,3,"exact float to integer");
   p.FloatValue(to_float,-17.0,"exact integer to float");
+  p.FloatValue(sqr,6.25,"exact floating square");
+  p.FloatValue(abs,2.5,"floating absolute");
+  p.FloatValue(abszero,0.0,"floating absolute clears sign of zero");
+  Check(p.code[rounded_sqr].code==IC_SQR && p.code[absnan].code==IC_ABS,
+        "floating intrinsics retain rounding and exceptional cases");
   Check(p.code[inexact].code==IC_DIV && p.code[divzero].code==IC_DIV &&
         p.code[rounded].code==IC_ADD && p.code[fractional].code==IC_TO_I64 &&
         p.code[nan].code==IC_LESS,"rounding and exceptional cases stay executable");

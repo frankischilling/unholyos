@@ -3892,6 +3892,38 @@ The earlier fixture hash and masks above identify the previous optimizer
 batch, not the expanded source. These tests do not establish full reference
 register allocation, branch selection, or instruction-byte equivalence.
 
+## Backend intrinsics and call-aware spilling
+
+The shared `BackendProbe.HC` (3533 bytes, SHA-256
+`f130781b9fb9c8ca35a15f6ce9319586cb2b60eacb24005c18b96e4d3920caff`)
+produced `Backend probe 1FFFF` on pinned TempleOS and in both native JIT
+builds. It covers integer and floating intrinsics, conversions, argument
+evaluation order, nested direct and indirect calls, x87 stack balance,
+and positive, negative, fractional and zero power operands. The reference
+lexer encodes `6.25` as `4019000000000001`, whereas `Sqr(-2.5)` produces
+`4019000000000000`; the fixture asserts both rather than replacing exact
+comparisons with a tolerance.
+
+Both native builds produced `Backend native FF`, verifying typed internal
+metadata (including forwarded unsigned classes), instruction signatures and
+an indirect call that deliberately clobbers R9. Native AOT compiled with
+result 0, produced `Backend probe 1FFFF` and loaded with result 1. The
+power operation imports `SYS_POW` by name. The updated host constant-fold
+probe passed 61 checks and the stack-temporary probe passed 89 checks.
+
+```sh
+make -j6 test-backend test-opt-pass012 test-opt-pass6 test-address-fold
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 \
+  test-backend test-opt-pass012 test-opt-pass6 test-address-fold
+build/Linux/TestBoot --backend-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/backend-reference
+```
+
+The boot media contract now requires 44 native imports and 32 data imports
+and explicitly rejects the removed native power import. These checks do not
+establish full instruction-byte parity, complete reference spilling, or
+cross-OS AOT loading.
+
 ## Nested images, FAT32 backing, and mounted ISO generation
 
 The shared `NestedRedSeaProbe.HC`, `RedSeaFreeListProbe.HC`, and `Fat32ImageProbe.HC` fixtures run on

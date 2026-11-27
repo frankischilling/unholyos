@@ -232,10 +232,33 @@ static bool OptFold(CIntermediateCode &node,const CIntermediateCode &left,
     case IC_UNARY_MINUS:
       res=left.type==RT_F64?a^F64_SIGN:uint64_t{0}-a;
       return true;
-    case IC_SQR_I64:
+    case IC_SQR_I64: case IC_SQR_U64:
       if (!OptToI64(left,a)) return false;
       res=a*a;
       return true;
+    case IC_TO_BOOL: case IC_TOUPPER:
+    case IC_ABS_I64: case IC_SIGN_I64:
+    case IC_BSF: case IC_BSR:
+      if (!IsInt(left.type)) return false;
+      switch (op) {
+        case IC_TO_BOOL: res=!!a; break;
+        case IC_TOUPPER: res=a>='a' && a<='z'?a-32:a; break;
+        case IC_ABS_I64: res=a>>63?uint64_t{0}-a:a; break;
+        case IC_SIGN_I64: res=a>>63?UINT64_MAX:!!a; break;
+        case IC_BSF: res=a?uint64_t(__builtin_ctzll(a)):UINT64_MAX; break;
+        default: res=a?uint64_t(63-__builtin_clzll(a)):UINT64_MAX; break;
+      }
+      return true;
+    case IC_ABS: case IC_SQR: {
+      COptF64 value;
+      if (!OptToF64(left,a) || !OptF64Decode(a,value)) return false;
+      if (op==IC_ABS) {
+        res=a&~F64_SIGN;
+        return true;
+      }
+      return OptF64Pack(static_cast<unsigned __int128>(value.sig)*value.sig,
+                        value.exp*2,false,res,24);
+    }
     default: break;
   }
   if (!right || !OptImmediate(*right))
@@ -245,9 +268,12 @@ static bool OptFold(CIntermediateCode &node,const CIntermediateCode &left,
     res=op==IC_AND_AND?(a && b):op==IC_OR_OR?(a || b):bool(a)!=bool(b);
     return true;
   }
-  if (op==IC_MIN_I64 || op==IC_MAX_I64) {
+  if (op>=IC_MIN_I64 && op<=IC_MAX_U64) {
     if (!OptToI64(left,a) || !OptToI64(*right,b)) return false;
-    res=(op==IC_MIN_I64?int64_t(a)<int64_t(b):int64_t(a)>int64_t(b))?a:b;
+    bool choose=op==IC_MIN_I64?int64_t(a)<int64_t(b):
+                op==IC_MAX_I64?int64_t(a)>int64_t(b):
+                op==IC_MIN_U64?a<b:a>b;
+    res=choose?a:b;
     return true;
   }
   if (left.type==RT_F64 || right->type==RT_F64)
@@ -322,7 +348,10 @@ void OptPass012(CIntermediateCode *code,uint32_t count)
     switch (node.code) {
       case IC_HOLYC_TYPECAST: case IC_TO_I64: case IC_TO_F64:
       case IC_NOT: case IC_COM: case IC_UNARY_MINUS: case IC_SQR_I64:
-      case IC_MIN_I64: case IC_MAX_I64:
+      case IC_SQR_U64: case IC_ABS: case IC_SQR:
+      case IC_TO_BOOL: case IC_TOUPPER: case IC_ABS_I64: case IC_SIGN_I64:
+      case IC_BSF: case IC_BSR:
+      case IC_MIN_I64: case IC_MAX_I64: case IC_MIN_U64: case IC_MAX_U64:
       case IC_ADD: case IC_SUB: case IC_MUL: case IC_DIV: case IC_MOD:
       case IC_AND: case IC_OR: case IC_XOR: case IC_SHL: case IC_SHR:
       case IC_AND_AND: case IC_OR_OR: case IC_XOR_XOR:

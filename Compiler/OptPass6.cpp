@@ -19,17 +19,17 @@ static bool OptStackInt(const CIntermediateCode &node)
 // Only inspect operands the emitter can actually evaluate. In particular,
 // the right field of a constant operation is not a second expression.
 // Bound work even for an unusually deep or heavily shared operand DAG.
-static bool OptR9Free(const CIntermediateCode *code,uint32_t i,
+static bool OptR9Safe(const CIntermediateCode *code,uint32_t i,
                       unsigned depth,unsigned &budget)
 {
   if (depth>=512 || !budget)
     return false;
   --budget;
   const auto &node=code[i];
-  if (!OptStackInt(node) || node.stack_reg)
+  if (!OptStackInt(node))
     return false;
   auto child=[&](uint32_t index) {
-    return index<i && OptR9Free(code,index,depth+1,budget);
+    return index<i && OptR9Safe(code,index,depth+1,budget);
   };
   switch (node.code) {
     case IC_IMM_I64:
@@ -37,6 +37,10 @@ static bool OptR9Free(const CIntermediateCode *code,uint32_t i,
     case IC_DATA_ADDR:
     case IC_GLBL_ADDR:
       return true;
+    case IC_CALL: case IC_CALL_INDIRECT:
+      // The emitter spills the live lowest virtual stack slot before
+      // target/argument evaluation and restores it after call cleanup.
+      return node.data && !OptContextTransfer(node);
     case IC_DEREF: {
       if (node.local_reg)
         return node.local_reg>=12 && node.local_reg<=15;
@@ -53,6 +57,8 @@ static bool OptR9Free(const CIntermediateCode *code,uint32_t i,
     case IC_ADD_CONST: case IC_SUB_CONST:
     case IC_COM: case IC_NOT: case IC_UNARY_MINUS:
     case IC_HOLYC_TYPECAST: case IC_TO_I64: case IC_SQR_I64:
+    case IC_SQR_U64: case IC_ABS_I64: case IC_SIGN_I64:
+    case IC_TO_BOOL: case IC_TOUPPER: case IC_BSF: case IC_BSR:
       return child(node.left);
     // Do not keep R9 live through a potentially trapping divide.
     case IC_DIV: case IC_MOD:
@@ -91,15 +97,17 @@ void OptPass6(CIntermediateCode *code,uint32_t count,CHashFun *fun)
         safe=false;
         break;
       default:
+        if (OptContextTransfer(code[i]))
+          safe=false;
         break;
     }
   }
   if (!safe)
     return;
 
-  // Like OptPass6Lag's single lowest stack slot, the left result lives
-  // in R9 only while its RHS executes. Earlier nodes are already scored;
-  // a selected node in that RHS would overwrite the live temporary.
+  // Like OptPass6Lag, use R9 for the lowest virtual stack slot. A nested
+  // selected expression uses its ordinary stack path while R9 is live;
+  // an opaque call spills R9 before its own argument evaluation.
   bool used=false;
   for (uint32_t i=0;i<count;i++) {
     auto &node=code[i];
@@ -108,7 +116,7 @@ void OptPass6(CIntermediateCode *code,uint32_t count,CHashFun *fun)
         !OptStackInt(code[node.left]) || !OptStackInt(code[node.right]))
       continue;
     unsigned budget=512;
-    if (OptR9Free(code,node.right,0,budget)) {
+    if (OptR9Safe(code,node.right,0,budget)) {
       node.stack_reg=true;
       used=true;
     }

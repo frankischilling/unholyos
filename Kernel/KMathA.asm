@@ -1,7 +1,7 @@
 GLOBAL Pow10Bits
 GLOBAL F64MulBits,F64DivBits,F64AddBits,F64Log10Bits,F64Log2Bits,F64ToI64,F64FromI64
 GLOBAL I64MulF64Bits,F64SqrtBits,F64SinBits,F64CosBits
-GLOBAL F64PowerBits
+GLOBAL F64PowerBits,SYS_POW
 GLOBAL F64ArgBits
 GLOBAL F64CompareBits
 
@@ -164,6 +164,18 @@ I64MulF64Bits:
 	POP	RAX
 	ADD	RSP,8
 	RET
+
+; Reference register ABI: RAX = RDX raised to RAX. Preserve the
+; caller's RDI and RSI when entering the existing SysV implementation.
+SYS_POW:
+  PUSH RDI
+  PUSH RSI
+  MOV RDI,RDX
+  MOV RSI,RAX
+  CALL F64PowerBits
+  POP RSI
+  POP RDI
+  RET
 
 F64PowerBits:
 	TEST	RSI,RSI

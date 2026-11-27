@@ -72,6 +72,16 @@ I64 AddressNativeR9Saves(U8 *name,U8 *entry)
   return count;
 }
 
+Bool AddressNativeR9Spill(U8 *name,U8 *entry)
+{
+  I64 size=AddressNativeCodeSize(name,entry),i,saves=0,restores=0;
+  for (i=0;i+2<=size;i++) {
+    if (entry[i]==0x41 && entry[i+1]==0x51) saves++;
+    if (entry[i]==0x41 && entry[i+1]==0x59) restores++;
+  }
+  return saves>0 && saves==restores;
+}
+
 // The condition lowering emits TEST RAX,RAX followed by JZ/JNZ.
 Bool AddressNativeBranch(U8 *name,U8 *entry,Bool short_form)
 {
@@ -219,9 +229,10 @@ U0 AddressFoldNativeProbe()
       AddressNativeR9Saves("StackTempDiv",&StackTempDiv)==1 &&
       AddressNativeR9Saves("StackTempShift",&StackTempShift)==1) res|=0x200;
   fn=HashFind("StackTempCall",Fs->hash_table,HTT_FUN);
-  if (fn && !(fn->used_reg_mask&0x200) && !(fn->clobbered_reg_mask&0x200) &&
-      AddressNativeCodeSize("StackTempCall",&StackTempCall)>0 &&
-      !AddressNativeR9Saves("StackTempCall",&StackTempCall)) res|=0x400;
+  if (fn && fn->used_reg_mask&0x200 && fn->clobbered_reg_mask&0x200 &&
+      AddressNativeR9Saves("StackTempCall",&StackTempCall)==1 &&
+      AddressNativeR9Spill("StackTempCall",&StackTempCall) &&
+      StackTempCall(13,7)==20) res|=0x400;
   if (AddressNativeBranch("BranchNear",&BranchNear,TRUE) &&
       AddressNativeBranch("BranchFar",&BranchFar,FALSE) &&
       AddressNativeBranch("BranchLoop",&BranchLoop,TRUE) &&

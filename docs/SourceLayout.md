@@ -134,7 +134,7 @@ public HolyC adapters. The loader also exposes `winmgr` and
 maps `sys_var_init_flag` and `sys_var_init_val` to
 `SYS_VAR_INIT_FLAG` and `SYS_VAR_INIT_VAL`.
 
-`Compiler/Compiler.bindings` imports those 45 native functions and
+`Compiler/Compiler.bindings` imports 44 of those native functions and
 32 data symbols. It exports the nine public adapters, 16 native
 compiler bodies under `__unholyos_sysv.`, and the module-owned
 `__unholyos_compiler.CInitStatus`. The nine public names are published
@@ -1824,15 +1824,15 @@ reference machine-code parity remain incomplete.
 
 `OptPass6.cpp` implements the single R9 temporary from the reference
 `OptPass6Lag` for selected integer binary expressions. It checks the
-evaluated right subtree, including folded address operands, and retains
-the stack path when a call, nested R9 lifetime, floating operation,
-mutation or opaque operation could interfere. Inline assembly, variadic
-functions, flag observation and nonlocal control flow disable selection.
-The backend saves the left result in R9, evaluates the right without
-adding a stack slot, then restores the left result. Function metadata
-records the additional used and clobbered register bit without clearing
-other bits. This does not implement the reference's call-aware spilling
-or complete register-lifetime model.
+evaluated right subtree, including folded address operands. The emitter
+tracks whether R9 is live: nested expressions use the stack while the
+slot is occupied. Before evaluating an ordinary call's arguments or
+indirect target, it spills a live R9 and includes the spill in stack
+alignment; it restores the slot after call cleanup. Inline assembly,
+variadic functions, flag observation and nonlocal control flow disable
+selection. Function metadata records the additional used and clobbered
+register bit without clearing other bits. The full register-lifetime
+model and selection of more reference operand forms remain incomplete.
 
 `OptPass789A.cpp` selects rel8 branches from recorded branch ends and
 label offsets. The backend first measures all branches in their near
@@ -1844,6 +1844,29 @@ before publication. Inline assembly and opaque code addresses retain the
 near layout; subroutine calls and switch-table branches are not relaxed.
 The reference's other late optimization and instruction selection work
 remains incomplete.
+
+## Backend instruction selection and templates
+
+`CompilerB.hpp` contains the shared code emitter. `BackA.cpp` and
+`BackB.cpp` implement integer binary operations, compound assignments,
+unary instructions and min/max selection; `BackFA.cpp` and `BackFB.cpp`
+implement floating binary operations and template selection. `BackC.cpp`
+coordinates expression and statement emission. The module copies bounded,
+position-independent instruction sequences from `Templates.asm`, derived
+from Terry A. Davis's public-domain `Compiler/Templates.HC`. The base
+template table includes floating increment, decrement, remainder,
+comparisons, string length, TSC, sign and unary math; not every entry or
+reference template variant is selected by the current backend.
+
+Fourteen additional typed internal functions cover sign, absolute value,
+unsigned square and min/max, bit scans, Boolean conversion, uppercase,
+TSC, floating square/absolute value, tangent and arctangent. The parser
+resolves their signatures and inserts needed numeric conversions.
+Exact constant folding leaves rounding-sensitive and exceptional floating
+cases for execution. `CExts.cpp` resolves register-ABI exports, including
+`SYS_POW`, whose RDX/RAX calling convention is implemented in
+`Kernel/KMathA.asm`. AOT uses a named import rather than embedding a host
+address; the compiler no longer imports `__unholyos_sysv.F64PowerBits`.
 
 ## Remaining structural work
 

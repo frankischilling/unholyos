@@ -172,20 +172,41 @@ private:
       if (paren)
         Lex(cc);
       uint32_t operands[]{NO_IC, NO_IC};
+      auto opcode = static_cast<CICode>(
+          reinterpret_cast<uintptr_t>(callee.exe_addr));
+      auto *member=callee.cls.member_lst_and_root;
       for (unsigned i = 0; i < callee.arg_cnt; ++i) {
+        if (!member || !member->member_class || member->dim.next)
+          return NO_IC;
         if (i && (cc.token != ',' || Lex(cc) == TK_EOF))
           return NO_IC;
         operands[i] = Expression(PREC_ASSIGN + 1, depth + 1);
         if (operands[i] == NO_IC || !TypeSize(coc.code[operands[i]].type))
           return NO_IC;
+        // Match the reference's argument conversion flags for intrinsics.
+        // Integer arguments keep their value bits; float/int conversions
+        // are explicit so each lowering sees the declared numeric category.
+        auto from=coc.code[operands[i]].type;
+        auto to=ClassRawType(*member->member_class);
+        if (!TypeSize(to))
+          return NO_IC;
+        if (opcode!=IC_TO_I64 && opcode!=IC_TO_F64 &&
+            (from==RT_F64)!=(to==RT_F64)) {
+          operands[i]=Add({0,operands[i],NO_IC,
+                           to==RT_F64?IC_TO_F64:IC_TO_I64,
+                           to==RT_F64?RT_F64:RT_I64,false,false,
+                           coc.code[operands[i]].runtime});
+          if (operands[i]==NO_IC)
+            return NO_IC;
+        }
+        member=member->next;
       }
       if (paren) {
         if (cc.token != ')')
           return NO_IC;
         Lex(cc);
       }
-      auto opcode = reinterpret_cast<uintptr_t>(callee.exe_addr);
-      return Add({0, operands[0], operands[1], static_cast<CICode>(opcode),
+      return Add({0, operands[0], operands[1], opcode,
                   ClassRawType(*callee.return_class), false, false, true,
                   NO_IC, callee.return_class});
     }

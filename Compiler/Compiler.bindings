@@ -40,7 +40,6 @@ import native DocPutLineCpp __unholyos_sysv.DocPutLineCpp
 import native DocSaveCpp __unholyos_sysv.DocSaveCpp
 import native ExtChgCpp __unholyos_sysv.ExtChgCpp
 import native ExtDftCpp __unholyos_sysv.ExtDftCpp
-import native F64PowerBits __unholyos_sysv.F64PowerBits
 import native FileReadCpp __unholyos_sysv.FileReadCpp
 import native FileWriteCpp __unholyos_sysv.FileWriteCpp
 import native GetStrCpp __unholyos_sysv.GetStrCpp
