@@ -2303,6 +2303,17 @@ constexpr CTextProbe late_import_probes[]{
     {"late-import", "/LateImportLoadProbe.HC", "/LateImportConsumer.BIN",
      "LI default ", "LI DONE", late_import_output}};
 
+constexpr std::string_view load_api_output = "LA paths 3F counts 1 33 17 33\n"
+                                             "LA flags F\n"
+                                             "LA override F F\n"
+                                             "LA failures F\n"
+                                             "LA small 7\n"
+                                             "LA retained 3\n"
+                                             "LA DONE\n";
+constexpr CTextProbe load_api_probes[]{{"load-api", "/LoadApiProbe.HC",
+                                        "/LoadApiConsumer.BIN", "LA paths ",
+                                        "LA DONE", load_api_output}};
+
 constexpr std::string_view assert_warning_output = "AW result 42\nAW DONE\n";
 constexpr CTextProbe assert_warning_probes[]{
     {"assert-warning", "/AssertWarningProbe.HC", "/AssertWarningProbe.BIN.Z",
@@ -5262,17 +5273,23 @@ int main(int argc, char **argv)
       ((argc == 6 || argc == 7) &&
        (std::string_view(argv[1]) == "--native-import-reference" ||
         std::string_view(argv[1]) == "--late-import" ||
-        std::string_view(argv[1]) == "--late-import-reference"))) {
+        std::string_view(argv[1]) == "--late-import-reference" ||
+        std::string_view(argv[1]) == "--load-api" ||
+        std::string_view(argv[1]) == "--load-api-reference"))) {
     const bool reference = std::string_view(argv[1]).ends_with("-reference");
     const bool native_import =
         std::string_view(argv[1]).starts_with("--native-import");
     const bool late_import =
         std::string_view(argv[1]).starts_with("--late-import");
-    const int capture_arg = late_import || (native_import && reference) ? 6 : 5;
-    const char *name = late_import     ? "late-import"
+    const bool load_api = std::string_view(argv[1]).starts_with("--load-api");
+    const int capture_arg =
+        load_api || late_import || (native_import && reference) ? 6 : 5;
+    const char *name = load_api        ? "load-api"
+                       : late_import   ? "late-import"
                        : native_import ? "native-import"
                                        : "host-module";
-    const char *guest_name = late_import     ? "LateImportConsumer.BIN"
+    const char *guest_name = load_api        ? "LoadApiConsumer.BIN"
+                             : late_import   ? "LateImportConsumer.BIN"
                              : native_import ? "NativeImportProbe.BIN"
                                              : "HostModuleProbe.BIN";
     std::span<const CTextProbe> probes = host_module_probes;
@@ -5280,6 +5297,8 @@ int main(int argc, char **argv)
       probes = native_import_probes;
     else if (late_import)
       probes = late_import_probes;
+    else if (load_api)
+      probes = load_api_probes;
     char path[] = "/tmp/unholyos-host-module-XXXXXX";
     if (argc == capture_arg && !mkdtemp(path))
       return 1;
@@ -5289,8 +5308,11 @@ int main(int argc, char **argv)
       fs::create_directories(dir);
       if (!reference) {
         VerifyHostModuleMedia(argv[3], argv[4], guest_name);
-        if (late_import)
+        if (late_import || load_api)
           VerifyHostModuleMedia(argv[3], argv[5], "LateImportProvider.BIN");
+        if (load_api)
+          VerifyHostModuleMedia(argv[3], "Linux/Fixtures/LoadApiProbe.HC",
+                                "LoadApiProbe.HC");
       }
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false,
                   reference);
@@ -5298,22 +5320,41 @@ int main(int argc, char **argv)
       if (reference) {
         const CModuleFile modules[]{
             {fs::absolute(argv[4]), guest_name,
-             late_import ? "late-import-consumer" : name},
-            {native_import || late_import ? fs::absolute(argv[5]) : fs::path{},
-             late_import ? "LateImportProvider.BIN"
-                         : "NativeImportReference.BIN",
-             late_import ? "late-import-provider" : "native-import-reference"}};
+             load_api      ? "load-api-consumer"
+             : late_import ? "late-import-consumer"
+                           : name},
+            {native_import || late_import || load_api ? fs::absolute(argv[5])
+                                                      : fs::path{},
+             late_import || load_api ? "LateImportProvider.BIN"
+                                     : "NativeImportReference.BIN",
+             load_api      ? "load-api-provider"
+             : late_import ? "late-import-provider"
+                           : "native-import-reference"}};
         DriveCharacterGraphics(
             vm, dir, "", true, false, false, false, false, false, false, false,
             false, probes,
-            std::span(modules, native_import || late_import ? 2 : 1));
+            std::span(modules,
+                      native_import || late_import || load_api ? 2 : 1));
       } else {
         const auto serial = vm.Boot(dir / "serial.log");
         const auto first = serial.find(probes[0].first);
-        const auto finish = std::string(probes[0].finish) + "\r\n";
+        const auto finish =
+            std::string(probes[0].finish) + (load_api ? "\n" : "\r\n");
         const auto last = serial.find(finish, first);
         Check(first != std::string::npos && last != std::string::npos,
               "Missing native host module report");
+        if (load_api) {
+          const auto media =
+              serial.find("UnholyOS: Load API input bytes verified\r\n");
+          const auto begin =
+              serial.find("UnholyOS: executing /LoadApiProbe.HC\r\n");
+          const auto end = serial.find("UnholyOS: finished /LoadApiProbe.HC, "
+                                       "checks 0x0000000000000001\r\n");
+          Check(media != std::string::npos && begin != std::string::npos &&
+                    end != std::string::npos && media < begin &&
+                    begin < first && last < end,
+                "Load API source did not complete after exact input staging");
+        }
         auto output = serial.substr(first, last + finish.size() - first);
         std::erase(output, '\r');
         std::ofstream file(dir / (std::string(name) + "-native.txt"));
@@ -5692,6 +5733,8 @@ int main(int argc, char **argv)
               << " --native-import-reference qemu image.iso module.BIN bridge.BIN [capture-dir]\n"
               << "       " << argv[0]
               << " --late-import[-reference] qemu image.iso consumer.BIN provider.BIN [capture-dir]\n"
+              << "       " << argv[0]
+              << " --load-api[-reference] qemu image.iso consumer.BIN provider.BIN [capture-dir]\n"
               << "       " << argv[0]
               << " --digits qemu image.iso [capture-dir]\n"
               << "       " << argv[0]

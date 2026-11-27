@@ -14,6 +14,7 @@ Preserve the spelling and case of the reference directories and basenames. Use `
 | `Kernel/KStart16.HC`, `KStart32.HC`, `KStart64.HC` | Corresponding `.asm` files under `Kernel/` | Firmware entry and CPU mode transitions |
 | `Kernel/Mem/PageTables.HC` | `Kernel/Mem/PageTables.asm`, `PageTables.cpp` | Early page tables and memory mapping |
 | `Kernel/KMain.HC` | `Kernel/KMain.cpp` | Kernel initialization and startup |
+| `Kernel/KLoad.HC` | `Kernel/KLoad.cpp`, `KLoad.asm` | TOSB loading, patch records, module registration, and the public HolyC `Load` adapter |
 | Compiler imports in `Kernel/Kernel.PRJ`, guarded-import guidance in `Kernel/KExts.HC` | `Kernel/KExts.hpp`, `KExts.cpp`, `KExts.asm` | Typed native reverse imports and guards for the separately loaded compiler |
 | `Kernel/BlkDev/*.HC` | Corresponding `.cpp` files under `Kernel/BlkDev/` | Block devices, paths, files, and filesystems as implemented |
 | `Compiler/*.HC` | Corresponding `.cpp` and `.asm` files under `Compiler/` | HolyC scanning, parsing, code generation, execution, and explicit C++ ABI adapters as implemented |
@@ -67,6 +68,31 @@ declared types at call and data access sites. The AOT writer uses
 reads the function address from its declaration, and the later
 definition updates that slot. `Compiler/CExcept.cpp` and its assembly
 adapter implement the reference's `UndefinedExtern` path.
+
+## Public HolyC module loading
+
+`Kernel/KLoad.cpp::LoadCpp` follows `Kernel/KLoad.HC::Load`, sharing the
+native image-loading core with the existing C++ boot callers.
+`Kernel/KLoad.asm::LoadHC` adapts its three HolyC stack arguments and
+24-byte cleanup. The exported `Load` returns the binary header address.
+The compiler declaration preserves `Kernel/KernelC.HH`'s `U8 *` return,
+default flags, and `CBinFile *` destination default of `INVALID_PTR`.
+`Compiler/AsmInit.cpp` installs the 32-byte packed `CBinFile` class,
+including signed `I64` origin and size fields, and the loader constants.
+Native size and offset assertions cover every header member.
+
+The public path uses the reference's `.BIN.Z` default, existing compressed
+file lookup, `FileExtDot` module naming, three load flags, explicit
+destination precedence, and header ownership rules. A missing file
+returns `NULL`; rejected binaries raise `BinModul`. The C++ parser keeps
+its stronger bounded validation. `Linux/Fixtures/LoadApiProbe.HC` runs
+unchanged in both guests against the same NASM consumer and provider.
+The native boot probe stages and verifies its RAM-drive inputs; it does
+not implement the public API. [Host modules](HostModules.md#public-holyc-loader)
+describes the contract and [Boot.md](Boot.md#public-holyc-load) records the
+matching GCC, Clang, and pinned-guest results. Raw public HolyC
+`LoadPass2`, invalid destination handling, and allocation-failure parity
+remain unverified or unfinished.
 
 ## Compiler ABI ownership
 

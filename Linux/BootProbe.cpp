@@ -721,6 +721,48 @@ extern "C" CBlkDev *BlkDevNextFreeSlotCpp(uint8_t letter, int64_t type);
 extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole,
                                uint8_t make_free);
 
+static void BootLoadApiReport(const CDrv &dvd)
+{
+  CRedSeaDirEntry entry;
+  size_t prefix;
+  if (!RedSeaFileLookup(dvd, "/LoadApiProbe.HC", false, false, entry, prefix) ||
+      MountedDrive('B'))
+    return;
+  auto *bd = BlkDevNextFreeSlotCpp('B', BDT_RAM);
+  bd->max_blk = 2047;
+  if (BlkDevAddCpp(bd, INT64_MIN, false, true) != 1)
+    return;
+  auto *ram = MountedDrive('B');
+  if (!ram || ram->bd->type != BDT_RAM || ram->fs_type != FSt_REDSEA)
+    return;
+  const char *paths[][2]{
+      {"::/LoadApiConsumer.BIN", "B:/LoadApiConsumer.BIN"},
+      {"::/LateImportProvider.BIN", "B:/LateImportProvider.BIN"}};
+  for (const auto &path : paths) {
+    size_t size = 0, read_size = 0;
+    auto *source = FileReadCpp(path[0], &size, nullptr);
+    uint8_t *read = nullptr;
+    bool okay = source && size && FileWriteCpp(path[1], source, size, 0, 0) > 0;
+    if (okay) {
+      read = FileReadCpp(path[1], &read_size, nullptr);
+      okay = read && read_size == size;
+      for (size_t i = 0; okay && i < size; i++)
+        okay = read[i] == source[i];
+    }
+    Free(read);
+    Free(source);
+    if (!okay)
+      return;
+  }
+  auto *saved = DirCurCpp(CurrentTask(), CurrentTask());
+  if (!saved)
+    return;
+  SerialPutS("UnholyOS: Load API input bytes verified\r\n");
+  BootFileProgramReport(dvd, "/LoadApiProbe.HC");
+  CdCpp(saved, false);
+  Free(saved);
+}
+
 static void BootISOReport(const CDrv &dv)
 {
   CRedSeaDirEntry entry;
@@ -1985,6 +2027,7 @@ void BootProbe()
                     "UnholyOS: compiler runtime probe ");
     BootProbeReport(*adam_task->cur_dv, *adam_task, "/FileWriteProbe.BIN",
                     "FileWriteProbeResult", "UnholyOS: write probe ");
+    BootLoadApiReport(*adam_task->cur_dv);
     BootVariadicReport(
         *adam_task->cur_dv, *adam_task, "/AssertWarningProbe.HC",
         "/AssertWarningProbe.BIN.Z",

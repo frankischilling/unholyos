@@ -1,0 +1,5 @@
+entry LoadApiMain
+export LoadApiCount LoadApiCount
+export LoadApiCall LoadApiCall
+export LoadApiAnchor LoadApiAnchor
+import holyc LateImportTarget LateImportTarget
