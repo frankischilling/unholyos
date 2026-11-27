@@ -543,12 +543,13 @@ uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
   if (coc.failed || !coc.GoToLabelsDefined())
     return nullptr;
   OptPass012(coc.code,coc.Count());
+  const bool no_reg_var = GetOptionCpp(OPTf_NO_REG_VAR);
   COptRegPlan locals;
   if (fun)
-    OptPass3(coc.code,coc.Count(),*fun,locals);
+    OptPass3(coc.code,coc.Count(),*fun,locals,no_reg_var);
   OptPass4(coc.code,coc.Count());
   OptPass5(coc.code,coc.Count());
-  OptPass6(coc.code,coc.Count(),fun);
+  OptPass6(coc.code,coc.Count(),fun,no_reg_var);
   for (uint32_t i=0;i<coc.Count();i++) {
     coc.code[i].branch_end=0;
     coc.code[i].short_branch=false;

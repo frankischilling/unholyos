@@ -116,6 +116,8 @@ constexpr int64_t LFSF_DOC = 1, LFSF_DEFINE = 2;
 constexpr int64_t COMPILER_ERROR = 0x72656C69706D6F43; // Compiler
 constexpr int64_t OPTF_WARN_UNUSED_VAR = 1 << 0x10,
                   OPTF_WARN_HEADER_MISMATCH = 1 << 0x13;
+constexpr int64_t OPTf_NO_REG_VAR = 0x22;
+extern "C" uint64_t GetOptionCpp(int64_t num);
 char *CmdLinePmt();
 
 // The caller owns the root source and filename. The lexer owns nested sources
@@ -675,10 +677,11 @@ uint32_t PrsExpression(CCmpCtrl &cc, CCodeCtrl &coc);
 uint32_t PrsPrint(CCmpCtrl &cc, CCodeCtrl &coc);
 void OptPass012(CIntermediateCode *code, uint32_t count);
 void OptPass3(CIntermediateCode *code, uint32_t count, CHashFun &fun,
-              COptRegPlan &plan);
+              COptRegPlan &plan, bool no_reg_var = false);
 void OptPass4(CIntermediateCode *code,uint32_t count);
 void OptPass5(CIntermediateCode *code,uint32_t count);
-void OptPass6(CIntermediateCode *code,uint32_t count,CHashFun *fun);
+void OptPass6(CIntermediateCode *code,uint32_t count,CHashFun *fun,
+              bool no_reg_var = false);
 bool OptContextTransfer(const CIntermediateCode &node);
 bool OptPass789A(CIntermediateCode *code,uint32_t count);
 CCodeBytes ICModr1(CMemOp op,CRawType type,uint8_t base,

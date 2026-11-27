@@ -8,6 +8,27 @@ extern "C" char *DirCurCpp(const CTask *task, void *mem_task);
 extern "C" char *DirFileCpp(const char *dirname, const char *name,
                             const char *extension);
 
+extern "C" uint64_t GetOptionCpp(int64_t num)
+{
+  auto *task = CurrentTask();
+  auto *cc = task->last_cc;
+  if (cc == reinterpret_cast<CCmpCtrl *>(&task->next_cc) || uint64_t(num) >= 64)
+    return false;
+  return (uint64_t(cc->opts) >> num) & 1;
+}
+
+extern "C" uint64_t OptionCpp(int64_t num, uint8_t val)
+{
+  auto *task = CurrentTask();
+  auto *cc = task->last_cc;
+  if (cc == reinterpret_cast<CCmpCtrl *>(&task->next_cc) || uint64_t(num) >= 64)
+    return false;
+  const uint64_t bit = uint64_t{1} << num;
+  const bool old = cc->opts & bit;
+  cc->opts = val ? uint64_t(cc->opts) | bit : uint64_t(cc->opts) & ~bit;
+  return old;
+}
+
 char *CmdLinePmt()
 {
   auto *task = CurrentTask();

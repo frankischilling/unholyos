@@ -197,6 +197,11 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not register document definitions\r\n");
     return;
   }
+  if (!MakeAdam()) {
+    BootPutS("Could not load Adam sources");
+    SerialPutS("UnholyOS: Could not load Adam sources\r\n");
+    return;
+  }
   if (!GrInit2()) {
     SerialPutS("UnholyOS: Could not allocate graphics device contexts\r\n");
     return;

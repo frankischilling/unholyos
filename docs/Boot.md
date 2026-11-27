@@ -4053,7 +4053,37 @@ build/Linux/TestBoot --adam-task-reference qemu-system-x86_64 \
 ```
 
 This exercises single-CPU task reporting, not SMP initialization or
-execution of the interactive Kill links.
+graphical activation of the interactive Kill links.
+
+## Adam startup source ownership
+
+The standard DVD now contains the original `AMath.HC`, `AMem.HC` and
+`TaskRep.HC` files. The native boot bridge compiles them before desktop
+initialization. Host boot inspection walks the Adam-owned namespace and
+its parent tables, checks the 88 compiler class records, identifies all
+25 original function definitions and source links, and accounts for the
+live metadata and machine-code allocations independently of the guest's
+reported totals. Child task tables must inherit the shared namespace.
+
+`AdamStartupProbe.HC` runs in a normal terminal without including those
+files again. It checks inherited source functions, task heap accounting,
+compiler option state and the no-register option, same-table symbol
+purging, protected task rejection and execution of the Kill command
+from the original report. The GCC build and pinned reference both
+reported `Adam startup FF`.
+
+```sh
+make test-adam-startup
+build/Linux/TestBoot --adam-startup-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/adam-startup-reference
+```
+
+The GCC compiler failure matrix also tests a missing and a malformed
+`TaskRep.HC` after compiling the earlier two sources. Both variants retain
+the compiler run level, discard the private startup namespace and leave
+no additional live code or data allocations. Neither reaches Adam
+graphics or terminal initialization. The original complete `StartOS.HC`
+and `MakeAdam.HC` project sequence has not yet been executed.
 
 ## Nested images, FAT32 backing, and mounted ISO generation
 

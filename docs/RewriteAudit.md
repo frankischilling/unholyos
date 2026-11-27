@@ -10,7 +10,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 68 | 8 |
 | `Compiler` | 33 | 33 | 0 |
-| `Adam` | 132 | 48 | 84 |
+| `Adam` | 132 | 49 | 83 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 22 | 181 |
 
@@ -94,9 +94,18 @@ part of the full rewrite.
   the native allocator's counters. The shared probe checks recursive
   task ordering, rendered report contents, interrupt restoration and
   child cleanup. CPU enumeration currently covers the initialized boot
-  CPU; SMP startup and execution of the report's Kill links are pending.
-- Move remaining Adam initialization to the guest startup path after
-  compiler support permits the original project and startup files.
+  CPU. The original report's Kill command now executes through the
+  public task API; SMP startup and graphical link activation remain pending.
+- `Adam/MakeAdam.cpp` compiles the unchanged math, memory and task-report
+  sources during ordinary boot. Child tasks inherit the resulting Adam
+  namespace instead of rebuilding compiler types independently. Missing
+  and malformed source tests verify rollback and stop before the desktop.
+  The original `StartOS.HC`, `MakeAdam.HC`, header declarations and remaining
+  startup dependencies still need native execution. `Option` and `GetOption`
+  now operate on the current compiler context, including the no-register
+  optimization gate, and `HashTablePurge` removes superseded entries in
+  its own table. Complete option effects and source header support remain
+  outstanding.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal
   and system tools in their respective reference subsystems.
 - Include the remaining applications, demos, documentation and assets,

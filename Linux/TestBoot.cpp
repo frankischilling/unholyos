@@ -35,6 +35,8 @@ constexpr std::string_view COMPILER_BIND_FAILURE_MARKER =
     "UnholyOS: Could not bind compiler imports\r\n";
 constexpr std::string_view COMPILER_INIT_FAILURE_MARKER =
     "UnholyOS: Could not initialize compiler module\r\n";
+constexpr std::string_view ADAM_SOURCE_FAILURE_MARKER =
+    "UnholyOS: Could not load Adam sources\r\n";
 
 enum class CBootPhase
 {
@@ -45,7 +47,8 @@ enum class CBootPhase
   CompilerInvalidExport,
   CompilerUnresolvedImport,
   OpcodeUnavailable,
-  OpcodeInvalid
+  OpcodeInvalid,
+  AdamSourceFailed
 };
 
 static bool CompilerLoaded(CBootPhase phase)
@@ -57,11 +60,18 @@ static bool CompilerLoaded(CBootPhase phase)
 static bool CompilerBound(CBootPhase phase)
 {
   return phase == CBootPhase::Desktop || phase == CBootPhase::OpcodeUnavailable ||
-         phase == CBootPhase::OpcodeInvalid;
+         phase == CBootPhase::OpcodeInvalid || phase == CBootPhase::AdamSourceFailed;
+}
+
+static bool CompilerInitialized(CBootPhase phase)
+{
+  return phase == CBootPhase::Desktop || phase == CBootPhase::AdamSourceFailed;
 }
 
 static std::string_view CompilerFailureMarker(CBootPhase phase)
 {
+  if (phase == CBootPhase::AdamSourceFailed)
+    return ADAM_SOURCE_FAILURE_MARKER;
   if (!CompilerLoaded(phase))
     return COMPILER_FAILURE_MARKER;
   return CompilerBound(phase) ? COMPILER_INIT_FAILURE_MARKER
@@ -133,7 +143,7 @@ constexpr std::string_view compiler_native_names[]{"AsmHashLoad",
 constexpr std::string_view compiler_public_names[]{
     "Cmp",         "ExePutS",   "ExeFile",        "StreamExePrint",
     "StreamPrint", "StreamDir", "MemberMetaData", "MemberMetaFind",
-    "MemberFind", "U", "Ui", "Un"};
+    "MemberFind", "U", "Ui", "Un", "Option", "GetOption"};
 constexpr std::string_view compiler_status_name =
     "__unholyos_compiler.CInitStatus";
 constexpr std::string_view compiler_types_name = "internal_types_table";
@@ -847,33 +857,39 @@ static std::string ReadGuestName(CMonitor &vm, uint64_t address)
 
 static CBootSymbols ReadBootSymbols(CMonitor &vm)
 {
-  const auto table = ReadPhysical<1>(vm, 0x100300 + 0x3D0)[0];
-  const auto header = ReadPhysical<4>(vm, table);
-  Check(header[1] == 1023 && !header[2] && header[3],
-        "Invalid boot hash table during compiler validation");
   CBootSymbols symbols;
-  std::set<uint64_t> seen;
-  for (size_t i = 0; i < 1024; i += 64) {
-    const auto buckets = ReadPhysical<64>(vm, header[3] + i * 8);
-    for (auto address : buckets)
-      while (address) {
-        Check(address >= 16 && seen.size() < 8192 && seen.insert(address).second,
-              "Invalid compiler symbol chain");
-        const auto entry = ReadPhysical<3>(vm, address);
-        const auto type = uint32_t(entry[2]) & 0x1FFFF;
-        if (type == 1 || type == 2 || type == 0x4000) {
-          const auto name = ReadGuestName(vm, entry[1]);
-          if (type == 1) {
-            symbols.exports.emplace(name, ReadPhysical<1>(vm, address + 64)[0]);
-            ++symbols.export_counts[name];
-          } else if (type == 0x4000) {
-            symbols.modules.emplace(name, ReadPhysical<1>(vm, address + 24)[0]);
-            ++symbols.module_counts[name];
-          } else
-            symbols.imports[name].push_back(address);
+  std::set<uint64_t> seen, tables;
+  auto table = ReadPhysical<1>(vm, 0x100300 + 0x3D0)[0];
+  Check(table, "Missing boot hash table");
+  while (table) {
+    Check(table >= 16 && tables.size() < 16 && tables.insert(table).second,
+          "Invalid or cyclic boot hash table chain");
+    const auto header = ReadPhysical<4>(vm, table);
+    Check(header[1] == 1023 && !header[2] && header[3],
+          "Invalid boot hash table during compiler validation");
+    for (size_t i = 0; i < 1024; i += 64) {
+      const auto buckets = ReadPhysical<64>(vm, header[3] + i * 8);
+      for (auto address : buckets)
+        while (address) {
+          Check(address >= 16 && seen.size() < 8192 && seen.insert(address).second,
+                "Invalid compiler symbol chain");
+          const auto entry = ReadPhysical<3>(vm, address);
+          const auto type = uint32_t(entry[2]) & 0x1FFFF;
+          if (type == 1 || type == 2 || type == 0x4000) {
+            const auto name = ReadGuestName(vm, entry[1]);
+            if (type == 1) {
+              symbols.exports.emplace(name, ReadPhysical<1>(vm, address + 64)[0]);
+              ++symbols.export_counts[name];
+            } else if (type == 0x4000) {
+              symbols.modules.emplace(name, ReadPhysical<1>(vm, address + 24)[0]);
+              ++symbols.module_counts[name];
+            } else
+              symbols.imports[name].push_back(address);
+          }
+          address = entry[0];
         }
-        address = entry[0];
-      }
+    }
+    table = header[0];
   }
   return symbols;
 }
@@ -934,7 +950,7 @@ struct CCompilerState
 {
   uint64_t code_used = 0, data_used = 0;
   uint64_t payload_begin = 0, payload_end = 0;
-  bool init_started = false;
+  bool init_started = false, initialized = false;
   std::string unresolved;
 };
 
@@ -962,7 +978,8 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
   const auto level = symbols.exports.find("SYS_RUN_LEVEL");
   Check(level != symbols.exports.end(), "Missing live compiler run level");
   Check(ReadPhysical<1>(vm, level->second, 'w')[0] ==
-            (phase == CBootPhase::Desktop ? 0x32FFu : 0x2FFu),
+            (phase == CBootPhase::Desktop ? 0x32FFu
+             : CompilerInitialized(phase) ? 0x12FFu : 0x2FFu),
         "Compiler run level was published before successful initialization");
   std::smatch match;
   Check(std::regex_search(output, match,
@@ -1089,7 +1106,7 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
             status->second >= base && status->second <= image + patch - 8 &&
             ReadLE(media.compiler, status->second - image, 8) == 0,
         "Compiler initialization status is outside zeroed module storage");
-  const auto expected_status = phase == CBootPhase::Desktop ? uint64_t{1}
+  const auto expected_status = CompilerInitialized(phase) ? uint64_t{1}
                                : CompilerBound(phase) ? UINT64_MAX : 0;
   Check(ReadPhysical<1>(vm, status->second)[0] == expected_status,
         "Compiler initialization status or rejected-entry execution differs");
@@ -1123,6 +1140,7 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
   result.payload_begin = base;
   result.payload_end = image + patch;
   result.init_started = CompilerBound(phase);
+  result.initialized = CompilerInitialized(phase);
   result.unresolved = unresolved;
   std::cout << "Verified compiler module " << size << " bytes, " << records.size()
             << " patch records, imports " << (bindings ? 16 : 0)
@@ -1603,7 +1621,6 @@ static bool GuestBytesEqual(CMonitor &vm, uint64_t address,
 static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
                                     uint64_t owner, uint64_t &graphics,
                                     uint64_t &winmgr_slot, uint64_t &disk,
-                                    bool desktop,
                                     const CCompilerState &compiler)
 {
   uint64_t used = 0, count = 0;
@@ -1682,7 +1699,7 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           Check(system_list || compiler_list || adam_list,
                 "Unexpected boot definition");
           Check(system_list ||
-                    (compiler_list ? compiler.init_started : desktop),
+                    (compiler_list ? compiler.init_started : compiler.initialized),
                 "Definition was created before its initialization phase");
           const auto &expected = system_list     ? *system_define
                                  : compiler_list ? *compiler_define
@@ -1773,8 +1790,8 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           compiler_define_used == (compiler.init_started ? 5360u : 0u),
       "Compiler definitions or their allocation total differ by startup phase");
   Check(std::all_of(adam_seen.begin(), adam_seen.end(),
-                    [&](bool seen) { return seen == desktop; }) &&
-            adam_define_used == (desktop ? 560u : 0u),
+                    [&](bool seen) { return seen == compiler.initialized; }) &&
+            adam_define_used == (compiler.initialized ? 560u : 0u),
         "Adam definitions or their allocation total differ by startup phase");
   std::cout << "Verified system definitions " << std::size(system_defines)
             << ", heap bytes " << system_define_used << '\n';
@@ -1782,7 +1799,7 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
             << (compiler.init_started ? std::size(compiler_defines) : 0)
             << ", heap bytes " << compiler_define_used << '\n';
   std::cout << "Verified Adam definitions "
-            << (desktop ? std::size(adam_defines) : 0) << ", heap bytes "
+            << (compiler.initialized ? std::size(adam_defines) : 0) << ", heap bytes "
             << adam_define_used << '\n';
   return used;
 }
@@ -1827,10 +1844,10 @@ static CTestHeap VerifyHeap(CMonitor &vm, uint64_t heap, uint64_t pool,
   return result;
 }
 
-static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
+static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                    uint64_t code_heap, uint64_t data_heap,
                                    const CTestHeap &code, const CTestHeap &data,
-                                   uint64_t inherited_table, bool terminal)
+                                   uint64_t inherited_table)
 {
   auto contains = [](const BlockRanges &ranges, uint64_t address,
                      uint64_t bytes) {
@@ -1854,15 +1871,7 @@ static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
     allocation(header[3], 1024 * 8, data_heap, data.ranges);
     return header;
   };
-  const auto table = table_header(ReadPhysical<1>(vm, task + 0x3D0)[0]);
-  if (!terminal) {
-    Check(table[0] == inherited_table && !code.used && !code.alloced,
-          "Nonterminal startup task allocated compiler class records");
-    return;
-  }
-  Check(table[0] != inherited_table,
-        "Startup terminal has no owned compiler class table");
-  const auto classes = table_header(table[0]);
+  const auto classes = table_header(class_table);
   Check(classes[0] == inherited_table,
         "Startup class table inherited the wrong symbols");
   constexpr std::string_view views[]{"U16", "I16", "U32", "I32", "U64", "I64"};
@@ -2003,11 +2012,266 @@ static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
         address = entry[0];
       }
   }
-  Check(expected.empty() && used == class_count * 656 && code.used == used,
-        "Startup terminal code usage differs from its owned class records");
-  std::cout << "Verified startup class records " << class_count
+  Check(expected.empty() && used == class_count * 656,
+        "Adam class usage differs from its owned class records");
+  std::cout << "Verified Adam startup class records " << class_count
             << ", code heap bytes " << used << '\n';
 }
+
+// Count the persistent compiler graph from actual allocation headers rather
+// than using the guest's reported startup delta as the expected total.
+class CAdamSourceAllocations
+{
+public:
+  CAdamSourceAllocations(CMonitor &vm, const fs::path &dir,
+                         uint64_t code_owner, uint64_t data_owner,
+                         const CTestHeap &code, const CTestHeap &data)
+      : vm(vm), dir(dir), owners{code_owner, data_owner},
+        heaps{&code, &data}
+  {
+  }
+
+  std::array<uint64_t, 2> Verify(uint64_t table, uint64_t classes,
+                                 uint64_t kernel)
+  {
+    VerifyTable(table, classes, false);
+    VerifyTable(classes, kernel, true);
+    Check(sources.size() == 25, "Missing original Adam startup functions");
+    std::cout << "Verified Adam source functions " << sources.size()
+              << ", owned code allocations " << used[0]
+              << ", owned data allocations " << used[1] << '\n';
+    return used;
+  }
+
+private:
+  CMonitor &vm;
+  const fs::path &dir;
+  uint64_t owners[2];
+  const CTestHeap *heaps[2];
+  std::array<uint64_t, 2> used{};
+  std::map<uint64_t, uint64_t> allocations;
+  std::map<uint64_t, Bytes> snapshots;
+  std::set<std::string> sources;
+
+  static bool Contains(const std::pair<uint64_t, uint64_t> &range,
+                       uint64_t address, uint64_t size)
+  {
+    return address >= range.first && address <= range.second &&
+           size <= range.second - address;
+  }
+
+  template <size_t N> std::array<uint64_t, N> Read(uint64_t address)
+  {
+    for (auto *heap : heaps)
+      for (auto range : heap->ranges)
+        if (Contains(range, address, N * 8)) {
+          if (range.second - range.first >= 16 * 1024 * 1024)
+            return ReadPhysical<N>(vm, address);
+          auto it = snapshots.find(range.first);
+          if (it == snapshots.end())
+            it = snapshots.emplace(range.first, CaptureCompilerMemory(
+                vm, dir / "adam-heap-block.bin", range.first,
+                range.second - range.first)).first;
+          std::array<uint64_t, N> words{};
+          for (size_t i = 0; i < N; ++i)
+            words[i] = ReadLE(it->second, address - range.first + i * 8, 8);
+          return words;
+        }
+    throw std::runtime_error("Adam metadata points outside its heaps");
+  }
+
+  uint64_t Allocation(uint64_t address, unsigned kind, uint64_t requested = 0)
+  {
+    Check(address >= 16 && !(address & 7), "Invalid Adam allocation address");
+    const auto head = address - 16;
+    const auto header = Read<2>(head);
+    const auto size = header[1];
+    if (!(header[0] == owners[kind] && size >= 16 && !(size & 7) &&
+          size < 16 * 1024 * 1024 &&
+          (!requested || size == CompilerAllocationSize(requested)) &&
+          std::any_of(heaps[kind]->ranges.begin(), heaps[kind]->ranges.end(),
+                      [&](auto range) { return Contains(range, head, size); }))) {
+      std::ostringstream message;
+      message << "Adam allocation 0x" << std::hex << address << " owner 0x"
+              << header[0] << " expected 0x" << owners[kind] << std::dec
+              << ", size " << size << ", requested " << requested;
+      throw std::runtime_error(message.str());
+    }
+    auto next = allocations.lower_bound(head);
+    Check((next == allocations.end() || size <= next->first - head) &&
+              (next == allocations.begin() ||
+               std::prev(next)->second <= head),
+          "Repeated or overlapping Adam startup allocation");
+    allocations.emplace_hint(next, head, head + size);
+    used[kind] += size;
+    return size - 16;
+  }
+
+  void String(uint64_t address)
+  {
+    if (!address)
+      return;
+    const auto size = Allocation(address, 1);
+    bool ended = false;
+    for (uint64_t i = 0; i < size && !ended; i += 8) {
+      auto word = Read<1>(address + i)[0];
+      for (unsigned b = 0; b < 8; ++b, word >>= 8)
+        if (!(word & 255)) {
+          ended = true;
+          break;
+        }
+    }
+    Check(ended, "Unterminated Adam startup string");
+  }
+
+  void Dimensions(uint64_t address)
+  {
+    while (address) {
+      Allocation(address, 1, 24);
+      address = Read<3>(address)[0];
+    }
+  }
+
+  void Members(uint64_t address, unsigned depth)
+  {
+    Check(depth < 16, "Recursive Adam callback metadata");
+    while (address) {
+      Allocation(address, 1, 144);
+      const auto member = Read<18>(address);
+      String(member[5]);
+      Dimensions(member[12]);
+      const auto flags = uint16_t(member[9] >> 32);
+      if (flags & 4)
+        String(member[16]);
+      if (flags & 8)
+        Callback(member[17], depth + 1);
+      if (flags & 64)
+        Allocation(member[15], 1);
+      for (auto meta = member[8]; meta;) {
+        Allocation(meta, 1, 32);
+        const auto record = Read<4>(meta);
+        String(record[1]);
+        if (record[2] & 1)
+          String(record[3]);
+        meta = record[0];
+      }
+      address = member[0];
+    }
+  }
+
+  void Callback(uint64_t pointer, unsigned depth)
+  {
+    Check(pointer >= 168, "Missing Adam callback metadata");
+    const auto stars = uint8_t(Read<1>(pointer + 80)[0] >> 32);
+    Check(stars && stars <= 4 && pointer >= stars * 168,
+          "Invalid Adam callback pointer companion");
+    const auto base = pointer - stars * 168;
+    Allocation(base, 1, (stars + 1) * 168);
+    const auto fun = Read<21>(base);
+    Check((fun[2] & 0x1FFFF) == 0x40 && !fun[19],
+          "Invalid Adam callback signature");
+    Members(fun[11], depth);
+  }
+
+  void SourceFunction(const std::string &name,
+                      const std::array<uint64_t, 21> &fun)
+  {
+    static const std::map<std::string, std::string_view> expected{
+        {"R2P", "AMath"}, {"P2R", "AMath"}, {"Wrap", "AMath"},
+        {"DistSqrI64", "AMath"}, {"ASin", "AMath"}, {"ACos", "AMath"},
+        {"Sinh", "AMath"}, {"Cosh", "AMath"}, {"CAdd", "AMath"},
+        {"CSub", "AMath"}, {"CMul", "AMath"}, {"CDiv", "AMath"},
+        {"CScale", "AMath"}, {"CCopy", "AMath"}, {"CEqu", "AMath"},
+        {"CPoly", "AMath"}, {"TaskMemAlloced", "AMem"},
+        {"TaskMemUsed", "AMem"}, {"HeapRep", "AMem"},
+        {"IsInHeapCtrl", "AMem"}, {"HeapCtrlWalk", "AMem"},
+        {"IsInHeap", "AMem"}, {"HeapWalk", "AMem"},
+        {"TaskRepTask", "TaskRep"}, {"TaskRep", "TaskRep"}};
+    auto it = expected.find(name);
+    Check(it != expected.end() && sources.insert(name).second,
+          "Unexpected or duplicate original Adam function");
+    const auto link = ReadGuestName(vm, fun[3]);
+    Check(link.starts_with("FL:") &&
+              link.find("/Adam/" + std::string(it->second) + ".HC,") !=
+                  std::string::npos &&
+              !(uint16_t(fun[10] >> 48) & 0x3001) &&
+              bool(fun[2] & 0x01000000) == (name != "TaskRepTask"),
+          "Adam function did not retain its original source and definition");
+    Allocation(fun[19], 0);
+  }
+
+  void VerifyTable(uint64_t table, uint64_t parent, bool classes)
+  {
+    Allocation(table, 1, 32);
+    const auto header = Read<4>(table);
+    Check(header[0] == parent && header[1] == 1023 && !header[2],
+          "Adam startup namespace inherited the wrong table");
+    Allocation(header[3], 1, 1024 * 8);
+    for (size_t i = 0; i < 1024; i += 64) {
+      const auto buckets = Read<64>(header[3] + i * 8);
+      for (auto address : buckets)
+        while (address) {
+          const auto entry = Read<3>(address);
+          const auto type = uint32_t(entry[2]) & 0x1FFFF;
+          if (type == 0x10 || type == 0x20) {
+            Check(classes, "Adam source table unexpectedly owns a class");
+            Allocation(address, 0, 5 * 128);
+            const auto cls = Read<16>(address);
+            String(cls[1]);
+            String(cls[3]);
+            String(cls[4]);
+            String(cls[6]);
+            Check(!cls[5] && !cls[7], "Unexpected Adam class relocation metadata");
+            Members(cls[11], 0);
+          } else if (type == 0x40) {
+            Check(!classes, "Typed function in the wrong Adam table");
+            Allocation(address, 1, 168);
+            const auto fun = Read<21>(address);
+            String(fun[1]);
+            String(fun[3]);
+            String(fun[4]);
+            String(fun[6]);
+            Check(!fun[5] && !fun[7] && !fun[20],
+                  "Unexpected Adam function relocation metadata");
+            Members(fun[11], 0);
+            if (fun[3])
+              SourceFunction(ReadGuestName(vm, fun[1]), fun);
+            else
+              Check((uint16_t(fun[10] >> 48) & 0x2000) && fun[19],
+                    "Adam runtime header is not bound");
+          } else if (type == 8) {
+            Check(!classes, "Typed global in the wrong Adam table");
+            Allocation(address, 1, 136);
+            const auto var = Read<17>(address);
+            String(var[1]);
+            String(var[3]);
+            String(var[4]);
+            String(var[6]);
+            Check(!var[5] && !var[7] && (var[9] & 16),
+                  "Adam runtime global is not a native alias");
+            Dimensions(var[12]);
+            if (var[11])
+              Callback(var[11], 0);
+          } else if (type == 4) {
+            Check(classes, "Define in the wrong Adam table");
+            Allocation(address, 1, 88);
+            const auto def = Read<11>(address);
+            String(def[1]);
+            String(def[8]);
+            Check(!def[3] && !def[4] && !def[5] && !def[6] &&
+                      !def[7] && !def[9] && def[10] == UINT64_MAX,
+                  "Unexpected compiler namespace definition");
+          } else {
+            Check(classes && (type == 1 || type == 0x200),
+                  "Unexpected Adam namespace entry type");
+            Allocation(address, 1, type == 1 ? 72 : 48);
+            String(entry[1]);
+          }
+          address = entry[0];
+        }
+    }
+  }
+};
 
 static void VerifyCoverage(BlockRanges blocks, const BlockRanges &ranges)
 {
@@ -2256,7 +2520,8 @@ static uint64_t VerifyDriveSectorCaches(CMonitor &vm, uint64_t disk,
   return used;
 }
 
-static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
+static void VerifyPools(CMonitor &vm, const fs::path &dir,
+                        uint64_t heap, uint64_t ram_end,
                         const std::string &output, uint64_t range_bytes,
                         uint64_t symbol_used,
                         const std::vector<CTestE820> &e820, uint64_t idle,
@@ -2321,7 +2586,7 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   // Compiler startup keeps the shared assembler dictionary and both decoder
   // indices in Adam's data heap. OpCodes.DD has 923 non-alias forms, of which
   // 908 lack IEF_NOT_IN_64_BIT.
-  const uint64_t asm_hash_used = desktop ? 0x10518 +
+  const uint64_t asm_hash_used = compiler.initialized ? 0x10518 +
       CompilerAllocationSize(923 * 8) + CompilerAllocationSize(908 * 8) : 0;
   std::smatch raw_screen;
   Check(std::regex_search(output,raw_screen,
@@ -2338,6 +2603,20 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
                                  2 * (9 * page - 24) + 65 * page - 24;
   auto code = VerifyHeap(vm, adam_hc, code_pool, adam);
   auto data = pool ? VerifyHeap(vm, expected_data_hc, pool, adam) : CTestHeap{};
+  const auto adam_table = ReadPhysical<1>(vm, adam + 0x3D0)[0];
+  const auto kernel_table = ram_end - 0x248;
+  std::array<uint64_t, 2> source_used{};
+  if (desktop) {
+    const auto classes = ReadPhysical<1>(vm, adam_table)[0];
+    Check(adam_table != kernel_table && classes != kernel_table &&
+              classes != adam_table, "Missing Adam startup namespaces");
+    VerifyAdamClassRecords(vm, classes, adam_hc, expected_data_hc, code,
+                           pool ? data : code, kernel_table);
+    CAdamSourceAllocations graph(vm, dir, adam_hc, expected_data_hc,
+                                 code, pool ? data : code);
+    source_used = graph.Verify(adam_table, classes, kernel_table);
+  } else
+    Check(adam_table == kernel_table, "Compiler failure published Adam sources");
   const uint64_t code_bytes = ram_end - heap + limit - code_base;
   const uint64_t cache_used =
       VerifyDiskCache(vm, disk, expected_data_hc, pool ? data_bytes : code_bytes,
@@ -2348,8 +2627,9 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   const uint64_t boot_used = range_bytes + late_used + symbol_used +
                              drive_used + allocation[1] + graphics_used +
                              asm_hash_used + raw_used + fifo_used +
-                             compiler.data_used + cache_used + sector_cache_used;
-  uint64_t code_used = 0x42840 + fault_used + compiler.code_used +
+                             compiler.data_used + cache_used + sector_cache_used +
+                             source_used[1];
+  uint64_t code_used = 0x42840 + fault_used + compiler.code_used + source_used[0] +
                        (pool ? 0x5E8 : boot_used);
   uint64_t data_used = boot_used, data_alloced = 0;
   BlockRanges data_used_ranges;
@@ -2364,6 +2644,12 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
               (heaps[0] != heaps[1]) == bool(pool),
           "Startup task or heap has the wrong owner");
     auto task_code = VerifyHeap(vm, heaps[0], code_pool, task);
+    const auto task_table = ReadPhysical<1>(vm, task + 0x3D0)[0];
+    const auto task_header = ReadPhysical<4>(vm, task_table);
+    VerifyCompilerAllocation(vm, task_table, heaps[1], 32);
+    VerifyCompilerAllocation(vm, task_header[3], heaps[1], 1024 * 8);
+    Check(task_header[0] == adam_table && task_header[1] == 1023 &&
+              !task_header[2], "Startup task did not inherit Adam's namespace");
     code_used += task_allocation[1];
     code.alloced += task_code.alloced;
     code.ranges.insert(code.ranges.end(), task_code.ranges.begin(),
@@ -2374,9 +2660,8 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
       Check(data_hc[0] == expected_data_hc &&
                 task_data.alloced > 256 * 1024,
             "Invalid startup task data heap usage");
-      VerifyTaskClassRecords(vm, task, heaps[0], heaps[1], task_code, task_data,
-                             ReadPhysical<1>(vm, adam + 0x3D0)[0],
-                             task == left || task == right);
+      Check(!task_code.used && !task_code.alloced,
+            "Startup task allocated duplicate compiler class records");
       data_used += code_hc[1] + data_hc[1];
       data_alloced += task_data.alloced;
       data_used_ranges.insert(data_used_ranges.end(), task_data.ranges.begin(),
@@ -2435,7 +2720,7 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
         "Incorrect heap limit or data pool");
 }
 
-static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
+static void VerifyFixedArea(CMonitor &vm, const fs::path &dir, uint64_t heap,
                             const std::string &registers,
                             const std::string &output, bool desktop,
                             const CCompilerState &compiler)
@@ -2452,7 +2737,7 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
   uint64_t graphics = 0, winmgr_slot = 0, disk = 0;
   uint64_t symbol_used =
       VerifyKernelSymbols(vm, top + 0x28, owner, graphics, winmgr_slot,
-                           disk, desktop, compiler);
+                           disk, compiler);
   uint64_t winmgr = ReadPhysical<1>(vm, winmgr_slot)[0];
   uint64_t left = 0, right = 0;
   if (desktop) {
@@ -2498,7 +2783,7 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
             ReadPhysical<3>(vm, idle + 0x78) == std::array<uint64_t, 3>{adam, idle, idle} &&
             ReadPhysical<1>(vm, idle + 0x1A8)[0] == boot_cpu,
         "Invalid idle task record");
-  VerifyPools(vm, heap, ram_end, output, range_bytes, symbol_used, e820, idle,
+  VerifyPools(vm, dir, heap, ram_end, output, range_bytes, symbol_used, e820, idle,
               graphics, disk, winmgr, left, right, desktop, compiler);
 
   constexpr uint64_t task_alloced = 0x44800;
@@ -2527,13 +2812,14 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
   Check(ReadPhysical<1>(vm, adam + 0x1B0)[0] == fpu &&
             ReadPhysical<1>(vm, fpu, 'h')[0] == 0x37F,
         "Invalid Adam FPU image");
-  Check(ReadPhysical<1>(vm, adam + 0x3D0)[0] == hash &&
+  const auto adam_hash = ReadPhysical<1>(vm, adam + 0x3D0)[0];
+  Check((adam_hash != hash) == desktop &&
             ReadPhysical<4>(vm, hash) ==
                 std::array<uint64_t, 4>{0, 1023, 0, top + 0x28},
         "Invalid Adam hash table");
 
   auto idle_hash = ReadPhysical<1>(vm, idle + 0x3D0)[0];
-  Check(ReadPhysical<1>(vm, idle_hash)[0] == hash,
+  Check(ReadPhysical<1>(vm, idle_hash)[0] == adam_hash,
         "Idle task does not inherit Adam's hash table");
   std::vector<uint64_t> slots;
   for (auto cached = ReadPhysical<1>(vm, owner + 0x98)[0]; cached;) {
@@ -3127,6 +3413,10 @@ constexpr CTextProbe adam_task_probes[]{
 constexpr CTextProbe adam_task_aot_probes[]{
     {"adam-task-aot","/AdamTaskAOTProbe.HC","","Adam tasks AOT compile ","Adam tasks AOT load ",
      "Adam tasks AOT compile 0\nAdam tasks FF\nAdam tasks AOT load 1\n",{},true}};
+
+constexpr CTextProbe adam_startup_probes[]{
+    {"adam-startup","/AdamStartupProbe.HC","","Adam startup ","Adam startup ",
+     "Adam startup FF\n",{},true}};
 
 constexpr CTextProbe uasm_probes[]{
     {"uasm","/UAsmProbe.HC","","UAsm probe ","UAsm probe ",
@@ -5571,14 +5861,19 @@ static void TestBoot(const char *qemu, const fs::path &iso,
             "Compiler failure reported completed startup");
     }
     for (auto marker : {COMPILER_FAILURE_MARKER, COMPILER_BIND_FAILURE_MARKER,
-                         COMPILER_INIT_FAILURE_MARKER})
+                         COMPILER_INIT_FAILURE_MARKER, ADAM_SOURCE_FAILURE_MARKER})
       Check((output.find(marker) != std::string::npos) ==
                 (!desktop && marker == CompilerFailureMarker(phase)),
             "Compiler stopped at the wrong startup phase");
+    if (phase == CBootPhase::AdamSourceFailed)
+      Check(output.find("UnholyOS: Adam source ready") == std::string::npos &&
+                output.find("UnholyOS: Adam source failed /Adam/TaskRep.HC\r\n") != std::string::npos &&
+                output.find("UnholyOS: Adam source rollback, code bytes 0x0000000000000000, data bytes 0x0000000000000000\r\n") != std::string::npos,
+            "Failed Adam startup did not discard its private source namespace");
     uint64_t heap = VerifyHandoff(output, media, registers);
     const auto compiler = VerifyCompiler(vm, dir, output, media, phase);
     if (!startup)
-      VerifyFixedArea(vm, heap, registers, output, desktop, compiler);
+      VerifyFixedArea(vm, dir, heap, registers, output, desktop, compiler);
     VerifyUncachedAlias(vm, output);
     VerifyKernelGlobals(vm, output);
     VerifyInterrupts(vm, output, registers, startup, desktop);
@@ -6121,6 +6416,10 @@ static void TestCompilerFailures(const char *qemu, const fs::path &iso,
   const auto opcode_entry = FindRedSeaEntry(original, compiler_dir, "OpCodes.DD");
   const auto module_start = ReadLE(original, module_entry + 40, 8) * 512;
   const auto opcode_start = ReadLE(original, opcode_entry + 40, 8) * 512;
+  const auto adam_entry = FindRedSeaEntry(original, media.root, "Adam");
+  const auto adam_dir = ReadLE(original, adam_entry + 40, 8);
+  const auto taskrep_entry = FindRedSeaEntry(original, adam_dir, "TaskRep.HC");
+  const auto taskrep_start = ReadLE(original, taskrep_entry + 40, 8) * 512;
   struct CCase
   {
     const char *name;
@@ -6133,14 +6432,28 @@ static void TestCompilerFailures(const char *qemu, const fs::path &iso,
       {"invalid-export", CBootPhase::CompilerInvalidExport},
       {"unresolved-import", CBootPhase::CompilerUnresolvedImport},
       {"missing-opcodes", CBootPhase::OpcodeUnavailable},
-      {"malformed-opcodes", CBootPhase::OpcodeInvalid}};
+      {"malformed-opcodes", CBootPhase::OpcodeInvalid},
+      {"missing-adam-source", CBootPhase::AdamSourceFailed},
+      {"malformed-adam-source", CBootPhase::AdamSourceFailed}};
   char path[] = "/tmp/unholyos-compiler-failures-XXXXXX";
   Check(mkdtemp(path), "Cannot create compiler failure-test directory");
   const fs::path dir = path;
   try {
     for (const auto &test : cases) {
       auto image = original;
-      if (test.phase == CBootPhase::CompilerUnavailable ||
+      if (test.phase == CBootPhase::AdamSourceFailed) {
+        if (std::string_view(test.name) == "missing-adam-source") {
+          constexpr std::string_view name = "Unavailable.HC";
+          std::fill(image.begin() + taskrep_entry + 2,
+                    image.begin() + taskrep_entry + 40, 0);
+          std::copy(name.begin(), name.end(), image.begin() + taskrep_entry + 2);
+        } else {
+          // Preserve the extent and the earlier successful source files.
+          constexpr std::string_view malformed = "U0 AdamBad( {";
+          std::copy(malformed.begin(), malformed.end(), image.begin() + taskrep_start);
+          image[taskrep_start + malformed.size()] = 0;
+        }
+      } else if (test.phase == CBootPhase::CompilerUnavailable ||
           test.phase == CBootPhase::OpcodeUnavailable) {
         const auto entry = test.phase == CBootPhase::CompilerUnavailable
                                ? module_entry : opcode_entry;
@@ -6227,6 +6540,33 @@ static void VerifyDatabaseRecords(const Bytes &disk)
 
 int main(int argc, char **argv)
 {
+  if ((argc == 4 || argc == 5) &&
+      (std::string_view(argv[1]) == "--adam-startup" ||
+       std::string_view(argv[1]) == "--adam-startup-reference")) {
+    const bool reference = std::string_view(argv[1]).ends_with("-reference");
+    char path[] = "/tmp/unholyos-adam-startup-XXXXXX";
+    if (argc == 4 && !mkdtemp(path))
+      return 1;
+    const fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      if (!reference)
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/AdamStartupProbe.HC",
+                              "AdamStartupProbe.HC");
+      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
+      vm.Connect();
+      DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
+                             reference, false, false, false, false, false,
+                             false, false, false, adam_startup_probes);
+      vm.Quit();
+      if (argc == 4)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
   if (argc == 5 && std::string_view(argv[1]) == "--compiler-failures") {
     try {
       TestCompilerFailures(argv[2], argv[3], argv[4]);

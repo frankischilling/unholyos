@@ -129,6 +129,37 @@ extern "C" void HashTableDelCpp(CHashTable *table)
   Free(table);
 }
 
+extern "C" int64_t HashTablePurgeCpp(CHashTable *table)
+{
+  if (!table)
+    return 0;
+  const auto flags = GetRFlags();
+  asm volatile("cli" : : : "memory");
+  int64_t count = 0;
+  for (int64_t i = 0; i <= table->mask; ++i)
+    for (auto *entry = table->body[i]; entry; entry = entry->next) {
+      if (!(entry->type & (HTT_FUN | HTT_GLBL_VAR)))
+        continue;
+      auto **link = &entry->next;
+      while (auto *older = *link) {
+        if (((older->type & HTT_EXPORT_SYS_SYM) ||
+             !(older->type & HTG_TYPE_MASK)) &&
+            !StrCmpCpp(reinterpret_cast<const uint8_t *>(entry->str),
+                       reinterpret_cast<const uint8_t *>(older->str))) {
+          *link = older->next;
+          if (!(older->type & HTG_TYPE_MASK))
+            older->type = HTT_KEYWORD;
+          HashDel(older);
+          ++count;
+          break;
+        }
+        link = &older->next;
+      }
+    }
+  SetRFlags(flags);
+  return count;
+}
+
 extern "C" void HashSrcFileSetCpp(const CCmpCtrl *cc, CHashSrcSym *sym,
                                   int64_t line_offset)
 {

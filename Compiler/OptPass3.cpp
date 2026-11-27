@@ -144,12 +144,12 @@ static void OptRegAdd(COptRegPlan &plan,CMemberLst &m,uint8_t reg)
 }
 
 void OptPass3(CIntermediateCode *code,uint32_t count,CHashFun &fun,
-              COptRegPlan &plan)
+              COptRegPlan &plan,bool no_reg_var)
 {
   plan={};
   constexpr uint32_t reg_mask=0xF000; // R12..R15, preserved by SysV.
   fun.used_reg_mask&=~reg_mask;
-  bool safe=!(fun.cls.flags&FF_DOT_DOT_DOT);
+  bool safe=!(fun.cls.flags&FF_DOT_DOT_DOT) && !no_reg_var;
   for (uint32_t i=0;i<count;i++) {
     code[i].local_reg=0;
     switch (code[i].code) {
