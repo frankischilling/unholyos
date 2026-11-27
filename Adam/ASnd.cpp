@@ -82,7 +82,8 @@ extern "C" const char *MusicSetNoteLenCpp(const char *st)
     case 'h': music.note_len = F64(2.0); break;
     case 'q': music.note_len = F64(1.0); break;
     case 'e': music.note_len = F64(0.5); break;
-    case 's': music.note_len = F64(0.25); break;
+    // Adam/ASnd.HC's 0.25 literal rounds one binary64 step above C++'s.
+    case 's': music.note_len = 0x3FD0000000000001; break;
     case 't':
       music.note_len = F64DivBits(F64MulBits(F64(2.0), music.note_len), F64(3.0));
       break;

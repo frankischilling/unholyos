@@ -1794,6 +1794,26 @@ The capture directories retain the text layer, screenshots and
 The separate probe captures are `music-native-final.log` and
 `music-reference-final.log` in `build/music-play/`.
 
+`MusicPrecision.HC` checks 29 note-length modifier sequences, initial
+and reset settings, and the `0.25`, `2.5`, and `0.9` literal bits. Its
+SHA-256 is
+`ef763c725ad9c64b6a6df6d92ac577f2cc4449760a11a61f421a6184f6206f10`.
+The pinned runtime assigns `0x3FD0000000000001` for the sixteenth-note
+length; that value and its six tested dotted or triplet variants differ
+from calculations starting with C++'s exact `0.25`. All 32 data rows
+match when executing the corrected native source and its guest-compiled
+TOSB module. The startup and guest-built ISO checks enforce the complete
+trace. The reference replay checks the uploaded source and terminating
+NUL before execution and verifies every expected line.
+
+```sh
+make -j6 build/music-precision-test.iso build/Linux/TestBoot
+build/Linux/TestBoot --music-precision qemu-system-x86_64 \
+  build/music-precision-test.iso build/music-precision-native
+build/Linux/TestBoot --music-precision-reference qemu-system-x86_64 \
+  /path/to/TOS_Distro.ISO build/music-precision-reference
+```
+
 Playback uses the actual PIT speaker and task sleep. It is tested on
 one CPU; waveform fidelity, exact wall-clock durations, SMP music
 semaphores, and the remaining sound and media APIs are not established.

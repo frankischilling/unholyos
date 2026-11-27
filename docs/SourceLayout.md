@@ -999,6 +999,12 @@ and playback routines in `Adam/ASnd.HC`. `Adam/ASnd.hpp` retains the
 packed `CMusicGlbls` layout, including its seven-entry note map.
 The native compiler exposes those fields and the typed runtime
 functions. Playback uses the existing speaker and scheduler routines.
+`MusicSetNoteLen` retains the pinned HolyC literal's binary64 value for
+`0.25`, `0x3FD0000000000001`. C++ parses the same decimal spelling as
+`0x3FD0000000000000`, so the translated sixteenth-note case uses the
+observed bits explicitly. Triplet and dotted modifiers operate on that
+value. The default tempo, staccato factor, and other note lengths use
+matching C++ constants.
 The single-CPU implementation protects beat updates with interrupts
 disabled. `Play` also checks the lower bound of the note index before
 accessing `music.note_map`; the reference only checks the upper bound.

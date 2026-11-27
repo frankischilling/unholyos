@@ -10,6 +10,41 @@ constexpr std::string_view flood_fill_output =
     "fill transform 12 DA390E6207FC8CB5 796135481584641D\n"
     "flood fill 1FF\n";
 
+constexpr std::string_view music_precision_output =
+    "MP initial 3FF0000000000000 4004000000000000 3FECCCCCCCCCCCCD\n"
+    "MP reset 3FF0000000000000 4004000000000000 3FECCCCCCCCCCCCD\n"
+    "MP literal 3FD0000000000001 4004000000000000 3FECCCCCCCCCCCCD\n"
+    "MP w 4010000000000000\n"
+    "MP h 4000000000000000\n"
+    "MP q 3FF0000000000000\n"
+    "MP e 3FE0000000000000\n"
+    "MP s 3FD0000000000001\n"
+    "MP wt 4005555555555555\n"
+    "MP ht 3FF5555555555555\n"
+    "MP qt 3FE5555555555555\n"
+    "MP et 3FD5555555555555\n"
+    "MP st 3FC5555555555557\n"
+    "MP w. 4018000000000000\n"
+    "MP h. 4008000000000000\n"
+    "MP q. 3FF8000000000000\n"
+    "MP e. 3FE8000000000000\n"
+    "MP s. 3FD8000000000002\n"
+    "MP wt. 4010000000000000\n"
+    "MP ht. 4000000000000000\n"
+    "MP qt. 3FF0000000000000\n"
+    "MP et. 3FE0000000000000\n"
+    "MP st. 3FD0000000000001\n"
+    "MP w.t 4010000000000000\n"
+    "MP h.t 4000000000000000\n"
+    "MP q.t 3FF0000000000000\n"
+    "MP e.t 3FE0000000000000\n"
+    "MP s.t 3FD0000000000001\n"
+    "MP qtt 3FDC71C71C71C71C\n"
+    "MP stt 3FBC71C71C71C71F\n"
+    "MP q.. 4002000000000000\n"
+    "MP s.. 3FE2000000000002\n"
+    "MP DONE\n";
+
 constexpr std::string_view math_helpers_output =
     "round -21 -20 -30 -20\n"
     "round -20 -20 -20 -20\n"
@@ -50,7 +85,8 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
                                    bool flood_fill = false, bool blot = false,
                                    bool math = false,
                                    bool sprite_flood = false,
-                                   bool music_demo = false)
+                                   bool music_demo = false,
+                                   bool music_precision = false)
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -395,19 +431,22 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
     Check(FileRead(uploaded) == expected, "Reference probe transfer changed source bytes");
     cmd("ExePutS(cgprobe);Free(cgprobe);");
   };
-  if (math) {
-    upload(fs::absolute("Linux/Fixtures/MathHelpersProbe.HC"));
-    const auto cells = wait_text("Math helpers done");
+  if (math || music_precision) {
+    upload(fs::absolute(music_precision ? "Linux/Fixtures/MusicPrecision.HC"
+                                       : "Linux/Fixtures/MathHelpersProbe.HC"));
+    const auto cells = wait_text(music_precision ? "MP DONE" : "Math helpers done");
     const auto screen = visible(cells);
-    auto lines = math_helpers_output;
+    const auto expected = music_precision ? music_precision_output : math_helpers_output;
+    auto lines = expected;
     while (!lines.empty()) {
       const auto end = lines.find('\n');
       Check(screen.find(lines.substr(0, end)) != std::string::npos,
-            "Math helper output differs from the pinned reference");
+            music_precision ? "Music precision differs from the pinned reference"
+                            : "Math helper output differs from the pinned reference");
       lines.remove_prefix(end + 1);
     }
-    snapshot("math-helpers");
-    std::cout << math_helpers_output;
+    snapshot(music_precision ? "music-precision" : "math-helpers");
+    std::cout << expected;
     return;
   }
   if (screen_capture) {
