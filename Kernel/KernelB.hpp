@@ -22,7 +22,11 @@ inline size_t StrLen(const char *str)
 }
 
 extern "C" int64_t StrCmpCpp(const uint8_t *a, const uint8_t *b);
+extern "C" int64_t StrICmpCpp(const char *st1, const char *st2);
+extern "C" int64_t StrNCmpCpp(const char *st1, const char *st2, int64_t n);
+extern "C" int64_t StrNICmpCpp(const char *st1, const char *st2, int64_t n);
 extern "C" const char *StrMatchCpp(const char *needle, const char *haystack);
+extern "C" int64_t StrOccCpp(const uint8_t *src, int64_t ch);
 extern "C" int64_t Spaces2TabsCpp(char *dst, const char *src);
 extern "C" char *StrUtilCpp(char *src, int64_t flags);
 extern "C" char *StrFirstOccCpp(char *src, const uint8_t *marker);
