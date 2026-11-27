@@ -1004,19 +1004,23 @@ first eight path cells; the captures also include the VGA framebuffer.
 Run the native regression with QEMU 8.2.2, PC, `qemu64` and 512 MiB:
 
 ```sh
-make -j4 BUILD=build/character-check
-make BUILD=build/character-check build/character-check/Linux/TestBoot
+make -j4 BUILD=build/character-check build/character-check/character-graphics-test.iso \
+  build/character-check/Linux/TestBoot
 build/character-check/Linux/TestBoot --character-graphics qemu-system-x86_64 \
-  build/character-check/unholyos.iso build/character-check/native
+  build/character-check/character-graphics-test.iso build/character-check/native
 ```
 
 To replay against the pinned distribution, invoke the same driver from
 the repository root with `--character-graphics-reference` and the
 reference ISO. It declines installation and the tour, obtains the text
 layer address from the guest's debug port, and uses GDB on local port
-45362 to copy the exact memory-set probe bytes into a guest allocation.
-The original demos execute from the reference DVD. The normal test uses
-QMP over a private socket pair and does not require GDB.
+45362 to copy the exact memory-set and CharDemo observer probe bytes into
+guest allocations. The native test ISO packages the same observer, and
+the driver checks its source bytes before booting. The observer records
+subcell pan transitions during guest refreshes independently of host
+sampling latency. The original demos run unmodified; the production ISO
+does not include the observer. The normal test uses QMP over a private
+socket pair and does not require GDB.
 
 This covers the tested keyboard, mouse, text-layer and cleanup paths,
 not every map boundary, maze shape, menu action, animation timing, or
