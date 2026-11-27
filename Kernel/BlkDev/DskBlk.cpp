@@ -35,6 +35,8 @@ bool BlkDevReadBytes(CBlkDev &bd, uint8_t *buf, uint64_t pos,
     return ATAPIReadBytes(bd, buf, pos, bytes);
   if (bd.type == BDT_ATA)
     return ATAReadBytes(bd, buf, pos, bytes);
+  if (bd.type==BDT_ISO_FILE_READ || bd.type==BDT_ISO_FILE_WRITE)
+    return FImageReadBytes(bd.file_dsk,buf,pos,bytes);
   if (bd.type != BDT_RAM || !bd.RAM_dsk || bd.max_blk < 0 ||
       uint64_t(bd.max_blk) >= SIZE_MAX / BLK_SIZE)
     return false;
@@ -45,13 +47,41 @@ bool BlkDevReadBytes(CBlkDev &bd, uint8_t *buf, uint64_t pos,
   return true;
 }
 
-bool BlkDevWriteBytes(CBlkDev &bd, const uint8_t *buf, uint64_t pos,
-                      size_t bytes,const CDrv *fat_origin)
+static bool ImageBackingWriteAllowed(const CBlkDev &bd,const CFile *origin)
+{
+  if (blkdev.blkdevs)
+    for (size_t i=0;i<BLKDEVS_NUM;i++) {
+      const auto &image=blkdev.blkdevs[i];
+      if (image.bd_signature==BD_SIGNATURE_VAL && image.file_dsk &&
+          image.file_dsk->dv && image.file_dsk->dv->bd &&
+          BlkDevSameBacking(*image.file_dsk->dv->bd,bd) &&
+          (image.file_dsk!=origin || image.type!=BDT_ISO_FILE_WRITE))
+        return false;
+    }
+  return true;
+}
+
+static bool BlkDevWriteBytesInternal(CBlkDev &bd,const uint8_t *buf,uint64_t pos,
+                                    size_t bytes,const CDrv *fat_origin,
+                                    const CFile *image_origin)
 {
   CDiskLock lock(bd);
   if (bd.flags&BDF_READ_ONLY && !(bd.flags&BDF_READ_ONLY_OVERRIDE))
     return false;
-  if (!DrvFATWriteAllowed(&bd,pos,bytes,fat_origin)) return false;
+  if (!ImageBackingWriteAllowed(bd,image_origin)) return false;
+  if (image_origin) {
+    if (!DrvFATWriteAllowedImage(&bd,pos,bytes,fat_origin)) return false;
+  } else if (!DrvFATWriteAllowed(&bd,pos,bytes,fat_origin)) return false;
+  // A read-only image is immutable even when the caller overrides its
+  // device's read-only flag.
+  if (bd.type==BDT_ISO_FILE_READ)
+    return false;
+  if (bd.type==BDT_ISO_FILE_WRITE) {
+    bool res=FImageWriteBytes(bd.file_dsk,buf,pos,bytes);
+    DskCacheWriteThrough(&bd,buf,pos,bytes,res);
+    DrvFATWriteThrough(&bd,buf,pos,bytes,res,fat_origin);
+    return res;
+  }
   if (bd.type==BDT_ATA) {
     bool res=ATAWriteBytes(bd,buf,pos,bytes);
     DskCacheWriteThrough(&bd,buf,pos,bytes,res);
@@ -67,6 +97,27 @@ bool BlkDevWriteBytes(CBlkDev &bd, const uint8_t *buf, uint64_t pos,
   MemCpy(bd.RAM_dsk+pos,buf,bytes);
   DskCacheWriteThrough(&bd,buf,pos,bytes,true);
   DrvFATWriteThrough(&bd,buf,pos,bytes,true,fat_origin);
+  return true;
+}
+
+bool BlkDevWriteBytes(CBlkDev &bd,const uint8_t *buf,uint64_t pos,size_t bytes,
+                     const CDrv *fat_origin)
+{
+  return BlkDevWriteBytesInternal(bd,buf,pos,bytes,fat_origin,nullptr);
+}
+
+bool FImageWriteBytes(CFile *f,const uint8_t *buf,uint64_t pos,size_t bytes)
+{
+  // The WRITE mount path must publish a preallocated, verified contiguous
+  // backing stream. Do not allocate or grow it in a device I/O operation.
+  uint64_t physical;
+  if (!f || !(f->flags&FF_WRITE) || (f->flags&(FF_NEW_FILE|FF_BUF_DIRTY)) ||
+      (bytes && !buf) || !FImageByteRange(*f,pos,bytes,physical))
+    return false;
+  if (!bytes) return true;
+  if (!BlkDevWriteBytesInternal(*f->dv->bd,buf,physical,bytes,nullptr,f))
+    return false;
+  f->fblk_num=(pos+bytes+BLK_SIZE-1)/BLK_SIZE;
   return true;
 }
 

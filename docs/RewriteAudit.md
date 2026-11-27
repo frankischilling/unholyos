@@ -10,7 +10,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 68 | 8 |
 | `Compiler` | 33 | 18 | 15 |
-| `Adam` | 132 | 44 | 88 |
+| `Adam` | 132 | 45 | 87 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 22 | 181 |
 
@@ -24,14 +24,15 @@ part of the full rewrite.
 - `Kernel/BlkDev/FileSysISO.HC` is present in the reference tree, but is
   not included by `MakeBlkDev.HC`; `KernelA.HH` marks `FSt_ISO9660`
   unsupported. Preserve that active-build distinction rather than
-  enabling a general ISO9660 filesystem. The active RedSea ISO path,
-  file-backed devices and media lifecycle still need work.
+  enabling a general ISO9660 filesystem. Fixed-size contiguous read-only
+  and writable RedSea file-backed devices are implemented; the guest ISO
+  builder still needs the reference's mounted-image workflow.
   `DskCache.cpp` now supplies the block cache and drive and device
   locking use task ownership. `DskClus.cpp` supplies cluster traversal, allocation,
   reads and writes, and `DirNew` publishes RedSea and FAT32 directory
   entries. Drive and device deletion, enabling/disabling, and initial
   disk-change handling are implemented; complete chain ownership,
-  error recovery, backing-file and open-stream lifetime, removable-media
+  error recovery, general open-stream lifetime, removable-media
   behavior and multi-CPU locking still need work.
   `DskCluster.HC` is present in the reference tree but not included by
   its `MakeBlkDev.HC`; the active cluster implementation is `DskClus.HC`.

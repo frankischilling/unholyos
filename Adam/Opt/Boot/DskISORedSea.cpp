@@ -133,7 +133,21 @@ extern "C" char *ExtChgCpp(const char *name,const char *ext);
 extern "C" uint64_t FileWriteCpp(const char *name,const uint8_t *data,
                                  uint64_t count,uint64_t date,uint64_t attr);
 
-constexpr size_t ISO_DRV_OFFSET=(ISO_LOADER_LBA+1)*DVD_BLK_SIZE/BLK_SIZE;
+bool RedSeaISO9660Write(CDrv &dv)
+{
+  if (!dv.bd || dv.drv_offset!=int64_t(ISO_DRV_OFFSET) ||
+      dv.bd->max_blk<int64_t(ISO_DRV_OFFSET) ||
+      uint64_t(dv.bd->max_blk)+1>uint64_t(UINT32_MAX)*DVD_BLK_SIZE/BLK_SIZE ||
+      dv.root_clus>UINT32_MAX)
+    return false;
+  auto *prefix=CAlloc(ISO_DRV_OFFSET*BLK_SIZE,CurrentTask()->data_heap);
+  if (!prefix) return false;
+  RedSeaISO9660(prefix,(uint64_t(dv.bd->max_blk)+1)*BLK_SIZE/DVD_BLK_SIZE,
+                dv.root_clus);
+  bool res=BlkDevWriteBytes(*dv.bd,prefix,0,ISO_DRV_OFFSET*BLK_SIZE);
+  Free(prefix);
+  return res;
+}
 
 struct CISOEntry
 {

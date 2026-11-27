@@ -215,8 +215,7 @@ static bool FAT32ChainTail(const CDrv &dv,uint64_t c,uint32_t &tail,
 
 static bool FAT32Writable(const CDrv &dv)
 {
-  return dv.fs_type==FSt_FAT32 && dv.bd && dv.bd->type==BDT_ATA &&
-         !(dv.bd->flags&BDF_READ_ONLY) && !(dv.fat_blk_dirty&1);
+  return dv.fs_type==FSt_FAT32 && WritableFS(dv) && !(dv.fat_blk_dirty&1);
 }
 
 static uint64_t FAT32ClusPos(const CDrv &dv,uint32_t c)

@@ -429,7 +429,8 @@ qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom build/gcc/unhol
 
 The guest copies files already present in the source tree. Rebuilding the
 kernel and loader from source inside the guest still requires the guest
-toolchain. The file-backed ISO device and persistent disc writes are pending.
+toolchain. File-backed devices are covered separately below; this builder
+still uses a temporary RAM volume.
 
 ## Reference
 
@@ -3717,8 +3718,48 @@ build/Linux/TestBoot --storage-lifecycle-reference qemu-system-x86_64 \
 
 All three focused runs exited successfully with GCC 13.3.0, Clang
 20.1.2 and QEMU 8.2.2, `pc`, `qemu64`, 512 MiB and one vCPU.
-These checks do not establish safe teardown with arbitrary open streams
-or file-backed devices; see [Source layout](SourceLayout.md).
+These checks do not establish safe teardown with arbitrary open streams;
+file-backed device lifetime is tested separately below.
+
+## File-backed RedSea mounts
+
+Two unchanged HolyC probes run on both UnholyOS and the pinned TempleOS
+distribution: `FileBackedRedSeaProbe.HC` (3868 bytes) and
+`FileBackedRedSeaWriteProbe.HC` (5155 bytes). They exercise default filename
+resolution, image geometry, contiguous reads, creation and formatting of
+a writable image, file and directory mutations, raw block writes and
+unmount/remount persistence. The results match:
+
+```text
+File backed RedSea 1FF
+File backed RedSea write 7FF
+```
+
+`FileBackedRedSeaNativeProbe.HC` (4257 bytes) adds eleven checks for native
+lifetime and cache safeguards, including `File`, `Drv`, `BlkDev` and `Drv`
+exception diagnostics:
+
+```text
+File backed RedSea native 7FF
+```
+
+The shared fixtures have SHA-256 hashes
+`bf04f3147fa7d39bc2b3e42637e34bb508e651500ba942ab535565e78ae9092f`
+and `d84ed801d391010fd7b68540d5d47108ec3ba8e3f3678ea9393998bfe8c086ce`;
+the native fixture hash is
+`d7de607b6cf91227eccd3396e66fd626cc748705704fc322361af1bede77f1b5`.
+
+```sh
+make -j8 test-file-backed-redsea test-storage-lifecycle test-cluster-entry test-disk-cache test-fat-sector-cache
+build/Linux/TestBoot --file-backed-redsea-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/file-backed-reference
+```
+
+The local GCC 13.3.0 and reference runs passed with NASM 2.16.01 and
+QEMU 8.2.2, `pc`, `qemu64`, 512 MiB and one vCPU. The native boot media
+is `build/file-backed-redsea-test.iso`. The fixtures establish the tested
+RAM-backed image operations, not FAT32-backed image or full lifecycle
+parity. See [Source layout](SourceLayout.md) for remaining differences.
 
 ## Subsystem map
 

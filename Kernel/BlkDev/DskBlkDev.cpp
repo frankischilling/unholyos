@@ -82,6 +82,26 @@ bool BlkDevEnsureInitialized(CBlkDev &bd)
         }
       }
       break;
+    case BDT_ISO_FILE_READ:
+    case BDT_ISO_FILE_WRITE: {
+      uint64_t physical;
+      res=bd.file_dsk &&
+          !(bd.file_dsk->flags&(FF_BUF_DIRTY|FF_NEEDS_WRITE|FF_NEW_FILE)) &&
+          bool(bd.file_dsk->flags&FF_WRITE)==(bd.type==BDT_ISO_FILE_WRITE) &&
+          FImageByteRange(*bd.file_dsk,0,0,physical) &&
+          bd.max_blk==bd.file_dsk->max_blk;
+      if (res)
+        for (size_t i=0;i<DRVS_NUM;i++) {
+          auto &dv=blkdev.drvs[i];
+          if (dv.dv_signature==DRV_SIGNATURE_VAL && dv.bd==&bd) {
+            uint16_t disabled=dv.fs_type&~FSG_TYPE_MASK;
+            res=RedSeaInit(dv) && DrvFATCacheInit(dv);
+            dv.fs_type|=disabled;
+            if (!res) break;
+          }
+        }
+      break;
+    }
     case BDT_ATA:
       res=ATAProbe(bd)==BDT_ATA && ATAReadCapacity(bd);
       if (res)
@@ -174,7 +194,11 @@ bool BlkDevDeleteReady(const CBlkDev *bd)
       break;
     }
   if (!found || (bd->locked_flags&1) || bd->owning_task ||
-      (bd->flags&BDF_INIT_IN_PROGRESS) || bd->file_dsk)
+      (bd->flags&BDF_INIT_IN_PROGRESS))
+    return false;
+  if (bd->file_dsk &&
+      ((bd->type!=BDT_ISO_FILE_READ && bd->type!=BDT_ISO_FILE_WRITE) ||
+       (bd->file_dsk->flags&(FF_BUF_DIRTY|FF_NEEDS_WRITE|FF_NEW_FILE))))
     return false;
   auto *lock_bd=BlkDevLockTarget(const_cast<CBlkDev *>(bd));
   if (bd->bd_signature==BD_SIGNATURE_VAL &&
@@ -200,6 +224,7 @@ void BlkDevDelete(CBlkDev &bd,uint8_t *keep_ram)
   DskCacheInvalidateDevice(&bd);
   for (size_t i=0;i<DRVS_NUM;i++)
     if (blkdev.drvs[i].bd==&bd) DrvDelete(blkdev.drvs[i]);
+  FCloseImage(bd.file_dsk);
   BlkDevReleaseRAM(bd,keep_ram);
   Free(bd.file_dsk_name);
   Free(bd.dev_id_record);

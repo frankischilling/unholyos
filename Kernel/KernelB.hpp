@@ -504,6 +504,9 @@ bool BlkDevDeleteReady(const CBlkDev *bd);
 void BlkDevDelete(CBlkDev &bd,uint8_t *keep_ram=nullptr);
 uint8_t *BlkDevOwnedRAM(const CBlkDev *bd);
 void BlkDevReleaseRAM(CBlkDev &bd,uint8_t *keep_ram);
+bool BlkDevSameBacking(const CBlkDev &a,const CBlkDev &b);
+bool BlkDevImageBacking(const CBlkDev *bd);
+bool DrvHasImageDependents(const CDrv &dv);
 extern "C" uint64_t BlkDevLockCpp(CBlkDev *bd);
 extern "C" uint64_t BlkDevUnlockCpp(CBlkDev *bd,uint8_t rst);
 bool BlkDevEnsureInitialized(CBlkDev &bd);
@@ -557,6 +560,7 @@ void DrvFATCacheReset(CDrv &dv);
 void DrvFATCacheResetDevice(CBlkDev *bd,bool controller=false);
 bool DrvFATRead(const CDrv &dv,uint64_t index,void *buf,size_t offset,size_t bytes);
 bool DrvFATWriteAllowed(CBlkDev *bd,uint64_t pos,size_t bytes,const CDrv *origin=nullptr);
+bool DrvFATWriteAllowedImage(CBlkDev *bd,uint64_t pos,size_t bytes,const CDrv *origin);
 void DrvFATWriteThrough(CBlkDev *bd,const uint8_t *buf,uint64_t pos,size_t bytes,
                         bool okay,const CDrv *origin=nullptr);
 extern "C" uint64_t DrvNextFreeLetCpp(uint8_t first_drv_let);
@@ -577,6 +581,10 @@ CBlkDev *BlkDevNextFreeSlot(uint8_t first_drv_let,uint32_t type);
 extern "C" CBlkDev *BlkDevNextFreeSlotCpp(uint8_t first_drv_let,int64_t type);
 extern "C" CBlkDev *BlkDevChkCpp(CBlkDev *bd,uint8_t except);
 extern "C" CBlkDev *Let2BlkDevCpp(uint8_t drv_let,uint8_t except);
+extern "C" int64_t BlkDevAddCpp(CBlkDev *bd,int64_t prt_num,uint8_t whole_drv,
+                                uint8_t make_free);
+extern "C" void UnmountCpp(uint8_t drv_let);
+extern "C" uint64_t MountFileCpp(const char *filename);
 bool BlkDevReadBytes(CBlkDev &bd, uint8_t *buf, uint64_t pos,
                      size_t bytes);
 bool BlkDevWriteBytes(CBlkDev &bd, const uint8_t *buf, uint64_t pos,
@@ -625,8 +633,9 @@ inline bool ReadableFS(const CDrv &dv)
 }
 inline bool WritableFS(const CDrv &dv)
 {
-  return dv.bd && !(dv.bd->flags&BDF_READ_ONLY) &&
-         ((dv.fs_type==FSt_REDSEA && dv.bd->type==BDT_RAM) ||
+  return dv.bd && !(dv.bd->flags&BDF_READ_ONLY) && !BlkDevImageBacking(dv.bd) &&
+         ((dv.fs_type==FSt_REDSEA &&
+           (dv.bd->type==BDT_RAM || dv.bd->type==BDT_ISO_FILE_WRITE)) ||
           (dv.fs_type==FSt_FAT32 && dv.bd->type==BDT_ATA));
 }
 inline bool FsMkDir(CDrv &dv,const char *path,int64_t entry_cnt=0);
@@ -648,6 +657,12 @@ bool RedSeaStreamPrepare(CDrv &dv, const char *path, CDirEntry &de, int64_t cnt)
 bool RedSeaStreamCommit(CDrv &dv, const char *path, CDirEntry &de, bool new_file);
 extern "C" int64_t FSizeCpp(CFile *f);
 extern "C" CFile *FOpenCpp(const char *filename, const char *flags, int64_t cnt);
+CFile *FOpenImageRead(const char *absolute,CDrv *backing);
+CFile *FOpenImageWrite(const char *absolute,CDrv *backing,int64_t cnt);
+void FCloseImage(CFile *f);
+bool FImageByteRange(const CFile &f,uint64_t pos,size_t bytes,uint64_t &physical);
+bool FImageReadBytes(CFile *f,uint8_t *buf,uint64_t pos,size_t bytes);
+bool FImageWriteBytes(CFile *f,const uint8_t *buf,uint64_t pos,size_t bytes);
 extern "C" void FCloseCpp(CFile *f);
 extern "C" uint64_t FBlkReadCpp(CFile *f, uint8_t *buf, int64_t blk, int64_t cnt);
 extern "C" uint64_t FBlkWriteCpp(CFile *f, const uint8_t *buf, int64_t blk, int64_t cnt);

@@ -2051,6 +2051,9 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/DiskCacheProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/StorageLifecycleProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/StorageLifecycleNativeProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/FileBackedRedSeaProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/FileBackedRedSeaWriteProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/FileBackedRedSeaNativeProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ListUtilitiesProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ColorConversionsProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FormatMissingArgsProbe.HC");
