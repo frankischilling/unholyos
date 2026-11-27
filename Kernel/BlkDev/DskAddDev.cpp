@@ -162,10 +162,19 @@ static int64_t BlkDevAddImage(CBlkDev *bd,bool make_free)
       (write && (bd->drv_offset!=ISO_DRV_OFFSET ||
                  bd->max_blk<bd->drv_offset+2 || bd->max_blk>=int64_t(INT64_MAX/BLK_SIZE))))
     return 0;
+  if (write) {
+    uint64_t blocks=uint64_t(bd->max_blk)+1-bd->drv_offset;
+    uint64_t map=(blocks+8*BLK_SIZE-1)/(8*BLK_SIZE);
+    uint64_t root=bd->init_root_dir_blks>0?bd->init_root_dir_blks:1;
+    if (map+1>=blocks || root>blocks-map-1 ||
+        uint64_t(bd->max_blk)+1>uint64_t(UINT32_MAX)*DVD_BLK_SIZE/BLK_SIZE)
+      return 0;
+  }
   auto *requested_name=bd->file_dsk_name;
   auto requested_letter=bd->first_drv_let;
   auto requested_offset=bd->drv_offset;
   auto requested_max=bd->max_blk;
+  auto requested_root=bd->init_root_dir_blks;
   auto requested_type=bd->type;
   char default_name[]="T:/DrvQ.ISO.C";
   default_name[0]=blkdev.boot_drv_let;
@@ -176,9 +185,9 @@ static int64_t BlkDevAddImage(CBlkDev *bd,bool make_free)
   auto *backing=absolute[0] && absolute[1]==':' && absolute[2]=='/'
                 ? MountedDrive(absolute[0]) : nullptr;
   int64_t res=0;
+  bool rollback_failed=false;
   if (backing && ReadableFS(*backing) && BlkDevLockTarget(backing->bd) &&
-      (backing->bd->type==BDT_RAM || backing->bd->type==BDT_ATA) &&
-      !(backing->bd->flags&BDF_REMOVABLE)) {
+      BlkDevImageChain(*backing->bd,write)) {
     auto *source_bd=backing->bd;
     auto *source_lock=BlkDevLockTarget(source_bd);
     // Acquire the potentially contended backing lock before mount_flags.
@@ -187,23 +196,23 @@ static int64_t BlkDevAddImage(CBlkDev *bd,bool make_free)
     CMemLock mount(mount_flags);
     if (BlkDevImageSlot(bd) && bd->file_dsk_name==requested_name &&
         bd->first_drv_let==requested_letter && bd->drv_offset==requested_offset &&
-        bd->max_blk==requested_max && bd->type==requested_type &&
+        bd->max_blk==requested_max && bd->init_root_dir_blks==requested_root &&
+        bd->type==requested_type &&
         MountedDrive(absolute[0])==backing && backing->bd==source_bd &&
         BlkDevLockTarget(source_bd)==source_lock && ReadableFS(*backing) &&
-        (source_bd->type==BDT_RAM || source_bd->type==BDT_ATA) &&
-        !(source_bd->flags&BDF_REMOVABLE) &&
+        BlkDevImageChain(*source_bd,write) &&
+        (!(source_bd->flags&BDF_REMOVABLE) || source_bd->type==BDT_ATAPI) &&
         BlkDevEnsureInitialized(*source_bd)) {
       bool clean=!write || WritableFS(*backing);
       for (size_t i=0;i<DRVS_NUM;i++)
-        if (blkdev.drvs[i].bd==backing->bd &&
+        if (blkdev.drvs[i].bd &&
+            BlkDevSameBacking(*blkdev.drvs[i].bd,*source_bd) &&
             (blkdev.drvs[i].fat_blk_dirty&1))
           clean=false;
       for (size_t i=0;i<BLKDEVS_NUM;i++) {
         const auto &image=blkdev.blkdevs[i];
-        if (image.bd_signature==BD_SIGNATURE_VAL &&
-            (write || image.type==BDT_ISO_FILE_WRITE) && image.file_dsk &&
-            image.file_dsk->dv && image.file_dsk->dv->bd &&
-            BlkDevSameBacking(*image.file_dsk->dv->bd,*source_bd))
+        if ((write || image.type==BDT_ISO_FILE_WRITE) &&
+            BlkDevImageDependsOn(image,*source_bd))
           clean=false;
       }
       char letter=bd->first_drv_let;
@@ -212,17 +221,20 @@ static int64_t BlkDevAddImage(CBlkDev *bd,bool make_free)
                blkdev.drvs[letter-'A'].dv_signature==DRV_SIGNATURE_VAL))
           letter++;
       if (clean && letter<=last && !MountedDrive(letter) &&
-          blkdev.drvs[letter-'A'].dv_signature!=DRV_SIGNATURE_VAL) {
+          blkdev.drvs[letter-'A'].dv_signature!=DRV_SIGNATURE_VAL &&
+          (source_bd->type!=BDT_ATAPI || BlkDevMediaPin(*source_bd))) {
         auto &target=blkdev.drvs[letter-'A'];
+        CImageMountUndo undo;
         auto *name=StrNew(absolute,adam_task->data_heap);
-        auto *f=name?(write?FOpenImageWrite(absolute,backing,requested_max+1):
+        auto *f=name?(write?FOpenImageWrite(absolute,backing,requested_max+1,undo):
                             FOpenImageRead(absolute,backing)):nullptr;
         if (f && name && bd->drv_offset<=f->max_blk) {
           CBlkDev device{};
           MemCpy(&device,bd,sizeof(device));
           device.bd_signature=BD_SIGNATURE_VAL;
           device.flags|=BDF_INITIALIZED;
-          device.flags&=~(BDF_INIT_IN_PROGRESS|BDF_READ_ONLY_OVERRIDE|BDF_READ_ONLY);
+          device.flags&=~(BDF_INIT_IN_PROGRESS|BDF_READ_ONLY_OVERRIDE|BDF_READ_ONLY|
+                          BDF_REMOVABLE);
           if (!write) device.flags|=BDF_READ_ONLY;
           device.first_drv_let=letter;
           device.blk_size=BLK_SIZE;
@@ -236,7 +248,8 @@ static int64_t BlkDevAddImage(CBlkDev *bd,bool make_free)
           drive.size=device.max_blk+1-drive.drv_offset;
           drive.drv_let=letter;
           size_t root_blocks=bd->init_root_dir_blks>0?bd->init_root_dir_blks:1;
-          if ((write?(RedSeaFormatRAM(drive,root_blocks) && RedSeaISO9660Write(drive)):
+          if (BlkDevImageChain(device,write) &&
+              (write?(RedSeaFormatRAM(drive,root_blocks) && RedSeaISO9660Write(drive)):
                      RedSeaInit(drive)) && DrvFATCacheInit(drive)) {
             CMemLock lock(disk_lock_flags);
             if (DrvDeleteReady(&target)) {
@@ -257,13 +270,21 @@ static int64_t BlkDevAddImage(CBlkDev *bd,bool make_free)
           if (!res) DrvFATCacheDrop(drive);
         }
         if (!res) {
+          if (write && f && !FDiscardImageWrite(f,undo))
+            undo.rollback_failed=true;
           Free(name);
           FCloseImage(f);
+          if (source_bd->type==BDT_ATAPI)
+            BlkDevMediaUnpin(*source_bd);
         }
+        rollback_failed=undo.rollback_failed;
+        Free(undo.data);
       }
     }
   }
   Free(absolute);
+  if (rollback_failed)
+    PutS("Image mount rollback failed\n");
   return res;
 }
 

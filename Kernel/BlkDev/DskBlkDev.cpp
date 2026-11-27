@@ -2,14 +2,73 @@
 
 uint64_t disk_lock_flags;
 
+bool BlkDevRegistered(const CBlkDev *bd)
+{
+  if (blkdev.blkdevs)
+    for (size_t i=0;i<BLKDEVS_NUM;i++)
+      if (bd==&blkdev.blkdevs[i])
+        return bd->bd_signature==BD_SIGNATURE_VAL;
+  return false;
+}
+
 CBlkDev *BlkDevLockTarget(CBlkDev *bd)
 {
   // Bound forwarding traversal even if a guest supplies a cyclic record.
   for (size_t i=0;i<BLKDEVS_NUM && BlkDevChkCpp(bd,false);i++) {
+    if ((bd->type==BDT_ISO_FILE_READ || bd->type==BDT_ISO_FILE_WRITE) &&
+        !BlkDevImageChain(*bd))
+      return nullptr;
     if (!bd->lock_fwding) return bd;
+    if (!BlkDevRegistered(bd->lock_fwding)) return nullptr;
+    if (bd->type!=BDT_ISO_FILE_READ && bd->type!=BDT_ISO_FILE_WRITE &&
+        ((bd->type!=BDT_ATA && bd->type!=BDT_ATAPI) ||
+         (bd->lock_fwding->type!=BDT_ATA && bd->lock_fwding->type!=BDT_ATAPI) ||
+         bd->base0!=bd->lock_fwding->base0 ||
+         bd->base1!=bd->lock_fwding->base1))
+      return nullptr;
     bd=bd->lock_fwding;
   }
   return nullptr;
+}
+
+// A direct optical dependency holds a media-removal pin until the last
+// image on that physical drive is detached. Nested images share this pin.
+static bool media_pinned[BLKDEVS_NUM];
+
+bool BlkDevMediaPinned(const CBlkDev &bd)
+{
+  if (blkdev.blkdevs)
+    for (size_t i=0;i<BLKDEVS_NUM;i++)
+      if (media_pinned[i] && BlkDevSameBacking(blkdev.blkdevs[i],bd))
+        return true;
+  return false;
+}
+
+bool BlkDevMediaPin(CBlkDev &bd)
+{
+  if (bd.type!=BDT_ATAPI || !BlkDevRegistered(&bd))
+    return false;
+  if (BlkDevMediaPinned(bd))
+    return true;
+  if (!ATAPIPreventRemoval(bd,true))
+    return false;
+  for (size_t i=0;i<BLKDEVS_NUM;i++)
+    if (&bd==&blkdev.blkdevs[i]) {
+      media_pinned[i]=true;
+      return true;
+    }
+  return false;
+}
+
+void BlkDevMediaUnpin(CBlkDev &bd)
+{
+  if (bd.type!=BDT_ATAPI || BlkDevImageBacking(&bd) ||
+      !BlkDevMediaPinned(bd))
+    return;
+  ATAPIPreventRemoval(bd,false);
+  for (size_t i=0;i<BLKDEVS_NUM;i++)
+    if (media_pinned[i] && BlkDevSameBacking(blkdev.blkdevs[i],bd))
+      media_pinned[i]=false;
 }
 
 bool BlkDevLockOwner(CBlkDev *bd)
@@ -37,6 +96,16 @@ bool BlkDevUnlockOwner(CBlkDev *bd,bool rst)
   if (rst) {
     bd->flags&=~(BDF_INITIALIZED|BDF_INIT_IN_PROGRESS);
     DskCacheInvalidateDevice(bd);
+    if (blkdev.blkdevs)
+      for (size_t i=0;i<BLKDEVS_NUM;i++) {
+        auto &image=blkdev.blkdevs[i];
+        if (image.bd_signature==BD_SIGNATURE_VAL &&
+            (image.type==BDT_ISO_FILE_READ || image.type==BDT_ISO_FILE_WRITE) &&
+            BlkDevLockTarget(&image)==bd) {
+          image.flags&=~(BDF_INITIALIZED|BDF_INIT_IN_PROGRESS);
+          DskCacheInvalidateDevice(&image);
+        }
+      }
     DrvFATCacheResetDevice(bd,true);
   }
   bd->owning_task=nullptr;
@@ -60,6 +129,12 @@ extern "C" uint64_t BlkDevUnlockCpp(CBlkDev *bd,uint8_t rst)
 
 bool BlkDevEnsureInitialized(CBlkDev &bd)
 {
+  if (bd.type==BDT_ISO_FILE_READ || bd.type==BDT_ISO_FILE_WRITE) {
+    if (!BlkDevImageChain(bd) ||
+        !BlkDevEnsureInitialized(*bd.file_dsk->dv->bd) ||
+        !BlkDevImageChain(bd))
+      return false;
+  }
   if (bd.flags&BDF_INITIALIZED) return true;
   if (bd.flags&BDF_INIT_IN_PROGRESS) return false;
   if (blkdev.drvs)
@@ -196,6 +271,8 @@ bool BlkDevDeleteReady(const CBlkDev *bd)
   if (!found || (bd->locked_flags&1) || bd->owning_task ||
       (bd->flags&BDF_INIT_IN_PROGRESS))
     return false;
+  if (bd->bd_signature==BD_SIGNATURE_VAL && BlkDevImageBacking(bd))
+    return false;
   if (bd->file_dsk &&
       ((bd->type!=BDT_ISO_FILE_READ && bd->type!=BDT_ISO_FILE_WRITE) ||
        (bd->file_dsk->flags&(FF_BUF_DIRTY|FF_NEEDS_WRITE|FF_NEW_FILE))))
@@ -221,6 +298,9 @@ bool BlkDevDeleteReady(const CBlkDev *bd)
 
 void BlkDevDelete(CBlkDev &bd,uint8_t *keep_ram)
 {
+  auto *parent=bd.file_dsk && bd.file_dsk->dv?bd.file_dsk->dv->bd:nullptr;
+  if (bd.type==BDT_ATAPI)
+    BlkDevMediaUnpin(bd);
   DskCacheInvalidateDevice(&bd);
   for (size_t i=0;i<DRVS_NUM;i++)
     if (blkdev.drvs[i].bd==&bd) DrvDelete(blkdev.drvs[i]);
@@ -229,6 +309,8 @@ void BlkDevDelete(CBlkDev &bd,uint8_t *keep_ram)
   Free(bd.file_dsk_name);
   Free(bd.dev_id_record);
   MemSet(&bd,0,sizeof(bd));
+  if (parent && parent->type==BDT_ATAPI)
+    BlkDevMediaUnpin(*parent);
 }
 
 extern "C" void BlkDevDelCpp(CBlkDev *bd)

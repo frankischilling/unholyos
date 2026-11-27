@@ -1590,8 +1590,8 @@ links, protects the root and overlapping or shared chains, and refuses
 nonterminal append, freeing an overlapping extent, or replacing a
 nonempty directory with a different chain. Same-chain metadata changes
 preserve the chain; FAT32 replacement may stay in place instead of using
-an earlier deleted slot. The existing direct bitmap and mirrored FAT
-I/O remain in use; no persistent free-list or FAT cache is introduced.
+an earlier deleted slot. Allocation uses the per-drive FAT sector cache
+and RedSea free-extent queue described below.
 Low-level freeing still relies on caller ownership outside the checked
 root, parent and directory entries. Rollback is best effort on hardware
 write failures, and full reference locking, break handling and exception
@@ -1656,8 +1656,18 @@ Mounting publishes a stable buffer only after successful geometry and
 initial sector reads. Temporary drives are not retained in the cache.
 Normal replacement refuses dirty state; explicit reset and format
 discard it. Direct writes through an arbitrary guest RAM pointer
-cannot be intercepted. RedSea free-list allocation, persistent FSInfo
-ownership and full media-change/error paths remain outstanding.
+cannot be intercepted. Persistent FSInfo ownership and full
+media-change/error paths remain outstanding.
+
+`FileSysRedSea.cpp` implements `RedSeaFreeFreeLst`, `RedSeaFreeLstBuild`,
+`RedSeaAllocClus`, and `RedSeaFreeClus` with the circular `CFreeLst` records
+anchored in `CDrv`. Allocation selects the smallest sufficient extent;
+freeing merges the first adjacent extent in queue order. Successful native
+bitmap writes maintain the queue and sector cache; external bitmap writes
+and device resets invalidate the queue so the next allocation rebuilds it.
+Mount-time allocation for an unpublished drive still scans the bitmap.
+`RedSeaValidate` and `RedSeaFmt` expose validation and formatting through the
+HolyC ABI. The native formatter rejects pending dirty allocation metadata.
 
 ## Drive and device lifecycle
 
@@ -1696,25 +1706,35 @@ The backing stream, name and cluster buffer belong to Adam; device locking
 forwards to the backing device. `DskCFile.cpp`, `DskBlk.cpp` and
 `FileSysRedSea.cpp` share bounded device I/O for RAM and writable images.
 
-The implementation requires nonremovable RAM or ATA backing storage and
-validated contiguous file extents. FAT32 requires the contiguous `.C`
-attribute. Nested image devices and occupied-slot replacement are not
-supported. Multiple read-only mounts may coexist; a writable mount is
-exclusive. While an image is mounted, the backing device is protected
-against unrelated mutations, deletion and reconfiguration. Closing its
-owned stream directly raises `File`. These restrictions are broader than
-the reference's lifetime rules. Invalid mount requests return zero and
-invalid raw I/O returns false where the reference may throw.
+The implementation accepts contiguous RedSea and FAT32 backing files on
+RAM, ATA, and nested image devices. FAT32 requires the contiguous `.C`
+attribute. Read-only optical backing uses ATAPI medium-removal prevention
+until the last direct image dependency is detached. A bounded dependency
+walk checks every ancestor's extent, access mode and forwarded lock before
+performing I/O. Nested writes pass authorization through the immediate
+child at each hop; unrelated backing mutations and teardown are rejected.
+Multiple read-only mounts may coexist, while a writable child requires
+exclusive access to its immediate backing device. Closing its owned stream
+directly raises `File`. These restrictions are broader than the reference's
+lifetime rules. Invalid mount requests return zero and invalid raw I/O
+returns false where the reference may throw. Occupied-slot replacement
+remains restricted.
 
-Writable images commit the backing extent and directory entry before
-publication. Failure during subsequent formatting may leave the backing
-file; persistent I/O errors have no guaranteed transactional rollback.
-RedSea root relocation updates the boot record, but does not rewrite the
-ISO descriptor root field. The guest `RedSeaISO` builder still uses a
-temporary RAM volume and `CopyTree2`; converting it to the reference's
-mounted writable-image workflow remains outstanding. FAT32 backing media,
-arbitrary open-stream lifetime, direct RAM writes, SMP and removable-media
-recovery need further runtime comparisons.
+Writable mounting validates geometry before allocating and saves an existing
+backing file before replacement. A failed staging operation attempts to
+remove its new extent or restore the saved file; restoration requires enough
+memory and working storage. Persistent hardware I/O errors have no guaranteed
+transactional rollback.
+
+`Adam/Opt/Boot/DskISORedSea.cpp` now follows the mounted writable-image
+workflow: calculate the tree's extent, mount the image, call `CopyTree`,
+refresh its descriptors, patch stage-one boot data in place, and detach it.
+The native `RedSeaISO9660` ABI also updates descriptors on supported
+writable media. The builder retains padding for the shifted stage-two
+read. Root relocation outside the builder and explicit formatting does not
+yet update the ISO descriptor. General nonlocal exception recovery during
+copying, direct RAM mutation, arbitrary open streams, SMP, and failure to
+release or externally forced replacement of optical media remain limitations.
 
 ## Remaining structural work
 
@@ -1762,9 +1782,8 @@ and reproduced native-import coverage.
 The [development milestones](Development.md) define completion in the required order: full rewrite, full compatibility, bootstrap, then self-hosting. Host GCC or Clang and NASM support the current development builds.
 
 The guest's `RedSeaISO` follows the sizing and directory-copy steps from
-`Adam/Opt/Boot/DskISORedSea.HC` and `Adam/ABlkDev/ADskA.HC`. The current
-`CopyTree2` works on the ISO's private RedSea RAM volume. The reference
-uses `BDT_ISO_FILE_WRITE` and the general `CopyTree` path. UnholyOS
+`Adam/Opt/Boot/DskISORedSea.HC` and `Adam/ABlkDev/ADskA.HC`, using
+`BDT_ISO_FILE_WRITE` and the general `CopyTree` path. UnholyOS
 reserves a spare DVD sector when a stage-two file is supplied because the
 shifted read can extend beyond that file's last RedSea block. The loader
 is the NASM `BootDVD.BIN` embedded by `DskISORedSea.asm`.

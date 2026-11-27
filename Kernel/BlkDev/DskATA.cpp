@@ -334,6 +334,21 @@ bool ATAPIStartStop(const CBlkDev &bd, bool start)
   return ATAPIStartStop(bd, ATADeadline(5000), start);
 }
 
+bool ATAPIPreventRemoval(const CBlkDev &bd, bool prevent)
+{
+  CATAChannelLock lock(bd);
+  uint64_t deadline=ATADeadline(5000);
+  ATASel(bd);
+  if (ATAWait(bd,deadline,0)<0)
+    return false;
+  ATACmd(bd,ATA_PACKET);
+  const uint16_t pkt[6]{0x1E00,0,uint16_t(prevent?0x100:0),0,0,0};
+  if (!ATAPIWritePktWord(bd,deadline,pkt))
+    return false;
+  int status=ATAWait(bd,deadline,0);
+  return status>=0 && !(status&(ATAS_DRQ|ATAS_ERR|ATAS_DF));
+}
+
 static bool ATAPIWaitReady(const CBlkDev &bd, uint64_t deadline)
 {
   ATASel(bd);

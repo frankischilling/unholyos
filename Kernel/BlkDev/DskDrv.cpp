@@ -57,11 +57,27 @@ static bool DrvFATSelector(int64_t fat_sel)
   return fat_sel==0 || fat_sel==1 || fat_sel==3;
 }
 
-void DrvFATCacheReset(CDrv &dv)
+static void DrvFreeListInvalidate(CDrv &dv)
+{
+  if (DrvFreeListValid(dv))
+    DrvFreeListClear(dv);
+  else
+    dv.next_free=dv.last_free=nullptr;
+}
+
+static void DrvFATCacheResetSector(CDrv &dv)
 {
   dv.cur_fat_blk_num=-1;
   dv.fat_blk_dirty=0;
   if (auto *copy=DrvFATCopy(dv)) *copy=0;
+}
+
+void DrvFATCacheReset(CDrv &dv)
+{
+  DrvFATCacheResetSector(dv);
+  if (DrvFATCopy(dv) && dv.dv_signature==DRV_SIGNATURE_VAL &&
+      (dv.fs_type&FSG_TYPE_MASK)==FSt_REDSEA)
+    DrvFreeListInvalidate(dv);
 }
 
 void DrvFATCacheDrop(CDrv &dv)
@@ -110,9 +126,11 @@ bool DrvFATWriteAllowedImage(CBlkDev *bd,uint64_t pos,size_t bytes,
                              const CDrv *origin)
 {
   if (!bytes || !blkdev.drvs) return true;
+  if (!bd) return false;
   for (size_t i=0;i<DRVS_NUM;i++) {
     auto &dv=blkdev.drvs[i];
-    if (&dv==origin || dv.dv_signature!=DRV_SIGNATURE_VAL || dv.bd!=bd ||
+    if (&dv==origin || dv.dv_signature!=DRV_SIGNATURE_VAL || !dv.bd ||
+        !BlkDevSameBacking(*dv.bd,*bd) ||
         !dv.cur_fat_blk || !(dv.fat_blk_dirty&1))
       continue;
     uint64_t blk1,blk2;
@@ -126,27 +144,47 @@ bool DrvFATWriteAllowedImage(CBlkDev *bd,uint64_t pos,size_t bytes,
 
 bool DrvFATWriteAllowed(CBlkDev *bd,uint64_t pos,size_t bytes,const CDrv *origin)
 {
-  return (!bytes || !BlkDevImageBacking(bd)) &&
+  return (!bytes || (!BlkDevImageBacking(bd) && bd &&
+          ((bd->type!=BDT_ISO_FILE_READ && bd->type!=BDT_ISO_FILE_WRITE) ||
+           BlkDevImageCanWrite(bd)))) &&
          DrvFATWriteAllowedImage(bd,pos,bytes,origin);
 }
 
 void DrvFATWriteThrough(CBlkDev *bd,const uint8_t *buf,uint64_t pos,
                         size_t bytes,bool okay,const CDrv *origin)
 {
-  if (!blkdev.drvs) return;
+  if (!bd || !bytes || !blkdev.drvs) return;
   for (size_t i=0;i<DRVS_NUM;i++) {
     auto &dv=blkdev.drvs[i];
-    if (&dv==origin || dv.dv_signature!=DRV_SIGNATURE_VAL || dv.bd!=bd ||
-        !dv.cur_fat_blk || dv.cur_fat_blk_num<0 || (dv.fat_blk_dirty&1))
+    if (dv.dv_signature!=DRV_SIGNATURE_VAL || !dv.bd ||
+        !BlkDevSameBacking(*dv.bd,*bd))
+      continue;
+    bool own=&dv==origin,dirty=dv.fat_blk_dirty&1;
+    if ((!own || dirty) && (dv.fs_type&FSG_TYPE_MASK)==FSt_REDSEA) {
+      uint64_t first,last;
+      if (dv.data_area<dv.fat1 ||
+          !DrvFATSector(dv,0,0,first) ||
+          !DrvFATSector(dv,dv.data_area-dv.fat1,0,last))
+        DrvFreeListInvalidate(dv);
+      else {
+        uint64_t start=first*BLK_SIZE,len=(last-first+1)*BLK_SIZE;
+        if (start>=pos?start-pos<bytes:pos-start<len)
+          DrvFreeListInvalidate(dv);
+      }
+    }
+    if (!dv.cur_fat_blk || dv.cur_fat_blk_num<0 || dirty)
       continue;
     uint64_t blk;
     if (!DrvFATSector(dv,dv.cur_fat_blk_num,fat_copy[i],blk)) {
-      DrvFATCacheReset(dv);
+      // A native allocator owns its list until the bitmap update returns.
+      if (own) DrvFATCacheResetSector(dv);
+      else DrvFATCacheReset(dv);
       continue;
     }
     if (!DrvFATOverlap(blk,pos,bytes)) continue;
     if (!okay) {
-      DrvFATCacheReset(dv);
+      if (own) DrvFATCacheResetSector(dv);
+      else DrvFATCacheReset(dv);
       continue;
     }
     uint64_t start=blk*BLK_SIZE;
@@ -281,7 +319,7 @@ static CFreeLst *DrvFreeListHead(CDrv &dv)
   return reinterpret_cast<CFreeLst *>(&dv.next_free);
 }
 
-static bool DrvFreeListValid(CDrv &dv)
+bool DrvFreeListValid(CDrv &dv)
 {
   if (!dv.next_free) return true;
   auto *head=DrvFreeListHead(dv),*last=head;
@@ -293,7 +331,7 @@ static bool DrvFreeListValid(CDrv &dv)
   return last==dv.last_free;
 }
 
-static void DrvFreeListClear(CDrv &dv)
+void DrvFreeListClear(CDrv &dv)
 {
   auto *head=DrvFreeListHead(dv);
   for (auto *p=dv.next_free;p && p!=head;) {
@@ -321,7 +359,7 @@ bool DrvDeleteReady(const CDrv *dv)
     auto *bd=BlkDevLockTarget(dv->bd);
     if (!bd || (bd->locked_flags&1) || bd->owning_task ||
         (dv->bd->locked_flags&1) || dv->bd->owning_task ||
-        (dv->bd->flags&BDF_INIT_IN_PROGRESS))
+        (dv->bd->flags&BDF_INIT_IN_PROGRESS) || DrvHasImageDependents(*dv))
       return false;
   }
   if (blkdev.blkdevs)
@@ -537,7 +575,7 @@ extern "C" CDrv *Let2DrvCpp(uint8_t drv_let,uint8_t except)
 extern "C" CBlkDev *DrvIsWritableCpp(uint8_t drv_let,uint8_t except)
 {
   auto *bd=Let2BlkDevCpp(drv_let,except);
-  if (!bd || bd->flags&BDF_READ_ONLY || BlkDevImageBacking(bd)) {
+  if (!BlkDevImageCanWrite(bd) || BlkDevImageBacking(bd)) {
     if (except)
       RaiseHolyC(0x767244); // Drv
     return nullptr;
@@ -620,6 +658,8 @@ static bool DrvChangeMedia(CDrv &dv)
 extern "C" void DskChgCpp(uint8_t drv_let)
 {
   auto *dv=Let2DrvCpp(drv_let,true);
+  if (dv->bd && BlkDevMediaPinned(*dv->bd))
+    RaiseHolyC(0x767244); // Drv
   if (!DrvChangeMedia(*dv)) RaiseHolyC(0x767244); // Drv
   DrvCpp(drv_let);
 }
