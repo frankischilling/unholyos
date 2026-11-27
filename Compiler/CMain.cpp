@@ -339,3 +339,12 @@ extern "C" int64_t StreamExePrintCpp(const char *fmt, int64_t argc,
   Free(source);
   return ExeAnswer(result);
 }
+
+int64_t CInitStatus = 0;
+
+extern "C" void CInitCpp()
+{
+  CInitStatus = -1;
+  if (AsmHashLoad())
+    CInitStatus = 1;
+}

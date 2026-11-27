@@ -6,6 +6,7 @@
 constexpr uint32_t RLF_VGA = 1 << 1;
 constexpr uint32_t RLF_FULL_HEAPS = 1 << 7;
 constexpr uint32_t RLF_INTERRUPTS = 1 << 9;
+constexpr uint32_t RLF_COMPILER = 1 << 12;
 constexpr uint32_t RLF_DOC = 1 << 13;
 constexpr uint32_t RLF_AUTO_COMPLETE = 1 << 17;
 

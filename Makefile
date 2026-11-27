@@ -12,13 +12,12 @@ CXXFLAGS := -std=c++20 -Os -Wall -Wextra -Werror -ffreestanding -fno-pie \
 	-mno-red-zone -mgeneral-regs-only -MMD -MP
 
 ASM_SRC := Kernel/KStart16.asm Kernel/KStart32.asm Kernel/KStart64.asm Kernel/KUtils.asm \
-	Kernel/KMathA.asm Kernel/StrA.asm Kernel/KInts.asm Kernel/KExcept.asm Kernel/Sched.asm Kernel/PCIBIOS.asm \
+	Kernel/KMathA.asm Kernel/StrA.asm Kernel/KInts.asm Kernel/KExcept.asm Kernel/KExts.asm Kernel/Sched.asm Kernel/PCIBIOS.asm \
 	Kernel/Mem/PageTables.asm Kernel/SerialDev/SerialBoot.asm Adam/Opt/Boot/DskISORedSea.asm \
-	Adam/Gr/GrAsm.asm Adam/Gr/GrTextBase.asm \
-	Compiler/CExcept.asm Compiler/CMain.asm Compiler/CMisc.asm Compiler/LexLib.asm
+	Adam/Gr/GrAsm.asm Adam/Gr/GrTextBase.asm
 CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp Kernel/KDbg.cpp Kernel/MultiProc.cpp Kernel/Display.cpp Kernel/FontStd.cpp Kernel/FontCyrillic.cpp Kernel/SerialDev/Serial.cpp \
 	Kernel/KTask.cpp Kernel/Sched.cpp Kernel/KHashA.cpp Kernel/KHashB.cpp Kernel/KLoad.cpp Kernel/KMathB.cpp Kernel/StrA.cpp \
-	Kernel/KDataTypes.cpp Kernel/KDate.cpp Kernel/KExcept.cpp Kernel/QSort.cpp \
+	Kernel/KDataTypes.cpp Kernel/KDate.cpp Kernel/KExcept.cpp Kernel/KExts.cpp Kernel/QSort.cpp \
 	Kernel/StrPrint.cpp Kernel/FunSeg.cpp Kernel/KDefine.cpp Kernel/KeyDev.cpp Kernel/StrB.cpp Kernel/StrScan.cpp \
 	Kernel/EdLite.cpp Kernel/Job.cpp Kernel/SerialDev/Message.cpp Kernel/SerialDev/Keyboard.cpp Kernel/SerialDev/Mouse.cpp \
 	Kernel/PCIBIOS.cpp Kernel/Mem/MemPag.cpp Kernel/Mem/MAllocFree.cpp \
@@ -26,8 +25,6 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Kernel/BlkDev/DskATA.cpp Kernel/BlkDev/DskATAId.cpp Kernel/BlkDev/DskAddDev.cpp \
 	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/FileSysFAT.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
 	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/BlkDev/DskFmt.cpp Kernel/Compress.cpp \
-	Compiler/CMain.cpp Compiler/Asm.cpp Compiler/AsmResolve.cpp Compiler/AsmLib.cpp Compiler/CHash.cpp Compiler/CExcept.cpp Compiler/CMisc.cpp Compiler/Lex.cpp Compiler/LexLib.cpp Compiler/AsmInit.cpp Compiler/PrsLib.cpp \
-	Compiler/PrsExp.cpp Compiler/PrsStmt.cpp Compiler/PrsVar.cpp Compiler/OptLib.cpp Compiler/BackC.cpp \
 	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ASnd.cpp Adam/TaskSettings.cpp Adam/AutoComplete/ACTask.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
 	Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
 	Adam/Gr/SpriteNew.cpp Adam/Gr/GrSpritePlot.cpp Adam/Gr/ScrnCast.cpp \
@@ -37,8 +34,16 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Adam/DolDoc/DocGet.cpp Adam/DolDoc/DocForm.cpp Adam/DolDoc/DocEd.cpp Adam/DolDoc/DocTerm.cpp HomeSys.cpp \
 	Adam/ABlkDev/ADskA.cpp Adam/Opt/Boot/DskISORedSea.cpp
 GUEST_TEST_SRC := Linux/BootProbe.cpp
+COMPILER_ASM_SRC := Compiler/CExcept.asm Compiler/CMain.asm Compiler/CMisc.asm Compiler/LexLib.asm
+COMPILER_CXX_SRC := Compiler/CMain.cpp Compiler/Asm.cpp Compiler/AsmResolve.cpp Compiler/AsmLib.cpp Compiler/CHash.cpp Compiler/CExcept.cpp Compiler/CMisc.cpp Compiler/Lex.cpp Compiler/LexLib.cpp Compiler/AsmInit.cpp Compiler/PrsLib.cpp \
+	Compiler/PrsExp.cpp Compiler/PrsStmt.cpp Compiler/PrsVar.cpp Compiler/OptLib.cpp Compiler/BackC.cpp
 ASM_OBJ := $(ASM_SRC:%.asm=$(BUILD)/%.asm.o)
 CXX_OBJ := $(CXX_SRC:%.cpp=$(BUILD)/%.o) $(GUEST_TEST_SRC:%.cpp=$(BUILD)/%.o)
+COMPILER_ASM_OBJ := $(COMPILER_ASM_SRC:%.asm=$(BUILD)/%.asm.o)
+COMPILER_CXX_OBJ := $(COMPILER_CXX_SRC:%.cpp=$(BUILD)/%.o)
+COMPILER_OBJECT := $(BUILD)/Compiler/Compiler.o
+COMPILER_MODULE := $(BUILD)/Compiler/Compiler.BIN
+COMPILER_BINDINGS := Compiler/Compiler.bindings
 KERNEL := $(BUILD)/0000Boot/0000Kernel.BIN.C
 LOADER := $(BUILD)/Adam/Opt/Boot/BootDVD.BIN
 ISO := $(BUILD)/unholyos.iso
@@ -91,7 +96,8 @@ STRINGS_PROBES := Linux/Fixtures/StrScanProbe.HC Linux/Fixtures/DocScanProbe.HC 
 STARTUP_FIXTURE := Linux/Fixtures/StartOS.HC.Z
 STARTUP_DOC := Doc/Start.DD
 COMPILER_RESOURCE := Compiler/OpCodes.DD
-COMPILER_ISO_ARGS := --file-at $(COMPILER_RESOURCE) $(COMPILER_RESOURCE)
+COMPILER_ISO_ARGS := --file-at $(COMPILER_RESOURCE) $(COMPILER_RESOURCE) \
+	--file-at Compiler/Compiler.BIN $(COMPILER_MODULE)
 MODULE_PROBE := Linux/Fixtures/LoadProbe.BIN
 MODULE_CALLER := Linux/Fixtures/LoadCaller.BIN
 RUNTIME_PROBE := Linux/Fixtures/RuntimeProbe.BIN
@@ -142,13 +148,23 @@ $(LOADER): Adam/Opt/Boot/BootDVD.asm Kernel/KernelA.inc
 $(BUILD)/Adam/Opt/Boot/DskISORedSea.asm.o: NASMFLAGS += -D'BDVD_FILE="$(LOADER)"'
 $(BUILD)/Adam/Opt/Boot/DskISORedSea.asm.o: $(LOADER)
 
-$(ASM_OBJ): $(BUILD)/%.asm.o: %.asm Kernel/KernelA.inc
+$(ASM_OBJ) $(COMPILER_ASM_OBJ): $(BUILD)/%.asm.o: %.asm Kernel/KernelA.inc
 	mkdir -p $(@D)
 	$(NASM) $(NASMFLAGS) -f elf64 -o $@ $<
 
 $(CXX_OBJ): $(BUILD)/%.o: %.cpp
 	mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(COMPILER_CXX_OBJ): $(BUILD)/%.o: %.cpp
+	mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -fPIC -fcf-protection=none -c -o $@ $<
+
+$(COMPILER_OBJECT): $(COMPILER_CXX_OBJ) $(COMPILER_ASM_OBJ)
+	$(LD) -m elf_x86_64 -r --no-relax --force-group-allocation -o $@ $^
+
+$(COMPILER_MODULE): $(COMPILER_OBJECT) $(COMPILER_BINDINGS) $(BIN_TOOL)
+	$(BIN_TOOL) $(COMPILER_OBJECT) $(COMPILER_BINDINGS) $@
 
 $(BUILD)/Kernel/Kernel.elf: $(ASM_OBJ) $(CXX_OBJ) Kernel/Kernel.ld
 	$(LD) -m elf_x86_64 --build-id=none -T Kernel/Kernel.ld -o $@ $(filter %.o,$^)
@@ -222,7 +238,7 @@ $(FAT_WRITE_DISK): $(FAT_TOOL)
 $(ISO) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(ATA_TEST_ISO) $(FAT_WRITE_ISO) \
 $(FAT_FORMAT_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(BREAK_TEST_ISO) \
 $(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(STRINGS_TEST_ISO) \
-$(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO): $(COMPILER_RESOURCE)
+$(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO): $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 
 $(HOST_MODULE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(HOST_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(HOST_MODULE)
@@ -289,6 +305,7 @@ run: $(ISO)
 test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) test-host-modules test-native-imports
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
 	$(STR_COMPARE_TEST)
+	$(BOOT_TEST) --compiler-failures "$(QEMU)" $(ISO) $(KERNEL)
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_DISK) valid
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_INVALID_DISK) invalid
 	$(BOOT_TEST) --ata-write "$(QEMU)" $(ATA_TEST_ISO) $(FAT_DISK)
@@ -307,4 +324,4 @@ test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_IS
 	$(BOOT_TEST) --database "$(QEMU)" $<
 	$(BOOT_TEST) --database-persistent "$(QEMU)" $< $(FAT_WRITE_DISK)
 
--include $(CXX_OBJ:.o=.d) $(HOST_MODULE_CPP:.o=.d) $(NATIVE_IMPORT_CPP:.o=.d)
+-include $(CXX_OBJ:.o=.d) $(COMPILER_CXX_OBJ:.o=.d) $(HOST_MODULE_CPP:.o=.d) $(NATIVE_IMPORT_CPP:.o=.d)

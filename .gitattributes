@@ -147,3 +147,4 @@ Linux/Fixtures/NativeImportProbe.bindings text eol=lf
 Linux/Fixtures/NativeImportReference.bindings text eol=lf
 Linux/Fixtures/NativeImportLoadProbe.HC text eol=lf
 Linux/Fixtures/AssertWarningProbe.HC text eol=lf
+Compiler/Compiler.bindings text eol=lf

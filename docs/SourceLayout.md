@@ -14,6 +14,7 @@ Preserve the spelling and case of the reference directories and basenames. Use `
 | `Kernel/KStart16.HC`, `KStart32.HC`, `KStart64.HC` | Corresponding `.asm` files under `Kernel/` | Firmware entry and CPU mode transitions |
 | `Kernel/Mem/PageTables.HC` | `Kernel/Mem/PageTables.asm`, `PageTables.cpp` | Early page tables and memory mapping |
 | `Kernel/KMain.HC` | `Kernel/KMain.cpp` | Kernel initialization and startup |
+| Compiler imports in `Kernel/Kernel.PRJ`, guarded-import guidance in `Kernel/KExts.HC` | `Kernel/KExts.hpp`, `KExts.cpp`, `KExts.asm` | Typed native reverse imports and guards for the separately loaded compiler |
 | `Kernel/BlkDev/*.HC` | Corresponding `.cpp` files under `Kernel/BlkDev/` | Block devices, paths, files, and filesystems as implemented |
 | `Compiler/*.HC` | Corresponding `.cpp` and `.asm` files under `Compiler/` | HolyC scanning, parsing, code generation, execution, and explicit C++ ABI adapters as implemented |
 | `Adam/DolDoc/*.HC` | Corresponding `.cpp` files under `Adam/DolDoc/` | Native document records and operations as implemented |
@@ -24,6 +25,13 @@ Preserve the spelling and case of the reference directories and basenames. Use `
 Use `Kernel`, including its capital K, in the filesystem, include paths, and build definitions. An existing Windows checkout can retain an older lowercase directory name even when Git tracks the correct case. Check actual directory names when preparing a Linux build.
 
 `Linux/` holds C++ host support and verification programs. `Linux/BootProbe.cpp` runs inside the guest and contains the boot reports and fixture checks consumed by the host's `TestBoot.cpp`. Its declaration is in `Linux/BootProbe.hpp`. The Makefile lists it separately in `GUEST_TEST_SRC` and compiles it with the freestanding guest flags. `Linux/Fixtures/` holds HolyC source and binary inputs. `Kernel/SerialDev/Serial.cpp` and `SerialBoot.asm` provide serial diagnostics without a matching reference file. `Adam/DolDoc/DolDoc.hpp` and `Kernel/Compress.hpp` are additional C++ declarations. These additions support the translation and its tests; they do not represent completed TempleOS subsystems.
+
+`Compiler/Compiler.bindings` is an explicit ELF-to-guest symbol manifest
+for the host build. The Makefile builds the compiler's 16 C++ and four
+assembly objects separately from the kernel and converts their combined
+object to `build/Compiler/Compiler.BIN`. Every ISO includes that file at
+`/Compiler/Compiler.BIN`. The pinned `Compiler/Compiler.PRJ` instead
+uses HolyC's project compilation and import directives.
 
 ## Structure and style
 
@@ -83,19 +91,55 @@ names, such as `HashFind` and `StrCmpCpp`; a binding manifest still
 names the exact ELF symbol. These System V entries coexist with the
 public HolyC adapters. The loader also exposes `winmgr` and
 `sys_task_being_scrn_updated` as data. The existing
-`sys_cur_submenu_entry` export remains available, and future compiler
-bindings must map `sys_var_init_flag` and `sys_var_init_val` to
+`sys_cur_submenu_entry` export remains available. The compiler manifest
+maps `sys_var_init_flag` and `sys_var_init_val` to
 `SYS_VAR_INIT_FLAG` and `SYS_VAR_INIT_VAL`.
+
+`Compiler/Compiler.bindings` imports those 44 native functions and
+30 data symbols. It exports the nine public adapters, 16 native
+compiler bodies under `__unholyos_sysv.`, and the module-owned
+`__unholyos_compiler.CInitStatus`. The nine public names are published
+by the module rather than `LoadKernel`. `CInitHC` in
+`Compiler/CMain.asm` is the sole `IET_MAIN` target.
 
 The reference has calls in both directions across this module boundary.
 `ExeCmdLine` remains in `Kernel/KTask.cpp`, matching
 `Kernel/KTask.HC`, while it calls the compiler's `LexStmt2Bin`.
 `Compiler/CMain.HC` calls the kernel's `ExeCmdLine`.
 `HashDel` in `Kernel/KHashB.HC` explicitly imports
-`ClassMemberLstDel` from the compiler. A separate native compiler
-must bind those calls without moving their responsibilities.
-The compiler remains in the host-linked image; its module entry,
-reverse imports, and initialization order are still pending.
+`ClassMemberLstDel` from the compiler. Those responsibilities remain
+in their original subsystems. `Kernel/KExts.hpp` declares the
+16-field native dispatch record using the actual function-pointer
+types and checks its 128-byte layout. `KExts.asm` uses only `R11` to
+check the table and target before tail-jumping. An unbound call raises
+`UndefExt`; a bound call preserves arguments and the stack.
+
+`LoadCompilerImports` in `Kernel/KLoad.cpp` accepts only unique,
+module-owned relative exports within the payload. It validates the
+full aligned status word and its initial zero value, along with all
+16 targets, before `KExts.cpp` publishes a complete table once under
+`CMemLock`. An unresolved or already-started module is rejected.
+The private `ExePutS` and `ExeFile` exports use the actual native
+bodies returning `CExeResult`, whose size is 24 bytes with fields at
+offsets 0, 8, and 16. The assembly dispatch preserves the hidden
+return-storage argument. Their public HolyC adapters retain the
+reference's integer return convention.
+
+After PS/2 setup, `Kernel/KMain.cpp` loads `/Compiler/Compiler.BIN`
+from the selected boot drive with `LDF_JUST_LOAD | LDF_SILENT`, binds
+the reverse imports, and invokes `LoadPass2`. The Adam task and heaps
+already exist, but color and DolDoc definitions, graphics contexts,
+the window manager, and user tasks have not been initialized yet.
+`CInitCpp` sets `CInitStatus` from zero to `-1` on entry and to `1`
+only if `AsmHashLoad` succeeds. KMain sets `RLF_COMPILER` only after
+the entry completes successfully and reports status `1`.
+
+This C++ entry does not reproduce all of pinned `Compiler/CMain.HC`'s
+`CInit`: it omits that routine's `CmpLoadDefines`, `CmpFillTables`,
+`cmp.ic_nop` setup, and `UAsmHashLoad` calls. GCC and Clang have built
+the separate module successfully, and both guest builds passed all seven
+focused compiler failure cases and the boot and startup matrices,
+including a cold boot of the ISO built in the guest.
 [Host modules](HostModules.md) describes the binding rules and
 native-import fixture. Its pinned-guest bridge is test
 scaffolding, not native C++ support in TempleOS.
@@ -144,20 +188,23 @@ remain pending. [Pinned opcode dictionary](https://github.com/cia-foundation/Tem
 
 The reference's `Kernel/KMain.HC` changes to `/Compiler` before loading
 the compiler. `CInit`, called by `Compiler/CMain.HC`, then invokes
-`AsmHashLoad`, whose filename is relative to that directory. The current
-compiler remains linked into the kernel, and boot probes can initialize
-its dictionary before terminal startup. Its explicit C++ adaptation
-uses `::/Compiler/OpCodes.DD` to select the boot volume without changing
-the caller's drive or directory. A failed read returns `false` without
+`AsmHashLoad`, whose filename is relative to that directory. The native
+module load uses `/Compiler/Compiler.BIN` on the selected boot drive,
+and the dictionary read uses `::/Compiler/OpCodes.DD`; both preserve
+the caller's directory. These absolute paths are explicit C++
+adaptations. A failed dictionary read returns `false` without
 publishing the shared table, permitting a later retry. Non-null input
 retains the existing parser behavior.
 
-`Kernel/KMain.cpp` requires that dictionary before setting `RLF_DOC`
-and starting interactive tasks. A failed load produces a serial
-diagnostic and returns to the existing idle path, avoiding repeated
-compiler failures in `UserTaskCont`. This controlled return uses the
-current C++ initialization's Boolean failure contract; the reference's
-startup failure after a missing dictionary has not been reproduced.
+The startup-test ISO's opcode-resource probe runs after reverse-import
+binding and before `CInitHC` so it can exercise the missing first read,
+retry, and cache through the loaded compiler. Its temporary drive and
+task state are restored before the module entry. Normal startup lets
+`CInitCpp` load the dictionary. KMain rejects a failed entry or a
+status other than `1` before setting `RLF_COMPILER` or initializing
+the later Adam subsystems. The controlled diagnostic and return to
+the idle path use the C++ status contract; the reference's startup
+failure after a missing dictionary has not been reproduced.
 
 `ORG` and `PrsBinFile` in `Compiler/Asm.cpp` follow `Compiler/Asm.HC`.
 `BINFILE` uses `ExtDft` and `FileRead` with the native `.BIN` default.
@@ -1166,26 +1213,42 @@ pending. Terry A. Davis's original song stays in `Demo/Snd/OhGreat.HC`.
 
 ## Remaining structural work
 
-`Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. The probes and their serial output belong to `Linux/BootProbe.cpp`; their bodies and execution order are preserved. [Verification evidence](SourceStructureVerification.md) records the source comparison, build, artifact hashes, and QEMU results.
+`Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. Earlier reports now cover the kernel state before compiler loading and the loaded compiler image; the opcode-resource probe runs before the module entry. These reports remain in `Linux/BootProbe.cpp`. [Source structure verification](SourceStructureVerification.md) records the earlier layout review; the compiler load cutover requires its own runtime evidence in [Boot.md](Boot.md).
 
-Startup remains partial. The current kernel initializes several Adam subsystems directly. The reference loads the compiler and executes `StartOS.HC`, which includes `Adam/MakeAdam.HC`. Matching that startup path requires further compiler and runtime work. Loading the opcode dictionary and checking it before terminal startup do not establish compiler-module or startup parity.
+Startup remains partial. The current kernel initializes several Adam subsystems directly after the separate compiler's initialization gate. The reference loads the compiler and executes `StartOS.HC`, which includes `Adam/MakeAdam.HC`. Matching that startup path requires further compiler and runtime work. GCC and Clang builds passed the seven focused failure cases and the boot and startup matrices, including guest ISO generation and cold boot. [Boot.md](Boot.md) records the tested scope.
 
-The host-linked image currently contains the compiler, Adam, and the
-boot probes in low memory. `Kernel/Kernel.ld` keeps it below the
+The host-linked image retains Adam and the boot probes in low memory;
+the compiler objects now form the separate TOSB module.
+`Kernel/Kernel.ld` keeps the kernel below the
 reference DVD loader at `0x96600`; the temporary boot stack occupies
-`0x96E00` through `0x96FFF`. Completing the separate compiler and Adam
-load path remains structural work. Shared source/module probe execution
+`0x96E00` through `0x96FFF`. Separating Adam remains structural work.
+The reference initializes the compiler with late DolDoc imports from
+`Compiler/CExts.HC` unresolved; the current native `LoadPass2` requires
+all imports before executing entries. Shared source/module probe execution
 in `Linux/BootProbe.cpp` avoids duplicating the same compile-and-load
 code within this limited boot image.
+
+Separating Adam also requires changing the compiler's eager typed
+metadata registration. Seven current data imports belong to Adam in
+both trees: `gr`, `gr_palette_std`, `gr_palette_gray`, `gr_rainbow_10`,
+`music`, `winmgr`, and `sys_cur_submenu_entry`. `CmpFillHash` copies their
+current addresses into global aliases, while `CmpRuntimeHeaders` skips
+unavailable public function exports. `CmpAsmHashLoad` then treats the
+presence of `I64i` as completed initialization. Later module relocations
+do not update those copied aliases or add the skipped headers. Metadata
+for these providers must support later registration while retaining the
+globals' reference ownership. The kernel's direct DolDoc input calls
+also need the reference `fp_getstr2` callback before Adam is separated.
 
 `Linux/MakeBIN.cpp` supplies a C++20 host producer for the native TOSB
 module format. It converts explicitly bound ELF64 objects and retains
 the patch semantics from `Compiler/CMain.HC` and `Kernel/KLoad.HC`.
-Its freestanding C++/NASM fixture tests the module boundary before
-runtime components move across it. The private native exports and
-compiler adapter placement prepare that boundary; the compiler
-and Adam still link into the kernel. A separate compiler load and
-a guest C++ compiler remain pending. [Host modules](HostModules.md)
+The compiler build now uses this producer and its explicit binding
+manifest. Its freestanding C++/NASM fixtures provide earlier runtime
+evidence for relocation and ABI behavior. The separate compiler's
+startup results are recorded independently in [Boot.md](Boot.md).
+A guest C++ compiler and the complete native build workflow remain
+pending. [Host modules](HostModules.md)
 records the ABI choices, supported relocations, rejected inputs,
 and reproduced native-import coverage.
 
