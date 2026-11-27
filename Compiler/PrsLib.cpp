@@ -37,7 +37,7 @@ CHashClass *PrsClass(const CCmpCtrl &cc)
     return nullptr;
   auto *cls = reinterpret_cast<CHashClass *>(cc.hash_entry);
   auto type = static_cast<CRawType>(cls->raw_type);
-  return TypeSize(type) || type == RT_U0 ? cls : nullptr;
+  return TypeSize(type) || IsVoid(type) ? cls : nullptr;
 }
 
 CHashClass *PrsStars(CCmpCtrl &cc, CHashClass *cls)

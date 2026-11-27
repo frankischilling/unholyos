@@ -278,6 +278,7 @@ constexpr unsigned PTR_STARS_NUM = 4;
 
 enum CRawType : uint8_t
 {
+  RT_I0 = 2,
   RT_U0 = 3,
   RT_I8 = 4,
   RT_U8,
@@ -291,18 +292,37 @@ enum CRawType : uint8_t
   RT_AGGREGATE = 255, // Intermediate code only.
 };
 
+constexpr unsigned INTERNAL_TYPES_NUM = 17;
+
+struct CInternalType
+{
+  uint8_t type, size, name[8];
+};
+
+static_assert(sizeof(CInternalType) == 10 &&
+              offsetof(CInternalType, type) == 0 &&
+              offsetof(CInternalType, size) == 1 &&
+              offsetof(CInternalType, name) == 2);
+extern CInternalType internal_types_table[INTERNAL_TYPES_NUM];
+
 inline CRawType ClassRawType(const CHashClass &cls)
 {
-  if (cls.ptr_stars_cnt || (cls.flags & CF_INTERNAL_TYPE))
-    return static_cast<CRawType>(cls.raw_type);
-  if (cls.fwd_class)
-    return static_cast<CRawType>(cls.fwd_class->raw_type);
+  auto *type = &cls;
+  while (type->fwd_class)
+    type = type->fwd_class;
+  if (type->ptr_stars_cnt || (type->flags & CF_INTERNAL_TYPE))
+    return static_cast<CRawType>(type->raw_type);
   return RT_AGGREGATE;
 }
 
 inline bool ClassComplete(const CHashClass &cls)
 {
   return cls.size > 0 && !(cls.flags & CF_EXTERN);
+}
+
+constexpr bool IsVoid(CRawType type)
+{
+  return type == RT_I0 || type == RT_U0;
 }
 
 constexpr bool IsInt(CRawType type)

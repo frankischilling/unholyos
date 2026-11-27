@@ -177,7 +177,7 @@ public:
 
   void Convert(CRawType from, CRawType to)
   {
-    if (from != RT_U0 && to != RT_U0 && (from == RT_F64) != (to == RT_F64)) {
+    if (!IsVoid(from) && !IsVoid(to) && (from == RT_F64) != (to == RT_F64)) {
       Bytes(0x50); // PUSH RAX
       if (to == RT_F64)
         ToFloat(from, 0);

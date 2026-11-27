@@ -107,10 +107,8 @@ static CHashClass *PrsClassDef(CCmpCtrl &cc, bool overlay, bool forward,
     }
     return nullptr;
   }
-  if (scalar) {
-    cls->raw_type = ClassRawType(*scalar);
+  if (scalar)
     cls->fwd_class = scalar;
-  }
   cls->flags &= ~CF_EXTERN;
   cls->sym.hash.type |= visibility;
   HashSrcFileSetCpp(&cc, &cls->sym, 0);

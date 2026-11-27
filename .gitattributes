@@ -159,3 +159,5 @@ Linux/Fixtures/StringDefinesProbe.HC text eol=lf
 Linux/Fixtures/SystemDefinesProbe.HC text eol=lf
 Linux/Fixtures/ColorConversionsProbe.HC text eol=lf
 Linux/Fixtures/FormatMissingArgsProbe.HC text eol=lf
+Linux/Fixtures/InternalTypesProbe.HC text eol=lf
+Linux/Fixtures/InternalTypesAOTProbe.HC text eol=lf

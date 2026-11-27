@@ -246,7 +246,8 @@ The compiler manifest states each side of the boundary:
 | --- | ---: | --- |
 | Native imports | 45 | Exact ELF names mapped to the kernel's `__unholyos_sysv.` entries |
 | Data imports | 30 | Existing runtime storage, including the two uppercase aliases above |
-| Public exports | 9 | Existing HolyC compiler adapters |
+| Public function exports | 9 | Existing HolyC compiler adapters |
+| Public data exports | 1 | The live 170-byte `internal_types_table` |
 | Private native exports | 16 | Native compiler bodies called by kernel and Adam code |
 | Status export | 1 | `CInitStatus` as `__unholyos_compiler.CInitStatus` |
 | Entry | 1 | `CInitHC`, the sole `IET_MAIN` target |
@@ -254,6 +255,23 @@ The compiler manifest states each side of the boundary:
 This manifest is a C++ build addition. The pinned
 `Compiler/Compiler.PRJ` instead turns declarations in the kernel
 headers into HolyC imports while compiling the project.
+
+`internal_types_table` is the writable array from
+`Compiler/CInit.HC`, with all 17 entries in their original order.
+`CInternalType` has a 10-byte size and fields at offsets 0, 1, and 2;
+compile-time assertions check that layout. The module export points
+to the same array that `Compiler/AsmInit.cpp::CmpFillHash` reads when
+registering primitive types. The six integer-view classes from
+`Kernel/KernelA.HH` are registered separately.
+The C++ initializer zeroes unused name bytes. The reference copies
+those bytes from temporary string storage; [Source layout](SourceLayout.md#compiler-primitive-types)
+records that difference and the remaining class-allocation gaps.
+
+Registration still occurs in each native compiler child table when
+that table is first used. The reference instead builds one shared
+`cmp.asm_hash` in `AsmHashLoad` and populates `cmp.internal_types`.
+This export does not change `CInitCpp`'s phases or supply the missing
+`CCmpGlbls`, `CmpFillTables`, and `cmp.ic_nop` state.
 
 The compiler's nine public HolyC adapters live beside their C++
 implementations, in the order of Terry A. Davis's corresponding
