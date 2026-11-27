@@ -2,6 +2,7 @@
 #include "../Adam/Gr/GrGlbls.hpp"
 #include "../Adam/Menu.hpp"
 #include "../Compiler/CompilerA.hpp"
+#include "KExts.hpp"
 #include "KernelB.hpp"
 
 struct CLoadImport
@@ -30,6 +31,24 @@ struct CLoadedModule
   size_t count, unresolved;
   bool owns_image, started;
 };
+
+static_assert(sizeof(CLoadRecord) == 64);
+static_assert(offsetof(CLoadRecord, raw) == 0 &&
+              offsetof(CLoadRecord, offsets) == 8 &&
+              offsetof(CLoadRecord, name) == 16 &&
+              offsetof(CLoadRecord, bytes) == 24 &&
+              offsetof(CLoadRecord, value) == 32 &&
+              offsetof(CLoadRecord, type) == 36 &&
+              offsetof(CLoadRecord, storage) == 40 &&
+              offsetof(CLoadRecord, exported) == 48 &&
+              offsetof(CLoadRecord, imported) == 56);
+static_assert(sizeof(CLoadedModule) == 40);
+static_assert(offsetof(CLoadedModule, image) == 0 &&
+              offsetof(CLoadedModule, records) == 8 &&
+              offsetof(CLoadedModule, count) == 16 &&
+              offsetof(CLoadedModule, unresolved) == 24 &&
+              offsetof(CLoadedModule, owns_image) == 32 &&
+              offsetof(CLoadedModule, started) == 33);
 
 extern "C" {
 void CallModuleMain(const uint8_t *entry);
@@ -84,11 +103,8 @@ void PrintErrHC(), PrintWarnHC(), PutCharsHC(), IsRawHC(), DefineLstLoadHC();
 void PutSHC(), PutHexHC();
 void PUT_HEX_U64(), PUT_HEX_U32(), PUT_HEX_U16(), PUT_HEX_U8(), PUT_CHARS(),
     PUT_STR();
-void CmpHC(), ExePutSHC(), ExeFileHC(), StreamPrintHC(), StreamExePrintHC();
-void StreamDirHC();
 void DefineSubHC(), DefineMatchHC();
 void HashValHC(), HashDelHC(), HashTableDelHC(), HashSrcFileSetHC();
-void MemberMetaDataHC(), MemberMetaFindHC(), MemberFindHC();
 void SpawnHC(), TaskValidateHC(), SuspendHC(), IsSuspendedHC();
 void TaskQueInsHC(), TaskQueRemHC(), SingleUserHC(), IsSingleUserHC();
 void _TASK_END_NOW();
@@ -453,6 +469,75 @@ bool LoadPass2(CLoadedModule &module)
   return true;
 }
 
+static uintptr_t CompilerExport(const CLoadedModule &module, const char *name,
+                                size_t size, size_t payload)
+{
+  uintptr_t result = 0;
+  for (size_t i = 0; i < module.count; ++i) {
+    const auto &record = module.records[i];
+    if ((!IsExport(record.type) && !IsHeap(record.type)) ||
+        StrCmpCpp(reinterpret_cast<const uint8_t *>(record.name),
+                  reinterpret_cast<const uint8_t *>(name)))
+      continue;
+    if (result ||
+        (record.type != IET_REL32_EXPORT && record.type != IET_REL64_EXPORT) ||
+        record.value > payload || size > payload - record.value)
+      return 0;
+    result = reinterpret_cast<uintptr_t>(ModuleBase(module) + record.value);
+  }
+  return result;
+}
+
+bool LoadCompilerImports(CLoadedModule &module, const int64_t *&status)
+{
+  status = nullptr;
+  if (!module.image || !module.records || module.unresolved || module.started)
+    return false;
+  CBinFile header;
+  MemCpy(&header, module.image, sizeof(header));
+  if (header.patch_table_offset < sizeof(header) ||
+      header.patch_table_offset >= header.file_size)
+    return false;
+  size_t payload = header.patch_table_offset - sizeof(header);
+  if (payload > UINTPTR_MAX - reinterpret_cast<uintptr_t>(ModuleBase(module)))
+    return false;
+
+  CCompilerImports imports{};
+#define COMPILER_BIND(name)                                                    \
+  do {                                                                         \
+    imports.name = reinterpret_cast<decltype(imports.name)>(                   \
+        CompilerExport(module, "__unholyos_sysv." #name, 1, payload));         \
+    if (!imports.name)                                                         \
+      return false;                                                            \
+  } while (false)
+  COMPILER_BIND(AsmHashLoad);
+  COMPILER_BIND(LexStmt2Bin);
+  COMPILER_BIND(ExePutS);
+  COMPILER_BIND(ClassMemberLstDel);
+  COMPILER_BIND(CmpAsmHashLoad);
+  COMPILER_BIND(LexSourceInit);
+  COMPILER_BIND(LexSourceDel);
+  COMPILER_BIND(Lex);
+  COMPILER_BIND(LexTypedExpression2Bin);
+  COMPILER_BIND(MemberMetaDataCpp);
+  COMPILER_BIND(AsmHashFind);
+  COMPILER_BIND(CmpAsmHashNew);
+  COMPILER_BIND(LexAttachDoc);
+  COMPILER_BIND(LexRaw);
+  COMPILER_BIND(LexExpression2Bin);
+  COMPILER_BIND(ExeFile);
+#undef COMPILER_BIND
+
+  auto address = CompilerExport(module, "__unholyos_compiler.CInitStatus",
+                                sizeof(int64_t), payload);
+  if (!address || address % alignof(int64_t) ||
+      ReadWidth(reinterpret_cast<const uint8_t *>(address), sizeof(int64_t)) ||
+      !CompilerImportsPublish(imports))
+    return false;
+  status = reinterpret_cast<const int64_t *>(address);
+  return true;
+}
+
 static CLoadedModule *LoadImage(const uint8_t *input, size_t size,
                                 const char *path, CTask &task, unsigned flags)
 {
@@ -669,9 +754,6 @@ bool LoadKernel(CTask &task)
       {"HashDel", reinterpret_cast<uintptr_t>(HashDelHC)},
       {"HashTableDel", reinterpret_cast<uintptr_t>(HashTableDelHC)},
       {"HashSrcFileSet", reinterpret_cast<uintptr_t>(HashSrcFileSetHC)},
-      {"MemberMetaData", reinterpret_cast<uintptr_t>(MemberMetaDataHC)},
-      {"MemberMetaFind", reinterpret_cast<uintptr_t>(MemberMetaFindHC)},
-      {"MemberFind", reinterpret_cast<uintptr_t>(MemberFindHC)},
       {"_HASH_REM_DEL", reinterpret_cast<uintptr_t>(_HASH_REM_DEL)},
       {"SysSymImportsResolve",
        reinterpret_cast<uintptr_t>(SysSymImportsResolveHC)},
@@ -985,12 +1067,6 @@ bool LoadKernel(CTask &task)
       {"Beep", reinterpret_cast<uintptr_t>(BeepHC)},
       {"Mute", reinterpret_cast<uintptr_t>(MuteHC)},
       {"IsMute", reinterpret_cast<uintptr_t>(IsMuteHC)},
-      {"ExePutS", reinterpret_cast<uintptr_t>(ExePutSHC)},
-      {"Cmp", reinterpret_cast<uintptr_t>(CmpHC)},
-      {"ExeFile", reinterpret_cast<uintptr_t>(ExeFileHC)},
-      {"StreamPrint", reinterpret_cast<uintptr_t>(StreamPrintHC)},
-      {"StreamDir", reinterpret_cast<uintptr_t>(StreamDirHC)},
-      {"StreamExePrint", reinterpret_cast<uintptr_t>(StreamExePrintHC)},
       {"IsRaw", reinterpret_cast<uintptr_t>(IsRawHC)},
       {"Raw", reinterpret_cast<uintptr_t>(RawHC)},
       {"DbgMode", reinterpret_cast<uintptr_t>(DbgModeHC)},

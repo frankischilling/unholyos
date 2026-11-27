@@ -626,3 +626,4 @@ bool LoadKernel(CTask &task);
 CLoadedModule *Load(const CDrv &dv, const char *path, CTask &task,
                     unsigned flags = 0);
 bool LoadPass2(CLoadedModule &module);
+bool LoadCompilerImports(CLoadedModule &module, const int64_t *&status);

@@ -1,5 +1,6 @@
 #include "BootProbe.hpp"
 #include "../Kernel/KernelB.hpp"
+#include "../Kernel/KExts.hpp"
 #include "../Adam/Gr/GrGlbls.hpp"
 #include "../Adam/DolDoc/DolDoc.hpp"
 #include "../Compiler/CompilerA.hpp"
@@ -50,7 +51,29 @@ static void BootDVDReport(const CDrv &dv)
   SerialPutS("\r\n");
 }
 
-static void BootOpcodeResourceReport(const CDrv &dvd)
+void BootCompilerImageReport(const CLoadedModule &module)
+{
+  auto *entry = reinterpret_cast<CHashGeneric *>(
+      HashFind("/Compiler/Compiler", adam_task->hash_table, HTT_MODULE));
+  if (!entry || !entry->user_data0)
+    return;
+  auto *image = reinterpret_cast<const uint8_t *>(entry->user_data0);
+  CBinFile header;
+  MemCpy(&header, image, sizeof(header));
+  SerialPutS("UnholyOS: compiler module ");
+  SerialPutHex(reinterpret_cast<uintptr_t>(&module));
+  SerialPutS(", image ");
+  SerialPutHex(entry->user_data0);
+  SerialPutS(", size ");
+  SerialPutHex(header.file_size);
+  SerialPutS(", patch table ");
+  SerialPutHex(header.patch_table_offset);
+  SerialPutS(", loaded hash ");
+  SerialPutHex(BootFileHash(14695981039346656037ULL, image, header.file_size));
+  SerialPutS("\r\n");
+}
+
+void BootOpcodeResourceReport(const CDrv &dvd)
 {
   CRedSeaDirEntry probe;
   if (!RedSeaFileFind(dvd, dvd.root_clus, "OpcodeProbe.HC", false, probe))
@@ -1602,7 +1625,7 @@ template <typename T> static bool BootFifoCheck(const CFifo<T> *f, size_t size)
          MSize(f->buf) >= size * sizeof(T) && f->mask == int64_t(size - 1);
 }
 
-void BootProbe()
+void BootPreCompilerProbe()
 {
   SerialPutS("UnholyOS: PS/2 heap FIFOs ");
   SerialPutHex(BootFifoCheck(kbd.fifo, 8) &&
@@ -1665,14 +1688,25 @@ void BootProbe()
   SerialPutHex(PCIReadU32(0, 0, 0, 0));
   SerialPutS(", HPET read ");
   SerialPutHex(cnts.HPET_freq ? HPET() : 0);
-  SerialPutS(", text base ");
-  SerialPutHex(reinterpret_cast<uintptr_t>(gr.text_base));
   SerialPutS(", raw screen ");
   SerialPutHex(reinterpret_cast<uintptr_t>(text.raw_scrn_image));
+  SerialPutS(", compiler imports ");
+  SerialPutHex(reinterpret_cast<uintptr_t>(&compiler_imports));
+  SerialPutS("\r\n");
+  if (adam_task->cur_dv)
+    BootDVDReport(*adam_task->cur_dv);
+  else
+    SerialPutS("UnholyOS: Could not mount the boot DVD\r\n");
+}
+
+void BootProbe()
+{
+  SerialPutS("UnholyOS: text base ");
+  SerialPutHex(reinterpret_cast<uintptr_t>(gr.text_base));
+  SerialPutS(", compiler run level ");
+  SerialPutHex(SYS_RUN_LEVEL);
   SerialPutS("\r\n");
   if (adam_task->cur_dv) {
-    BootOpcodeResourceReport(*adam_task->cur_dv);
-    BootDVDReport(*adam_task->cur_dv);
     BootHostModuleReport(*adam_task->cur_dv, *adam_task);
     BootNativeImportReport(*adam_task->cur_dv, *adam_task);
     if (MountedDrive('C')) {
@@ -1853,7 +1887,5 @@ void BootProbe()
     BootFixedAsmReport(*adam_task->cur_dv, *adam_task);
     BootSwitchReport(*adam_task->cur_dv, *adam_task);
     BootISOReport(*adam_task->cur_dv);
-  } else {
-    SerialPutS("UnholyOS: Could not mount the boot DVD\r\n");
   }
 }

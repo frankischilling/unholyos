@@ -30,13 +30,43 @@ using namespace std::string_view_literals;
 constexpr std::string_view BOOT_MARKER =
     "UnholyOS: kernel entered in 64-bit mode";
 constexpr std::string_view COMPILER_FAILURE_MARKER =
-    "UnholyOS: Could not load compiler opcode dictionary\r\n";
+    "UnholyOS: Could not load compiler module\r\n";
+constexpr std::string_view COMPILER_BIND_FAILURE_MARKER =
+    "UnholyOS: Could not bind compiler imports\r\n";
+constexpr std::string_view COMPILER_INIT_FAILURE_MARKER =
+    "UnholyOS: Could not initialize compiler module\r\n";
 
 enum class CBootPhase
 {
   Desktop,
-  CompilerUnavailable
+  CompilerUnavailable,
+  CompilerInvalid,
+  CompilerMissingExport,
+  CompilerInvalidExport,
+  CompilerUnresolvedImport,
+  OpcodeUnavailable,
+  OpcodeInvalid
 };
+
+static bool CompilerLoaded(CBootPhase phase)
+{
+  return phase != CBootPhase::CompilerUnavailable &&
+         phase != CBootPhase::CompilerInvalid;
+}
+
+static bool CompilerBound(CBootPhase phase)
+{
+  return phase == CBootPhase::Desktop || phase == CBootPhase::OpcodeUnavailable ||
+         phase == CBootPhase::OpcodeInvalid;
+}
+
+static std::string_view CompilerFailureMarker(CBootPhase phase)
+{
+  if (!CompilerLoaded(phase))
+    return COMPILER_FAILURE_MARKER;
+  return CompilerBound(phase) ? COMPILER_INIT_FAILURE_MARKER
+                              : COMPILER_BIND_FAILURE_MARKER;
+}
 
 static void Check(bool ok, const char *msg)
 {
@@ -78,13 +108,125 @@ struct CBootMedia
 {
   uint64_t lba, shift, drive, blocks, root, bitmap, kernel_clus, kernel_size,
       kernel_hash;
+  Bytes compiler;
 };
+
+struct CCompilerRecord
+{
+  size_t offset, name_offset, offsets_offset = 0;
+  uint8_t type;
+  uint32_t value;
+  std::string name;
+  std::vector<uint32_t> offsets;
+};
+
+static std::vector<CCompilerRecord> CompilerRecords(const Bytes &image)
+{
+  Check(image.size() >= 33 && HasBytes(image, 4, "TOSB") &&
+            ReadLE(image, 8, 8) == INT64_MAX &&
+            ReadLE(image, 24, 8) == image.size(),
+        "Invalid host-built compiler header");
+  const auto patch = ReadLE(image, 16, 8);
+  Check(patch >= 32 && patch < image.size() && image[2] >= 4 && image[2] < 31,
+        "Invalid compiler payload bounds or alignment");
+  const auto payload = patch - 32;
+  std::vector<CCompilerRecord> records;
+  bool importing = false;
+  size_t at = patch;
+  while (at < image.size() && image[at]) {
+    const auto begin = at;
+    const auto type = image[at++];
+    const auto value = uint32_t(ReadLE(image, at, 4));
+    at += 4;
+    const auto name_begin = at;
+    while (at < image.size() && image[at])
+      ++at;
+    Check(at < image.size(), "Unterminated compiler patch name");
+    CCompilerRecord record{begin, name_begin, 0, type, value,
+                           std::string(image.begin() + name_begin,
+                                       image.begin() + at), {}};
+    ++at;
+    if (type == 8 || type == 11) {
+      const size_t width = type == 8 ? 4 : 8;
+      Check((!record.name.empty() || importing) && value <= payload &&
+                width <= payload - value,
+            "Invalid compiler import patch");
+      importing = true;
+    } else {
+      importing = false;
+      if (type == 16 || type == 17) {
+        Check(!record.name.empty() && (type == 17 || value < payload),
+              "Invalid compiler export patch");
+      } else if (type == 20) {
+        Check(value <= (image.size() - at) / 4,
+              "Truncated compiler absolute patches");
+        record.offsets_offset = at;
+        for (uint32_t i = 0; i < value; ++i) {
+          const auto offset = uint32_t(ReadLE(image, at, 4));
+          Check(offset <= payload && 4 <= payload - offset,
+                "Compiler absolute patch outside payload");
+          record.offsets.push_back(offset);
+          at += 4;
+        }
+      } else
+        Check(type == 25 && value < payload && record.name.empty(),
+              "Unexpected compiler patch record");
+    }
+    records.push_back(std::move(record));
+  }
+  Check(at < image.size() && image.size() - at <= 16 &&
+            std::all_of(image.begin() + at, image.end(),
+                        [](uint8_t byte) { return byte == 0; }),
+        "Invalid compiler patch terminator or padding");
+  return records;
+}
+
+static void WriteLE(Bytes &bytes, size_t offset, uint64_t value, size_t width)
+{
+  Check(offset <= bytes.size() && width <= bytes.size() - offset,
+        "Compiler test patch is outside its file");
+  for (size_t i = 0; i < width; ++i, value >>= 8)
+    bytes[offset + i] = value;
+}
+
+static Bytes CompilerVariant(Bytes image, CBootPhase phase)
+{
+  if (phase == CBootPhase::CompilerInvalid) {
+    Check(HasBytes(image, 4, "TOSB"), "Missing compiler signature to corrupt");
+    image[4] ^= 1;
+  } else if (phase == CBootPhase::CompilerMissingExport ||
+             phase == CBootPhase::CompilerInvalidExport ||
+             phase == CBootPhase::CompilerUnresolvedImport) {
+    const auto records = CompilerRecords(image);
+    bool changed = false;
+    for (const auto &record : records) {
+      if (phase == CBootPhase::CompilerUnresolvedImport) {
+        if ((record.type != 8 && record.type != 11) || record.name.empty())
+          continue;
+        image[record.name_offset] = '!';
+      } else {
+        if (record.type != 16 || record.name != "__unholyos_sysv.AsmHashLoad")
+          continue;
+        if (phase == CBootPhase::CompilerMissingExport)
+          image[record.name_offset] = '!';
+        else {
+          image[record.offset] = 17;
+          WriteLE(image, record.offset + 1, 0, 4);
+        }
+      }
+      changed = true;
+      break;
+    }
+    Check(changed, "Required compiler failure-test record is missing");
+  }
+  return image;
+}
 
 static std::string_view RedSeaName(const Bytes &image, size_t entry);
 static size_t RedSeaDirectory(const Bytes &image, uint64_t cluster);
 
-static size_t FindRedSeaEntry(const Bytes &disc, uint64_t directory,
-                              std::string_view name)
+static size_t FindRedSeaEntryOrZero(const Bytes &disc, uint64_t directory,
+                                    std::string_view name)
 {
   constexpr size_t blk = 512;
   auto end = RedSeaDirectory(disc, directory);
@@ -95,6 +237,14 @@ static size_t FindRedSeaEntry(const Bytes &disc, uint64_t directory,
     if (found == name)
       return entry;
   }
+  return 0;
+}
+
+static size_t FindRedSeaEntry(const Bytes &disc, uint64_t directory,
+                              std::string_view name)
+{
+  if (auto entry = FindRedSeaEntryOrZero(disc, directory, name))
+    return entry;
   throw std::runtime_error("Missing RedSea entry " + std::string(name));
 }
 
@@ -118,23 +268,60 @@ static void VerifyStartDoc(const Bytes &disc, uint64_t root)
   Check(hash == 0x0C20EFB983195E6C0ULL, "Start.DD.Z differs from TempleOS");
 }
 
-static void VerifyOpcodeResource(const Bytes &disc, uint64_t root)
+static void VerifyOpcodeResource(const Bytes &disc, uint64_t root,
+                                  CBootPhase phase)
 {
   constexpr size_t blk = 512;
   auto entry = FindRedSeaEntry(disc, root, "Compiler");
   Check(ReadLE(disc, entry, 2) == 0x810,
         "Invalid Compiler directory attributes");
   auto compiler = ReadLE(disc, entry + 40, 8);
+  if (phase == CBootPhase::OpcodeUnavailable) {
+    Check(!FindRedSeaEntryOrZero(disc, compiler, "OpCodes.DD"),
+          "Failure image still contains the opcode dictionary");
+    return;
+  }
   auto file = FindRedSeaEntry(disc, compiler, "OpCodes.DD");
   auto start = ReadLE(disc, file + 40, 8);
   auto size = ReadLE(disc, file + 48, 8);
   Bytes source = FileRead("Compiler/OpCodes.DD");
+  if (phase == CBootPhase::OpcodeInvalid) {
+    Check(source.size() >= 2, "Opcode dictionary is too short to corrupt");
+    source[0] = ';';
+    source[1] = 0;
+  }
   Check(ReadLE(disc, file, 2) == 0x800 && source.size() == 28105 &&
             size == source.size() && start < disc.size() / blk &&
             size <= disc.size() - start * blk,
         "Invalid Compiler/OpCodes.DD extent");
   Check(std::equal(source.begin(), source.end(), disc.begin() + start * blk),
         "Packaged Compiler/OpCodes.DD differs from the reference source");
+}
+
+static Bytes VerifyCompilerMedia(const Bytes &disc, uint64_t root,
+                                  const fs::path &kernel_path, CBootPhase phase)
+{
+  constexpr size_t blk = 512;
+  const auto directory = FindRedSeaEntry(disc, root, "Compiler");
+  const auto compiler = ReadLE(disc, directory + 40, 8);
+  if (phase == CBootPhase::CompilerUnavailable) {
+    Check(!FindRedSeaEntryOrZero(disc, compiler, "Compiler.BIN"),
+          "Failure image still contains the compiler module");
+    return {};
+  }
+  const auto file = FindRedSeaEntry(disc, compiler, "Compiler.BIN");
+  const auto start = ReadLE(disc, file + 40, 8);
+  const auto size = ReadLE(disc, file + 48, 8);
+  auto expected = CompilerVariant(
+      FileRead(kernel_path.parent_path().parent_path() / "Compiler/Compiler.BIN"),
+      phase);
+  Check(ReadLE(disc, file, 2) == 0x800 && !expected.empty() &&
+            size == expected.size() && start < disc.size() / blk &&
+            size <= disc.size() - start * blk,
+        "Invalid Compiler/Compiler.BIN extent");
+  Check(std::equal(expected.begin(), expected.end(), disc.begin() + start * blk),
+        "Packaged Compiler/Compiler.BIN differs from the expected module");
+  return expected;
 }
 
 static void VerifyHostModuleMedia(const fs::path &iso, const fs::path &module,
@@ -173,7 +360,8 @@ static void VerifyHome(const Bytes &disc, uint64_t root)
         "Invalid empty RedSea Home directory");
 }
 
-static CBootMedia VerifyMedia(const fs::path &iso, const fs::path &kernel_path)
+static CBootMedia VerifyMedia(const fs::path &iso, const fs::path &kernel_path,
+                              CBootPhase media_phase = CBootPhase::Desktop)
 {
   constexpr size_t blk = 512, dvd = 4 * blk, primary = 16 * dvd,
                    catalog = 20 * dvd, loader = 21 * dvd, redsea = 88 * blk;
@@ -207,7 +395,8 @@ static CBootMedia VerifyMedia(const fs::path &iso, const fs::path &kernel_path)
   Check(root == drive + bitmap_blocks + 1 && root < disc.size() / blk,
         "Invalid RedSea root");
   VerifyStartDoc(disc, root);
-  VerifyOpcodeResource(disc, root);
+  VerifyOpcodeResource(disc, root, media_phase);
+  auto compiler = VerifyCompilerMedia(disc, root, kernel_path, media_phase);
   VerifyHome(disc, root);
 
   // TempleOS packs CISOPriDesc and writes the cluster at the record start.
@@ -265,7 +454,8 @@ static CBootMedia VerifyMedia(const fs::path &iso, const fs::path &kernel_path)
   uint64_t hash = 14695981039346656037ULL;
   for (uint8_t byte : kernel)
     hash = (hash ^ byte) * 1099511628211ULL;
-  return {lba, shift, drive, blocks, root, bitmap_blocks, start, size, hash};
+  return {lba, shift, drive, blocks, root, bitmap_blocks, start, size, hash,
+           std::move(compiler)};
 }
 
 class CMonitor
@@ -530,6 +720,288 @@ static std::array<uint64_t, Count> ReadPhysical(CMonitor &vm, uint64_t addr,
   return values;
 }
 
+struct CBootSymbols
+{
+  std::map<std::string, uint64_t> exports, modules;
+  std::map<std::string, size_t> export_counts, module_counts;
+  std::map<std::string, std::vector<uint64_t>> imports;
+};
+
+static std::string ReadGuestName(CMonitor &vm, uint64_t address)
+{
+  Check(address >= 16, "Missing boot symbol name");
+  std::string name;
+  for (size_t offset = 0; offset < 256; offset += 64) {
+    const auto words = ReadPhysical<8>(vm, address + offset);
+    for (auto word : words)
+      for (unsigned i = 0; i < 8; ++i, word >>= 8) {
+        if (!(word & 255))
+          return name;
+        name.push_back(char(word));
+      }
+  }
+  throw std::runtime_error("Unterminated boot symbol name");
+}
+
+static CBootSymbols ReadBootSymbols(CMonitor &vm)
+{
+  const auto table = ReadPhysical<1>(vm, 0x100300 + 0x3D0)[0];
+  const auto header = ReadPhysical<4>(vm, table);
+  Check(header[1] == 1023 && !header[2] && header[3],
+        "Invalid boot hash table during compiler validation");
+  CBootSymbols symbols;
+  std::set<uint64_t> seen;
+  for (size_t i = 0; i < 1024; i += 64) {
+    const auto buckets = ReadPhysical<64>(vm, header[3] + i * 8);
+    for (auto address : buckets)
+      while (address) {
+        Check(address >= 16 && seen.size() < 8192 && seen.insert(address).second,
+              "Invalid compiler symbol chain");
+        const auto entry = ReadPhysical<3>(vm, address);
+        const auto type = uint32_t(entry[2]) & 0x1FFFF;
+        if (type == 1 || type == 2 || type == 0x4000) {
+          const auto name = ReadGuestName(vm, entry[1]);
+          if (type == 1) {
+            symbols.exports.emplace(name, ReadPhysical<1>(vm, address + 64)[0]);
+            ++symbols.export_counts[name];
+          } else if (type == 0x4000) {
+            symbols.modules.emplace(name, ReadPhysical<1>(vm, address + 24)[0]);
+            ++symbols.module_counts[name];
+          } else
+            symbols.imports[name].push_back(address);
+        }
+        address = entry[0];
+      }
+  }
+  return symbols;
+}
+
+static Bytes CaptureCompilerMemory(CMonitor &vm, const fs::path &path,
+                                    uint64_t address, size_t bytes)
+{
+  Check(bytes && bytes < 16 * 1024 * 1024 && address &&
+            address <= UINT64_MAX - bytes,
+        "Invalid compiler capture extent");
+  vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+             std::to_string(address) + R"(,"size":)" + std::to_string(bytes) +
+             R"(,"filename":")" + path.string() + R"("}})");
+  auto result = FileRead(path);
+  Check(result.size() == bytes, "Incomplete compiler memory capture");
+  return result;
+}
+
+static uint64_t CompilerAllocationSize(uint64_t bytes)
+{
+  Check(bytes < 16 * 1024 * 1024, "Compiler allocation is too large");
+  bytes = (bytes + 23) & ~uint64_t{7};
+  if (bytes < 1024)
+    return bytes;
+  uint64_t pages = CeilDiv(bytes + 24, 512);
+  // MemPagTake's second page hash uses a power-of-two bucket plus
+  // MEM_EXTRA_HASH2_PAGS, which is two pages.
+  if (pages >= 256)
+    pages = (uint64_t{1} << std::bit_width(pages - 2)) + 2;
+  return pages * 512 - 24;
+}
+
+static uint64_t VerifyCompilerAllocation(CMonitor &vm, uint64_t pointer,
+                                         uint64_t owner, uint64_t bytes,
+                                         bool aligned = false)
+{
+  Check(pointer >= 16, "Missing compiler allocation");
+  auto allocation = pointer;
+  if (aligned) {
+    const auto displacement = int64_t(ReadPhysical<1>(vm, pointer - 8)[0]);
+    Check(displacement < 0 && (0 - uint64_t(displacement)) <= pointer - 16,
+          "Invalid aligned compiler allocation header");
+    allocation += displacement;
+  }
+  const auto header = ReadPhysical<2>(vm, allocation - 16);
+  const auto expected = CompilerAllocationSize(bytes);
+  if (header != std::array<uint64_t, 2>{owner, expected}) {
+    std::ostringstream message;
+    message << "Compiler allocation at 0x" << std::hex << pointer
+            << " owner 0x" << header[0] << ", expected 0x" << owner
+            << std::dec << ", size " << header[1] << ", expected " << expected;
+    throw std::runtime_error(message.str());
+  }
+  return header[1];
+}
+
+struct CCompilerState
+{
+  uint64_t code_used = 0, data_used = 0;
+  std::string unresolved;
+};
+
+static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
+                                      const std::string &output,
+                                      const CBootMedia &media, CBootPhase phase)
+{
+  constexpr std::string_view imports[]{
+      "AsmHashLoad", "LexStmt2Bin", "ExePutS", "ClassMemberLstDel",
+      "CmpAsmHashLoad", "LexSourceInit", "LexSourceDel", "Lex",
+      "LexTypedExpression2Bin", "MemberMetaDataCpp", "AsmHashFind",
+      "CmpAsmHashNew", "LexAttachDoc", "LexRaw", "LexExpression2Bin", "ExeFile"};
+  constexpr std::string_view public_names[]{
+      "Cmp", "ExePutS", "ExeFile", "StreamExePrint", "StreamPrint", "StreamDir",
+      "MemberMetaData", "MemberMetaFind", "MemberFind"};
+  constexpr std::string_view status_name = "__unholyos_compiler.CInitStatus";
+  auto symbols = ReadBootSymbols(vm);
+  const auto level = symbols.exports.find("SYS_RUN_LEVEL");
+  Check(level != symbols.exports.end(), "Missing live compiler run level");
+  Check(ReadPhysical<1>(vm, level->second, 'w')[0] ==
+            (phase == CBootPhase::Desktop ? 0x32FFu : 0x2FFu),
+        "Compiler run level was published before successful initialization");
+  std::smatch match;
+  Check(std::regex_search(output, match,
+                         std::regex(R"(compiler imports (0x[0-9a-f]+))")),
+        "Missing compiler import publication slot");
+  const auto publication = std::stoull(match[1].str(), nullptr, 16);
+  const auto bindings = ReadPhysical<1>(vm, publication)[0];
+  Check(bool(bindings) == CompilerBound(phase),
+        "Compiler imports were partially or prematurely published");
+  const std::regex report(
+      R"(compiler module (0x[0-9a-f]+), image (0x[0-9a-f]+), size (0x[0-9a-f]+), )"
+      R"(patch table (0x[0-9a-f]+), loaded hash (0x[0-9a-f]+))");
+  const bool reported = std::regex_search(output, match, report);
+  auto module_entry = symbols.modules.find("/Compiler/Compiler");
+  if (!CompilerLoaded(phase)) {
+    Check(!reported && module_entry == symbols.modules.end() &&
+              !symbols.exports.contains(std::string(status_name)),
+          "Rejected compiler module published executable state");
+    for (auto name : imports)
+      Check(!symbols.exports.contains("__unholyos_sysv." + std::string(name)),
+            "Rejected compiler has a native export");
+    for (auto name : public_names)
+      Check(!symbols.exports.contains(std::string(name)),
+            "Rejected compiler has a public HolyC export");
+    return {};
+  }
+  Check(reported && module_entry != symbols.modules.end(),
+        "Missing loaded compiler module report or hash entry");
+  std::array<uint64_t, 5> fields;
+  for (size_t i = 0; i < fields.size(); ++i)
+    fields[i] = std::stoull(match[i + 1].str(), nullptr, 16);
+  const auto [module, image, size, patch, loaded_hash] = fields;
+  const auto records = CompilerRecords(media.compiler);
+  const auto base = image + 32;
+  const auto alignment = uint64_t{1} << media.compiler[2];
+  Check(image > 0x100000 && image < 0x80000000 && size == media.compiler.size() &&
+            size <= 0x80000000 - image && patch == ReadLE(media.compiler, 16, 8) &&
+            !(base & (alignment - 1)) && module_entry->second == image &&
+            symbols.module_counts["/Compiler/Compiler"] == 1,
+        "Loaded compiler range, alignment, or module hash entry differs");
+  auto prepared = media.compiler;
+  std::string import_name, unresolved;
+  unsigned main_count = 0;
+  for (const auto &record : records) {
+    if (record.type == 16 || record.type == 17) {
+      const auto value = record.type == 16 ? base + record.value : record.value;
+      const auto found = symbols.exports.find(record.name);
+      Check(found != symbols.exports.end() && found->second == value &&
+                symbols.export_counts[record.name] == 1,
+            "Compiler export did not relocate into the loaded module");
+    } else if (record.type == 8 || record.type == 11) {
+      if (!record.name.empty())
+        import_name = record.name;
+      const auto found = symbols.exports.find(import_name);
+      if (found == symbols.exports.end()) {
+        Check(phase == CBootPhase::CompilerUnresolvedImport &&
+                  (unresolved.empty() || unresolved == import_name),
+              "Unexpected unresolved compiler import");
+        unresolved = import_name;
+        continue;
+      }
+      const auto value = record.type == 8
+                             ? found->second - (base + record.value) - 4
+                             : found->second;
+      WriteLE(prepared, 32 + record.value, value, record.type == 8 ? 4 : 8);
+    } else if (record.type == 20) {
+      for (auto offset : record.offsets) {
+        const auto value = ReadLE(prepared, 32 + offset, 4) + base;
+        Check(value < 0x80000000, "Compiler absolute relocation escaped code RAM");
+        WriteLE(prepared, 32 + offset, value, 4);
+      }
+    } else if (record.type == 25)
+      ++main_count;
+  }
+  Check(main_count == 1 &&
+            (!unresolved.empty()) == (phase == CBootPhase::CompilerUnresolvedImport),
+        "Compiler entry count or unresolved-import state differs");
+  uint64_t hash = 14695981039346656037ULL;
+  for (auto byte : prepared)
+    hash = (hash ^ byte) * 1099511628211ULL;
+  Check(hash == loaded_hash,
+        "Loaded compiler bytes differ from the disk image and its relocations");
+  const auto actual = CaptureCompilerMemory(vm, dir / "compiler-image.bin", image, size);
+  Check(std::equal(prepared.begin(), prepared.begin() + 32, actual.begin()) &&
+            std::equal(prepared.begin() + patch, prepared.end(), actual.begin() + patch),
+        "Compiler initialization changed its header or patch table");
+  const auto state = ReadPhysical<5>(vm, module);
+  Check(state[0] == image && state[1] && state[2] == records.size() &&
+            state[3] == (unresolved.empty() ? 0u : 1u) &&
+            (state[4] & 0xFFFF) == (CompilerBound(phase) ? 0x101u : 1u),
+        "Compiler metadata or execution gate differs");
+  const auto raw_records = CaptureCompilerMemory(
+      vm, dir / "compiler-records.bin", state[1], records.size() * 64);
+  for (size_t i = 0; i < records.size(); ++i) {
+    const auto &record = records[i];
+    const auto at = i * 64;
+    Check(ReadLE(raw_records, at, 8) == image + record.offset &&
+              ReadLE(raw_records, at + 8, 8) ==
+                  (record.offsets_offset ? image + record.offsets_offset : 0) &&
+              ReadLE(raw_records, at + 16, 8) == image + record.name_offset &&
+              !ReadLE(raw_records, at + 24, 8) &&
+              ReadLE(raw_records, at + 32, 4) == record.value &&
+              ReadLE(raw_records, at + 36, 1) == record.type &&
+              !ReadLE(raw_records, at + 40, 8) &&
+              !ReadLE(raw_records, at + 48, 8) &&
+              !ReadLE(raw_records, at + 56, 8),
+          "Compiler load record differs from its disk patch record");
+  }
+  const auto status = symbols.exports.find(std::string(status_name));
+  Check(status != symbols.exports.end() && !(status->second & 7) &&
+            status->second >= base && status->second <= image + patch - 8 &&
+            ReadLE(media.compiler, status->second - image, 8) == 0,
+        "Compiler initialization status is outside zeroed module storage");
+  const auto expected_status = phase == CBootPhase::Desktop ? uint64_t{1}
+                               : CompilerBound(phase) ? UINT64_MAX : 0;
+  Check(ReadPhysical<1>(vm, status->second)[0] == expected_status,
+        "Compiler initialization status or rejected-entry execution differs");
+  if (bindings) {
+    const auto targets = ReadPhysical<16>(vm, bindings);
+    for (size_t i = 0; i < std::size(imports); ++i) {
+      const auto found = symbols.exports.find("__unholyos_sysv." + std::string(imports[i]));
+      Check(found != symbols.exports.end() && targets[i] == found->second &&
+                targets[i] >= base && targets[i] < image + patch,
+            "A compiler reverse import points outside its loaded module");
+    }
+  }
+  if (!unresolved.empty()) {
+    const auto found = symbols.imports.find(unresolved);
+    Check(found != symbols.imports.end() && found->second.size() == 1,
+          "Missing unresolved compiler import record");
+    const auto pending = ReadPhysical<13>(vm, found->second[0]);
+    Check(pending[8] == base && pending[10] == module && pending[11] < records.size() &&
+              pending[12] <= records.size() && pending[11] < pending[12] &&
+              pending[9] == image + records[pending[11]].offset,
+          "Unresolved compiler import belongs to the wrong module");
+  }
+  const auto owner = ReadPhysical<1>(vm, 0x100300 + 0x28)[0];
+  CCompilerState result;
+  result.data_used = VerifyCompilerAllocation(vm, module, owner, 40) +
+                     VerifyCompilerAllocation(vm, state[1], owner, records.size() * 64);
+  const auto misalignment = (0 - uint64_t{32}) & (alignment - 1);
+  result.code_used = VerifyCompilerAllocation(
+      vm, image, 0x101188, size + alignment - 1 + 8 + misalignment, true);
+  result.unresolved = unresolved;
+  std::cout << "Verified compiler module " << size << " bytes, " << records.size()
+            << " patch records, imports " << (bindings ? 16 : 0)
+            << ", status " << int64_t(expected_status) << '\n';
+  return result;
+}
+
 static void VerifyUncachedAlias(CMonitor &vm, const std::string &output)
 {
   constexpr uint64_t four_gib = 1ULL << 32, page = 1ULL << 21, pml2 = 0x102000;
@@ -681,7 +1153,8 @@ static std::string StopAtIdle(CMonitor &vm)
 }
 
 static void VerifyInterrupts(CMonitor &vm, const std::string &output,
-                             const std::string &registers, bool startup)
+                             const std::string &registers, bool startup,
+                             bool desktop)
 {
   const std::regex report(R"(IDT (0x[0-9a-f]+))");
   const std::regex idtr(R"(IDT=\s*([0-9a-f]+)\s+([0-9a-f]+))");
@@ -762,9 +1235,12 @@ static void VerifyInterrupts(CMonitor &vm, const std::string &output,
         "PIT timer and task restoration counters disagree");
   if (startup)
     Check(idle_ticks > 0, "The scheduler did not idle while tasks slept");
-  else
+  else if (desktop)
     Check(adam_swaps>=3 && swaps>adam_swaps,
           "PIT did not restore Adam and the window manager");
+  else
+    Check(adam_swaps >= 3 && swaps == adam_swaps && !idle_ticks,
+          "PIT did not restore the sole runnable Adam task");
 }
 
 static void VerifyClock(CMonitor &vm, const std::string &output,
@@ -860,7 +1336,8 @@ constexpr uint64_t drive_used = drive_alloced - 2 * 24 + 40 + 40 + 32 + 24;
 
 static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
                                     uint64_t owner, uint64_t &graphics,
-                                    uint64_t &winmgr_slot)
+                                    uint64_t &winmgr_slot, bool desktop,
+                                    const CCompilerState &compiler)
 {
   uint64_t used = 0, count = 0;
   bool kernel = false, hash_del = false, hash_src = false, put_str = false;
@@ -874,8 +1351,10 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
         auto type = static_cast<uint32_t>(entry[4]);
         bool module = type == 0x01004000;
         bool define = type == 4;
-        Check((module || define || type == 0x08000001) && entry[0] == owner &&
-                  entry[1] == (module ? 64u : define ? 104u : 88u) &&
+        bool imported = type == 2 && !compiler.unresolved.empty();
+        Check((module || define || imported || type == 0x08000001) &&
+                  entry[0] == owner &&
+                  entry[1] == (module ? 64u : define ? 104u : imported ? 120u : 88u) &&
                   entry[3] >= 16,
               "Invalid boot symbol allocation");
         auto name = ReadPhysical<2>(vm, entry[3] - 16);
@@ -902,7 +1381,11 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           hash = std::rotl(hash, 1) + ch;
         hash += (hash >> 16) + ((hash >> 15) & 1);
         Check((hash & 1023) == i + j, "Boot symbol in the wrong bucket");
+        if (imported)
+          Check(str == compiler.unresolved,
+                "Unexpected unresolved boot symbol");
         if (define) {
+          Check(desktop, "Compiler failure initialized Adam definitions");
           bool color_list = str == "ST_COLORS";
           bool rainbow_list = str == "ST_RAINBOW_10";
           bool startup_name = str == "DD_OS_NAME_VERSION";
@@ -953,8 +1436,9 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
       }
     }
   }
-  Check(kernel && hash_del && hash_src && put_str && colors && rainbow &&
-            os_name && file_util && graphics && winmgr_slot,
+  Check(kernel && hash_del && hash_src && put_str && graphics && winmgr_slot &&
+            (desktop ? colors && rainbow && os_name && file_util
+                     : !colors && !rainbow && !os_name && !file_util),
         "Missing boot symbols");
   return used;
 }
@@ -1153,7 +1637,8 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
                         uint64_t symbol_used,
                         const std::vector<CTestE820> &e820, uint64_t idle,
                         uint64_t graphics, uint64_t winmgr, uint64_t left,
-                        uint64_t right, bool desktop)
+                        uint64_t right, bool desktop,
+                        const CCompilerState &compiler)
 {
   constexpr uint64_t adam = 0x100300, adam_hc = 0x101188, code_pool = 0x1007A8;
   constexpr uint64_t code_base = 0x1000000, page = 512;
@@ -1201,8 +1686,14 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   auto allocation = ReadPhysical<2>(vm, waiting[0] - 16);
   Check(allocation[0] == expected_data_hc && allocation[1] == 0x80,
         "Invalid mouse message allocation");
-  const uint64_t graphics_used =
-      VerifyGraphicsContexts(vm, graphics, expected_data_hc, desktop);
+  uint64_t graphics_used = 0;
+  if (desktop)
+    graphics_used = VerifyGraphicsContexts(vm, graphics, expected_data_hc, true);
+  else {
+    Check(ReadPhysical<14>(vm, graphics) == std::array<uint64_t, 14>{} &&
+              ReadPhysical<10>(vm, graphics + 10408) == std::array<uint64_t, 10>{},
+          "Compiler failure allocated Adam graphics state");
+  }
   // Compiler startup keeps the shared assembler table in Adam's heap.
   const uint64_t asm_hash_used = desktop ? 0x10518 : 0;
   std::smatch raw_screen;
@@ -1220,9 +1711,10 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
                                  2 * (9 * page - 24) + 65 * page - 24;
   const uint64_t boot_used = range_bytes + late_used + symbol_used +
                              drive_used + allocation[1] + graphics_used +
-                             asm_hash_used + raw_used + fifo_used;
+                             asm_hash_used + raw_used + fifo_used + compiler.data_used;
   auto code = VerifyHeap(vm, adam_hc, code_pool, adam);
-  uint64_t code_used = 0x42840 + fault_used + (pool ? 0x5E8 : boot_used);
+  uint64_t code_used = 0x42840 + fault_used + compiler.code_used +
+                       (pool ? 0x5E8 : boot_used);
   uint64_t data_used = boot_used, data_alloced = 0;
   BlockRanges data_used_ranges;
   for (auto task : {idle, winmgr, left, right}) {
@@ -1308,7 +1800,8 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
 
 static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
                             const std::string &registers,
-                            const std::string &output, bool desktop)
+                            const std::string &output, bool desktop,
+                            const CCompilerState &compiler)
 {
   constexpr uint64_t fixed = 0x100000, boot_cpu = fixed + 0x200,
                      adam = fixed + 0x300;
@@ -1321,17 +1814,20 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
   uint64_t owner = ReadPhysical<1>(vm, adam + 0x28)[0];
   uint64_t graphics = 0, winmgr_slot = 0;
   uint64_t symbol_used =
-      VerifyKernelSymbols(vm, top + 0x28, owner, graphics, winmgr_slot);
+      VerifyKernelSymbols(vm, top + 0x28, owner, graphics, winmgr_slot,
+                           desktop, compiler);
   uint64_t winmgr = ReadPhysical<1>(vm, winmgr_slot)[0];
-  uint64_t left = ReadPhysical<1>(vm, winmgr + 0x88)[0];
-  uint64_t right = ReadPhysical<1>(vm, adam + 0x80)[0];
-  Check(winmgr && winmgr != adam && ReadPhysical<1>(vm, winmgr)[0] == winmgr &&
-            ReadPhysical<3>(vm, winmgr + 0x78) ==
-                std::array<uint64_t, 3>{adam, adam, left} &&
-            ReadPhysical<1>(vm, adam + 0x88)[0] == winmgr &&
-            ReadPhysical<1>(vm, winmgr + 0x1B8)[0] > 0,
-        "Missing window manager task or broken task queue");
+  uint64_t left = 0, right = 0;
   if (desktop) {
+    Check(winmgr && winmgr != adam, "Missing window manager task");
+    left = ReadPhysical<1>(vm, winmgr + 0x88)[0];
+    right = ReadPhysical<1>(vm, adam + 0x80)[0];
+    Check(ReadPhysical<1>(vm, winmgr)[0] == winmgr &&
+              ReadPhysical<3>(vm, winmgr + 0x78) ==
+                  std::array<uint64_t, 3>{adam, adam, left} &&
+              ReadPhysical<1>(vm, adam + 0x88)[0] == winmgr &&
+              ReadPhysical<1>(vm, winmgr + 0x1B8)[0] > 0,
+          "Broken window manager task queue");
     Check(left && right && left != right &&
               ReadPhysical<3>(vm, left + 0x78) ==
                   std::array<uint64_t, 3>{adam, winmgr, right} &&
@@ -1346,9 +1842,10 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
             "Missing startup terminal prompt or documents");
     }
   } else {
-    Check(left == adam && right == winmgr,
-          "Compiler failure left unexpected terminal tasks");
-    left = right = 0;
+    Check(!winmgr && ReadPhysical<3>(vm, adam + 0x78) ==
+                        std::array<uint64_t, 3>{0, adam, adam} &&
+              ReadPhysical<3>(vm, adam + 0x30) == std::array<uint64_t, 3>{},
+          "Compiler failure started Adam graphics or terminal tasks");
   }
   Check(ReadPhysical<1>(vm, fixed, 'h')[0] == 0x37F,
         "Missing initial FPU image");
@@ -1365,7 +1862,7 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
             ReadPhysical<1>(vm, idle + 0x1A8)[0] == boot_cpu,
         "Invalid idle task record");
   VerifyPools(vm, heap, ram_end, output, range_bytes, symbol_used, e820, idle,
-              graphics, winmgr, left, right, desktop);
+              graphics, winmgr, left, right, desktop, compiler);
 
   constexpr uint64_t task_alloced = 0x44800;
   uint64_t used_block = ram_end - task_alloced;
@@ -4027,8 +4524,10 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/ScreenProbe.HC", screen_output, '1');
     CheckFontText(boot);
     auto registers = StopAtIdle(rebuilt);
+    rebuilt.ResetDeadline(60s);
     VerifyHandoff(boot, media, registers);
     VerifyBootDrive(rebuilt, boot, media, true, false);
+    VerifyCompiler(rebuilt, reboot, boot, media, CBootPhase::Desktop);
     rebuilt.Command(R"({"execute":"cont"})");
     DriveUserTask(rebuilt, reboot, boot, true);
     rebuilt.Command(R"({"execute":"quit"})");
@@ -4042,10 +4541,12 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                      const char *memory, uint32_t host_bridge,
                      bool hpet_enabled, bool secondary_slave = false,
                      bool startup = false,
-                     CBootPhase phase = CBootPhase::Desktop)
+                     CBootPhase phase = CBootPhase::Desktop,
+                     bool modified_media = false)
 {
   const bool desktop = phase == CBootPhase::Desktop;
-  auto media = VerifyMedia(iso, kernel);
+  auto media = VerifyMedia(iso, kernel,
+                           modified_media ? phase : CBootPhase::Desktop);
   char path[] = "/tmp/unholyos-boot-XXXXXX";
   Check(mkdtemp(path), "Cannot create a temporary QEMU directory");
   fs::path dir = path, serial = dir / "serial.log", screen = dir / "screen.ppm";
@@ -4068,19 +4569,27 @@ static void TestBoot(const char *qemu, const fs::path &iso,
     }
     std::string output = desktop
                              ? vm.Boot(serial)
-                             : vm.WaitSerial(serial, COMPILER_FAILURE_MARKER);
+                             : vm.WaitSerial(serial, CompilerFailureMarker(phase));
     std::string registers = StopAtIdle(vm);
+    vm.ResetDeadline(60s);
     if (!desktop) {
       output = ReadText(serial);
-      Check(output.find(BOOT_MARKER) == std::string::npos,
+      Check(output.find(BOOT_MARKER) == std::string::npos &&
+                output.find("UnholyOS: text base ") == std::string::npos,
             "Compiler failure reported completed startup");
     }
+    for (auto marker : {COMPILER_FAILURE_MARKER, COMPILER_BIND_FAILURE_MARKER,
+                         COMPILER_INIT_FAILURE_MARKER})
+      Check((output.find(marker) != std::string::npos) ==
+                (!desktop && marker == CompilerFailureMarker(phase)),
+            "Compiler stopped at the wrong startup phase");
     uint64_t heap = VerifyHandoff(output, media, registers);
+    const auto compiler = VerifyCompiler(vm, dir, output, media, phase);
     if (!startup)
-      VerifyFixedArea(vm, heap, registers, output, desktop);
+      VerifyFixedArea(vm, heap, registers, output, desktop, compiler);
     VerifyUncachedAlias(vm, output);
     VerifyKernelGlobals(vm, output);
-    VerifyInterrupts(vm, output, registers, startup);
+    VerifyInterrupts(vm, output, registers, startup, desktop);
     VerifyClock(vm, output, host_bridge, hpet_enabled);
     VerifyBootDrive(vm, output, media, host_bridge == 0x12378086,
                     secondary_slave);
@@ -4573,7 +5082,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
               "The module's data allocation did not use RAM above 4 GiB");
       }
     }
-    if (!startup && std::string_view(machine) == "pc" &&
+    if (desktop && !startup && std::string_view(machine) == "pc" &&
         std::string_view(memory) == "512" && !secondary_slave) {
       vm.Command(R"({"execute":"cont"})");
       DriveUserTask(vm, dir, output);
@@ -4597,10 +5106,72 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       std::cout
           << "Verified BIOS handoff, long mode, VGA, kernel tables, "
              "interrupt gates, PIT, PCI, allocator pools, and device memory.\n"
-             "The boot DVD and compiler are unavailable; startup stopped "
-             "before creating terminal tasks.\n";
+             "Compiler startup stopped before Adam graphics and terminal tasks.\n";
   } catch (...) {
     std::cerr << ReadText(serial) << ReadText(dir / "qemu.log");
+    std::error_code ignored;
+    fs::remove_all(dir, ignored);
+    throw;
+  }
+  fs::remove_all(dir);
+}
+
+static void TestCompilerFailures(const char *qemu, const fs::path &iso,
+                                  const fs::path &kernel)
+{
+  const auto original = FileRead(iso);
+  const auto media = VerifyMedia(iso, kernel);
+  const auto directory = FindRedSeaEntry(original, media.root, "Compiler");
+  const auto compiler_dir = ReadLE(original, directory + 40, 8);
+  const auto module_entry = FindRedSeaEntry(original, compiler_dir, "Compiler.BIN");
+  const auto opcode_entry = FindRedSeaEntry(original, compiler_dir, "OpCodes.DD");
+  const auto module_start = ReadLE(original, module_entry + 40, 8) * 512;
+  const auto opcode_start = ReadLE(original, opcode_entry + 40, 8) * 512;
+  struct CCase
+  {
+    const char *name;
+    CBootPhase phase;
+  };
+  constexpr CCase cases[]{
+      {"missing-module", CBootPhase::CompilerUnavailable},
+      {"corrupt-module", CBootPhase::CompilerInvalid},
+      {"missing-export", CBootPhase::CompilerMissingExport},
+      {"invalid-export", CBootPhase::CompilerInvalidExport},
+      {"unresolved-import", CBootPhase::CompilerUnresolvedImport},
+      {"missing-opcodes", CBootPhase::OpcodeUnavailable},
+      {"malformed-opcodes", CBootPhase::OpcodeInvalid}};
+  char path[] = "/tmp/unholyos-compiler-failures-XXXXXX";
+  Check(mkdtemp(path), "Cannot create compiler failure-test directory");
+  const fs::path dir = path;
+  try {
+    for (const auto &test : cases) {
+      auto image = original;
+      if (test.phase == CBootPhase::CompilerUnavailable ||
+          test.phase == CBootPhase::OpcodeUnavailable) {
+        const auto entry = test.phase == CBootPhase::CompilerUnavailable
+                               ? module_entry : opcode_entry;
+        constexpr std::string_view name = "Unavailable.BIN";
+        std::fill(image.begin() + entry + 2, image.begin() + entry + 40, 0);
+        std::copy(name.begin(), name.end(), image.begin() + entry + 2);
+      } else if (test.phase == CBootPhase::OpcodeInvalid) {
+        image[opcode_start] = ';';
+        image[opcode_start + 1] = 0;
+      } else {
+        const auto module = CompilerVariant(media.compiler, test.phase);
+        Check(module.size() == media.compiler.size(),
+              "Compiler failure mutation changed the file extent");
+        std::copy(module.begin(), module.end(), image.begin() + module_start);
+      }
+      const auto variant = dir / (std::string(test.name) + ".iso");
+      std::ofstream file(variant, std::ios::binary);
+      file.write(reinterpret_cast<const char *>(image.data()), image.size());
+      file.close();
+      Check(bool(file), "Could not write private compiler failure image");
+      std::cout << "Compiler failure case: " << test.name << '\n';
+      TestBoot(qemu, variant, kernel, "pc", "512", 0x12378086, true, false,
+                false, test.phase, true);
+    }
+  } catch (...) {
     std::error_code ignored;
     fs::remove_all(dir, ignored);
     throw;
@@ -4662,6 +5233,15 @@ static void VerifyDatabaseRecords(const Bytes &disk)
 
 int main(int argc, char **argv)
 {
+  if (argc == 5 && std::string_view(argv[1]) == "--compiler-failures") {
+    try {
+      TestCompilerFailures(argv[2], argv[3], argv[4]);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n';
+      return 1;
+    }
+  }
   if (((argc == 5 || argc == 6) &&
        (std::string_view(argv[1]) == "--host-module" ||
         std::string_view(argv[1]) == "--host-module-reference" ||
@@ -5073,6 +5653,8 @@ int main(int argc, char **argv)
               << " qemu image.iso kernel [startup-test.iso]\n"
               << "       " << argv[0]
               << " --q35-no-compiler qemu image.iso kernel\n"
+              << "       " << argv[0]
+              << " --compiler-failures qemu image.iso kernel\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]

@@ -1,4 +1,3 @@
-#include "../Compiler/CompilerA.hpp"
 #include "../Linux/BootProbe.hpp"
 #include "KernelB.hpp"
 
@@ -161,6 +160,31 @@ extern "C" void KMainCpp()
     KbdMsService();
   else
     SerialPutS("UnholyOS: Could not initialize the PS/2 mouse\r\n");
+  BootPreCompilerProbe();
+  BootPutS("Loading Compiler");
+  auto *compiler = adam_task->cur_dv
+                       ? Load(*adam_task->cur_dv, "/Compiler/Compiler.BIN",
+                              *adam_task, LDF_JUST_LOAD | LDF_SILENT)
+                       : nullptr;
+  if (!compiler) {
+    BootPutS("Could not load compiler module");
+    SerialPutS("UnholyOS: Could not load compiler module\r\n");
+    return;
+  }
+  BootCompilerImageReport(*compiler);
+  const int64_t *compiler_status = nullptr;
+  if (!LoadCompilerImports(*compiler, compiler_status)) {
+    BootPutS("Could not bind compiler imports");
+    SerialPutS("UnholyOS: Could not bind compiler imports\r\n");
+    return;
+  }
+  BootOpcodeResourceReport(*adam_task->cur_dv);
+  if (!LoadPass2(*compiler) || *compiler_status != 1) {
+    BootPutS("Could not initialize compiler module");
+    SerialPutS("UnholyOS: Could not initialize compiler module\r\n");
+    return;
+  }
+  SYS_RUN_LEVEL |= RLF_COMPILER;
   if (!DefineInitColors() || !GrPaletteInit()) {
     SerialPutS("UnholyOS: Could not register color names\r\n");
     return;
@@ -185,10 +209,6 @@ extern "C" void KMainCpp()
 
   MusicSettingsRstCpp();
   BootProbe();
-  if (!AsmHashLoad()) {
-    SerialPutS("UnholyOS: Could not load compiler opcode dictionary\r\n");
-    return;
-  }
   adam_task->win_inhibit |= WIF_SELF_FOCUS;
   SYS_RUN_LEVEL |= RLF_DOC;
   adam_task->display_flags |= DISPLAYF_CHILDREN_NOT_ON_TOP;

@@ -2333,6 +2333,117 @@ build/Linux/TestBoot --assert-warning-reference qemu-system-x86_64 \
   ../reference-media/TOS_Distro.ISO build/assert-warning-reference
 ```
 
+## Loading the compiler from the boot volume
+
+The host build now puts the existing compiler implementation in
+`Compiler/Compiler.BIN`. Its 16 C++ and four NASM objects are absent from
+the kernel ELF link. Every ISO includes the module beside Terry A.
+Davis's unchanged `Compiler/OpCodes.DD`. This follows the separate
+compiler load in pinned `Kernel/KMain.HC`: keyboard and mouse setup,
+`Load("Compiler",LDF_SILENT)`, then the compiler run-level bit before
+`StartOS` begins. The native code uses the absolute path
+`/Compiler/Compiler.BIN` and still initializes several Adam subsystems
+directly afterward.
+
+The module imports 44 native functions and 30 data symbols through the
+explicit `Compiler/Compiler.bindings` manifest. It publishes the nine
+existing public HolyC adapters and 16 private native compiler entries.
+`Kernel/KExts.asm` dispatches kernel and Adam calls through a validated
+table while preserving native arguments, including the hidden storage
+argument for the 24-byte `CExeResult`. The compiler's C++ entry is reached
+through the zero-argument HolyC `CInitHC` adapter. [Host modules](HostModules.md)
+records the ownership, ABI, manifest, and initialization differences.
+
+The local builds use GCC 13.3.0 or Clang 20.1.2, NASM 2.16.01, GNU ld 2.42,
+and QEMU 8.2.2 (`1:8.2.2+ds-0ubuntu1.18`). The focused commands are:
+
+```sh
+make -j6 all build/unholyos-startup-test.iso build/Linux/TestBoot
+build/Linux/TestBoot --compiler-failures qemu-system-x86_64 \
+  build/unholyos.iso build/0000Boot/0000Kernel.BIN.C
+build/Linux/TestBoot qemu-system-x86_64 build/unholyos.iso \
+  build/0000Boot/0000Kernel.BIN.C build/unholyos-startup-test.iso
+
+make -j6 BUILD=build/clang CXX=clang++ HOSTCXX=clang++ \
+  all build/clang/unholyos-startup-test.iso build/clang/Linux/TestBoot
+build/clang/Linux/TestBoot --compiler-failures qemu-system-x86_64 \
+  build/clang/unholyos.iso build/clang/0000Boot/0000Kernel.BIN.C
+build/clang/Linux/TestBoot qemu-system-x86_64 build/clang/unholyos.iso \
+  build/clang/0000Boot/0000Kernel.BIN.C build/clang/unholyos-startup-test.iso
+```
+
+The local Clang commands set both compiler variables to the installed
+Clang 20 binary. The default build paths are `build/unholyos.iso` and
+`build/Compiler/Compiler.BIN`; the Clang paths are beneath `build/clang`.
+The compiler bytes are:
+
+| Build | Bytes | SHA-256 |
+| --- | ---: | --- |
+| GCC | 246,208 | `19324dd7315e5625dcaffdb2bfabd0975a50371edae0d081539e6b86aa3a71fe` |
+| Clang | 254,976 | `c6130db6ba6979231359b1518c08df24603eb0a4239c834d6eda35b9ddd81f67` |
+
+Each ordinary VM starts from a clean CD boot with one CPU. For example,
+the harness launches:
+
+```sh
+qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d \
+  -cdrom build/unholyos.iso -display none -monitor none \
+  -serial file:<capture-dir>/serial.log -qmp stdio -no-reboot
+```
+
+Both GCC and Clang passed the complete boot and startup matrices.
+The normal PC cases reached the desktop at 512, 3,072, and 4,608 MiB,
+with HPET disabled, and with the DVD on the secondary IDE slave.
+Q35's AHCI DVD remains unsupported: that case passed by verifying the
+missing drive and compiler-load diagnostic, the early machine state,
+and the absence of later Adam initialization. The missing-DVD message
+now accompanies the early drive report, before the compiler-load guard.
+
+The startup ISO passed at all three memory sizes. It expanded the
+startup source, compiled and executed the existing HolyC and TOSB
+fixtures through the loaded compiler, checked runtime calls and
+interactive input, and verified the complete guest-built ISO against
+its source files. A clean VM also booted the guest-built 512 MiB result,
+including its copied compiler module. The complete regression command
+is `make -j6 test`; the CI workflows run that gate with GCC and Clang.
+
+The early record has run level `0x2ff`. After compiler initialization,
+the pre-desktop report has `0x12ff`; the final desktop state has `0x32ff`
+after `RLF_DOC`. The driver reconstructs every relocated compiler byte
+from the packaged image and live import addresses, then compares the
+hash reported before the entry runs. It also checks the retained patch
+records, module hash entry, code and data heap ownership, 16 dispatch
+targets, status word, and the single completed entry. The GCC module
+has 429 patch records and the Clang module has 630.
+
+Both compiler builds passed all seven focused failure cases. Each case
+uses a private ISO copy and checks the diagnostic and live guest state:
+
+| Change to the test image | Expected result |
+| --- | --- |
+| Remove the compiler directory entry | Load fails; no compiler image or published imports |
+| Corrupt the compiler signature | Load fails; no compiler image or published imports |
+| Remove a required native export name | Binding fails; status remains `0`, imports unpublished |
+| Replace a required target with a zero-valued immediate export | Binding fails; status remains `0`, imports unpublished |
+| Rename a kernel import to an unavailable name | Binding fails with a retained unresolved import; status remains `0` |
+| Remove the opcode dictionary entry | Entry runs; initialization fails with status `-1` |
+| Replace the opcode dictionary with malformed input | Entry runs; initialization fails with status `-1` |
+
+Every failure retains run level `0x2ff`, prints through the early VGA
+path, and stops before Adam graphics and terminal tasks. Initialization
+failures retain the published dispatch table; binding failures never
+publish a partial table. These are native failure checks, not claims
+about how the pinned system handles deliberately corrupted media.
+
+Source review establishes the corresponding compiler load boundary.
+The current `CInitCpp` still calls only `AsmHashLoad`; the reference's
+`CmpLoadDefines`, `CmpFillTables`, `cmp.ic_nop` setup, and `UAsmHashLoad`
+sequence remain incomplete. Adam remains linked into the kernel,
+and complete `StartOS.HC`/`Adam/MakeAdam.HC` execution still needs work.
+The guest ISO builder copies existing files, including this compiler
+module. Rebuilding C++20, HolyC, and assembly components entirely in
+the guest remains a later milestone.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |
