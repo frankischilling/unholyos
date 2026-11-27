@@ -119,8 +119,16 @@ extern "C" void KMainCpp()
     return;
   }
   UncachedAliasAlloc();
+  if (!LoadKernel(*adam_task)) {
+    SerialPutS("UnholyOS: Could not register kernel symbols\r\n");
+    return;
+  }
   if (!SysGrInit()) {
     SerialPutS("UnholyOS: Could not initialize text globals\r\n");
+    return;
+  }
+  if (!SysDefinesLoad()) {
+    SerialPutS("UnholyOS: Could not register system definitions\r\n");
     return;
   }
   if (!IntInit1()) {
@@ -136,10 +144,6 @@ extern "C" void KMainCpp()
   SYS_RUN_LEVEL |= RLF_INTERRUPTS;
   asm volatile("sti" : : : "memory");
   TimeCal();
-  if (!LoadKernel(*adam_task)) {
-    SerialPutS("UnholyOS: Could not register kernel symbols\r\n");
-    return;
-  }
   if (!BlkDevGlblsInit()) {
     SerialPutS("UnholyOS: Could not allocate drive tables\r\n");
     return;
@@ -185,12 +189,8 @@ extern "C" void KMainCpp()
     return;
   }
   SYS_RUN_LEVEL |= RLF_COMPILER;
-  if (!DefineInitColors() || !GrPaletteInit()) {
+  if (!GrPaletteInit()) {
     SerialPutS("UnholyOS: Could not register color names\r\n");
-    return;
-  }
-  if (!DefineInitFileFlags()) {
-    SerialPutS("UnholyOS: Could not register file utility flags\r\n");
     return;
   }
   if (!LoadDocDefines()) {

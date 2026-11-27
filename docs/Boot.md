@@ -2934,6 +2934,106 @@ exited and released that port.
 pull request records the exact tested commit and the GCC and Clang CI
 results.
 
+## Kernel system definitions
+
+`SystemDefinesProbe.HC` runs unchanged in the pinned TempleOS guest and
+the GCC and Clang native builds. Its ten lists come from Terry A. Davis's
+`Kernel/KDefine.HC::SysDefinesLoad`: on/off names, hash types, weekdays,
+months, file attributes, file utility flags, block device types, drive
+types, colors, and interrupt names. All three runs produced these exact
+116 normalized output bytes:
+
+```text
+SY lists 3FF entries 170 bytes 980
+SY storage 3FF 3FF
+SY consumers FF
+SY flags 2003 1A00000
+SY date Sat|Feb
+SY DONE
+```
+
+The fixture checks every name and count, all 170 indexed strings and
+offsets, and all 980 decoded bytes, including each list's terminating
+empty string. It verifies the complete copied data separately from the
+original storage retained by `sub_idx`, requires those addresses to
+differ, rejects duplicate definitions, and checks out-of-range indexes.
+The comparisons retain the single-space entries and the one decoded
+dollar sign in `ST_FILE_UTIL_FLAGS`.
+
+Public `Define`, `DefineCnt`, `DefineSub`, and `DefineMatch` calls feed
+the checks. `%Z` formats color and interrupt names, including `Page
+Fault`, `MP Crash`, `Wake`, and `Dbg`. `ScanFlags` first enables `r`, `d`,
+and the dollar flag, then enables `la`, `lb`, and `f` while clearing the
+first three. The weekday and month consumers use the `%03tZ` pattern
+from the untouched `Demo/DateTime.HC` with a fixed 2020-02-29 date. This
+tests name lookup and formatting; it does not inject an interrupt fault.
+
+Source review establishes that native `KMain` calls `SysDefinesLoad`
+before `IntInit1` and compiler loading, matching the relevant ordering
+in pinned `Kernel/KMain.HC`. Separate GCC and Clang runs of all seven
+compiler-failure cases verify that the ten lists already exist before
+Adam initialization. The host inspects all five allocations per list,
+totaling 50 allocations and 4,296 heap bytes, their owning heap, exact
+contents, and index pointers into the kernel image. Compiler lists
+appear only after compiler entry has started; Adam definitions remain
+absent in these failure captures. These observations establish early
+availability, while the exact placement before interrupts is source
+evidence. The common HolyC fixture runs later, after Adam's initializers
+but before `RLF_DOC` and user startup tasks. Native initialization passes
+a null frame and records `AD:0x0`; the reference retains its HolyC caller
+address. Allocation failures are not injected.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Common `SystemDefinesProbe.HC` | 6,687 | `5b4f0cfb74a55ea47c88b6a58fed7798a91da93276cded118e295fd577d2d51b` |
+| Reference source readback, including NUL | 6,688 | `8df3111fd81fc7199ce58282e11e0d39e4c0dec81a7c081ef4f134c7f7530a40` |
+| Normalized trace | 116 | `ff104984a43876c58455dba96d195b9a15e0b04b1239e69e689490d54fe83083` |
+
+```sh
+make -j4 test-system-defines
+make -j4 BUILD=build/clang \
+  CXX=/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  HOSTCXX=/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  test-system-defines
+build/system-defines-audit/TestBoot.gcc --compiler-failures \
+  qemu-system-x86_64 build/unholyos.iso build/0000Boot/0000Kernel.BIN.C
+build/system-defines-audit/TestBoot.clang --compiler-failures \
+  qemu-system-x86_64 build/clang/unholyos.iso \
+  build/clang/0000Boot/0000Kernel.BIN.C
+build/system-defines-audit/TestBoot.gcc --system-defines-reference \
+  qemu-system-x86_64 ../reference-media/TOS_Distro.ISO \
+  build/system-defines-reference
+```
+
+The audit drivers were built from the same `Linux/TestBoot.cpp` with
+`-std=c++20 -O2 -Wall -Wextra -Werror`. The native ISOs are
+`build/system-defines-test.iso` and
+`build/clang/system-defines-test.iso`. Both native runs verify all 6,687
+packaged source bytes, one execution at run level `0x12ff`, completion
+with `checks 1`, and the full trace. The reference transport verifies
+all source bytes plus the NUL before execution and saves the full text
+and screen with an empty prompt afterward. All five focused commands
+above exited successfully. Native logs are
+`build/system-defines-gcc-first.log` and
+`build/system-defines-clang-first.log`; failure-case logs use
+`build/system-defines-failures-gcc-first.log` and
+`build/system-defines-failures-clang-first.log`. Reference evidence is
+in `build/system-defines-reference` and its matching `.log`.
+
+The separate reference checkout was verified clean through the Git
+Human Workflow helper before and after execution at
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`. Its ISO SHA-256 is
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+All runs used QEMU 8.2.2 (`1:8.2.2+ds-0ubuntu1.18`),
+`-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`, one default vCPU,
+`-display none -monitor none -qmp stdio -no-reboot`, and serial capture.
+The reference also used the debug console and GDB on port 45362; its VM
+exited and released that port.
+
+`make test` includes this fixture in the complete regression gate. The
+pull request records the exact tested commit and the GCC and Clang CI
+results.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

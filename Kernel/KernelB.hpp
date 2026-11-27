@@ -251,8 +251,7 @@ extern "C" void DefinePrintCpp(const char *name, const char *src, int64_t argc,
                                const uint64_t *argv);
 extern "C" CHashDefineStr *DefineLstLoadCpp(const char *name, const char *list,
                                             const uintptr_t *frame);
-bool DefineInitColors();
-bool DefineInitFileFlags();
+bool SysDefinesLoad();
 bool LoadDocDefines();
 extern "C" void PutS(const char *text);
 extern "C" void StrCpyCpp(char *dst, const char *src);
