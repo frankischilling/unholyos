@@ -1912,6 +1912,45 @@ This evidence covers the listed values and default x87 environment;
 zero-divisor faults, signed division overflow, and unmasked floating-point
 exceptions are not part of the comparison.
 
+## Bit operations
+
+`Linux/Fixtures/BitProbe.HC` exercises the nine bit intrinsics and four
+runtime bit APIs declared in the pinned `Kernel/KernelB.HH`. It checks
+all 64 scan positions, zero scans, immediate and variable bit indexes,
+old-bit return values, locked operations, and a field crossing a word
+boundary. The 2,261-byte fixture has SHA-256
+`456d16a571175fcfc863f8b31de57cbe9694dc14bc07c2dc7c838e8704629cc4`.
+
+The native GCC 13.3 and Clang 20.1 builds executed the source and a
+guest-built `BitProbe.BIN.Z`; both matched the six-line trace from
+TempleOS source and AOT execution. The reference additionally returned
+zero compile errors and a non-null module. The negative literal and
+variable indexes intentionally have different behavior, as described
+in [Source layout](SourceLayout.md#bit-operations).
+
+```sh
+make -j8 all build/bit-test.iso build/Linux/TestBoot
+build/Linux/TestBoot --bit-operations qemu-system-x86_64 \
+  build/bit-test.iso build/bit-native
+make -j8 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 all test-bit-operations
+build/Linux/TestBoot --bit-operations-reference qemu-system-x86_64 \
+  /path/to/TOS_Distro.ISO build/bit-reference
+```
+
+NASM 2.16.01 and QEMU 8.2.2 were used for both native builds. The VM
+configuration matches the math-helper comparison above, including the
+reference GDB transfer. The reference checkout was at
+`c26482bb6ad3f80106d28504ec5db3c6a360732c` and its ISO SHA-256 was
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+The reference driver verified the RAM-file readback before compilation.
+An initial AOT replay produced the correct trace but failed the driver's
+window-origin check because `Cmp` printed a diagnostic; the wrapper
+clears the window after compilation, and the final replay passed.
+The native driver verifies the packaged fixture bytes, execution order,
+and completion of both source and module before the kernel boot marker.
+`make test` includes the dedicated fixture. General constant-expression
+optimization and multicore contention are not covered.
+
 ## String scanning and transformations
 
 Five separate HolyC fixtures exercise the translated routines in

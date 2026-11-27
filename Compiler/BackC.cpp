@@ -426,6 +426,39 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     out.Immediate(0, 4);
     return true;
   }
+  if (IC_BT <= op && op <= IC_LBTC) {
+    const auto &bit = code[node.right];
+    uint64_t bit_value = bit.data;
+    bool constant = bit.code == IC_IMM_I64;
+    // OptPass012 folds a negated integer literal before ICBitOps.
+    if (bit.code == IC_UNARY_MINUS && code[bit.left].code == IC_IMM_I64) {
+      bit_value = 0 - code[bit.left].data;
+      constant = true;
+    }
+    const bool immediate = constant && static_cast<int64_t>(bit_value) < 64;
+    if (!immediate) {
+      if (!Emit(out, code, node.right, depth + 1, stack_slots))
+        return false;
+      out.Convert(bit.type, RT_I64);
+      out.Bytes(0x50); // PUSH RAX
+    }
+    if (!Emit(out, code, node.left, depth + 1, stack_slots + !immediate))
+      return false;
+    if (!immediate)
+      out.Bytes(0x59); // POP RCX
+    if (IC_LBTS <= op)
+      out.Bytes(0xF0); // LOCK
+    if (!immediate || static_cast<int64_t>(bit_value) >= 32)
+      out.Bytes(0x48);
+    // ICBitOps in BackB.HC uses the dword immediate form below 32.
+    uint8_t operation = op == IC_BT ? 0 : (op - IC_BTS) % 3 + 1;
+    if (immediate)
+      out.Bytes(0x0F, 0xBA, 0x20 + (operation << 3), bit_value);
+    else
+      out.Bytes(0x0F, 0xA3 + (operation << 3), 0x08);
+    out.SetBool(2); // SETC AL
+    return true;
+  }
   if (op == IC_QUE_INS || op == IC_QUE_INS_REV) {
     if (!Emit(out, code, node.right, depth + 1, stack_slots))
       return false;
@@ -627,6 +660,13 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
   if (op == IC_SQR_I64) {
     out.Convert(left, RT_I64);
     out.Bytes(0x48, 0x0F, 0xAF, 0xC0); // IMUL RAX,RAX
+    return true;
+  }
+  if (op == IC_BSF || op == IC_BSR) {
+    out.Convert(left, RT_I64);
+    out.Bytes(0x48, 0x0F, op == IC_BSF ? 0xBC : 0xBD, 0xC0);
+    out.Bytes(0x75, 0x03);       // JNZ done
+    out.Bytes(0x48, 0xF7, 0xD0); // NOT RAX
     return true;
   }
   if (op == IC_SQRT || op == IC_SIN || op == IC_COS) {

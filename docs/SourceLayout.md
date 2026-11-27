@@ -1235,6 +1235,30 @@ TOSB module; the host driver compares them with the pinned runtime trace.
 Fault delivery for zero divisors and signed division overflow, and
 unmasked floating-point exceptions, remain outside this comparison.
 
+## Bit operations
+
+`Compiler/CompilerA.hpp` retains the intermediate codes for `Bsf`, `Bsr`,
+`Bt`, `Btc`, `Btr`, `Bts`, `LBtc`, `LBtr`, and `LBts` from
+`Compiler/CompilerA.HH`. `Compiler/AsmInit.cpp` registers the signatures
+from `Kernel/KernelB.HH`, and `Compiler/BackC.cpp` emits their x86-64
+instructions following `Compiler/BackB.HC` (`ICBitOps`) and
+`Compiler/OptPass789A.HC`. Bit tests return the previous bit through the
+carry flag, and locked updates carry the `LOCK` prefix.
+
+The reference's immediate form below 32 uses a 32-bit memory operand.
+In particular, `Bts(p,-1)` sets bit 31 of that operand, while passing
+the same index through an integer variable addresses the preceding
+word. The backend handles integer literals and negated integer literals
+explicitly because the full reference optimization passes are not yet
+implemented.
+
+`Kernel/KUtils.asm` retains the HolyC stack argument order and callee
+cleanup for `_BEQU`, `_LBEQU`, `_BIT_FIELD_OR_U32`, and
+`_BIT_FIELD_EXT_U32`. `Kernel/KLoad.cpp` exposes their native symbols.
+The focused comparison in [Booting](Boot.md#bit-operations) covers
+the source and compiled module paths; general constant folding and
+concurrent SMP behavior remain outside its scope.
+
 ## String scanning and transformations
 
 `StrScan` in `Kernel/StrScan.cpp` follows `Kernel/StrScan.HC`'s format

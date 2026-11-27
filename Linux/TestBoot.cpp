@@ -2927,6 +2927,24 @@ constexpr CTextProbe class_records_probes[]{
     {"class-records", "/ClassRecordsProbe.HC", "", "CR heaps ", "CR DONE",
      class_records_output}};
 
+constexpr std::string_view bit_operations_output =
+    "BIT scan 64 -1 -1\n"
+    "BIT memory 7F\n"
+    "BIT immediate 0000000000000000 0000000080000000\n"
+    "BIT locked 1F\n"
+    "BIT field F000000000000000 000000000A5B6C7D A5B6C7DF 7D 0\n"
+    "BIT DONE\n";
+constexpr CTextProbe bit_operations_probes[]{
+    {"bit-operations", "/BitProbe.HC", "/BitProbe.BIN.Z", "BIT scan ", "BIT DONE",
+     bit_operations_output}};
+const std::string bit_operations_aot_output =
+    std::string(bit_operations_output) +
+    "BIT AOT compile 0\nBIT AOT load 1\nBIT AOT DONE\n";
+const CTextProbe bit_operations_reference_probes[]{
+    bit_operations_probes[0],
+    {"bit-operations-aot", "/BitAOTProbe.HC", "", "BIT scan ",
+     "BIT AOT DONE", bit_operations_aot_output}};
+
 static void CheckBootProbeOrder(const std::string &serial,
                                 std::span<const char *const> paths)
 {
@@ -6249,6 +6267,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--internal-types-reference" ||
        std::string_view(argv[1]) == "--class-records" ||
        std::string_view(argv[1]) == "--class-records-reference" ||
+       std::string_view(argv[1]) == "--bit-operations" ||
+       std::string_view(argv[1]) == "--bit-operations-reference" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -6295,6 +6315,8 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--internal-types");
     bool class_records_probe =
         std::string_view(argv[1]).starts_with("--class-records");
+    bool bit_operations_probe =
+        std::string_view(argv[1]).starts_with("--bit-operations");
     const bool source_probe = compiler_defines_probe || string_defines_probe ||
                               system_defines_probe || color_conversions_probe ||
                               format_missing_args_probe || class_records_probe;
@@ -6321,6 +6343,8 @@ int main(int argc, char **argv)
       text_probes = internal_types_probes;
     else if (class_records_probe)
       text_probes = class_records_probes;
+    else if (bit_operations_probe)
+      text_probes = bit_operations_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -6328,7 +6352,7 @@ int main(int argc, char **argv)
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
-      if ((source_probe || internal_types_probe) && !reference) {
+      if ((source_probe || internal_types_probe || bit_operations_probe) && !reference) {
         const auto &probe = text_probes[0];
         VerifyHostModuleMedia(argv[3],
                               std::string("Linux/Fixtures") + probe.source,
@@ -6358,10 +6382,10 @@ int main(int argc, char **argv)
                    "both executions completed\n";
           } else {
             CheckTextProbes(output, text_probes);
-            if (internal_types_probe) {
+            if (internal_types_probe || bit_operations_probe) {
               const char *paths[]{text_probes[0].source, text_probes[0].module};
               CheckBootProbeOrder(output, paths);
-              CaptureGuestFile(vm, dir, output, "InternalTypesProbe.BIN.Z");
+              CaptureGuestFile(vm, dir, output, text_probes[0].module + 1);
             }
             std::cout << "Text probe sources and compiled modules matched\n";
           }
@@ -6373,6 +6397,13 @@ int main(int argc, char **argv)
         DriveCharacterGraphics(vm, dir, "", true, false, false, false, false,
                                false, false, false, false,
                                internal_types_reference_probes, source);
+      } else if (bit_operations_probe && reference) {
+        const CModuleFile source[]{
+            {fs::absolute("Linux/Fixtures/BitProbe.HC"),
+             "BitProbe.HC", "bit-operations-source"}};
+        DriveCharacterGraphics(vm, dir, "", true, false, false, false, false,
+                               false, false, false, false,
+                               bit_operations_reference_probes, source);
       } else if (character || tic || breaks || screen_capture || spline ||
                  flood_fill || blot || sprite_flood || music_demo ||
                  !text_probes.empty())
@@ -6506,6 +6537,7 @@ int main(int argc, char **argv)
               << " --internal-types[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --class-records[-reference] qemu image.iso [capture-dir]\n"
+              << " --bit-operations[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]

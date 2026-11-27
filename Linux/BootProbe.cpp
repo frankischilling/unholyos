@@ -2130,6 +2130,9 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/ClassMeta.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ClassReportProbe.HC");
     BootClassRecordsReport(*adam_task->cur_dv);
+    BootVariadicReport(
+        *adam_task->cur_dv, *adam_task, "/BitProbe.HC", "/BitProbe.BIN.Z",
+        "Cmp(\"::/BitProbe.HC\",,\"B:/BitProbe.BIN.Z\");");
     BootVariadicReport(*adam_task->cur_dv, *adam_task, "/LastClassProbe.HC",
                        "/LastClassProbe.BIN.Z",
                        "Cmp(\"::/LastClassProbe.HC\",,\"B:/LastClassProbe.BIN.Z\");");
