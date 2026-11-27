@@ -3058,6 +3058,19 @@ constexpr CTextProbe optimizer_aot_probes[]{
      "Optimizer AOT compile 0\nOptimizer probe 3FF\nOptimizer AOT load 1\n",
      {}, true}};
 
+constexpr CTextProbe register_allocation_probes[]{
+    {"register-allocation", "/RegisterAllocationProbe.HC", "",
+     "Register allocation ", "Register allocation ",
+     "Register allocation 7F\n", {}, true},
+    {"register-allocation-native", "/RegisterAllocationNativeProbe.HC", "",
+     "Register allocation native ", "Register allocation native ",
+     "Register allocation native 3F\n", {}, true}};
+constexpr CTextProbe register_allocation_aot_probes[]{
+    {"register-allocation-aot", "/RegisterAllocationAOTProbe.HC", "",
+     "Register AOT compile ", "Register AOT load ",
+     "Register AOT compile 0\nRegister allocation 7F\nRegister AOT load 1\n",
+     {}, true}};
+
 constexpr CTextProbe storage_services_probes[]{
     {"drive-services", "/DriveServicesProbe.HC", "", "Drive services ",
      "Drive services ", "Drive services 7FF\n", {}, true},
@@ -6544,6 +6557,9 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--optimizer" ||
        std::string_view(argv[1]) == "--optimizer-reference" ||
        std::string_view(argv[1]) == "--optimizer-aot" ||
+       std::string_view(argv[1]) == "--register-allocation" ||
+       std::string_view(argv[1]) == "--register-allocation-reference" ||
+       std::string_view(argv[1]) == "--register-allocation-aot" ||
        std::string_view(argv[1]) == "--storage-services" ||
        std::string_view(argv[1]) == "--storage-services-reference" ||
        std::string_view(argv[1]) == "--cluster-entry" ||
@@ -6607,6 +6623,10 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--list-utilities");
     bool optimizer_probe = std::string_view(argv[1]).starts_with("--optimizer");
     bool optimizer_aot = std::string_view(argv[1]) == "--optimizer-aot";
+    bool register_allocation_probe =
+        std::string_view(argv[1]).starts_with("--register-allocation");
+    bool register_allocation_aot =
+        std::string_view(argv[1]) == "--register-allocation-aot";
     bool storage_services_probe =
         std::string_view(argv[1]).starts_with("--storage-services");
     bool cluster_entry_probe =
@@ -6625,7 +6645,7 @@ int main(int argc, char **argv)
                               format_missing_args_probe || class_records_probe ||
                               list_utilities_probe || storage_services_probe ||
                               cluster_entry_probe || disk_cache_probe || storage_lifecycle_probe ||
-                              file_backed_redsea_probe || nested_redsea_probe || optical_image_probe || optimizer_probe;
+                              file_backed_redsea_probe || nested_redsea_probe || optical_image_probe || optimizer_probe || register_allocation_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6654,6 +6674,10 @@ int main(int argc, char **argv)
     else if (optimizer_probe)
       text_probes = optimizer_aot ? std::span<const CTextProbe>(optimizer_aot_probes)
                                  : std::span<const CTextProbe>(optimizer_probes);
+    else if (register_allocation_probe)
+      text_probes = register_allocation_aot
+          ? std::span<const CTextProbe>(register_allocation_aot_probes)
+          : std::span<const CTextProbe>(register_allocation_probes);
     else if (storage_services_probe)
       text_probes = storage_services_probes;
     else if (cluster_entry_probe)
@@ -6675,6 +6699,8 @@ int main(int argc, char **argv)
       text_probes=text_probes.first(2);
     if (nested_redsea_probe && reference)
       text_probes=text_probes.first(2);
+    if (register_allocation_probe && reference)
+      text_probes=text_probes.first(1);
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
@@ -6692,6 +6718,10 @@ int main(int argc, char **argv)
         if (optimizer_aot)
           VerifyHostModuleMedia(argv[3], "Linux/Fixtures/OptimizerProbe.HC",
                                 "OptimizerProbe.HC");
+        if (register_allocation_aot)
+          VerifyHostModuleMedia(argv[3],
+                                "Linux/Fixtures/RegisterAllocationProbe.HC",
+                                "RegisterAllocationProbe.HC");
       }
       const char *memory = class_records_probe ? "3072" : "512";
       CMonitor vm(argv[2], argv[3], dir, "pc", memory, false, {}, false,
@@ -6876,6 +6906,8 @@ int main(int argc, char **argv)
               << " --list-utilities[-reference] qemu image.iso [capture-dir]\n"
               << " --optimizer[-reference] qemu image.iso [capture-dir]\n"
               << " --optimizer-aot qemu image.iso [capture-dir]\n"
+              << " --register-allocation[-reference] qemu image.iso [capture-dir]\n"
+              << " --register-allocation-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"
               << " --cluster-entry[-reference] qemu image.iso [capture-dir]\n"
               << " --disk-cache[-reference] qemu image.iso [capture-dir]\n"

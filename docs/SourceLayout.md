@@ -1752,9 +1752,42 @@ unsigned division by powers of two use shifts. Constant branches retain
 evaluation order and comparison-chain links. Binary64 folding is limited to
 supported comparisons, bitwise operations, conversions, and arithmetic that
 does not depend on rounding precision; other operations still use the existing
-x87 emitter. This is not the complete reference optimizer: dynamic signed
-division strength reduction, operand-location analysis, register allocation,
-and `OptPass3` through the later backend passes need further translation.
+x87 emitter. Dynamic signed division strength reduction still needs
+reference validation.
+
+## Frame operand allocation
+
+`PrsVar.cpp` and `PrsStmt.cpp` recognize `reg`, `noreg`, and named
+register hints on local and parameter declarations. The parser retains the
+hint in `CMemberLst.reg`. Static variables remain in memory.
+
+`OptPass3.cpp` scores direct accesses to eight-byte integer and pointer
+frame members. It gives explicit R12 through R15 requests priority, then
+allocates hinted and frequently used members. R12 and R13 are preferred
+for nonpointer members. The selected registers appear in the member
+records and `CHashFun.used_reg_mask`; the dereference nodes carry the
+actual register operands for the emitter.
+
+`BackC.cpp` keeps existing frame offsets and saves the assigned registers
+in the prologue. It emits direct register loads, assignments, compound
+assignments and prefix/postfix updates. Calls synchronize the frame
+slots after argument evaluation and reload them after returning. The
+epilogue restores the saved registers in reverse order; the call
+alignment calculation includes the extra stack slots.
+
+The allocation is conservative. Narrow values, floating-point values,
+aggregates, arrays, static storage, `noreg` members and unsupported named
+registers stay in memory. A frame address that escapes a direct typed
+member access disables allocation for the entire function, since HolyC
+pointer arithmetic can reach neighboring frame slots. Functions with
+inline assembly, try/catch, known context transfers, subroutine control
+flow, label addresses, explicit flag reads or variadic arguments use
+the existing memory lowering. The pass does not
+yet reproduce the reference's full register pool, stack layout,
+operand-location tracking or clobber metadata. Arbitrary frame aliases
+fabricated through externally supplied addresses remain outside the
+verified behavior. `OptPass4.HC` and the subsequent backend passes
+still need translation.
 
 ## Remaining structural work
 

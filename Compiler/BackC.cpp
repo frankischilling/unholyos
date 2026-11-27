@@ -6,7 +6,8 @@ extern "C" uint64_t F64PowerBits(uint64_t base, uint64_t exponent);
 class CCodeOut
 {
 public:
-  explicit CCodeOut(uint8_t *buf, CAOT *aot) : buf(buf), aot(aot)
+  explicit CCodeOut(uint8_t *buf, CAOT *aot, const COptRegPlan &locals)
+      : buf(buf), aot(aot), locals(locals)
   {
   }
 
@@ -19,6 +20,49 @@ public:
   {
     Bytes(0x48, 0xB8);
     Immediate(bits, 8);
+  }
+
+  void LocalLoad(uint8_t reg)
+  {
+    Bytes(0x4C,0x89,0xC0+((reg&7)<<3)); // MOV RAX,R12..R15
+  }
+
+  void LocalStore(uint8_t reg)
+  {
+    Bytes(0x49,0x89,0xC0+(reg&7)); // MOV R12..R15,RAX
+  }
+
+  void LocalFrame(bool load,const COptReg &reg)
+  {
+    bool short_disp=reg.offset>=-128 && reg.offset<=127;
+    Bytes(0x4C,load?0x8B:0x89,(short_disp?0x45:0x85)+((reg.reg&7)<<3));
+    Immediate(reg.offset,short_disp?1:4);
+  }
+
+  void LocalsToFrame()
+  {
+    for (unsigned i=0;i<locals.count;i++) LocalFrame(false,locals.regs[i]);
+  }
+
+  void LocalsFromFrame()
+  {
+    for (unsigned i=0;i<locals.count;i++) LocalFrame(true,locals.regs[i]);
+  }
+
+  unsigned LocalsEnter()
+  {
+    for (unsigned i=0;i<locals.count;i++)
+      Bytes(0x41,0x50+(locals.regs[i].reg&7));
+    // Preserve the initial contents of frame slots, including arguments.
+    LocalsFromFrame();
+    return locals.count;
+  }
+
+  void LocalsLeave()
+  {
+    LocalsToFrame();
+    for (unsigned i=locals.count;i;i--)
+      Bytes(0x41,0x58+(locals.regs[i-1].reg&7));
   }
 
   void StringAddress(size_t offset)
@@ -206,6 +250,7 @@ private:
 
   uint8_t *buf;
   CAOT *aot;
+  const COptRegPlan &locals;
 };
 
 static uint8_t CmpCondition(CICode op, bool uns)
@@ -349,7 +394,8 @@ static void FltBinary(CCodeOut &out, const CIntermediateCode &node,
 
 static void ICCompoundAssign(CCodeOut &out, CIntermediateCode node,
                              const CIntermediateCode &rhs, CRawType left,
-                             bool by_val, unsigned stack_slots)
+                             bool by_val, unsigned stack_slots,
+                             uint8_t local_reg = 0)
 {
   constexpr CICode binary_ops[]{IC_SHL, IC_SHR, IC_MUL, IC_DIV, IC_MOD,
                                 IC_AND, IC_OR,  IC_XOR, IC_ADD, IC_SUB};
@@ -377,8 +423,12 @@ static void ICCompoundAssign(CCodeOut &out, CIntermediateCode node,
     }
   }
   out.Bytes(0x48, 0x89, 0xC1);       // MOV RCX,RAX
-  out.Bytes(0x48, 0x8B, 0x04, 0x24); // MOV RAX,[RSP]
-  out.Load(left);
+  if (local_reg)
+    out.LocalLoad(local_reg);
+  else {
+    out.Bytes(0x48, 0x8B, 0x04, 0x24); // MOV RAX,[RSP]
+    out.Load(left);
+  }
   if (!bit_op && (left == RT_F64 || right == RT_F64)) {
     node.code = op;
     FltBinary(out, node, left, right, stack_slots);
@@ -498,6 +548,10 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
       out.Bytes(0x50); // PUSH RAX
       arg = push.right;
     }
+    // Opaque HolyC imports and handwritten assembly need not follow the
+    // native register convention. Synchronize homes after argument/target
+    // evaluation so mutations in those expressions are not lost.
+    out.LocalsToFrame();
     if (indirect_call) {
       out.Bytes(0xFF, 0x94, 0x24); // CALL [RSP+disp32]
       out.Immediate(8 * slots, 4);
@@ -509,6 +563,7 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     uint32_t drop = pad + indirect_call + (FunPopsArgs(*fun) ? 0 : slots);
     if (drop)
       out.StackAdjust(8 * drop);
+    out.LocalsFromFrame();
     return true;
   }
   if (op == IC_RBP) {
@@ -518,6 +573,17 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
   }
   if (op == IC_ASSIGN || ICIsCompoundAssign(op)) {
     const auto &target = code[node.left];
+    if (target.local_reg) {
+      if (!Emit(out,code,node.right,depth+1,stack_slots))
+        return false;
+      if (op==IC_ASSIGN)
+        out.Convert(code[node.right].type,target.type);
+      else
+        ICCompoundAssign(out,node,code[node.right],target.type,true,
+                         stack_slots,target.local_reg);
+      out.LocalStore(target.local_reg);
+      return true;
+    }
     if (!Emit(out, code, target.left, depth + 1, stack_slots))
       return false;
     out.Bytes(
@@ -575,6 +641,18 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
   }
   if (IC__PP <= op && op <= IC_MM_) {
     const auto &target = code[node.left];
+    if (target.local_reg) {
+      bool postfix=op==IC_PP_ || op==IC_MM_;
+      bool inc=op==IC__PP || op==IC_PP_;
+      out.LocalLoad(target.local_reg);
+      if (postfix)
+        out.Bytes(0x48,0x89,0xC1); // MOV RCX,RAX
+      out.Bytes(0x48,0x83,inc?0xC0:0xE8,node.data);
+      out.LocalStore(target.local_reg);
+      if (postfix)
+        out.Bytes(0x48,0x89,0xC8); // MOV RAX,RCX
+      return true;
+    }
     if (!Emit(out, code, target.left, depth + 1, stack_slots))
       return false;
     out.Bytes(0x50); // Save the address for the store.
@@ -598,6 +676,10 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
     out.Store(target.type);
     if (postfix)
       out.Bytes(0x48, 0x89, 0xC8); // MOV RAX,RCX
+    return true;
+  }
+  if (op==IC_DEREF && node.local_reg) {
+    out.LocalLoad(node.local_reg);
     return true;
   }
   if (!Emit(out, code, node.left, depth + 1, stack_slots))
@@ -788,7 +870,7 @@ static bool EmitFunction(CCodeOut &out, CCodeCtrl &coc, uint32_t root,
     auto frame_size = static_cast<int32_t>((-fun->cls.size + 15) & ~15);
     if (frame_size)
       out.StackAdjust(-frame_size);
-    stack_slots = 1;
+    stack_slots = 1+out.LocalsEnter();
   }
   if (root == NO_IC) {
     if (!EmitBody(out, coc, type, stack_slots))
@@ -798,8 +880,10 @@ static bool EmitFunction(CCodeOut &out, CCodeCtrl &coc, uint32_t root,
       return false;
     out.Convert(coc.code[root].type, type);
   }
-  if (fun)
+  if (fun) {
+    out.LocalsLeave();
     out.Bytes(0xC9); // LEAVE
+  }
   if (fun && fun->arg_cnt && FunPopsArgs(*fun)) {
     out.Bytes(0xC2); // RET imm16
     out.Immediate(8 * fun->arg_cnt, 2);
@@ -809,12 +893,15 @@ static bool EmitFunction(CCodeOut &out, CCodeCtrl &coc, uint32_t root,
 }
 
 uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
-                    const CHashFun *fun, CAOT *aot, size_t *bytes)
+                    CHashFun *fun, CAOT *aot, size_t *bytes)
 {
   if (coc.failed || !coc.GoToLabelsDefined())
     return nullptr;
   OptPass012(coc.code,coc.Count());
-  CCodeOut size(nullptr, aot);
+  COptRegPlan locals;
+  if (fun)
+    OptPass3(coc.code,coc.Count(),*fun,locals);
+  CCodeOut size(nullptr, aot, locals);
   if (!EmitFunction(size, coc, root, type, fun) || size.failed ||
       size.size > INT32_MAX)
     return nullptr;
@@ -834,7 +921,7 @@ uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
   auto *result = MAlloc(total_size, CurrentTask()->code_heap);
   if (!result)
     return nullptr;
-  CCodeOut out(result, aot);
+  CCodeOut out(result, aot, locals);
   if (!EmitFunction(out, coc, root, type, fun) || out.failed ||
       (coc.asm_first && !AsmPublish(*coc.asm_first, result))) {
     Free(result);

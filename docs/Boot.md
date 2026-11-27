@@ -3796,6 +3796,40 @@ Native AOT execution is tested separately; reference AOT and instruction-byte
 parity are not established by these checks. See [Source layout](SourceLayout.md)
 for unimplemented optimizer stages.
 
+## Register allocation
+
+`RegisterAllocationProbe.HC` (1778 bytes, SHA-256
+`3fb705984de08bcdc055fc2d235aaae8f8fac77bf449931855af9ddbe7ba7936`)
+checks register hints, default arguments, nested calls, escaped frame
+addresses, register pressure, try/catch and static storage. The pinned
+reference and both native compiler builds produced `Register allocation 7F`
+under QEMU 8.2.2, `pc`, `qemu64`, 512 MiB and one vCPU.
+
+The native-only probe checks allocated member records and register masks,
+distinct preserved registers, named R15, `noreg`, address escape,
+arithmetic across calls and a store to a neighboring frame slot through
+an escaped pointer. Both native builds produced `Register allocation native 3F`.
+The host pass probe passed 30 checks with GCC and Clang.
+
+The separate AOT guest compiles and loads the shared source in a fresh
+session. Both native builds produced:
+
+```text
+Register AOT compile 0
+Register allocation 7F
+Register AOT load 1
+```
+
+```sh
+make -j6 test-register-allocation
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-register-allocation
+build/Linux/TestBoot --register-allocation-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/register-allocation-reference
+```
+
+The tests check execution and native allocation metadata, not reference
+instruction bytes or the reference's complete register allocation policy.
+
 ## Nested images, FAT32 backing, and mounted ISO generation
 
 The shared `NestedRedSeaProbe.HC`, `RedSeaFreeListProbe.HC`, and `Fat32ImageProbe.HC` fixtures run on
