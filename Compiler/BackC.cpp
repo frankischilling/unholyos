@@ -69,6 +69,47 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
   }
   if (op==IC_RDTSC)
     return ICCopyTemplate(out,CMP_TEMPLATE_RDTSC);
+  if (op>=IC_IN_U8 && op<=IC_IN_U32) {
+    const auto &port=code[node.left];
+    bool immediate=port.code==IC_IMM_I64 && int64_t(port.data)<=255;
+    if (!immediate && !Emit(out,code,node.left,depth+1,stack_slots))
+      return false;
+    ICPort(out,op,immediate,port.data);
+    return true;
+  }
+  if (op>=IC_OUT_U8 && op<=IC_OUT_U32) {
+    const auto &port=code[node.left];
+    bool immediate=port.code==IC_IMM_I64 && int64_t(port.data)<=255;
+    if (!Emit(out,code,node.right,depth+1,stack_slots)) return false;
+    if (!immediate) {
+      out.Bytes(0x50); // Preserve value across port evaluation.
+      if (!Emit(out,code,node.left,depth+1,stack_slots+1)) return false;
+      out.Bytes(0x48,0x89,0xC2,0x58); // MOV RDX,RAX / POP RAX
+    }
+    ICPort(out,op,immediate,port.data);
+    return true;
+  }
+  if (op>=IC_BT && op<=IC_LBTC) {
+    const auto &bit=code[node.right];
+    bool immediate=bit.code==IC_IMM_I64 && int64_t(bit.data)<64;
+    if (!immediate) {
+      if (!Emit(out,code,node.right,depth+1,stack_slots)) return false;
+      out.Bytes(0x50);
+    }
+    if (!Emit(out,code,node.left,depth+1,stack_slots+!immediate)) return false;
+    if (!immediate) out.Bytes(0x59); // POP RCX
+    ICBitOps(out,op,immediate,bit.data);
+    return true;
+  }
+  if ((op>=IC_SWAP_U8 && op<=IC_SWAP_I64) || op==IC_MOD_U64) {
+    if (!Emit(out,code,node.right,depth+1,stack_slots)) return false;
+    out.Bytes(0x50);
+    if (!Emit(out,code,node.left,depth+1,stack_slots+1)) return false;
+    out.Bytes(0x59); // POP RCX
+    if (op==IC_MOD_U64) ICModU64(out);
+    else ICSwap(out,op);
+    return !out.failed;
+  }
   if (op == IC_FS || op == IC_GS) {
     out.Bytes(op == IC_FS ? 0x64 : 0x65, 0x48, 0x8B, 0x04, 0x25);
     out.Immediate(0, 4);

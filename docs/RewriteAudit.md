@@ -75,7 +75,12 @@ part of the full rewrite.
   probes verify selected integer and x87 instructions, their typed metadata,
   exact constant folds and JIT/AOT execution; `SYS_POW` uses the reference
   register ABI and a named module relocation. Template variants, general
-  clobber analysis and other intrinsic families remain incomplete.
+  clobber analysis and other intrinsic families remain incomplete. Locked
+  and unlocked bit operations, memory swaps, unsigned quotient/remainder
+  updates, and port I/O now have native instruction lowering. Source-level
+  `_intern` declarations work for the supported opcode and arity set in
+  JIT and AOT. Remaining intrinsic opcodes and complete operand-location
+  selection are still needed for the original headers and startup.
 - Move remaining Adam initialization to the guest startup path after
   compiler support permits the original project and startup files.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal

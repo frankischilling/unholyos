@@ -3925,6 +3925,22 @@ and explicitly rejects the removed native power import. These checks do not
 establish full instruction-byte parity, complete reference spilling, or
 cross-OS AOT loading.
 
+The expanded intrinsic fixture is 6698 bytes, with SHA-256
+`522ab9a386d4381c9475802dac582778a44d31cd81b4a230b959ef4aafefac6b`.
+The same reference command now produces `Backend probe 7FFFFF` on the
+pinned TempleOS ISO and both native JIT builds. The additional checks
+cover previous-bit results and memory changes for locked and unlocked
+bit operations across word boundaries, all four swap widths, unsigned
+division with quotient writeback, serial scratch-register I/O, PCI
+configuration reads, and explicit `_intern` aliases. The native probe
+produces `Backend native 7FF`, including lock prefixes, immediate bit
+instructions, unsigned division and immediate/variable port encodings.
+Both native AOT runs produce compile result 0, the expanded shared mask
+and load result 1. AOT cleanup excludes internal opcode declarations
+from machine-code deallocation. These tests use a single QEMU CPU;
+they do not establish SMP atomicity, every hardware port behavior, or
+all reference register and memory operand selections.
+
 ## Disassembler initialization and entry points
 
 The shared `UAsmProbe.HC` (1640 bytes, SHA-256
