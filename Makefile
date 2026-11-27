@@ -29,7 +29,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
 	Adam/Gr/SpriteNew.cpp Adam/Gr/GrSpritePlot.cpp Adam/Gr/ScrnCast.cpp \
 	Adam/DolDoc/DocNew.cpp Adam/DolDoc/DocDblBuf.cpp Adam/DolDoc/DocRecalc.cpp Adam/DolDoc/DocRecalcLib.cpp \
-	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp \
+	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp Adam/DolDoc/DocClipBoard.cpp Adam/DolDoc/DocTree.cpp \
 	Adam/DolDoc/DocChar.cpp Adam/DolDoc/DocPutKey.cpp Adam/DolDoc/DocRun.cpp \
 	Adam/DolDoc/DocGet.cpp Adam/DolDoc/DocForm.cpp Adam/DolDoc/DocEd.cpp Adam/DolDoc/DocTerm.cpp HomeSys.cpp \
 	Adam/ABlkDev/ADskA.cpp Adam/ABlkDev/Mount.cpp Adam/Opt/Boot/DskISORedSea.cpp Adam/MakeAdam.cpp
@@ -147,6 +147,9 @@ ADAM_TASK_TEST_ISO := $(BUILD)/adam-task-test.iso
 ADAM_TASK_AOT_TEST_ISO := $(BUILD)/adam-task-aot-test.iso
 ADAM_STARTUP_PROBE := Linux/Fixtures/AdamStartupProbe.HC
 ADAM_STARTUP_TEST_ISO := $(BUILD)/adam-startup-test.iso
+DOC_TREE_PROBE := Linux/Fixtures/DocTreeProbe.HC
+DOC_TREE_AOT_PROBE := Linux/Fixtures/DocTreeAOTProbe.HC
+DOC_TREE_TEST_ISO := $(BUILD)/doc-tree-test.iso
 UASM_PROBES := $(addprefix Linux/Fixtures/,UAsmProbe.HC UAsmNativeProbe.HC)
 UASM_TEST_ISO := $(BUILD)/uasm-test.iso
 UASM_AOT_PROBE := Linux/Fixtures/UAsmAOTProbe.HC
@@ -529,6 +532,9 @@ $(ADAM_TASK_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM
 $(ADAM_STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_STARTUP_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_STARTUP_PROBE)
 
+$(DOC_TREE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(DOC_TREE_PROBE) $(DOC_TREE_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(DOC_TREE_PROBE) --file $(DOC_TREE_AOT_PROBE)
+
 $(UASM_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(UASM_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(UASM_PROBES))
 
@@ -728,6 +734,13 @@ test-adam-startup: $(ADAM_STARTUP_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --adam-startup "$(QEMU)" $(ADAM_STARTUP_TEST_ISO)
 
 test: test-adam-startup
+
+.PHONY: test-doc-tree
+test-doc-tree: $(DOC_TREE_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --doc-tree "$(QEMU)" $(DOC_TREE_TEST_ISO)
+	$(BOOT_TEST) --doc-tree-aot "$(QEMU)" $(DOC_TREE_TEST_ISO)
+
+test: test-doc-tree
 
 .PHONY: test-uasm
 test-uasm: $(UASM_TEST_ISO) $(UASM_AOT_TEST_ISO) $(BOOT_TEST)

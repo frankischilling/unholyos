@@ -49,6 +49,18 @@ void DocEntryDel(CDoc &doc, CDocEntryBase &entry);
 void DocEntryError(CDocEntry &entry);
 bool DocInsEntry(CDoc &doc, CDocEntryBase &entry);
 void DocEntryInsert(CDocEntryBase &entry, CDocEntryBase &before);
+extern "C" void DocCutCpp(CDoc *doc, CDocEntryBase *start, CDocEntryBase *end);
+extern "C" CDoc *DocCopyCpp(CDoc *doc, CDocEntryBase *start, CDocEntryBase *end);
+extern "C" uint64_t DocTreeFindCpp(CDoc *doc, const char *path,
+                                    CDocEntryBase **tree, CDocEntryBase **start,
+                                    CDocEntryBase **end);
+extern "C" uint64_t DocTreeMakeCpp(CDoc *doc, const char *path);
+extern "C" uint64_t DocTreeWriteCpp(CDoc *doc, const char *path, uint8_t write,
+                                     const char *fmt, int64_t argc,
+                                     const uint64_t *argv);
+extern "C" uint64_t DocTreeAppendCpp(CDoc *doc, const char *path, uint8_t write,
+                                      const char *fmt, int64_t argc,
+                                      const uint64_t *argv);
 bool DocRecalc(CDoc &doc, uint64_t recalc_flags = RECALCt_NORMAL);
 void DocUpdateTaskDocs(CTask *task);
 extern "C" void DocPutKeyCpp(CDoc *doc, int64_t ch, int64_t sc);

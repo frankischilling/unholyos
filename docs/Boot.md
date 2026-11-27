@@ -4085,6 +4085,34 @@ no additional live code or data allocations. Neither reaches Adam
 graphics or terminal initialization. The original complete `StartOS.HC`
 and `MakeAdam.HC` project sequence has not yet been executed.
 
+## DolDoc tree services
+
+`DocTreeProbe.HC` runs in an ordinary terminal and in a freshly compiled
+guest AOT module. It checks nested tree lookup and creation, replacement
+and append, independent sibling contents, inclusive copy and cut,
+recursive lock ownership, execution after a caught Break, and in-memory
+modification without a write on read-only media. It also writes a tree
+to a RedSea RAM drive, reopens it, appends a second expression and checks
+the actual saved bytes and execution results. The native GCC and Clang
+builds produce:
+
+```text
+Tree disk 0 1 61 1 73
+Doc tree 3FF
+```
+
+The AOT runner reports `Tree AOT done` after a successful guest compile
+and load. The earlier eight-bit fixture also produced `FF` on the pinned
+reference. Full regression and the extended reference comparison are
+required before this batch is merged.
+
+```sh
+make test-doc-tree
+make BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-doc-tree
+build/Linux/TestBoot --doc-tree-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/doc-tree-reference
+```
+
 ## Nested images, FAT32 backing, and mounted ISO generation
 
 The shared `NestedRedSeaProbe.HC`, `RedSeaFreeListProbe.HC`, and `Fat32ImageProbe.HC` fixtures run on

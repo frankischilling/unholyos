@@ -707,6 +707,8 @@ struct CExeResult
 CExeResult ExePutS(const char *src, const char *filename, int64_t flags,
                    const CLexHashTableContext *htc = nullptr);
 CExeResult ExeFile(const char *name, int64_t flags = 0);
+CExeResult ExeDoc(CDoc &doc, int64_t flags = 0);
+CExeResult DocTreeExe(CDoc *doc, const char *path);
 int64_t ExeAnswer(const CExeResult &result);
 extern "C" int64_t ExeFileCpp(const char *name, int64_t flags);
 
