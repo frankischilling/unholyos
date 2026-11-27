@@ -4,7 +4,6 @@
 #include "../Adam/Menu.hpp"
 #include "CompilerA.hpp"
 
-extern "C" const char CompilerOpCodes[];
 extern "C" int64_t LstMatchCpp(const uint8_t *needle, const uint8_t *list,
                                uint64_t flags);
 static CHashTable *asm_hash;
@@ -223,13 +222,19 @@ bool AsmHashLoad()
   CMemLock lock(asm_hash_lock);
   if (asm_hash)
     return true;
+  auto *source = FileReadCpp("::/Compiler/OpCodes.DD", nullptr, nullptr);
+  if (!source)
+    return false;
   auto *heap = adam_task->data_heap;
   auto *table = HashTableNew(1024, heap);
-  if (!table)
+  if (!table) {
+    Free(source);
     return false;
+  }
   CCmpCtrl cc;
   CLexFile file;
-  LexSourceInit(cc, file, CompilerOpCodes, 0, "::/Compiler/OpCodes.DD");
+  LexSourceInit(cc, file, reinterpret_cast<const char *>(source), 0,
+                "::/Compiler/OpCodes.DD");
   bool okay = true;
   while (LexRaw(cc) > TK_EOF)
     if (!AsmPrsHashEntry(cc, table, heap)) {
@@ -238,6 +243,7 @@ bool AsmHashLoad()
     }
   okay = okay && cc.token == TK_EOF;
   LexSourceDel(cc);
+  Free(source);
   if (okay)
     asm_hash = table;
   else

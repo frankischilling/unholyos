@@ -2039,8 +2039,9 @@ this check with the selected host compiler.
 `FunctionPtrProbe` uses the shared source/module executor with its
 existing paths and compile command. Removing that duplicate test code
 keeps the image within the unchanged reference loader boundary at
-`0x96600`. Clang 20.1.2 links `__bss_end` at `0x9652B`, leaving 213
-bytes; GCC 13.3.0 links it at `0x8F36B`, leaving 29,333 bytes. The
+`0x96600`. At comparison commit `6fa73f3`, Clang 20.1.2 links
+`__bss_end` at `0x9652B`, leaving 213 bytes; GCC 13.3.0 links it at
+`0x8F36B`, leaving 29,333 bytes. The
 separate compiler and Adam load path remains incomplete, as recorded
 in [Source layout](SourceLayout.md#remaining-structural-work).
 
@@ -2056,6 +2057,75 @@ build/Linux/TestBoot --strings-reference qemu-system-x86_64 \
 The guest probes cover valid terminated strings and the reference's
 zero-count null-pointer case. They do not establish fault behavior for
 other invalid pointers or strings extending beyond accessible memory.
+
+## Opcode dictionary on disk
+
+Every Makefile ISO target now includes Terry A. Davis's unchanged
+`Compiler/OpCodes.DD` at that path. The 28,105-byte source matches the
+pinned reference with SHA-256
+`215b2113288f58d67b7da34cb3ade9bd744fac8dff79bfce70197a7ee879220f`.
+`AsmHashLoad` reads `::/Compiler/OpCodes.DD` through the native file
+reader and frees the input after parsing. The former `INCBIN` object
+and `CompilerOpCodes` symbol are removed.
+
+`VerifyMedia` checks the canonical directory and filename, raw
+contiguous attributes, logical size, bounded file extent, and exact
+bytes against the checked-in dictionary. Existing recursive-copy
+checks also cover the compiler directory in the guest-produced ISO.
+
+The startup image runs a separate test in `Linux/BootProbe.cpp` before
+the first HolyC program. A temporary, unregistered RedSea RAM drive
+provides an empty filesystem and a different caller drive and `/Home`
+directory. The test first redirects the boot path there: loading must
+fail without publishing representative entries or increasing Adam's
+heap usage. Restoring the real boot volume must permit a successful
+retry while leaving the caller's drive and directory intact. Redirecting
+the boot path to the empty drive again must reuse the same cached
+entries without allocating. The probe restores all task and boot-drive
+fields before releasing its temporary disk. The host requires all
+three result bits in `opcode resource checks 0x0000000000000007`.
+
+The unchanged loader guard still requires `__bss_end <= 0x96600`.
+Local builds, including the new startup checks, have these limits:
+
+| Compiler | `__bss_end` | Bytes below the loader | Bytes recovered from `6fa73f3` |
+| --- | --- | ---: | ---: |
+| GCC 13.3.0 | `0x889CB` | 56,373 | 27,040 |
+| Clang 20.1.2 | `0x8FBBB` | 27,205 | 26,992 |
+
+The GCC build and startup driver commands are:
+
+```sh
+make -j4 build/unholyos.iso build/unholyos-startup-test.iso \
+  build/strings-test.iso build/Linux/TestBoot build/Linux/TestStrCompare
+build/Linux/TestBoot qemu-system-x86_64 build/unholyos.iso \
+  build/0000Boot/0000Kernel.BIN.C build/unholyos-startup-test.iso
+```
+
+`KMain` now requires the dictionary before starting interactive tasks.
+The Q35 case has no supported guest IDE boot drive, so its expected
+outcome is `Could not load compiler opcode dictionary`, followed by
+the existing idle path without a normal startup-completion marker or
+terminal tasks. The test retains the CPU, FPU, stack, hash, heap,
+interrupt, clock, and device checks with the appropriate state before
+terminal startup. Normal PC boots still require both terminal tasks
+and every existing success check.
+
+Both local compiler builds passed the focused Q35 check under QEMU
+8.2.2 with `-machine q35 -cpu qemu64 -m 512 -boot d -cdrom <iso>`.
+Each clean VM reported the unavailable dictionary and stopped before
+terminal creation. The focused command is:
+
+```sh
+build/Linux/TestBoot --q35-no-compiler qemu-system-x86_64 \
+  build/unholyos.iso build/0000Boot/0000Kernel.BIN.C
+```
+
+The compiler remains in the image produced by the host linker. Using
+an explicit path on the boot volume is the documented adaptation until
+`KMain` loads the separate compiler from `/Compiler`. These checks do
+not reproduce the reference's startup failure after a missing
+dictionary or establish separate compiler-module loading.
 
 ## Subsystem map
 

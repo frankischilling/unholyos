@@ -29,6 +29,14 @@ using namespace std::string_view_literals;
 
 constexpr std::string_view BOOT_MARKER =
     "UnholyOS: kernel entered in 64-bit mode";
+constexpr std::string_view COMPILER_FAILURE_MARKER =
+    "UnholyOS: Could not load compiler opcode dictionary\r\n";
+
+enum class CBootPhase
+{
+  Desktop,
+  CompilerUnavailable
+};
 
 static void Check(bool ok, const char *msg)
 {
@@ -110,6 +118,25 @@ static void VerifyStartDoc(const Bytes &disc, uint64_t root)
   Check(hash == 0x0C20EFB983195E6C0ULL, "Start.DD.Z differs from TempleOS");
 }
 
+static void VerifyOpcodeResource(const Bytes &disc, uint64_t root)
+{
+  constexpr size_t blk = 512;
+  auto entry = FindRedSeaEntry(disc, root, "Compiler");
+  Check(ReadLE(disc, entry, 2) == 0x810,
+        "Invalid Compiler directory attributes");
+  auto compiler = ReadLE(disc, entry + 40, 8);
+  auto file = FindRedSeaEntry(disc, compiler, "OpCodes.DD");
+  auto start = ReadLE(disc, file + 40, 8);
+  auto size = ReadLE(disc, file + 48, 8);
+  Bytes source = FileRead("Compiler/OpCodes.DD");
+  Check(ReadLE(disc, file, 2) == 0x800 && source.size() == 28105 &&
+            size == source.size() && start < disc.size() / blk &&
+            size <= disc.size() - start * blk,
+        "Invalid Compiler/OpCodes.DD extent");
+  Check(std::equal(source.begin(), source.end(), disc.begin() + start * blk),
+        "Packaged Compiler/OpCodes.DD differs from the reference source");
+}
+
 static void VerifyHome(const Bytes &disc, uint64_t root)
 {
   constexpr size_t blk = 512;
@@ -161,6 +188,7 @@ static CBootMedia VerifyMedia(const fs::path &iso, const fs::path &kernel_path)
   Check(root == drive + bitmap_blocks + 1 && root < disc.size() / blk,
         "Invalid RedSea root");
   VerifyStartDoc(disc, root);
+  VerifyOpcodeResource(disc, root);
   VerifyHome(disc, root);
 
   // TempleOS packs CISOPriDesc and writes the cluster at the record start.
@@ -998,27 +1026,43 @@ static void ReadCachedFreePages(CMonitor &vm, uint64_t pool,
 }
 
 static uint64_t VerifyGraphicsContexts(CMonitor &vm, uint64_t graphics,
-                                       uint64_t owner)
+                                       uint64_t owner, bool desktop)
 {
   const auto contexts = ReadPhysical<8>(vm, graphics);
   auto z_buf = ReadPhysical<1>(vm, graphics + 72)[0];
-  Check(z_buf >= 16 &&
-            ReadPhysical<2>(vm, z_buf - 16) ==
-                std::array<uint64_t, 2>{owner, 19 * 512 - 24} &&
-            ReadPhysical<1>(vm, z_buf)[0] == 0x0001000100010001 &&
-            ReadPhysical<1>(vm, z_buf + (2 * 80 + 1) * 2, 'h')[0] == 3 &&
-            ReadPhysical<1>(vm, z_buf + (2 * 80 + 41) * 2, 'h')[0] == 2 &&
-            ReadPhysical<1>(vm, z_buf + 9592)[0] == 0x0002000200020002,
-        "Invalid startup window depth buffer");
+  Check(z_buf >= 16 && ReadPhysical<2>(vm, z_buf - 16) ==
+                           std::array<uint64_t, 2>{owner, 19 * 512 - 24},
+        "Invalid startup window depth allocation");
   Check(ReadPhysical<1>(vm, graphics + 10480)[0] == 1,
         "Invalid initial graphics zoom");
   constexpr uint64_t flags[] = {0, 0x24000, 0x4000, 0x4000, 0, 0x4000};
   auto bitmap = ReadPhysical<1>(vm, graphics + 88)[0];
-  Check(bitmap >= 16 &&
-            ReadPhysical<2>(vm, bitmap - 16) ==
-                std::array<uint64_t, 2>{owner, 17 * 512 - 24} &&
-            ReadPhysical<1>(vm, bitmap)[0] == 14,
-        "Invalid startup window coverage bitmap");
+  Check(bitmap >= 16 && ReadPhysical<2>(vm, bitmap - 16) ==
+                            std::array<uint64_t, 2>{owner, 17 * 512 - 24},
+        "Invalid startup window coverage allocation");
+  const std::array<uint64_t, 4> depth{
+      ReadPhysical<1>(vm, z_buf)[0],
+      ReadPhysical<1>(vm, z_buf + (2 * 80 + 1) * 2, 'h')[0],
+      ReadPhysical<1>(vm, z_buf + (2 * 80 + 41) * 2, 'h')[0],
+      ReadPhysical<1>(vm, z_buf + 9592)[0]};
+  // Compiler failure precedes the first request to update window depths.
+  const auto expected_depth =
+      desktop ? std::array<uint64_t, 4>{0x0001000100010001, 3, 2,
+                                        0x0002000200020002}
+              : std::array<uint64_t, 4>{};
+  auto coverage = ReadPhysical<1>(vm, bitmap)[0];
+  auto highest = ReadPhysical<1>(vm, graphics + 96)[0];
+  if (depth != expected_depth || coverage != (desktop ? 14 : 0) ||
+      (!desktop && highest)) {
+    std::ostringstream message;
+    message << "Invalid startup window depth or coverage ("
+            << (desktop ? "desktop" : "compiler unavailable") << ", depth"
+            << std::hex << std::uppercase;
+    for (auto value : depth)
+      message << ' ' << value;
+    message << ", coverage " << coverage << ", highest " << highest << ')';
+    throw std::runtime_error(message.str());
+  }
   uint64_t used = (19 + 17) * 512 - 48;
   auto text_base = ReadPhysical<1>(vm, graphics + 64)[0];
   auto vga_text_cache = ReadPhysical<1>(vm, graphics + 104)[0];
@@ -1090,7 +1134,7 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
                         uint64_t symbol_used,
                         const std::vector<CTestE820> &e820, uint64_t idle,
                         uint64_t graphics, uint64_t winmgr, uint64_t left,
-                        uint64_t right)
+                        uint64_t right, bool desktop)
 {
   constexpr uint64_t adam = 0x100300, adam_hc = 0x101188, code_pool = 0x1007A8;
   constexpr uint64_t code_base = 0x1000000, page = 512;
@@ -1139,9 +1183,9 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   Check(allocation[0] == expected_data_hc && allocation[1] == 0x80,
         "Invalid mouse message allocation");
   const uint64_t graphics_used =
-      VerifyGraphicsContexts(vm, graphics, expected_data_hc);
-  // The first terminal lexer loads the shared assembler table into Adam.
-  constexpr uint64_t asm_hash_used = 0x10518;
+      VerifyGraphicsContexts(vm, graphics, expected_data_hc, desktop);
+  // Compiler startup keeps the shared assembler table in Adam's heap.
+  const uint64_t asm_hash_used = desktop ? 0x10518 : 0;
   std::smatch raw_screen;
   Check(std::regex_search(output,raw_screen,
                          std::regex(R"(raw screen (0x[0-9a-f]+))")),
@@ -1163,6 +1207,8 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   uint64_t data_used = boot_used, data_alloced = 0;
   BlockRanges data_used_ranges;
   for (auto task : {idle, winmgr, left, right}) {
+    if (!task)
+      continue;
     auto heaps = ReadPhysical<2>(vm, task + 0x20);
     auto task_allocation = ReadPhysical<2>(vm, task - 16);
     auto code_hc = ReadPhysical<2>(vm, heaps[0] - 16);
@@ -1243,7 +1289,7 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
 
 static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
                             const std::string &registers,
-                            const std::string &output)
+                            const std::string &output, bool desktop)
 {
   constexpr uint64_t fixed = 0x100000, boot_cpu = fixed + 0x200,
                      adam = fixed + 0x300;
@@ -1266,18 +1312,24 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
             ReadPhysical<1>(vm, adam + 0x88)[0] == winmgr &&
             ReadPhysical<1>(vm, winmgr + 0x1B8)[0] > 0,
         "Missing window manager task or broken task queue");
-  Check(left && right && left != right &&
-            ReadPhysical<3>(vm, left + 0x78) ==
-                std::array<uint64_t, 3>{adam, winmgr, right} &&
-            ReadPhysical<3>(vm, right + 0x78) ==
-                std::array<uint64_t, 3>{adam, left, adam},
-        "Invalid startup terminal task queue");
-  for (auto task : {left, right}) {
-    auto docs = ReadPhysical<3>(vm, task + 0x30);
-    Check(ReadPhysical<1>(vm, task)[0] == task &&
-              (ReadPhysical<1>(vm, task + 0x18, 'w')[0] & 0x218) == 0x218 &&
-              docs[0] && docs[0] == docs[1] && docs[2] && docs[2] != docs[0],
-          "Missing startup terminal prompt or documents");
+  if (desktop) {
+    Check(left && right && left != right &&
+              ReadPhysical<3>(vm, left + 0x78) ==
+                  std::array<uint64_t, 3>{adam, winmgr, right} &&
+              ReadPhysical<3>(vm, right + 0x78) ==
+                  std::array<uint64_t, 3>{adam, left, adam},
+          "Invalid startup terminal task queue");
+    for (auto task : {left, right}) {
+      auto docs = ReadPhysical<3>(vm, task + 0x30);
+      Check(ReadPhysical<1>(vm, task)[0] == task &&
+                (ReadPhysical<1>(vm, task + 0x18, 'w')[0] & 0x218) == 0x218 &&
+                docs[0] && docs[0] == docs[1] && docs[2] && docs[2] != docs[0],
+            "Missing startup terminal prompt or documents");
+    }
+  } else {
+    Check(left == adam && right == winmgr,
+          "Compiler failure left unexpected terminal tasks");
+    left = right = 0;
   }
   Check(ReadPhysical<1>(vm, fixed, 'h')[0] == 0x37F,
         "Missing initial FPU image");
@@ -1294,7 +1346,7 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
             ReadPhysical<1>(vm, idle + 0x1A8)[0] == boot_cpu,
         "Invalid idle task record");
   VerifyPools(vm, heap, ram_end, output, range_bytes, symbol_used, e820, idle,
-              graphics, winmgr, left, right);
+              graphics, winmgr, left, right, desktop);
 
   constexpr uint64_t task_alloced = 0x44800;
   uint64_t used_block = ram_end - task_alloced;
@@ -3916,8 +3968,10 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                      const fs::path &kernel, const char *machine,
                      const char *memory, uint32_t host_bridge,
                      bool hpet_enabled, bool secondary_slave = false,
-                     bool startup = false)
+                     bool startup = false,
+                     CBootPhase phase = CBootPhase::Desktop)
 {
+  const bool desktop = phase == CBootPhase::Desktop;
   auto media = VerifyMedia(iso, kernel);
   char path[] = "/tmp/unholyos-boot-XXXXXX";
   Check(mkdtemp(path), "Cannot create a temporary QEMU directory");
@@ -3939,11 +3993,18 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       DriveFontText(vm,serial);
       DrivePrompts(vm,serial);
     }
-    std::string output = vm.Boot(serial);
+    std::string output = desktop
+                             ? vm.Boot(serial)
+                             : vm.WaitSerial(serial, COMPILER_FAILURE_MARKER);
     std::string registers = StopAtIdle(vm);
+    if (!desktop) {
+      output = ReadText(serial);
+      Check(output.find(BOOT_MARKER) == std::string::npos,
+            "Compiler failure reported completed startup");
+    }
     uint64_t heap = VerifyHandoff(output, media, registers);
     if (!startup)
-      VerifyFixedArea(vm, heap, registers, output);
+      VerifyFixedArea(vm, heap, registers, output, desktop);
     VerifyUncachedAlias(vm, output);
     VerifyKernelGlobals(vm, output);
     VerifyInterrupts(vm, output, registers, startup);
@@ -3952,6 +4013,9 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                     secondary_slave);
 
     if (startup) {
+      Check(output.find("UnholyOS: opcode resource checks "
+                        "0x0000000000000007\r\n") != std::string::npos,
+            "Opcode resource first load, retry, or cache checks failed");
       CheckProgramOutput(output, "/DCProbe.HC", dc_output, '1');
       CheckProgramOutput(output, "/BitmapDiffProbe.HC", "bitmap diff 7F E76D01B74919B2D4\n", '1');
       CheckProgramOutput(output, "/CaptureProbe.HC", "capture probe 7F\n", '1');
@@ -4444,16 +4508,23 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                screen.string() + R"("}})");
     VerifyVGA(screen);
     vm.Command(R"({"execute":"quit"})");
-    std::cout
-        << "QEMU " << machine << " with " << memory << " MiB\n"
-        << output
-        << "Verified RedSea, BIOS handoff, long mode, VGA, kernel "
-           "tables, interrupt gates, PIT, PCI, and the boot DVD.\n"
-        << (startup
-                ? "Verified StartOS.HC expansion, native HolyC compilation, "
-                  "TOSB execution, runtime calls, and guest-built ISO contents.\n"
-                : "Verified Adam startup, allocator pools, and device "
-                  "memory.\n");
+    std::cout << "QEMU " << machine << " with " << memory << " MiB\n" << output;
+    if (desktop)
+      std::cout
+          << "Verified RedSea, BIOS handoff, long mode, VGA, kernel "
+             "tables, interrupt gates, PIT, PCI, and the boot DVD.\n"
+          << (startup
+                  ? "Verified StartOS.HC expansion, native HolyC compilation, "
+                    "TOSB execution, runtime calls, and guest-built ISO "
+                    "contents.\n"
+                  : "Verified Adam startup, allocator pools, and device "
+                    "memory.\n");
+    else
+      std::cout
+          << "Verified BIOS handoff, long mode, VGA, kernel tables, "
+             "interrupt gates, PIT, PCI, allocator pools, and device memory.\n"
+             "The boot DVD and compiler are unavailable; startup stopped "
+             "before creating terminal tasks.\n";
   } catch (...) {
     std::cerr << ReadText(serial) << ReadText(dir / "qemu.log");
     std::error_code ignored;
@@ -4846,6 +4917,8 @@ int main(int argc, char **argv)
     std::cerr << "Usage: " << argv[0]
               << " qemu image.iso kernel [startup-test.iso]\n"
               << "       " << argv[0]
+              << " --q35-no-compiler qemu image.iso kernel\n"
+              << "       " << argv[0]
               << " --digits qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --character-graphics[-reference] qemu image.iso [capture-dir]\n"
@@ -4873,12 +4946,18 @@ int main(int argc, char **argv)
     return 2;
   }
   try {
+    if (argc == 5 && std::string_view(argv[1]) == "--q35-no-compiler") {
+      TestBoot(argv[2], argv[3], argv[4], "q35", "512", 0x29C08086, true, false,
+               false, CBootPhase::CompilerUnavailable);
+      return 0;
+    }
     for (const char *memory : {"512", "3072", "4608"})
       TestBoot(argv[1], argv[2], argv[3], "pc", memory, 0x12378086, true);
     TestBoot(argv[1], argv[2], argv[3], "pc,hpet=off", "512", 0x12378086,
              false);
     TestBoot(argv[1], argv[2], argv[3], "pc", "512", 0x12378086, true, true);
-    TestBoot(argv[1], argv[2], argv[3], "q35", "512", 0x29C08086, true);
+    TestBoot(argv[1], argv[2], argv[3], "q35", "512", 0x29C08086, true, false,
+             false, CBootPhase::CompilerUnavailable);
     if (argc == 5)
       for (const char *memory : {"512", "3072", "4608"})
         TestBoot(argv[1], argv[4], argv[3], "pc", memory, 0x12378086, true,

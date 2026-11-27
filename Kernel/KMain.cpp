@@ -1,3 +1,4 @@
+#include "../Compiler/CompilerA.hpp"
 #include "../Linux/BootProbe.hpp"
 #include "KernelB.hpp"
 
@@ -184,6 +185,10 @@ extern "C" void KMainCpp()
 
   MusicSettingsRstCpp();
   BootProbe();
+  if (!AsmHashLoad()) {
+    SerialPutS("UnholyOS: Could not load compiler opcode dictionary\r\n");
+    return;
+  }
   adam_task->win_inhibit |= WIF_SELF_FOCUS;
   SYS_RUN_LEVEL |= RLF_DOC;
   adam_task->display_flags |= DISPLAYF_CHILDREN_NOT_ON_TOP;

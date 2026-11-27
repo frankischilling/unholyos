@@ -93,12 +93,31 @@ The source lexer expands them through the same path as `#define`.
 `AsmHashLoad`, `AsmPrsInsFlags`, and `AsmPrsArgType` in the same
 file read Terry A. Davis's unchanged `Compiler/OpCodes.DD` from the
 pinned tree. `AsmPrsArgType` uses the operand list from
-`Compiler/CInit.HC`. `Compiler/AsmInit.asm` embeds the dictionary
-while the compiler directory is absent from the guest boot media.
+`Compiler/CInit.HC`. Each Makefile ISO target includes the dictionary at
+`Compiler/OpCodes.DD`; `AsmHashLoad` reads it through `FileReadCpp` and
+releases the source buffer after parsing. The old assembly embedding
+has been removed.
 `Compiler/Asm.cpp` uses its opcode, alias, and register records for
 instruction selection and emission. The current encoder covers integer,
 segment, and x87 forms used by the tests. Far and `MOFFS` operand forms
 remain pending. [Pinned opcode dictionary](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Compiler/OpCodes.DD)
+
+The reference's `Kernel/KMain.HC` changes to `/Compiler` before loading
+the compiler. `CInit`, called by `Compiler/CMain.HC`, then invokes
+`AsmHashLoad`, whose filename is relative to that directory. The current
+compiler remains linked into the kernel, and boot probes can initialize
+its dictionary before terminal startup. Its explicit C++ adaptation
+uses `::/Compiler/OpCodes.DD` to select the boot volume without changing
+the caller's drive or directory. A failed read returns `false` without
+publishing the shared table, permitting a later retry. Non-null input
+retains the existing parser behavior.
+
+`Kernel/KMain.cpp` requires that dictionary before setting `RLF_DOC`
+and starting interactive tasks. A failed load produces a serial
+diagnostic and returns to the existing idle path, avoiding repeated
+compiler failures in `UserTaskCont`. This controlled return uses the
+current C++ initialization's Boolean failure contract; the reference's
+startup failure after a missing dictionary has not been reproduced.
 
 `ORG` and `PrsBinFile` in `Compiler/Asm.cpp` follow `Compiler/Asm.HC`.
 `BINFILE` uses `ExtDft` and `FileRead` with the native `.BIN` default.
@@ -1109,7 +1128,7 @@ pending. Terry A. Davis's original song stays in `Demo/Snd/OhGreat.HC`.
 
 `Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. The probes and their serial output belong to `Linux/BootProbe.cpp`; their bodies and execution order are preserved. [Verification evidence](SourceStructureVerification.md) records the source comparison, build, artifact hashes, and QEMU results.
 
-Startup remains partial. The current kernel initializes several Adam subsystems directly. The reference loads the compiler and executes `StartOS.HC`, which includes `Adam/MakeAdam.HC`. Matching that startup path requires further compiler and runtime work. The probe extraction does not establish startup parity.
+Startup remains partial. The current kernel initializes several Adam subsystems directly. The reference loads the compiler and executes `StartOS.HC`, which includes `Adam/MakeAdam.HC`. Matching that startup path requires further compiler and runtime work. Loading the opcode dictionary and checking it before terminal startup do not establish compiler-module or startup parity.
 
 The host-linked image currently contains the compiler, Adam, and the
 boot probes in low memory. `Kernel/Kernel.ld` keeps it below the
