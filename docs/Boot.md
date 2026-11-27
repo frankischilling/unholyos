@@ -4102,8 +4102,9 @@ Doc tree 3FF
 ```
 
 The AOT runner reports `Tree AOT done` after a successful guest compile
-and load. The earlier eight-bit fixture also produced `FF` on the pinned
-reference. Full regression and the extended reference comparison are
+and load. The pinned reference produced the same disk results and `3FF`
+mask in its terminal. The first reference capture failed before executing
+the fixture; a fresh VM completed it successfully. Full regression is
 required before this batch is merged.
 
 ```sh
