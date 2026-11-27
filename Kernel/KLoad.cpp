@@ -38,8 +38,13 @@ void CAllocHC(), MAllocIdentHC(), StrNewHC(), AStrNewHC();
 void _STRCMP(), _STRCPY(), _STRIMATCH(), StrOccHC();
 void _HASH_ADD(), _HASH_ADD_AFTER(), _HASH_FIND(), _HASH_SINGLE_TABLE_FIND();
 void HashTableNewHC(), HashTypeNumHC(), CeilU64HC(), Pow10I64HC();
+void ClampHC(), MinHC(), MaxHC(), FloorU64HC(), RoundI64HC(), FloorI64HC(), CeilI64HC();
 void LinkedLstDelHC(), LinkedLstSizeHC(), QueDelHC();
 void QueVectU8NewHC(), QueVectU8PutHC(), QueVectU8GetHC(), QueVectU8DelHC();
+void FifoU8NewHC(), FifoU8DelHC(), FifoU8InsHC(), FifoU8RemHC();
+void FifoU8PeekHC(), FifoU8FlushHC(), FifoU8CntHC();
+void FifoI64NewHC(), FifoI64DelHC(), FifoI64InsHC(), FifoI64RemHC();
+void FifoI64PeekHC(), FifoI64FlushHC(), FifoI64CntHC();
 void QSortHC(), QSortI64HC(), LstMatchHC();
 void FileReadHC(), FileNameAbsHC(), DirNameAbsHC(), DirCurHC(), DirFileHC();
 void CdHC(), IsDirHC(), DirHC(), PutDirLinkHC(), FilesFindHC(), FileFindHC(),
@@ -88,6 +93,7 @@ void RandU32HC(),RandI64HC(),RandU64HC(),RandHC();
 void SeedHC(),IsPixCovered0HC(),GrPlot0HC(),GrPeek0HC();
 void GrBlotHC(),GrRectHC(),GrRectBHC(),GrClampHC();
 void GrPlotHC(),GrPeekHC(),GrLineHC(),ClipLineHC();
+void GrFloodFillHC(),GrFloodFill3HC();
 void GrFillCircleHC(),GrPlot3BHC(),GrPlot3HC(),GrLine3HC(),DCThickScaleHC();
 void CircleHC(),EllipseHC(),GrCircleHC(),GrEllipseHC(),GrCircle3HC(),GrEllipse3HC(),ArgHC();
 void LineHC();
@@ -156,6 +162,10 @@ void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
 void RawHC(), DbgModeHC(), IsDbgModeHC();
 void tSHC(), BusyHC(), SleepUntilHC(), SleepHC(), Ona2FreqHC(), Freq2OnaHC();
 void SndHC(), ScrnCastHC(), SndRstHC(), BeepHC(), MuteHC(), IsMuteHC();
+void SndShiftHC(), AUWriteHC();
+void SndTaskEndCBHC(), tMHC(), BeatHC(), MusicSetOctaveHC(), MusicSetMeterHC();
+void MusicSetNoteLenHC(), Note2OnaHC(), Ona2NoteHC(), Ona2OctaveHC();
+void PlayHC(), MusicSettingsRstHC();
 }
 
 static bool IsImport(uint8_t type)
@@ -564,6 +574,7 @@ bool LoadKernel(CTask &task)
       {"sys_winmgr_task", reinterpret_cast<uintptr_t>(&sys_winmgr_task)},
       {"sys_focus_task", reinterpret_cast<uintptr_t>(&sys_focus_task)},
       {"scrncast", reinterpret_cast<uintptr_t>(&scrncast)},
+      {"music", reinterpret_cast<uintptr_t>(&music)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
       {"SYS_RUN_LEVEL", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
       {"SYS_VAR_INIT_FLAG", reinterpret_cast<uintptr_t>(&sys_var_init_flag)},
@@ -625,8 +636,15 @@ bool LoadKernel(CTask &task)
       {"_HASH_REM_DEL", reinterpret_cast<uintptr_t>(_HASH_REM_DEL)},
       {"SysSymImportsResolve",
        reinterpret_cast<uintptr_t>(SysSymImportsResolveHC)},
-      {"CeilU64", reinterpret_cast<uintptr_t>(CeilU64HC)},
+      {"Clamp", reinterpret_cast<uintptr_t>(ClampHC)},
+      {"Min", reinterpret_cast<uintptr_t>(MinHC)},
+      {"Max", reinterpret_cast<uintptr_t>(MaxHC)},
       {"Pow10I64", reinterpret_cast<uintptr_t>(Pow10I64HC)},
+      {"FloorU64", reinterpret_cast<uintptr_t>(FloorU64HC)},
+      {"CeilU64", reinterpret_cast<uintptr_t>(CeilU64HC)},
+      {"RoundI64", reinterpret_cast<uintptr_t>(RoundI64HC)},
+      {"FloorI64", reinterpret_cast<uintptr_t>(FloorI64HC)},
+      {"CeilI64", reinterpret_cast<uintptr_t>(CeilI64HC)},
       {"LinkedLstDel", reinterpret_cast<uintptr_t>(LinkedLstDelHC)},
       {"LinkedLstSize", reinterpret_cast<uintptr_t>(LinkedLstSizeHC)},
       {"QueDel", reinterpret_cast<uintptr_t>(QueDelHC)},
@@ -634,6 +652,20 @@ bool LoadKernel(CTask &task)
       {"QueVectU8Put", reinterpret_cast<uintptr_t>(QueVectU8PutHC)},
       {"QueVectU8Get", reinterpret_cast<uintptr_t>(QueVectU8GetHC)},
       {"QueVectU8Del", reinterpret_cast<uintptr_t>(QueVectU8DelHC)},
+      {"FifoU8New", reinterpret_cast<uintptr_t>(FifoU8NewHC)},
+      {"FifoU8Del", reinterpret_cast<uintptr_t>(FifoU8DelHC)},
+      {"FifoU8Ins", reinterpret_cast<uintptr_t>(FifoU8InsHC)},
+      {"FifoU8Rem", reinterpret_cast<uintptr_t>(FifoU8RemHC)},
+      {"FifoU8Peek", reinterpret_cast<uintptr_t>(FifoU8PeekHC)},
+      {"FifoU8Flush", reinterpret_cast<uintptr_t>(FifoU8FlushHC)},
+      {"FifoU8Cnt", reinterpret_cast<uintptr_t>(FifoU8CntHC)},
+      {"FifoI64New", reinterpret_cast<uintptr_t>(FifoI64NewHC)},
+      {"FifoI64Del", reinterpret_cast<uintptr_t>(FifoI64DelHC)},
+      {"FifoI64Ins", reinterpret_cast<uintptr_t>(FifoI64InsHC)},
+      {"FifoI64Rem", reinterpret_cast<uintptr_t>(FifoI64RemHC)},
+      {"FifoI64Peek", reinterpret_cast<uintptr_t>(FifoI64PeekHC)},
+      {"FifoI64Flush", reinterpret_cast<uintptr_t>(FifoI64FlushHC)},
+      {"FifoI64Cnt", reinterpret_cast<uintptr_t>(FifoI64CntHC)},
       {"QSort", reinterpret_cast<uintptr_t>(QSortHC)},
       {"QSortI64", reinterpret_cast<uintptr_t>(QSortI64HC)},
       {"LstMatch", reinterpret_cast<uintptr_t>(LstMatchHC)},
@@ -810,6 +842,8 @@ bool LoadKernel(CTask &task)
       {"DocSprite", reinterpret_cast<uintptr_t>(DocSpriteHC)},
       {"Sprite", reinterpret_cast<uintptr_t>(SpriteHC)},
       {"GrPeek", reinterpret_cast<uintptr_t>(GrPeekHC)},
+      {"GrFloodFill", reinterpret_cast<uintptr_t>(GrFloodFillHC)},
+      {"GrFloodFill3", reinterpret_cast<uintptr_t>(GrFloodFill3HC)},
       {"GrLine", reinterpret_cast<uintptr_t>(GrLineHC)},
       {"GrLine3", reinterpret_cast<uintptr_t>(GrLine3HC)},
       {"Circle", reinterpret_cast<uintptr_t>(CircleHC)},
@@ -894,7 +928,20 @@ bool LoadKernel(CTask &task)
       {"Freq2Ona", reinterpret_cast<uintptr_t>(Freq2OnaHC)},
       {"Snd", reinterpret_cast<uintptr_t>(SndHC)},
       {"ScrnCast", reinterpret_cast<uintptr_t>(ScrnCastHC)},
+      {"SndShift", reinterpret_cast<uintptr_t>(SndShiftHC)},
+      {"AUWrite", reinterpret_cast<uintptr_t>(AUWriteHC)},
       {"SndRst", reinterpret_cast<uintptr_t>(SndRstHC)},
+      {"SndTaskEndCB", reinterpret_cast<uintptr_t>(SndTaskEndCBHC)},
+      {"tM", reinterpret_cast<uintptr_t>(tMHC)},
+      {"Beat", reinterpret_cast<uintptr_t>(BeatHC)},
+      {"MusicSetOctave", reinterpret_cast<uintptr_t>(MusicSetOctaveHC)},
+      {"MusicSetMeter", reinterpret_cast<uintptr_t>(MusicSetMeterHC)},
+      {"MusicSetNoteLen", reinterpret_cast<uintptr_t>(MusicSetNoteLenHC)},
+      {"Note2Ona", reinterpret_cast<uintptr_t>(Note2OnaHC)},
+      {"Ona2Note", reinterpret_cast<uintptr_t>(Ona2NoteHC)},
+      {"Ona2Octave", reinterpret_cast<uintptr_t>(Ona2OctaveHC)},
+      {"Play", reinterpret_cast<uintptr_t>(PlayHC)},
+      {"MusicSettingsRst", reinterpret_cast<uintptr_t>(MusicSettingsRstHC)},
       {"Beep", reinterpret_cast<uintptr_t>(BeepHC)},
       {"Mute", reinterpret_cast<uintptr_t>(MuteHC)},
       {"IsMute", reinterpret_cast<uintptr_t>(IsMuteHC)},

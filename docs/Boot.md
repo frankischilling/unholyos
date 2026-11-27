@@ -1087,6 +1087,54 @@ copies the exact probe into allocated guest memory with GDB and
 checks the uploaded bytes before executing it. Native regression
 runs do not require GDB.
 
+## Flood filling
+
+`FloodFillProbe.HC` compares region fills, boundary-color fills, dither
+and XOR pixels, depth rejection and boundary depth updates, symmetry,
+and transformed coordinates. It checks restoration of the brush,
+secondary color, flags and recorded extents. Both the pinned reference
+and native PC guests report `flood fill 1FF`; all seven printed counts
+and pixel/depth fingerprints agree. The startup and guest-built ISO
+tests require those exact lines. Run the reference fixture with
+`build/Linux/TestBoot --flood-fill-reference qemu-system-x86_64
+<reference.iso> build/flood-reference`. The driver verifies the uploaded
+source bytes before executing it in a 512 MiB QEMU PC guest. Native
+verification uses the regular startup test ISO. Coverage does not yet
+include overlapping windows, probability dithering or the fixed ray
+stack's exhaustion behavior.
+
+`SpriteFloodProbe.HC` exercises both sprite flood-fill elements in a packed
+stream. The boundary-color element uses only the primary color, then restores
+the dither color for the next point. The probe also checks transformed,
+depth-buffered single-element drawing, including restoration of the caller's
+color, flags and brush. The native guest reported `sprite flood 0` before
+dispatch was enabled. Both guests now report `sprite flood F`, with matching
+stream (`95BB364C84E33F56`), single-element bitmap (`026661834AEEFF05`)
+and depth (`66901F20C6B79EE1`) fingerprints. The reference driver uploads
+and verifies all 1,840 source bytes and runs the fixture on the pinned DVD:
+
+```sh
+build/Linux/TestBoot --sprite-flood-reference qemu-system-x86_64 \
+  <reference.iso> build/sprite-flood-reference
+```
+
+Both focused guests use QEMU 8.2.2, PC, `qemu64` and 512 MiB. The regular
+startup and guest-built ISO tests check the same three output lines.
+
+The original [Demo/Graphics/Blot.HC](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Demo/Graphics/Blot.HC)
+by Terry A. Davis is included without changes. The imported checkout
+contains 735 bytes (SHA-256
+`5a98a574fdb3341816fbc55877f125abfa30229e7e06f68c162bc6de6fc0e35e`).
+The interactive test runs the animated brush and bitmap composition,
+waits for the key prompt, records the graphics layer, and presses Space.
+The two guests' complete drawing buffers match byte for byte (SHA-256
+`897974d37f94c5224c05da2064c18684626a779738c013d8b8125bd14b7f40f4`).
+The cleared buffers also match. Both guests then evaluate another terminal
+expression successfully. The native test is part of `make test`; the
+reference run uses `build/Linux/TestBoot --blot-reference qemu-system-x86_64
+<reference.iso> build/blot-reference`. Both use QEMU 8.2.2, PC,
+`qemu64`, 512 MiB and a private QMP socket.
+
 ## Regular polygons, Bezier curves, and B-splines
 
 `SplineProbe.HC` exercises the typed callbacks, distance helpers,
@@ -1542,8 +1590,18 @@ when HPET is available.
 The suite compiles `SoundRecord.HC` in the guest and saves
 `SoundRecord.BIN.Z` under `BUILD`. Loading that module in both systems
 produced the event sequence `0, 60, 60, 0` and the default path
-`B:/Tmp/%X.GR` in audio-only mode. Video capture and writing the queued
-events to an AU file remain pending.
+`B:/Tmp/%X.GR` in audio-only mode.
+
+`AUProbe.HC` (SHA-256
+`b3e29b6624f09455e3e04a78f720df1b82138ce9ce63f6fdaa403ecf1c875606`)
+checks the packed sound structures, zero and negative shifts, removal
+of expired events, equal timestamps, default and explicit extensions,
+and export of a queue recorded through `Snd` and `ScrnCast`. Both
+guests on QEMU PC with qemu64 and 512 MiB returned `AU probe 7F`.
+The expected timestamps include the one-ULP rounding of the original
+decimal lexer. The host test reads the complete 45-byte deterministic
+AU file and checks each nine-byte record against the pinned output.
+Video capture and desktop playback remain pending.
 
 ## RedSea descriptor verification
 
@@ -1593,6 +1651,49 @@ cluster `0x5d`, and `UnholyOS: kernel entered in 64-bit mode`. QMP reported
 the VM running. The screenshot and serial log were captured under `build/`.
 This verifies the clean boot to the current kernel; the desktop is pending.
 
+## Native FIFO operations
+
+`Kernel/KDataTypes.HC` defines the byte and signed 64-bit FIFO operations.
+Both records have a typed buffer pointer followed by `mask`, `in_ptr`,
+and `out_ptr`, at offsets 0, 8, 16, and 24. The ring reserves one slot.
+The native insert, remove, peek, flush and count operations preserve the
+interrupt flag. Flush advances the read pointer to the write pointer.
+Count uses the reference's conditional subtraction, including its
+non-power-of-two mask behavior. Allocation retains UnholyOS's existing
+failure checks and deletion accepts a null record; those cases differ
+from the unchecked reference routines.
+
+The new `Linux/Fixtures/FifoProbe.HC` checks both typed layouts,
+empty operations (including null output pointers), capacity, byte and
+signed I64 values, peek, wraparound, flush, interrupt state and the
+size-six ring quirk. Both guests printed `FIFO probe 1FF`. A second
+direct call returned the same value without changing the task's
+data-heap usage.
+
+The focused native image was built using GCC 13.3.0:
+
+```sh
+make -j4 build/unholyos-startup-test.iso build/Linux/TestBoot
+build/Linux/MakeISO build/Adam/Opt/Boot/BootDVD.BIN \
+  build/0000Boot/0000Kernel.BIN.C build/fifo-focused.iso \
+  --compress-at Doc/Start.DD.Z Doc/Start.DD --dir Home \
+  --file Linux/Fixtures/FifoProbe.HC
+qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d \
+  -cdrom build/fifo-focused.iso -display none \
+  -serial file:build/fifo-focused.log -monitor none -no-reboot -no-shutdown
+```
+
+QEMU 8.2.2 booted the focused image and reported the FIFO result, heap
+cleanup and entry into 64-bit mode. The 512,176-byte kernel's BSS ended
+at `0x88DAB`, below the relocated DVD loader at `0x96600`.
+The pinned distribution DVD ran with the same PC, qemu64 and 512 MiB
+settings. Its kernel matches the 189,760-byte kernel file in the pinned
+checkout at DVD byte offset 52,224. GDB copied the 3,704-byte fixture into
+a zeroed guest buffer and read it back; the SHA-256 of both copies was
+`28e776de0d4d84d99cb1f1c6dbf68cac8bcaaf6f12b7542588c492dadff75f1e`.
+`ExePutS` ran that buffer, and a separate `KeyDevAdd` hook captured the
+output through QEMU's debug console. The reference heap check emitted 1.
+
 ## TimeClock and queue operations
 
 The original `Apps/TimeClock/Load.HC`, `Install.HC`, and `TimeClk.HC`
@@ -1637,6 +1738,85 @@ Use `Linux/MakeISO` with the built loader and kernel, `--dir Home`,
 trace, and before/after keyboard screenshots were captured in
 `build/time-clock/`. Persistent hard-disk writes and the complete
 reference file-error diagnostics remain pending.
+
+## Music notation and playback
+
+`MusicProbe.HC` (SHA-256
+`d75c1504452d0b9a7f825e111e338f800f9f81a81a77af61867f341eefadeb24`)
+checks the packed music state, note-number conversions, meter and note
+length modifiers, lyrics, rests, ties, mute, and beat progression.
+Both guests returned `Music probe 7F`. The 117-byte AU file contains
+13 events; the native regression checks each note and nondecreasing
+timestamps. Both guests reported the fractional jiffy correction as
+`0x401800000000000A`. The reference probe was executed from a guest
+buffer whose bytes were checked against the fixture, using a RAM disk
+for the AU file and the debug port to retrieve the output and file.
+
+Terry A. Davis's `Demo/Snd/OhGreat.HC` is copied byte for byte from the
+clean pinned Windows checkout (SHA-256
+`914e1648a99f587716a2ba896b7a99865538118769716b2e1f0b9fe96a0fc198`).
+Git's checkout converts LF to CRLF; removing only those inserted CR bytes
+recovers the pinned Git blob `19771968474ab35d0d91c2e64872631bdebf7388`.
+The reference distribution's expanded `OhGreat.HC.Z` is 1,086 bytes
+(SHA-256 `b73ecbac7b7d25588ddb7cda10816b58da029cd73abc9e1a9d198471aa19bd77`);
+it differs from the pinned LF source only at 62 lyric spaces, encoded as
+`0x1F` in the distribution and `0x20` in Git. Both versions produce the
+same recorded notes.
+The QEMU driver starts it through the terminal, sends a real key during
+the song, waits for the complete verse and the next terminal prompt,
+and walks the recorded sound queue. Both guests produced the same
+171-byte note sequence (SHA-256
+`96735c04fad3b8acd8dfabca345278e856974e3dc295688348d79c9ba5bb5080`).
+The test checks monotonic event times, a silent speaker on exit, and a
+subsequent terminal command. The comparison used QEMU 8.2.2, `pc`,
+`qemu64`, one CPU, 512 MiB and CD boot. The driver starts QEMU with
+`-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso> -display none
+-monitor none -serial file:<log> -qmp stdio -no-reboot`; the reference
+run also captures the debug port. The tested reference ISO was
+`TOS_Distro.ISO` (SHA-256
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`).
+
+The full native suite passed. Repeat it with
+`make -j4 BUILD=build/music-play test`. To repeat just the song comparison,
+use the following commands and
+substitute the path to the pinned distribution ISO:
+
+```sh
+make -j4 BUILD=build/music-play all build/music-play/Linux/TestBoot
+build/music-play/Linux/TestBoot --music qemu-system-x86_64 \
+  build/music-play/unholyos.iso build/music-play/song-native
+build/music-play/Linux/TestBoot --music-reference qemu-system-x86_64 \
+  /path/to/TOS_Distro.ISO build/music-play/song-reference
+```
+
+The capture directories retain the text layer, screenshots and
+`music-notes.bin`. Compare the latter directly between guests.
+The separate probe captures are `music-native-final.log` and
+`music-reference-final.log` in `build/music-play/`.
+
+`MusicPrecision.HC` checks 29 note-length modifier sequences, initial
+and reset settings, and the `0.25`, `2.5`, and `0.9` literal bits. Its
+SHA-256 is
+`ef763c725ad9c64b6a6df6d92ac577f2cc4449760a11a61f421a6184f6206f10`.
+The pinned runtime assigns `0x3FD0000000000001` for the sixteenth-note
+length; that value and its six tested dotted or triplet variants differ
+from calculations starting with C++'s exact `0.25`. All 32 data rows
+match when executing the corrected native source and its guest-compiled
+TOSB module. The startup and guest-built ISO checks enforce the complete
+trace. The reference replay checks the uploaded source and terminating
+NUL before execution and verifies every expected line.
+
+```sh
+make -j6 build/music-precision-test.iso build/Linux/TestBoot
+build/Linux/TestBoot --music-precision qemu-system-x86_64 \
+  build/music-precision-test.iso build/music-precision-native
+build/Linux/TestBoot --music-precision-reference qemu-system-x86_64 \
+  /path/to/TOS_Distro.ISO build/music-precision-reference
+```
+
+Playback uses the actual PIT speaker and task sleep. It is tested on
+one CPU; waveform fidelity, exact wall-clock durations, SMP music
+semaphores, and the remaining sound and media APIs are not established.
 
 ## Screen capture
 
@@ -1688,6 +1868,50 @@ the startup document and a `Home` directory. The reference ran the same
 fixture via `ExePutS` after creating a RAM drive. Both ran under QEMU
 8.2.2, PC, `qemu64`, 512 MiB. Logs are in `build/capture-check/`.
 
+## Kernel math helpers
+
+`MathHelpersProbe.HC` compares the native helpers with
+`Kernel/KMathB.HC` from the pinned TempleOS checkout. Its SHA-256 is
+`b6e6d2c0a6a9e23438beb99448123339accc2f0e31fb7e474c0a3b5d43fac41a`.
+The reference driver verifies the complete uploaded source and trailing
+NUL before executing it. The native guest runs the same source, compiles
+it with `Cmp`, and executes the resulting `MathHelpersProbe.BIN.Z`.
+
+All 25 trace lines matched across the reference and native source and
+module runs. The reference fingerprints are:
+
+| Inputs | Helper calls | Fingerprint |
+| --- | ---: | --- |
+| Signed values -47 through 47 and both integer limits, with eight positive and negative divisors | 2,376 | `903D605CF130C49A` |
+| Six unsigned values and five divisors, including the high bit and maximum value | 60 | `65978B3FBB23DE21` |
+| Twelve binary64 inputs, including signed zero, subnormals, infinities, and quiet and signaling NaNs | 2,016 | `023263F76EC7DF9A` |
+
+Additional trace lines check reversed clamp limits, selected NaN payloads,
+decimal-power bounds, and indirect calls to floating and integer helpers.
+The comparison preserves the reference's `CeilI64(-1,10)==-10` result
+and unordered floating-point branches. For example, `Max(NaN,1.0)`
+returns its first operand and `Clamp(NaN,-2.0,3.0)` returns 3.0.
+
+Build and run the focused image from the repository root:
+
+```sh
+make -j6 build/math-test.iso build/Linux/TestBoot
+build/Linux/TestBoot --math-helpers qemu-system-x86_64 \
+  build/math-test.iso build/math-native
+build/Linux/TestBoot --math-helpers-reference qemu-system-x86_64 \
+  /path/to/TOS_Distro.ISO build/math-reference
+```
+
+Both guests use QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512
+-boot d -cdrom <image.iso> -display none -monitor none -serial
+file:<serial.log> -qmp stdio -no-reboot`. The reference also uses
+`-debugcon file:<debugcon.bin> -gdb tcp:127.0.0.1:45362` to transfer
+the fixture. Each guest starts from a clean VM. The native startup and
+guest-built ISO regressions check the same source and module output.
+This evidence covers the listed values and default x87 environment;
+zero-divisor faults, signed division overflow, and unmasked floating-point
+exceptions are not part of the comparison.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |
@@ -1698,6 +1922,6 @@ fixture via `ExePutS` after creating a RAM drive. Both ran under QEMU
 | Tasking and CPUs | `Kernel/KTask.HC`, `Sched.HC`, `MultiProc.HC` | Core 0 runs Adam, the idle task, and spawned tasks with cooperative switching and PIT wakeups. Starting additional CPUs remains pending. |
 | Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `FileSysFAT.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. ATA block writes, explicitly enabled FAT32 file and directory mutations, and buffered streams persist across cold boots. Fragmented streams, recursive file operations, cluster reclamation, and quick and full formatting of mounted FAT32 primary partitions are tested. Unmounted partitions and full cache and error-path parity remain pending. |
 | Graphics | `Kernel/Display.HC`, `Adam/Gr/GrScrn.HC` | VGA text and graphics composition, 16-color palette, cursor, zoom, and a scheduled refresh task |
-| Input and sound | `Kernel/SerialDev/Keyboard.HC`, `Mouse.HC`, `Message.HC`, `Kernel/KMisc.HC` | PS/2 keyboard and mouse messages, PC speaker tones, and queued sound recording. Desktop input controls and AU output remain pending. |
+| Input and sound | `Kernel/SerialDev/Keyboard.HC`, `Mouse.HC`, `Message.HC`, `Kernel/KMisc.HC`, `Adam/Gr/ScrnCast.HC`, `Adam/ASnd.HC` | PS/2 keyboard and mouse messages, PC speaker tones, queued sound recording, event shifting, packed AU output, and music notation playback. Full desktop input and remaining media APIs are pending. |
 | Desktop and system tools | `StartOS.HC`, `Adam/MakeAdam.HC`, `Adam/WinMgr.HC`, `Adam/DolDoc`, `Apps` | The refresh task draws visible DolDoc text and borders. The full editor and interactive desktop remain pending. |
 | HolyC | `Compiler/CMain.HC`, `Lex.HC`, `Prs*.HC`, `Back*.HC`, `Kernel/KLoad.HC` | Source execution with `ExeFile` and `ExePutS`, compile-time streams, plain and DolDoc tokenization, scalar expressions and functions, typed pointers, packed classes, unions, fixed arrays and their initializers, print calls, and TOSB module generation and loading for supported source. Full language support and native kernel compilation remain pending. |

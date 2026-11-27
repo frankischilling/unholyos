@@ -47,7 +47,8 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, int64_t z0, const uint8_t *elems,
       (1u << SPT_POLYPT) | (1u << SPT_LINE) | (1u << SPT_POLYLINE) |
       (1u << SPT_RECT) | (1u << SPT_BITMAP) | (1u << SPT_TRANSFORM_ON) |
       (1u << SPT_TRANSFORM_OFF) | (1u << SPT_PLANAR_SYMMETRY) |
-      (1u << SPT_ARROW);
+      (1u << SPT_ARROW) | (1u << SPT_FLOOD_FILL) |
+      (1u << SPT_FLOOD_FILL_NOT);
   constexpr uint32_t flags_3d = DCF_TRANSFORMATION | DCF_SYMMETRY;
   if (!elems || !available)
     return false;
@@ -127,6 +128,20 @@ bool Sprite3(CDC &dc, int64_t x0, int64_t y0, int64_t z0, const uint8_t *elems,
         y += pt.y1;
       } else
         GrPlot3Cpp(&dc, pt.x1 + x, pt.y1 + y, z);
+      break;
+    }
+    case SPT_FLOOD_FILL:
+    case SPT_FLOOD_FILL_NOT: {
+      CSpritePt pt;
+      MemCpy(&pt, elem, sizeof(pt));
+      if (type == SPT_FLOOD_FILL) {
+        GrFloodFill3Cpp(&dc, pt.x1 + x, pt.y1 + y, z, false);
+      } else {
+        auto color = dc.color;
+        dc.color = {color.c0, {0, 0}};
+        GrFloodFill3Cpp(&dc, pt.x1 + x, pt.y1 + y, z, true);
+        dc.color = color;
+      }
       break;
     }
     case SPT_POLYPT: {

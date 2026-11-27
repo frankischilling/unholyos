@@ -1163,6 +1163,12 @@ static void BootSoundReport(const CDrv &dvd, CTask &task)
   }
   Free(fmt);
   scrncast.print_fmt = nullptr;
+  old_debug = DbgModeCpp(false);
+  if (BootFileProgramReport(dvd, "/AUProbe.HC").okay)
+    BootGuestFileReport(*ram, "/AUProbe.AU");
+  if (BootFileProgramReport(dvd, "/MusicProbe.HC").okay)
+    BootGuestFileReport(*ram, "/MusicProbe.AU");
+  DbgModeCpp(old_debug);
 }
 
 static void BootAsmListingReport(const CDrv &dvd, CTask &task)
@@ -1491,6 +1497,8 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv,"/Fat32RejectProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ArcProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/SplineProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/FloodFillProbe.HC");
+    BootFileProgramReport(*adam_task->cur_dv, "/SpriteFloodProbe.HC");
     BootStartupReport(*adam_task->cur_dv);
     BootLexReport(*adam_task->cur_dv);
     BootDirectiveReport(*adam_task->cur_dv);
@@ -1569,6 +1577,25 @@ void BootProbe()
     BootVariadicReport(*adam_task->cur_dv, *adam_task, "/Doc/QueueProbe.HC",
                        "/QueueProbe.BIN.Z",
                        "Cmp(\"::/Doc/QueueProbe.HC\",,\"B:/QueueProbe.BIN.Z\");");
+    BootVariadicReport(*adam_task->cur_dv, *adam_task, "/MathHelpersProbe.HC",
+                       "/MathHelpersProbe.BIN.Z",
+                       "Cmp(\"::/MathHelpersProbe.HC\",,\"B:/MathHelpersProbe.BIN.Z\");");
+    BootVariadicReport(*adam_task->cur_dv, *adam_task, "/MusicPrecision.HC",
+                       "/MusicPrecision.BIN.Z",
+                       "Cmp(\"::/MusicPrecision.HC\",,\"B:/MusicPrecision.BIN.Z\");");
+    if (BootFileProgramReport(*adam_task->cur_dv, "/FifoProbe.HC").okay) {
+      auto *fun = reinterpret_cast<CHashFun *>(
+          HashFind("FifoProbe", adam_task->hash_table, HTT_FUN));
+      auto *heap = adam_task->data_heap;
+      const auto used = heap->used_u8s;
+      uint64_t result = 0;
+      bool okay = fun && CallHolyC0Checked(
+          reinterpret_cast<const uint8_t *>(fun->exe_addr), &result) &&
+          result == 0x1FF && heap->used_u8s == used;
+      SerialPutS("UnholyOS: FIFO heap cleanup ");
+      SerialPutHex(okay);
+      SerialPutS("\r\n");
+    }
     BootTimeClockReport(*adam_task->cur_dv);
     BootFileProgramReport(*adam_task->cur_dv, "/FileOperationsProbe.HC");
     {

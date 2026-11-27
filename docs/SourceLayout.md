@@ -186,7 +186,15 @@ for controller setup, the translated scan tables, and the
 `KbdPktRead`, `KbdHndlr`, and `KbdMsgsQue` stages. `IRQKbd` in
 `Kernel/KInts.asm` acknowledges IRQ1 and buffers bytes. Queue delivery
 runs from the scheduler and message scanner until the window manager
-takes over. The keyboard FIFOs use static storage during bootstrap.
+takes over. `KbdMsInit` allocates the five input FIFOs from the task heap.
+
+`Kernel/KDataTypes.cpp` and the shared ring operations in
+`Kernel/KernelB.hpp` implement both FIFO types from `Kernel/KDataTypes.HC`.
+`Kernel/KernelA.hpp` checks both 32-byte layouts against `KernelA.HH`.
+The compiler registers the classes, their typed buffer and index fields,
+and the declarations from `KernelC.HH`; the HolyC stack adapters in
+`Kernel/KUtils.asm` are published by `Kernel/KLoad.cpp`.
+The keyboard and mouse records expose their FIFO pointers with those types.
 
 `Kernel/SerialDev/Message.cpp` carries the reference `ScanChar`,
 `ScanKey`, `GetKey`, and `GetChar` paths. Echo and the raw cursor use
@@ -219,8 +227,12 @@ and `CScrnCastGlbls` records in `Kernel/KernelA.hpp` follow
 stack calls to the C++ ABI.
 
 `SleepUntilCpp` sets the idle bit and wake jiffy before yielding to the
-scheduler. The desktop playback in `Adam/ASnd.HC`, the AU writer in
-`Adam/Snd/SndFile.HC`, and video capture remain pending.
+scheduler. `Adam/Gr/ScrnCast.cpp` follows the `SndShift` and `AUWrite`
+functions in `Adam/Gr/ScrnCast.HC`. The compiler exposes the packed
+sound types and the live `scrncast` global. The AU writer includes the
+queue sentinel and stores timestamps as raw CDate values, followed by
+one signed note byte. Music notation playback is described below;
+video capture and the remaining desktop sound APIs are pending.
 
 ## VGA palette
 
@@ -324,6 +336,16 @@ from `GrPrimatives.HC`, including the shared row in opposing sweeps.
 `GrFillPoly3` and `GrRect3` in `GrComposites.cpp` follow the triangle
 fan in `GrComposites.HC`. They call the device context's transform
 callback and reflect vertices when symmetry is enabled.
+
+`GrRayLenMinus` and `GrRayLen` in `Adam/Gr/GrBitMap.cpp` preserve
+the leftward scan and two-direction drawing pass from `GrBitMap.HC`.
+They check window coverage at character-cell boundaries and update
+explicit depth values before testing the boundary color. `GrFloodFill`
+and `GrFloodFill3` in `GrPrimatives.cpp` follow the reference's
+`CFFRay` state machine and restore the brush, secondary color and flags.
+The mirrored pass in `GrFloodFill3` runs first; the normal pass replaces
+its returned count. The C++ traversal stops at the reference's fixed
+stack allocation limit rather than writing outside it.
 
 ## Round pens and 3D lines
 
@@ -626,7 +648,9 @@ the sprite data. `Sprite3` draws points, packed point paths, lines,
 and polylines with the active pen width. `DocRecalc.cpp` draws sprite
 entries through a task alias of `gr.dc2` during screen refresh.
 Bitmap and rectangle elements pass through `GrBlot3` and `GrRect3`.
-These elements support depth, transforms, and planar symmetry.
+The two flood-fill elements pass through `GrFloodFill3`; the boundary-color
+variant clears the secondary color for that element and restores it before
+the next one. These elements support depth, transforms, and planar symmetry.
 `Sprite3B` applies its
 temporary translation and restores the caller's context. The remaining
 3D drawing elements, sprite hit testing, and the sprite editor remain
@@ -941,6 +965,53 @@ replacing the saved return address. Native drive and block locks
 do not yield while held. Full drive-lock release, general
 Ctrl-Alt callback registration and preemptive scheduling remain
 pending.
+
+## Kernel math helpers
+
+`Kernel/KMathB.cpp` follows the function order and branches in
+`Kernel/KMathB.HC` for `Clamp`, `Min`, `Max`, `Pow10I64`, `FloorU64`,
+`CeilU64`, `RoundI64`, `FloorI64`, and `CeilI64`. Unsigned intermediate
+addition and subtraction preserve 64-bit wraparound; signed remainders
+retain the reference's negative-divisor behavior. `RoundI64` removes the
+signed remainder. `CeilI64` keeps its separate negative-input branch,
+including the result of -10 for `CeilI64(-1,10)`.
+
+The floating-point C++ entry points pass binary64 bits through integer
+registers. `F64CompareBits` in `Kernel/KMathA.asm` uses `FCOMIP`, as emitted
+by `Compiler/BackFB.HC`, and restores the x87 stack depth. The wrappers
+preserve the pinned runtime's unordered comparisons: `Min` selects the
+second operand, `Max` selects the first, and `Clamp` selects its upper
+bound when the upper comparison is unordered. These choices also retain
+the selected operand's signed-zero and NaN payload bits.
+
+`Compiler/AsmInit.cpp` supplies the signatures from `Kernel/KernelC.HH`.
+`Kernel/KLoad.cpp` and the explicit `KUtils.asm` adapters expose the same
+HolyC names, argument order, return register, and callee stack cleanup.
+The focused fixture runs through both source execution and a guest-built
+TOSB module; the host driver compares them with the pinned runtime trace.
+Fault delivery for zero divisors and signed division overflow, and
+unmasked floating-point exceptions, remain outside this comparison.
+
+## Music playback
+
+`Adam/ASnd.cpp` follows the note conversion, timing, notation parsing,
+and playback routines in `Adam/ASnd.HC`. `Adam/ASnd.hpp` retains the
+packed `CMusicGlbls` layout, including its seven-entry note map.
+The native compiler exposes those fields and the typed runtime
+functions. Playback uses the existing speaker and scheduler routines.
+`MusicSetNoteLen` retains the pinned HolyC literal's binary64 value for
+`0.25`, `0x3FD0000000000001`. C++ parses the same decimal spelling as
+`0x3FD0000000000000`, so the translated sixteenth-note case uses the
+observed bits explicitly. Triplet and dotted modifiers operate on that
+value. The default tempo, staccato factor, and other note lengths use
+matching C++ constants.
+The single-CPU implementation protects beat updates with interrupts
+disabled. `Play` also checks the lower bound of the note index before
+accessing `music.note_map`; the reference only checks the upper bound.
+Characters below `A` outside the notation modifiers therefore become
+rests instead of reading outside that array. SMP synchronization,
+`CurSongTask`, the waveform functions, `Noise`, and `Sweep` remain
+pending. Terry A. Davis's original song stays in `Demo/Snd/OhGreat.HC`.
 
 ## Remaining structural work
 

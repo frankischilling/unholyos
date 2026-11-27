@@ -643,6 +643,38 @@ static bool CmpQueData(CHashTable *table)
   return true;
 }
 
+static bool CmpFifoData(CHashTable *table)
+{
+  auto *u8 = CmpKernelClass(table, "CFifoU8", sizeof(CFifoU8));
+  auto *i64 = CmpKernelClass(table, "CFifoI64", sizeof(CFifoI64));
+  if (!u8 || !i64)
+    return false;
+  auto *heap = CurrentTask()->data_heap;
+  auto *integer = FindType("I64", table);
+  const struct {
+    const char *name;
+    CHashClass *record, *type;
+    size_t offset;
+  } members[]{
+      {"buf", u8, FindType("U8", table) + 1, offsetof(CFifoU8, buf)},
+      {"mask", u8, integer, offsetof(CFifoU8, mask)},
+      {"in_ptr", u8, integer, offsetof(CFifoU8, in_ptr)},
+      {"out_ptr", u8, integer, offsetof(CFifoU8, out_ptr)},
+      {"buf", i64, integer + 1, offsetof(CFifoI64, buf)},
+      {"mask", i64, integer, offsetof(CFifoI64, mask)},
+      {"in_ptr", i64, integer, offsetof(CFifoI64, in_ptr)},
+      {"out_ptr", i64, integer, offsetof(CFifoI64, out_ptr)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    if (!name || !MemberAdd(*member.record, name, *member.type, member.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool CmpDateData(CHashTable *table)
 {
   auto *date = CmpKernelClass(table, "CDate", sizeof(CDate));
@@ -948,6 +980,9 @@ static bool CmpKbdData(CHashTable *table)
       {"cnt", i64, offsetof(CKbdStateGlbls, cnt)},
       {"timestamp", i64, offsetof(CKbdStateGlbls, timestamp)},
       {"new_key_timestamp", i64, offsetof(CKbdStateGlbls, new_key_timestamp)},
+      {"fifo", FindType("CFifoU8", table) + 1, offsetof(CKbdStateGlbls, fifo)},
+      {"fifo2", FindType("CFifoU8", table) + 1, offsetof(CKbdStateGlbls, fifo2)},
+      {"scan_code_fifo", FindType("CFifoI64", table) + 1, offsetof(CKbdStateGlbls, scan_code_fifo)},
       {"rst", boolean, offsetof(CKbdStateGlbls, rst)},
       {"irqs_working", boolean, offsetof(CKbdStateGlbls, irqs_working)},
   };
@@ -1057,6 +1092,8 @@ static bool CmpMouseData(CHashTable *table)
       {"timestamp", hard, i64, offsetof(CMsHardStateGlbls, timestamp)},
       {"install_attempts", hard, i64, offsetof(CMsHardStateGlbls, install_attempts)},
       {"pkt_size", hard, i64, offsetof(CMsHardStateGlbls, pkt_size)},
+      {"fifo", hard, FindType("CFifoU8", table) + 1, offsetof(CMsHardStateGlbls, fifo)},
+      {"fifo2", hard, FindType("CFifoU8", table) + 1, offsetof(CMsHardStateGlbls, fifo2)},
       {"has_wheel", hard, boolean, offsetof(CMsHardStateGlbls, has_wheel)},
       {"has_ext_bttns", hard, boolean, offsetof(CMsHardStateGlbls, has_ext_bttns)},
       {"evt", hard, boolean, offsetof(CMsHardStateGlbls, evt)},
@@ -1314,6 +1351,102 @@ static bool CmpDCData(CHashTable *table)
   }
   return CmpKernelGlobal(table, "gr", glbl, &gr) &&
          CmpKernelGlobal(table, "winmgr", wm, &winmgr);
+}
+
+static bool CmpScrnCastData(CHashTable *table)
+{
+  auto *au = CmpKernelClass(table, "CAUData", sizeof(CAUData));
+  auto *snd = CmpKernelClass(table, "CSndData", sizeof(CSndData));
+  auto *sc = CmpKernelClass(table, "CScrnCastGlbls", sizeof(CScrnCastGlbls));
+  if (!au || !snd || !sc)
+    return false;
+  auto *date = FindType("CDate", table);
+  auto *f64 = FindType("F64", table);
+  auto *i8 = FindType("I8", table);
+  auto *boolean = FindType("Bool", table);
+  auto *dc = FindType("CDC", table);
+  const struct
+  {
+    CHashClass *record;
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+  } fields[]{
+      {au, "cdt", date, offsetof(CAUData, cdt)},
+      {au, "ona", i8, offsetof(CAUData, ona)},
+      {snd, "next", snd + 1, offsetof(CSndData, next)},
+      {snd, "last", snd + 1, offsetof(CSndData, last)},
+      {snd, "tS", f64, offsetof(CSndData, tS)},
+      {snd, "ona", i8, offsetof(CSndData, ona)},
+      {sc, "snd_head", snd, offsetof(CScrnCastGlbls, snd_head)},
+      {sc, "t0_now", date, offsetof(CScrnCastGlbls, t0_now)},
+      {sc, "t0_tS", f64, offsetof(CScrnCastGlbls, t0_tS)},
+      {sc, "print_fmt", FindType("U8", table) + 1,
+       offsetof(CScrnCastGlbls, print_fmt)},
+      {sc, "dc", dc + 1, offsetof(CScrnCastGlbls, dc)},
+      {sc, "dc2_alias", dc + 1, offsetof(CScrnCastGlbls, dc2_alias)},
+      {sc, "record", boolean, offsetof(CScrnCastGlbls, record)},
+      {sc, "just_audio", boolean, offsetof(CScrnCastGlbls, just_audio)},
+      {sc, "ona", i8, offsetof(CScrnCastGlbls, ona)},
+  };
+  auto *heap = CurrentTask()->data_heap;
+  for (const auto &field : fields) {
+    auto *name = StrNew(field.name, heap);
+    if (!name || !MemberAdd(*field.record, name, *field.type, field.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return CmpKernelGlobal(table, "scrncast", sc, &scrncast);
+}
+
+static bool CmpMusicData(CHashTable *table)
+{
+  auto *cls = CmpKernelClass(table, "CMusicGlbls", sizeof(CMusicGlbls));
+  if (!cls)
+    return false;
+  auto *u8 = FindType("U8", table);
+  auto *i64 = FindType("I64", table);
+  auto *f64 = FindType("F64", table);
+  const struct
+  {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+  } fields[]{
+      {"cur_song", u8 + 1, offsetof(CMusicGlbls, cur_song)},
+      {"cur_song_task", FindType("CTask", table) + 1, offsetof(CMusicGlbls, cur_song_task)},
+      {"octave", i64, offsetof(CMusicGlbls, octave)},
+      {"note_len", f64, offsetof(CMusicGlbls, note_len)},
+      {"note_map", u8, offsetof(CMusicGlbls, note_map)},
+      {"mute", FindType("Bool", table), offsetof(CMusicGlbls, mute)},
+      {"meter_top", i64, offsetof(CMusicGlbls, meter_top)},
+      {"meter_bottom", i64, offsetof(CMusicGlbls, meter_bottom)},
+      {"tempo", f64, offsetof(CMusicGlbls, tempo)},
+      {"stacatto_factor", f64, offsetof(CMusicGlbls, stacatto_factor)},
+      {"play_note_num", i64, offsetof(CMusicGlbls, play_note_num)},
+      {"tM_correction", f64, offsetof(CMusicGlbls, tM_correction)},
+      {"last_Beat", f64, offsetof(CMusicGlbls, last_Beat)},
+      {"last_tM", f64, offsetof(CMusicGlbls, last_tM)},
+  };
+  auto *heap = CurrentTask()->data_heap;
+  for (const auto &field : fields) {
+    auto *name = StrNew(field.name, heap);
+    auto *m = name ? MemberAdd(*cls, name, *field.type, field.offset) : nullptr;
+    if (!m) {
+      Free(name);
+      return false;
+    }
+    if (field.offset == offsetof(CMusicGlbls, note_map)) {
+      auto *axis = reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return false;
+      axis->cnt = m->dim.total_cnt = m->size = sizeof(music.note_map);
+      axis->total_cnt = 1;
+      m->dim.next = axis;
+    }
+  }
+  return CmpKernelGlobal(table, "music", cls, &music);
 }
 
 static bool CmpTaskSettingsData(CHashTable *table)
@@ -1742,6 +1875,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     DefinePtr,
     BlkDevPtr,
     DrvPtr,
+    SndPtr,
+    DatePtr,
+    FifoU8Ptr,
+    FifoI64Ptr,
     PlotFn,
   };
   CHashClass *types[]{
@@ -1781,6 +1918,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CHashDefineStr", table) + 1,
       FindType("CBlkDev", table) + 1,
       FindType("CDrv", table) + 1,
+      FindType("CSndData", table) + 1,
+      FindType("CDate", table) + 1,
+      FindType("CFifoU8", table) + 1,
+      FindType("CFifoI64", table) + 1,
   };
   auto *task = CurrentTask();
   enum CDefaultKind : uint8_t { Numeric, String, LastClass };
@@ -1907,6 +2048,20 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"QueIns", U0, FF_INTERNAL, {{"entry", QuePtr}, {"pred", QuePtr}}, nullptr, IC_QUE_INS},
       {"QueInsRev", U0, FF_INTERNAL, {{"entry", QuePtr}, {"succ", QuePtr}}, nullptr, IC_QUE_INS_REV},
       {"QueRem", U0, FF_INTERNAL, {{"entry", QuePtr}}, nullptr, IC_QUE_REM},
+      {"FifoU8New", FifoU8Ptr, FF_RET1, {{"size", I64}, {"mem_task", TaskPtr, true}}},
+      {"FifoU8Del", U0, FF_RET1, {{"f", FifoU8Ptr}}},
+      {"FifoU8Ins", Bool, FF_RET1, {{"f", FifoU8Ptr}, {"b", U8}}},
+      {"FifoU8Rem", Bool, FF_RET1, {{"f", FifoU8Ptr}, {"_b", U8Ptr}}},
+      {"FifoU8Peek", Bool, FF_RET1, {{"f", FifoU8Ptr}, {"_b", U8Ptr}}},
+      {"FifoU8Flush", U0, FF_RET1, {{"f", FifoU8Ptr}}},
+      {"FifoU8Cnt", I64, FF_RET1, {{"f", FifoU8Ptr}}},
+      {"FifoI64New", FifoI64Ptr, FF_RET1, {{"size", I64}, {"mem_task", TaskPtr, true}}},
+      {"FifoI64Del", U0, FF_RET1, {{"f", FifoI64Ptr}}},
+      {"FifoI64Ins", Bool, FF_RET1, {{"f", FifoI64Ptr}, {"q", I64}}},
+      {"FifoI64Rem", Bool, FF_RET1, {{"f", FifoI64Ptr}, {"_q", I64Ptr}}},
+      {"FifoI64Peek", Bool, FF_RET1, {{"f", FifoI64Ptr}, {"_q", I64Ptr}}},
+      {"FifoI64Flush", U0, FF_RET1, {{"f", FifoI64Ptr}}},
+      {"FifoI64Cnt", I64, FF_RET1, {{"f", FifoI64Ptr}}},
       {"StrCmp", I64, FF_RET1, {{"st1", U8Ptr}, {"st2", U8Ptr}}, "_STRCMP"},
       {"MemCmp", I64, FF_RET1, {{"ptr1", U8Ptr}, {"ptr2", U8Ptr}, {"cnt", I64}},
        "_MEMCMP"},
@@ -2086,6 +2241,15 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"PaletteSetStd", U0, FF_RET1, {}},
       {"ClampI64", I64, FF_RET1, {{"i", I64}, {"lo", I64}, {"hi", I64}}, "_CLAMP_I64"},
       {"SignI64", I64, FF_RET1, {{"i", I64}}},
+      {"Clamp", F64, FF_RET1, {{"d", F64}, {"lo", F64}, {"hi", F64}}},
+      {"Min", F64, FF_RET1, {{"n1", F64}, {"n2", F64}}},
+      {"Max", F64, FF_RET1, {{"n1", F64}, {"n2", F64}}},
+      {"Pow10I64", F64, FF_RET1, {{"i", I64}}},
+      {"FloorU64", U64, FF_RET1, {{"num", U64}, {"to", U64}}},
+      {"CeilU64", U64, FF_RET1, {{"num", U64}, {"to", U64}}},
+      {"RoundI64", I64, FF_RET1, {{"num", I64}, {"to", I64}}},
+      {"FloorI64", I64, FF_RET1, {{"num", I64}, {"to", I64}}},
+      {"CeilI64", I64, FF_RET1, {{"num", I64}, {"to", I64}}},
       {"RandI16", I16, FF_RET1, {}},
       {"RandU16", U16, FF_RET1, {}},
       {"RandI32", I32, FF_RET1, {}},
@@ -2163,6 +2327,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"doc", DocPtr, true}, {"elems", U8Ptr}, {"fmt", U8Ptr, true}}},
       {"Sprite", DocEntryPtr, FF_RET1, {{"elems", U8Ptr}, {"fmt", U8Ptr, true}}},
       {"GrPeek", I64, FF_RET1, {{"dc", DCPtr, true}, {"x", I64}, {"y", I64}}},
+      {"GrFloodFill", I64, FF_RET1, {{"dc", DCPtr, true}, {"x", I64}, {"y", I64},
+       {"not_color", Bool, true}, {"z", I64, true}, {"db", I32Ptr, true}}},
+      {"GrFloodFill3", I64, FF_RET1, {{"dc", DCPtr, true}, {"x", I64}, {"y", I64},
+       {"z1", I64}, {"not_color", Bool, true}}},
       {"GrLine", Bool, FF_RET1,
        {{"dc", DCPtr, true}, {"x1", I64}, {"y1", I64}, {"x2", I64},
         {"y2", I64}, {"step", I64, true, 1}, {"start", I64, true}}},
@@ -2407,6 +2575,20 @@ static bool CmpRuntimeHeaders(CHashTable *table)
         {"just_audio", Bool, true},
         {"print_fmt", U8Ptr, true, 0, "B:/Tmp/%X.GR"}}},
       {"SndRst", U0, FF_RET1, {}},
+      {"SndTaskEndCB", U0, FF_RET1, {}},
+      {"tM", F64, FF_RET1, {}},
+      {"Beat", F64, FF_RET1, {}},
+      {"MusicSetOctave", U8Ptr, FF_RET1, {{"st", U8Ptr}}},
+      {"MusicSetMeter", U8Ptr, FF_RET1, {{"st", U8Ptr}}},
+      {"MusicSetNoteLen", U8Ptr, FF_RET1, {{"st", U8Ptr}}},
+      {"Note2Ona", I8, FF_RET1, {{"note", I64}, {"octave", I64, true, 4}}},
+      {"Ona2Note", I8, FF_RET1, {{"ona", I8}}},
+      {"Ona2Octave", I8, FF_RET1, {{"ona", I8}}},
+      {"Play", U0, FF_RET1, {{"st", U8Ptr}, {"words", U8Ptr, true}}},
+      {"MusicSettingsRst", U0, FF_RET1, {}},
+      {"SndShift", U0, FF_RET1, {{"head", SndPtr}, {"dt", F64, true}}},
+      {"AUWrite", I64, FF_RET1,
+       {{"filename", U8Ptr}, {"head", SndPtr}, {"t0_now", DatePtr}, {"t0_tS", F64}}},
       {"Beep", U0, FF_RET1, {{"ona", I8, true, 62}, {"busy", Bool, true}}},
       {"Mute", Bool, FF_RET1, {{"val", Bool}}},
       {"IsMute", Bool, FF_RET1, {}},
@@ -2646,7 +2828,8 @@ static bool CmpFillHash(CHashTable *table)
       {"SPT_THICK","3"}, {"SPT_PLANAR_SYMMETRY","4"}, {"SPT_TRANSFORM_ON","5"},
       {"SPT_TRANSFORM_OFF","6"}, {"SPT_SHIFT","7"}, {"SPT_PT","8"},
       {"SPT_POLYPT","9"}, {"SPT_LINE","10"}, {"SPT_POLYLINE","11"},
-      {"SPT_RECT","12"}, {"SPT_BITMAP","23"}, {"SPT_ARROW","26"},
+      {"SPT_RECT","12"}, {"SPT_FLOOD_FILL","21"}, {"SPT_FLOOD_FILL_NOT","22"},
+      {"SPT_BITMAP","23"}, {"SPT_ARROW","26"},
       {"TEXT_COLS","80"}, {"TEXT_ROWS","60"}, {"TASKf_NONTIMER_RAND","14"},
       {"TASKf_BREAK_LOCKED","10"}, {"TASKf_PENDING_BREAK","11"}, {"TASKf_BREAK_TO_SHIFT_ESC","12"},
       {"ATTRF_BLINK","0x10000000"}, {"ATTRF_INVERT","0x20000000"},
@@ -2834,10 +3017,11 @@ static bool CmpFillHash(CHashTable *table)
     HashAdd(&entry->sym.hash,table);
   }
   auto *task = CmpKernelClass(table, "CTask", sizeof(CTask));
-  return task && CmpMemberData(table) && CmpRuntimeData(table) && CmpQueData(table) && CmpDateData(table) && CmpDirData(table) &&
+  return task && CmpMemberData(table) && CmpRuntimeData(table) && CmpQueData(table) && CmpFifoData(table) && CmpDateData(table) && CmpDirData(table) &&
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) && CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
+         CmpScrnCastData(table) && CmpMusicData(table) &&
          CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
          CmpCtrlData(table, task) && CmpClassReportData(table, *task) &&
          CmpRuntimeHeaders(table);

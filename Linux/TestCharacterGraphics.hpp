@@ -1,10 +1,92 @@
 #pragma once
 
+constexpr std::string_view flood_fill_output =
+    "fill region 48 A1B582AFB5972DE5\n"
+    "fill boundary 48 8421AE126C7CED25\n"
+    "fill dither 128 B16124DE9090DEA5\n"
+    "fill xor 6 BC485F29989517E5\n"
+    "fill depth 4 041C8166341270CB 18B09C2E6758C549\n"
+    "fill symmetry 6 101D6F5E76191AC5 1CA312FDBF5F72ED\n"
+    "fill transform 12 DA390E6207FC8CB5 796135481584641D\n"
+    "flood fill 1FF\n";
+
+constexpr std::string_view music_precision_output =
+    "MP initial 3FF0000000000000 4004000000000000 3FECCCCCCCCCCCCD\n"
+    "MP reset 3FF0000000000000 4004000000000000 3FECCCCCCCCCCCCD\n"
+    "MP literal 3FD0000000000001 4004000000000000 3FECCCCCCCCCCCCD\n"
+    "MP w 4010000000000000\n"
+    "MP h 4000000000000000\n"
+    "MP q 3FF0000000000000\n"
+    "MP e 3FE0000000000000\n"
+    "MP s 3FD0000000000001\n"
+    "MP wt 4005555555555555\n"
+    "MP ht 3FF5555555555555\n"
+    "MP qt 3FE5555555555555\n"
+    "MP et 3FD5555555555555\n"
+    "MP st 3FC5555555555557\n"
+    "MP w. 4018000000000000\n"
+    "MP h. 4008000000000000\n"
+    "MP q. 3FF8000000000000\n"
+    "MP e. 3FE8000000000000\n"
+    "MP s. 3FD8000000000002\n"
+    "MP wt. 4010000000000000\n"
+    "MP ht. 4000000000000000\n"
+    "MP qt. 3FF0000000000000\n"
+    "MP et. 3FE0000000000000\n"
+    "MP st. 3FD0000000000001\n"
+    "MP w.t 4010000000000000\n"
+    "MP h.t 4000000000000000\n"
+    "MP q.t 3FF0000000000000\n"
+    "MP e.t 3FE0000000000000\n"
+    "MP s.t 3FD0000000000001\n"
+    "MP qtt 3FDC71C71C71C71C\n"
+    "MP stt 3FBC71C71C71C71F\n"
+    "MP q.. 4002000000000000\n"
+    "MP s.. 3FE2000000000002\n"
+    "MP DONE\n";
+
+constexpr std::string_view math_helpers_output =
+    "round -21 -20 -30 -20\n"
+    "round -20 -20 -20 -20\n"
+    "round -19 -10 -20 -20\n"
+    "round -10 -10 -10 -10\n"
+    "round -9 0 -10 -10\n"
+    "round -1 0 -10 -10\n"
+    "round 0 0 0 0\n"
+    "round 1 0 0 10\n"
+    "round 9 0 0 10\n"
+    "round 10 10 10 10\n"
+    "round 11 10 10 20\n"
+    "round 19 10 10 20\n"
+    "round 20 20 20 20\n"
+    "math integer 903D605CF130C49A 65978B3FBB23DE21\n"
+    "math floating 023263F76EC7DF9A\n"
+    "math clamp C000000000000000 4008000000000000 3FF4000000000001\n"
+    "math reversed 4020000000000000 4008000000000000 4020000000000000\n"
+    "math zero 8000000000000000 8000000000000000 8000000000000000\n"
+    "math finite C016000000000000 4002000000000001 C008000000000000\n"
+    "math nan1 3FF0000000000000 7FF8000000001234 7FF8000000001234\n"
+    "math nan2 3FF0000000000000 4008000000000000 3FF0000000000000\n"
+    "math infinity 4008000000000000 C008000000000000 4008000000000000\n"
+    "math powers 0000000000000000 4058FFFFFFFFFFFE 7FF0000000000000\n"
+    "math indirect -10 20\n"
+    "Math helpers done\n";
+
+constexpr std::string_view sprite_flood_output =
+    "sprite flood stream 95BB364C84E33F56\n"
+    "sprite flood single 026661834AEEFF05 66901F20C6B79EE1\n"
+    "sprite flood F\n";
+
 // Uses the same QMP input and physical-memory readers as the boot tests.
 static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
                                    const std::string &boot, bool reference,
                                    bool tic = false, bool breaks = false,
-                                   bool screen_capture = false, bool spline = false)
+                                   bool screen_capture = false, bool spline = false,
+                                   bool flood_fill = false, bool blot = false,
+                                   bool math = false,
+                                   bool sprite_flood = false,
+                                   bool music_demo = false,
+                                   bool music_precision = false)
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -135,6 +217,118 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
   };
   wait_text("T:/Home>");
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
+  if (music_demo) {
+    vm.ResetDeadline(180s);
+    cmd("I64 mu1=&scrncast.snd_head,mu2=&scrncast.ona;");
+    cmd("I64 mu3=&music.play_note_num;");
+    cmd(R"("Sound MU %X %X %X\n",mu1,mu2,mu3;)");
+    auto [head, ona, note_num] = addresses("MU ");
+    cmd("ScrnCast(1,1);DocClear(,1);");
+    cmd(R"(ExeFile("::/Demo/Snd/OhGreat.HC");)");
+    wait([&](const Cells &cells) {
+      return visible(cells).find("is a god of love.") != std::string::npos;
+    }, "OhGreat did not play its first line", 600);
+    snapshot("music-playing");
+    // The original checks ScanChar between complete verses, not each note.
+    key("x");
+    wait([&](const Cells &cells) {
+      auto screen = visible(cells);
+      return std::regex_search(screen, std::regex(":/Home> *\\n")) &&
+             screen.find("world isn't always nice.") != std::string::npos;
+    }, "OhGreat did not finish the song after a real key", 2400);
+    Check(ReadPhysical<1>(vm, ona, 'b')[0] == 0,
+          "OhGreat left the speaker playing");
+    Check(ReadPhysical<1>(vm, note_num)[0] == 4,
+          "OhGreat did not finish its last phrase");
+    auto node = ReadPhysical<1>(vm, head)[0];
+    auto previous = head;
+    auto last_time = ReadPhysical<1>(vm, head + 16)[0];
+    Bytes notes;
+    std::set<uint64_t> visited;
+    while (node != head) {
+      Check(node && node < 0x20000000 && visited.insert(node).second &&
+                notes.size() < 512, "Invalid recorded song queue");
+      auto entry = ReadPhysical<3>(vm, node);
+      Check(entry[1] == previous && entry[2] >= last_time,
+            "Broken song queue or timestamps");
+      notes.push_back(ReadPhysical<1>(vm, node + 24, 'b')[0]);
+      previous = node;
+      last_time = entry[2];
+      node = entry[0];
+    }
+    Check(ReadPhysical<1>(vm, head + 8)[0] == previous && !notes.empty(),
+          "OhGreat did not record a complete sound queue");
+    // One complete verse captured from the pinned TempleOS guest.
+    constexpr uint8_t tones[]{
+      79, 77, 75, 74, 75, 77, 79, 70, 68, 67, 68, 70,
+      79, 77, 75, 74, 75, 77, 79, 70, 68, 67, 68, 70,
+      74, 75, 77, 75, 77, 75, 74, 70, 68, 67, 68, 70,
+      79, 77, 75, 74, 75, 77, 79, 70, 68, 67, 68, 70,
+      79, 77, 75, 74, 75, 77, 79, 70, 68, 67, 68, 70,
+      79, 77, 75, 74, 75, 77, 79, 70, 68, 67, 68, 70,
+      74, 75, 77, 75, 77, 75, 74, 70, 68, 67, 68, 70,
+    };
+    Bytes expected{0, 0};
+    for (auto tone : tones) {
+      expected.push_back(tone);
+      expected.push_back(0);
+    }
+    expected.push_back(0);
+    Check(notes == expected, "OhGreat note events differ from the reference");
+    std::cout << "OhGreat events " << notes.size() << ':';
+    for (auto note : notes) std::cout << ' ' << unsigned(note);
+    std::cout << '\n';
+    std::ofstream out(dir / "music-notes.bin", std::ios::binary);
+    out.write(reinterpret_cast<const char *>(notes.data()), notes.size());
+    out.close();
+    snapshot("music-exit");
+    cmd("ScrnCast(0,1);");
+    cmd(R"("Done Music exit %d\n",7*9;)");
+    wait_text("Music exit 63");
+    return;
+  }
+  if (blot) {
+    cmd(R"("BL %X %X %X\n",gr.dc->body,&Fs->pix_left,&Fs->pix_top;)");
+    auto [pixels, left, top] = addresses("BL ");
+    cmd("DocClear(,1);DCFill;MsSet(620,460);");
+    cmd(R"(ExeFile("::/Demo/Graphics/Blot.HC");)");
+    wait_text("PRESS A KEY");
+    auto bitmap = [&](std::string name) {
+      auto file = dir / (name + ".raw");
+      vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+                 std::to_string(pixels) + R"(,"size":307200,"filename":")" +
+                 file.string() + R"("}})");
+      auto bytes = FileRead(file);
+      Check(bytes.size() == 640 * 480, "Incomplete blot drawing");
+      return bytes;
+    };
+    auto drawn = bitmap("blot-drawn");
+    std::array<uint64_t, 256> colors{};
+    uint64_t hash = 0xcbf29ce484222325ULL;
+    for (auto pixel : drawn) {
+      colors[pixel]++;
+      hash = (hash ^ pixel) * 0x100000001b3ULL;
+    }
+    std::cout << "Blot " << std::hex << hash << std::dec << " origin "
+              << ReadPhysical<1>(vm, left)[0] << ' ' << ReadPhysical<1>(vm, top)[0]
+              << " colors " << colors[4] << ' ' << colors[1] << ' ' << colors[14]
+              << ' ' << colors[255] << '\n';
+    Check(colors[4] && colors[1] && colors[14], "Blot did not draw all three colors");
+    Check(hash == 0xed339cb81a835d9dULL && colors[4] == 17188 &&
+              colors[1] == 3556 && colors[14] == 1600 && colors[255] == 284856,
+          "Blot drawing differs from the pinned reference");
+    snapshot("blot-drawn");
+    key("spc");
+    wait([&](const Cells &) {
+      auto data = bitmap("blot-cleared");
+      return std::all_of(data.begin(), data.end(), [](uint8_t c) { return c == 255; });
+    }, "Blot did not clear graphics on exit");
+    wait_text("T:/Home>");
+    cmd("3*21;");
+    wait_text("=63");
+    snapshot("blot-exit");
+    return;
+  }
   if (screen_capture) {
     cmd("CBlkDev *scbd=BlkDevNextFreeSlot('B',BDT_RAM);");
     cmd("scbd->max_blk=4095;BlkDevAdd(scbd,,0,1);HomeSet(\"B:/\");");
@@ -237,6 +431,24 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
     Check(FileRead(uploaded) == expected, "Reference probe transfer changed source bytes");
     cmd("ExePutS(cgprobe);Free(cgprobe);");
   };
+  if (math || music_precision) {
+    upload(fs::absolute(music_precision ? "Linux/Fixtures/MusicPrecision.HC"
+                                       : "Linux/Fixtures/MathHelpersProbe.HC"));
+    const auto cells = wait_text(music_precision ? "MP DONE" : "Math helpers done");
+    const auto screen = visible(cells);
+    const auto expected = music_precision ? music_precision_output : math_helpers_output;
+    auto lines = expected;
+    while (!lines.empty()) {
+      const auto end = lines.find('\n');
+      Check(screen.find(lines.substr(0, end)) != std::string::npos,
+            music_precision ? "Music precision differs from the pinned reference"
+                            : "Math helper output differs from the pinned reference");
+      lines.remove_prefix(end + 1);
+    }
+    snapshot(music_precision ? "music-precision" : "math-helpers");
+    std::cout << expected;
+    return;
+  }
   if (screen_capture) {
     if (reference) {
       upload(fs::absolute("Linux/Fixtures/CaptureProbe.HC"));
@@ -244,6 +456,22 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
       snapshot("capture-probe");
       std::cout << "Capture probe 7F: exact success and missing-file returns\n";
     }
+    return;
+  }
+  if (flood_fill || sprite_flood) {
+    upload(fs::absolute(sprite_flood ? "Linux/Fixtures/SpriteFloodProbe.HC"
+                                    : "Linux/Fixtures/FloodFillProbe.HC"));
+    auto cells = wait_text(sprite_flood ? "sprite flood F" : "flood fill 1FF");
+    const auto screen = visible(cells);
+    auto lines = sprite_flood ? sprite_flood_output : flood_fill_output;
+    while (!lines.empty()) {
+      auto end = lines.find('\n');
+      Check(screen.find(lines.substr(0, end)) != std::string::npos,
+            "Flood-fill reference output mismatch");
+      lines.remove_prefix(end + 1);
+    }
+    snapshot(sprite_flood ? "sprite-flood" : "flood-fill");
+    std::cout << (sprite_flood ? sprite_flood_output : flood_fill_output);
     return;
   }
   if (spline) {

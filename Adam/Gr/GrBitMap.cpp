@@ -452,6 +452,103 @@ extern "C" int64_t GrRectCpp(CDC *dc, int64_t x, int64_t y, int64_t w,
   return res;
 }
 
+// Rays use window-local coordinates and recheck coverage at character cells.
+static bool GrRayStart(CDC *dc, int64_t &x, int64_t &y, int64_t &z)
+{
+  int64_t x3 = x, y3 = y;
+  if (dc->flags & DCF_SCRN_BITMAP) {
+    auto *task = dc->win_task;
+    x += uint64_t(task->scroll_x);
+    y += uint64_t(task->scroll_y);
+    z += uint64_t(task->scroll_z);
+    x3 = x;
+    y3 = y;
+    if (x3 < 0 || y3 < 0)
+      return false;
+    x3 += uint64_t(task->pix_left);
+    y3 += uint64_t(task->pix_top);
+    if (x3 < 0 || x3 > task->pix_right || y3 < 0 ||
+        y3 > task->pix_bottom || !GrPixelVisible(dc, x3, y3, false))
+      return false;
+  }
+  y = y3;
+  return dc->body && x3 >= 0 && x3 < dc->width && y3 >= 0 && y3 < dc->height;
+}
+
+static bool GrRayX(CDC *dc, int64_t x, int64_t y, bool boundary, int64_t &x3)
+{
+  x3 = x;
+  if (dc->flags & DCF_SCRN_BITMAP) {
+    auto *task = dc->win_task;
+    if (boundary && x < 0)
+      return false;
+    x3 += uint64_t(task->pix_left);
+    if (boundary && (x3 < 0 || x3 > task->pix_right || x3 >= dc->width ||
+                     !GrPixelVisible(dc, x3, y, false)))
+      return false;
+  } else if (boundary && (x3 < 0 || x3 >= dc->width))
+    return false;
+  return x3 >= 0 && x3 < dc->width_internal;
+}
+
+int64_t GrRayLenMinus(CDC *dc, int64_t x, int64_t y)
+{
+  int64_t z = 0, res = 0, x3;
+  if (!GrRayStart(dc, x, y, z))
+    return 0;
+  const auto *dst = dc->body + y * dc->width_internal;
+  const bool not_color = dc->flags & DCF_FILL_NOT_COLOR;
+  while (GrRayX(dc, x, y, (x & 7) == 7, x3) &&
+         ((dst[x3] != dc->color2.c0.color) == not_color)) {
+    res++;
+    x--;
+  }
+  return res;
+}
+
+int64_t GrRayLen(CDC *dc, int64_t *x1, int64_t y, int64_t z, int32_t *db)
+{
+  int64_t x = *x1, res = 0, x3;
+  if (!GrRayStart(dc, x, y, z))
+    return 0;
+  const int64_t x2 = x, d = y * dc->width_internal;
+  auto *dst = dc->body + d;
+  if (db)
+    db += d;
+  const auto color = dc->color;
+  const bool not_color = dc->flags & DCF_FILL_NOT_COLOR;
+  auto plot = [&](int64_t px) {
+    // TempleOS writes depth before checking the boundary color.
+    if (db) {
+      if (z < 0 || z > db[px])
+        return false;
+      db[px] = z;
+    }
+    if ((dst[px] != dc->color2.c0.color) != not_color)
+      return false;
+    if (dc->flags & DCF_LOCATE_NEAREST)
+      GrNearest(dc, px, y);
+    if (dc->flags & DCF_RECORD_EXTENTS)
+      GrExtents(dc, px, y, px, y);
+    bool alternate = color.c1.rop & ROPBF_PROBABILITY_DITHER
+                         ? RandU16Cpp() < dc->dither_probability_u16
+                         : (color.c1.rop & ROPBF_DITHER) && ((px ^ y) & 1);
+    GrWritePixel(*dc, dst[px],
+                 {alternate ? color.c1.color : color.c0.color, color.c0.rop});
+    res++;
+    return true;
+  };
+  while (GrRayX(dc, x, y, !(x & 7), x3) && plot(x3))
+    x++;
+  *x1 = x - 1;
+  if (dc->flags & DCF_SCRN_BITMAP)
+    *x1 -= uint64_t(dc->win_task->scroll_x);
+  x = x2 - 1;
+  while (GrRayX(dc, x, y, (x & 7) == 7, x3) && plot(x3))
+    x--;
+  return res;
+}
+
 static int64_t GrSpan(CDC &dc, int64_t first, int64_t last, int64_t across,
                       int64_t z1, int64_t z2, bool vertical)
 {

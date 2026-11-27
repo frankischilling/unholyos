@@ -1349,7 +1349,10 @@ struct [[gnu::packed]] CKbdStateGlbls
 };
 
 static_assert(sizeof(CFifoU8) == 32 && sizeof(CFifoI64) == 32 &&
-              offsetof(CFifoU8, in_ptr) == 16);
+              offsetof(CFifoU8, buf) == 0 && offsetof(CFifoU8, mask) == 8 &&
+              offsetof(CFifoU8, in_ptr) == 16 && offsetof(CFifoU8, out_ptr) == 24 &&
+              offsetof(CFifoI64, buf) == 0 && offsetof(CFifoI64, mask) == 8 &&
+              offsetof(CFifoI64, in_ptr) == 16 && offsetof(CFifoI64, out_ptr) == 24);
 static_assert(sizeof(CKbdStateGlbls) == 130 &&
               offsetof(CKbdStateGlbls, fifo) == 40 &&
               offsetof(CKbdStateGlbls, down_bitmap) == 64 &&
