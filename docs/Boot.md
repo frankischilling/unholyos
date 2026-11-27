@@ -2204,6 +2204,135 @@ two loaders. The compiler and Adam remain linked into the boot image;
 the native HolyC `Load` API, separate compiler initialization, and the
 guest C++20 build toolchain remain work for later increments.
 
+## Native compiler bindings
+
+`make -j4 test-native-imports` builds `build/native-import-test.iso`
+and loads a freestanding C++/NASM module through the existing loader.
+`Kernel/KLoad.cpp` now publishes 44 explicitly named System V entries
+under `__unholyos_sysv.`. Public HolyC names retain their stack-call
+adapters. The focused fixture exercises two private entries, `PutS`
+and `StrCmpCpp`, and the public HolyC `PutS` in the same module.
+
+Local GCC 13.3.0 and Clang 20.1.2 builds both passed, using NASM 2.16.01,
+GNU ld 2.42, and the QEMU 8.2.2 configuration described above. The
+harness verifies the module bytes packaged on the ISO before boot.
+Both native runs produced:
+
+```text
+NI START
+NI native direct
+NI native indirect
+NI HolyC public
+NI result 000000000000001F
+NI bindings 0000000000000007
+NI DONE
+```
+
+The `1F` result checks zero-initialized storage, direct and indirect
+comparisons including unsigned bytes, distinct native and HolyC entry
+addresses, and function-pointer bindings. `7` checks those recorded
+addresses against the native C++ implementations and confirms that
+the public `PutS` binding is unchanged.
+
+| Local fixture compiler | BIN bytes | SHA-256 |
+| --- | ---: | --- |
+| GCC 13.3.0 | 832 | `1135b0c2719e652e355e355422c6c607999e9a221e221169049ced18ecdaec6c` |
+| Clang 20.1.2 | 848 | `0625d9669fa901fd3ac20f1e6449457b7b2681a178146f0c17f2b34c23d8846c` |
+
+Both binaries also passed in fresh pinned TempleOS VMs, with the same
+trace. `NativeImportReference.asm` supplies a 192-byte test bridge
+from System V calls to TempleOS's HolyC `PutS` and `_STRCMP`; its
+SHA-256 is
+`aa510862dca0179bfa4166f4b3c1d79d3b69160bd7874af009961de1690d8043`.
+The 1,401-byte `NativeImportLoadProbe.HC` first requires the private
+names to be absent, then loads the bridge and fixture. Its SHA-256 is
+`b1bc3e562efb1ec9b1aaf65fbbdbed02dc4f4e9179728c396b9de5c1e212c2ad`.
+The harness compares both uploaded modules byte for byte after RAM-file
+readback and verifies the wrapper plus its trailing NUL before execution.
+This bridge tests the explicit ABI boundary; it does not supply a native
+C++ implementation in TempleOS.
+
+```sh
+build/Linux/TestBoot --native-import-reference qemu-system-x86_64 \
+  ../reference-media/TOS_Distro.ISO build/Linux/Fixtures/NativeImportProbe.BIN \
+  build/Linux/Fixtures/NativeImportReference.BIN build/native-import-gcc-reference
+build/clang/Linux/TestBoot --native-import-reference qemu-system-x86_64 \
+  ../reference-media/TOS_Distro.ISO build/clang/Linux/Fixtures/NativeImportProbe.BIN \
+  build/clang/Linux/Fixtures/NativeImportReference.BIN build/native-import-clang-reference
+```
+
+The existing host-module target also passed with both compilers after
+the harness changes, including its two-load checks and the producer's
+30 rejection cases. The nine compiler adapters moved to matching
+`Compiler/*.asm` files without changing their instruction bytes or
+relocation records. The declaration audit covers all 44 private
+function imports and the compiler's 30 data imports; the focused
+runtime fixture directly exercises only the two private functions
+named above. The compiler still links into the kernel at this stage.
+
+## Failed assertion warnings
+
+`Compiler/Lex.cpp` previously called the four-argument `PrintWarnCpp`
+through a three-argument declaration. Its shared declaration now
+matches the definition, and the lexer supplies a null caller frame.
+The existing caller formatter handles that null frame without reading
+an unspecified address.
+
+`Linux/Fixtures/AssertWarningProbe.HC` contains one failed assertion,
+one successful assertion, and a function call that returns 42.
+GCC and Clang startup images both passed source execution, AOT
+compilation with `Errs:0 Warns:1`, and execution of the resulting
+`AssertWarningProbe.BIN.Z`. The source and AOT warning is:
+
+```text
+. . . . WARNING: Assert Failed T:/AssertWarningProbe.HC,4
+```
+
+Both source execution and the loaded module print:
+
+```text
+AW result 42
+AW DONE
+```
+
+The loaded module emits no assertion warning. The native diagnostic
+reports line 4 after the lexer consumes the consecutive directives.
+This test verifies the warning call ABI and continued execution;
+reference diagnostic formatting remains separate work.
+
+The focused commands are:
+
+```sh
+make -j4 test-native-imports build/unholyos-startup-test.iso
+build/Linux/TestBoot --assert-warning qemu-system-x86_64 \
+  build/unholyos-startup-test.iso build/assert-warning-gcc
+make -j4 BUILD=build/clang CXX=clang++ HOSTCXX=clang++ \
+  test-native-imports build/clang/unholyos-startup-test.iso
+build/clang/Linux/TestBoot --assert-warning qemu-system-x86_64 \
+  build/clang/unholyos-startup-test.iso build/assert-warning-clang
+```
+
+The focused warning command stops after the loaded module's completion
+record. The full startup gate drives the later keyboard and other
+interactive probes and applies the same warning assertions. The
+138-byte HolyC fixture has SHA-256
+`6f928c397b60f41494789a778afa77b0c0913a885040f5ebf9ec423475caaf13`.
+
+A fresh pinned TempleOS VM also passed source execution of this exact
+fixture after a byte-for-byte upload plus trailing-NUL check. Its
+diagnostic contains one `WARNING:` and `Assert Failed`, followed by
+the same `AW result 42` and `AW DONE` body and a return to the prompt.
+The reference prints its caller chain and lexer position, including
+token `I64` at line 4 of the uploaded source. The capture retains the
+full visible diagnostic, terminal cells, and screenshot. This reference
+run covers source continuation only; it does not establish reference
+AOT warning counts or diagnostic-format parity.
+
+```sh
+build/Linux/TestBoot --assert-warning-reference qemu-system-x86_64 \
+  ../reference-media/TOS_Distro.ISO build/assert-warning-reference
+```
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

@@ -2,8 +2,6 @@
 #include "CompilerA.hpp"
 
 extern "C" uint64_t I64MulF64Bits(int64_t value, uint64_t scale);
-extern "C" void PrintWarnCpp(const char *fmt, int64_t argc,
-                             const uint64_t *argv);
 
 constexpr size_t STR_LEN = 144;
 constexpr int64_t LEX_RESCAN = -2;
@@ -1105,7 +1103,7 @@ int64_t Lex(CCmpCtrl &cc)
         const auto *file = cc.lex_include_stk;
         uint64_t args[]{reinterpret_cast<uintptr_t>(file->full_name),
                         static_cast<uint64_t>(file->line_num)};
-        PrintWarnCpp("Assert Failed %s,%d\n", 2, args);
+        PrintWarnCpp("Assert Failed %s,%d\n", 2, args, nullptr);
       }
       return cc.token <= TK_EOF ? cc.token : LexEnd(cc, cc.token);
     }

@@ -15,7 +15,7 @@ Preserve the spelling and case of the reference directories and basenames. Use `
 | `Kernel/Mem/PageTables.HC` | `Kernel/Mem/PageTables.asm`, `PageTables.cpp` | Early page tables and memory mapping |
 | `Kernel/KMain.HC` | `Kernel/KMain.cpp` | Kernel initialization and startup |
 | `Kernel/BlkDev/*.HC` | Corresponding `.cpp` files under `Kernel/BlkDev/` | Block devices, paths, files, and filesystems as implemented |
-| `Compiler/*.HC` | Corresponding `.cpp` files under `Compiler/` | HolyC scanning, parsing, code generation, and execution as implemented |
+| `Compiler/*.HC` | Corresponding `.cpp` and `.asm` files under `Compiler/` | HolyC scanning, parsing, code generation, execution, and explicit C++ ABI adapters as implemented |
 | `Adam/DolDoc/*.HC` | Corresponding `.cpp` files under `Adam/DolDoc/` | Native document records and operations as implemented |
 | `Adam/ADefine.HC` | `Adam/ADefine.cpp` | Startup document name definition |
 | `Adam/Opt/Boot/BootDVD.HC` | `Adam/Opt/Boot/BootDVD.asm` | DVD boot loader |
@@ -59,6 +59,46 @@ declared types at call and data access sites. The AOT writer uses
 reads the function address from its declaration, and the later
 definition updates that slot. `Compiler/CExcept.cpp` and its assembly
 adapter implement the reference's `UndefinedExtern` path.
+
+## Compiler ABI ownership
+
+The public adapters for `Cmp`, `ExePutS`, `ExeFile`, and
+`StreamExePrint` are in `Compiler/CMain.asm`. `StreamPrint` and
+`StreamDir` use `Compiler/CMisc.asm`; `MemberMetaData`,
+`MemberMetaFind`, and `MemberFind` use `Compiler/LexLib.asm`.
+These nine adapters are C++ ABI additions beside the matching
+translations of Terry A. Davis's reference routines. They retain
+their existing instruction sequences, HolyC names, arguments,
+saved registers, and stack cleanup.
+
+The shared `HC_FRAME_ENTER`, `HC_FRAME_CALL`, `HOLYC_CPP`, and
+`HOLYC_PRINT` macros are in `Kernel/KernelA.inc`.
+`Kernel/KUtils.asm` includes them for its remaining adapters;
+it no longer owns the compiler adapters. The definitions emit
+instructions only where an adapter invokes them.
+
+`Kernel/KLoad.cpp` publishes 44 explicit native function addresses
+under `__unholyos_sysv.`. Their suffixes follow the source entry
+names, such as `HashFind` and `StrCmpCpp`; a binding manifest still
+names the exact ELF symbol. These System V entries coexist with the
+public HolyC adapters. The loader also exposes `winmgr` and
+`sys_task_being_scrn_updated` as data. The existing
+`sys_cur_submenu_entry` export remains available, and future compiler
+bindings must map `sys_var_init_flag` and `sys_var_init_val` to
+`SYS_VAR_INIT_FLAG` and `SYS_VAR_INIT_VAL`.
+
+The reference has calls in both directions across this module boundary.
+`ExeCmdLine` remains in `Kernel/KTask.cpp`, matching
+`Kernel/KTask.HC`, while it calls the compiler's `LexStmt2Bin`.
+`Compiler/CMain.HC` calls the kernel's `ExeCmdLine`.
+`HashDel` in `Kernel/KHashB.HC` explicitly imports
+`ClassMemberLstDel` from the compiler. A separate native compiler
+must bind those calls without moving their responsibilities.
+The compiler remains in the host-linked image; its module entry,
+reverse imports, and initialization order are still pending.
+[Host modules](HostModules.md) describes the binding rules and
+native-import fixture. Its pinned-guest bridge is test
+scaffolding, not native C++ support in TempleOS.
 
 ## HolyC assembler
 
@@ -1142,9 +1182,12 @@ code within this limited boot image.
 module format. It converts explicitly bound ELF64 objects and retains
 the patch semantics from `Compiler/CMain.HC` and `Kernel/KLoad.HC`.
 Its freestanding C++/NASM fixture tests the module boundary before
-runtime components move across it. The tool does not change their
-current placement or supply a guest C++ compiler. [Host modules](HostModules.md)
-records the ABI choices, supported relocations, and rejected inputs.
+runtime components move across it. The private native exports and
+compiler adapter placement prepare that boundary; the compiler
+and Adam still link into the kernel. A separate compiler load and
+a guest C++ compiler remain pending. [Host modules](HostModules.md)
+records the ABI choices, supported relocations, rejected inputs,
+and reproduced native-import coverage.
 
 The [development milestones](Development.md) define completion in the required order: full rewrite, full compatibility, bootstrap, then self-hosting. Host GCC or Clang and NASM support the current development builds.
 

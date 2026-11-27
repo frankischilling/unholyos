@@ -1,0 +1,5 @@
+entry NativeImportReferenceMain
+export NativeImportReferencePutS __unholyos_sysv.PutS
+export NativeImportReferenceStrCmp __unholyos_sysv.StrCmpCpp
+import holyc PutS PutS
+import holyc _STRCMP _STRCMP

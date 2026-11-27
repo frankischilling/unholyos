@@ -143,3 +143,7 @@ Linux/Fixtures/FloatScanProbe.HC text eol=lf
 Linux/Fixtures/StringCompareProbe.HC text eol=lf
 Linux/Fixtures/HostModuleProbe.bindings text eol=lf
 Linux/Fixtures/HostModuleLoadProbe.HC text eol=lf
+Linux/Fixtures/NativeImportProbe.bindings text eol=lf
+Linux/Fixtures/NativeImportReference.bindings text eol=lf
+Linux/Fixtures/NativeImportLoadProbe.HC text eol=lf
+Linux/Fixtures/AssertWarningProbe.HC text eol=lf

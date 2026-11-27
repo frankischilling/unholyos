@@ -106,3 +106,82 @@
 %define CTask_WIN_BOTTOM 0x60
 %define CTask_SCROLL_X 0x100
 %define CTask_SCROLL_Y 0x108
+
+; C++ ABI additions: the HolyC reference calls its implementations directly.
+; Adapt HolyC stack arguments and callee cleanup to C++.
+%macro HC_FRAME_ENTER 0
+	PUSH	RBP
+	MOV	RBP,RSP
+	PUSH	RSI
+	PUSH	RDI
+	PUSH	R10
+	PUSH	R11
+%endmacro
+
+%macro HC_FRAME_CALL 1-2 0
+	AND	RSP,-16
+%if %2>6
+	SUB	RSP,((%2-6)*8+15)&~15
+%assign %%arg 6
+%rep %2-6
+	MOV	RAX,[RBP+16+%%arg*8]
+	MOV	[RSP+(%%arg-6)*8],RAX
+%assign %%arg %%arg+1
+%endrep
+%endif
+	CALL	%1
+	LEA	RSP,[RBP-32]
+	POP	R11
+	POP	R10
+	POP	RDI
+	POP	RSI
+	POP	RBP
+%endmacro
+
+; The optional fourth argument widens a SysV U8 or Bool return for HolyC.
+%macro HOLYC_CPP 3-4 0
+%1:
+	HC_FRAME_ENTER
+%if %3>=1
+	MOV	RDI,[RBP+16]
+%endif
+%if %3>=2
+	MOV	RSI,[RBP+24]
+%endif
+%if %3>=3
+	MOV	RDX,[RBP+32]
+%endif
+%if %3>=4
+	MOV	RCX,[RBP+40]
+%endif
+%if %3>=5
+	MOV	R8,[RBP+48]
+%endif
+%if %3>=6
+	MOV	R9,[RBP+56]
+%endif
+	HC_FRAME_CALL %2,%3
+%if %4
+	MOVZX	EAX,AL
+%endif
+	RET	%3*8
+%endmacro
+
+; The caller pops fixed arguments, argc, and the inline argv for variadics.
+%macro HOLYC_PRINT 3-4 0
+%1:
+	HC_FRAME_ENTER
+	MOV	RDI,[RBP+16]
+	MOV	RSI,[RBP+24]
+%if %3=2
+	MOV	RDX,[RBP+32]
+	LEA	RCX,[RBP+40]
+%else
+	LEA	RDX,[RBP+32]
+%if %4
+	MOV	RCX,RBP
+%endif
+%endif
+	HC_FRAME_CALL %2
+	RET
+%endmacro

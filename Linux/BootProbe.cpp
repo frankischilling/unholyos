@@ -1525,6 +1525,46 @@ static void BootHostModuleReport(const CDrv &dv, CTask &task)
                           5, args));
 }
 
+static void BootNativeImportReport(const CDrv &dv, CTask &task)
+{
+  CRedSeaDirEntry file;
+  if (!RedSeaFileFind(dv, dv.root_clus, "NativeImportProbe.BIN", false, file))
+    return;
+  auto address = [&](const char *name) {
+    auto *entry = reinterpret_cast<CHashExport *>(
+        HashFind(name, task.hash_table, HTT_EXPORT_SYS_SYM));
+    return entry ? entry->val : 0;
+  };
+  const auto public_put = address("PutS");
+  const auto native_put = address("__unholyos_sysv.PutS");
+  const auto native_cmp = address("__unholyos_sysv.StrCmpCpp");
+  uint64_t value = 0, checks = 0;
+  SerialPutS("NI START\r\n");
+  if (Load(dv, "/NativeImportProbe.BIN", task, LDF_SILENT)) {
+    const auto result = address("NativeImportResult");
+    const auto pointers = address("NativeImportBindings");
+    if (result && pointers) {
+      uint64_t bindings[3];
+      MemCpy(&value, reinterpret_cast<const void *>(result), sizeof(value));
+      MemCpy(bindings, reinterpret_cast<const void *>(pointers),
+             sizeof(bindings));
+      if (native_put == reinterpret_cast<uintptr_t>(PutS) &&
+          bindings[0] == native_put && native_put != public_put)
+        checks |= 1;
+      if (native_cmp == reinterpret_cast<uintptr_t>(StrCmpCpp) &&
+          bindings[1] == native_cmp)
+        checks |= 2;
+      if (public_put && bindings[2] == public_put &&
+          address("PutS") == public_put)
+        checks |= 4;
+    }
+  }
+  uint64_t args[]{value, checks};
+  char text[96];
+  SerialPutS(StrPrintJoin(
+      text, "NI result %016X\r\nNI bindings %016X\r\nNI DONE\r\n", 2, args));
+}
+
 static void BootATAByteReport(CDrv &dv)
 {
   if (dv.fs_type!=FSt_FAT32 || dv.drv_offset!=2048 || dv.size!=132130)
@@ -1634,6 +1674,7 @@ void BootProbe()
     BootOpcodeResourceReport(*adam_task->cur_dv);
     BootDVDReport(*adam_task->cur_dv);
     BootHostModuleReport(*adam_task->cur_dv, *adam_task);
+    BootNativeImportReport(*adam_task->cur_dv, *adam_task);
     if (MountedDrive('C')) {
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32ReadProbe.HC");
       if (BootFileProgramReport(*adam_task->cur_dv,"/AtaWriteProbe.HC").okay)
@@ -1686,6 +1727,10 @@ void BootProbe()
                     "UnholyOS: compiler runtime probe ");
     BootProbeReport(*adam_task->cur_dv, *adam_task, "/FileWriteProbe.BIN",
                     "FileWriteProbeResult", "UnholyOS: write probe ");
+    BootVariadicReport(
+        *adam_task->cur_dv, *adam_task, "/AssertWarningProbe.HC",
+        "/AssertWarningProbe.BIN.Z",
+        "Cmp(\"::/AssertWarningProbe.HC\",,\"B:/AssertWarningProbe.BIN.Z\");");
     BootFileProgramReport(*adam_task->cur_dv, "/MemberMetaProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/MemSetProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ClassMeta.HC");

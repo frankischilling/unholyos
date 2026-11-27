@@ -1,6 +1,8 @@
-#include "KernelB.hpp"
+#include "../Adam/DolDoc/DolDoc.hpp"
 #include "../Adam/Gr/GrGlbls.hpp"
 #include "../Adam/Menu.hpp"
+#include "../Compiler/CompilerA.hpp"
+#include "KernelB.hpp"
 
 struct CLoadImport
 {
@@ -31,6 +33,14 @@ struct CLoadedModule
 
 extern "C" {
 void CallModuleMain(const uint8_t *entry);
+char *DirFileCpp(const char *dirname, const char *name, const char *extension);
+CDocEntryBase *DocPutLineCpp(CDoc *doc, CDocEntryBase *entry);
+char *ExtChgCpp(const char *name, const char *ext);
+uint64_t F64PowerBits(uint64_t base, uint64_t exponent);
+uint64_t I64MulF64Bits(int64_t value, uint64_t scale);
+void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
+void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
+                 const uintptr_t *frame);
 void _BEQU(), _CALL(), _CLAMP_I64();
 void _MEMCPY(), _MEMSET(), _MEMSET_U16(), _MEMSET_U32(), _MEMSET_I64(), _MEMCMP();
 void _MALLOC(), _FREE(), _MHEAP_CTRL(), _MSIZE(), _MSIZE2();
@@ -577,6 +587,9 @@ bool LoadKernel(CTask &task)
       {"gr", reinterpret_cast<uintptr_t>(&gr)},
       {"sys_winmgr_task", reinterpret_cast<uintptr_t>(&sys_winmgr_task)},
       {"sys_focus_task", reinterpret_cast<uintptr_t>(&sys_focus_task)},
+      {"sys_task_being_scrn_updated",
+       reinterpret_cast<uintptr_t>(&sys_task_being_scrn_updated)},
+      {"winmgr", reinterpret_cast<uintptr_t>(&winmgr)},
       {"scrncast", reinterpret_cast<uintptr_t>(&scrncast)},
       {"music", reinterpret_cast<uintptr_t>(&music)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
@@ -1096,6 +1109,66 @@ bool LoadKernel(CTask &task)
       {"char_bmp_safe_dollar",
        reinterpret_cast<uintptr_t>(char_bmp_safe_dollar)},
       {"char_bmp_non_eol", reinterpret_cast<uintptr_t>(char_bmp_non_eol)},
+      // System V entries used by host-built C++ modules.
+      {"__unholyos_sysv.CAlloc", reinterpret_cast<uintptr_t>(CAlloc)},
+      {"__unholyos_sysv.CmpCall", reinterpret_cast<uintptr_t>(CmpCall)},
+      {"__unholyos_sysv.DirCurCpp", reinterpret_cast<uintptr_t>(DirCurCpp)},
+      {"__unholyos_sysv.DirFileCpp", reinterpret_cast<uintptr_t>(DirFileCpp)},
+      {"__unholyos_sysv.Doc2PlainTextCpp",
+       reinterpret_cast<uintptr_t>(Doc2PlainTextCpp)},
+      {"__unholyos_sysv.DocDelCpp", reinterpret_cast<uintptr_t>(DocDelCpp)},
+      {"__unholyos_sysv.DocLoadCpp", reinterpret_cast<uintptr_t>(DocLoadCpp)},
+      {"__unholyos_sysv.DocNewCpp", reinterpret_cast<uintptr_t>(DocNewCpp)},
+      {"__unholyos_sysv.DocPutLineCpp",
+       reinterpret_cast<uintptr_t>(DocPutLineCpp)},
+      {"__unholyos_sysv.DocPutS", reinterpret_cast<uintptr_t>(DocPutS)},
+      {"__unholyos_sysv.DocSaveCpp", reinterpret_cast<uintptr_t>(DocSaveCpp)},
+      {"__unholyos_sysv.ExeCmdLine", reinterpret_cast<uintptr_t>(ExeCmdLine)},
+      {"__unholyos_sysv.ExtChgCpp", reinterpret_cast<uintptr_t>(ExtChgCpp)},
+      {"__unholyos_sysv.ExtDftCpp", reinterpret_cast<uintptr_t>(ExtDftCpp)},
+      {"__unholyos_sysv.F64PowerBits",
+       reinterpret_cast<uintptr_t>(F64PowerBits)},
+      {"__unholyos_sysv.FileNameAbs", reinterpret_cast<uintptr_t>(FileNameAbs)},
+      {"__unholyos_sysv.FileReadCpp", reinterpret_cast<uintptr_t>(FileReadCpp)},
+      {"__unholyos_sysv.FileWriteCpp",
+       reinterpret_cast<uintptr_t>(FileWriteCpp)},
+      {"__unholyos_sysv.Free", reinterpret_cast<uintptr_t>(Free)},
+      {"__unholyos_sysv.GetStrCpp", reinterpret_cast<uintptr_t>(GetStrCpp)},
+      {"__unholyos_sysv.HashAdd", reinterpret_cast<uintptr_t>(HashAdd)},
+      {"__unholyos_sysv.HashDel", reinterpret_cast<uintptr_t>(HashDel)},
+      {"__unholyos_sysv.HashFind", reinterpret_cast<uintptr_t>(HashFind)},
+      {"__unholyos_sysv.HashRemove", reinterpret_cast<uintptr_t>(HashRemove)},
+      {"__unholyos_sysv.HashSingleTableFind",
+       reinterpret_cast<uintptr_t>(HashSingleTableFind)},
+      {"__unholyos_sysv.HashSrcFileSetCpp",
+       reinterpret_cast<uintptr_t>(HashSrcFileSetCpp)},
+      {"__unholyos_sysv.HashTableDelCpp",
+       reinterpret_cast<uintptr_t>(HashTableDelCpp)},
+      {"__unholyos_sysv.HashTableNew",
+       reinterpret_cast<uintptr_t>(HashTableNew)},
+      {"__unholyos_sysv.I64MulF64Bits",
+       reinterpret_cast<uintptr_t>(I64MulF64Bits)},
+      {"__unholyos_sysv.LinkedLstDelCpp",
+       reinterpret_cast<uintptr_t>(LinkedLstDelCpp)},
+      {"__unholyos_sysv.LstMatchCpp", reinterpret_cast<uintptr_t>(LstMatchCpp)},
+      {"__unholyos_sysv.MAlloc", reinterpret_cast<uintptr_t>(MAlloc)},
+      {"__unholyos_sysv.MStrPrintCpp",
+       reinterpret_cast<uintptr_t>(MStrPrintCpp)},
+      {"__unholyos_sysv.Pow10I64Cpp", reinterpret_cast<uintptr_t>(Pow10I64Cpp)},
+      {"__unholyos_sysv.PrintCpp", reinterpret_cast<uintptr_t>(PrintCpp)},
+      {"__unholyos_sysv.PrintErrCpp", reinterpret_cast<uintptr_t>(PrintErrCpp)},
+      {"__unholyos_sysv.PrintWarnCpp",
+       reinterpret_cast<uintptr_t>(PrintWarnCpp)},
+      {"__unholyos_sysv.PutS", reinterpret_cast<uintptr_t>(PutS)},
+      {"__unholyos_sysv.RaiseHolyC", reinterpret_cast<uintptr_t>(RaiseHolyC)},
+      {"__unholyos_sysv.RethrowHolyC",
+       reinterpret_cast<uintptr_t>(RethrowHolyC)},
+      {"__unholyos_sysv.StrCmpCpp", reinterpret_cast<uintptr_t>(StrCmpCpp)},
+      {"__unholyos_sysv.StrNew", reinterpret_cast<uintptr_t>(StrNew)},
+      {"__unholyos_sysv.StrPrintJoin",
+       reinterpret_cast<uintptr_t>(StrPrintJoin)},
+      {"__unholyos_sysv.SysSymImportsResolveCpp",
+       reinterpret_cast<uintptr_t>(SysSymImportsResolveCpp)},
   };
   constexpr char name[] = "/Kernel/Kernel";
   if (HashSingleTableFind(name, task.hash_table, HTT_MODULE))

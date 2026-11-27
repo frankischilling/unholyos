@@ -77,14 +77,95 @@ use the private `__unholyos_sysv.` guest namespace. A C++ function and a
 HolyC stack-call adapter can share a conceptual API while requiring
 different entry points; the manifest must make that choice explicit.
 The tool does not generate an ABI adapter or infer one from a symbol's
-spelling. No native function exports are added to the runtime by this
-increment.
+spelling.
+
+`Kernel/KLoad.cpp` publishes 44 native function addresses under
+`__unholyos_sysv.` for the current compiler's host-built dependencies.
+The suffix names the source entry point: `__unholyos_sysv.HashFind`
+refers to the C++ `HashFind`, while `__unholyos_sysv.StrCmpCpp`
+retains that entry point's `Cpp` suffix. The ELF import name can still
+be mangled. For example, these manifest entries select native addresses
+without changing the public HolyC exports:
+
+```text
+import native PutS __unholyos_sysv.PutS
+import native _Z8HashFindPKcP10CHashTablejm __unholyos_sysv.HashFind
+import native StrCmpCpp __unholyos_sysv.StrCmpCpp
+```
+
+Public `PutS` resolves to `PutSHC`, which receives HolyC stack
+arguments. The private `__unholyos_sysv.PutS` resolves directly to
+the native `PutS(const char *)`. Likewise, public `HashFind` uses
+`_HASH_FIND`; its private entry uses the C++ signature. A module must
+choose the entry that matches its caller, including argument types,
+return convention, and stack cleanup.
+
+The loader also exports the existing `winmgr` and
+`sys_task_being_scrn_updated` storage. `sys_cur_submenu_entry`
+already has a public data export. A future compiler manifest must map
+the two lowercase ELF names to their existing uppercase guest names:
+
+```text
+import data sys_var_init_flag SYS_VAR_INIT_FLAG
+import data sys_var_init_val SYS_VAR_INIT_VAL
+```
 
 `IET_MAIN` uses the HolyC calling convention. The fixture's
 `HostModuleMain` assembly entry preserves the HolyC registers and aligns
 the stack before calling its System V C++ body. Its two `_STRCMP` adapters
 push arguments in HolyC order, let the callee remove them, preserve the
 System V callee-saved `RBX`, and clear the direction flag on return.
+
+## Compiler ABI placement and remaining loading work
+
+The compiler's nine public HolyC adapters live beside their C++
+implementations, in the order of Terry A. Davis's corresponding
+`Compiler/CMain.HC`, `Compiler/CMisc.HC`, and `Compiler/LexLib.HC`
+routines:
+
+| Assembly file | Adapter symbols |
+| --- | --- |
+| `Compiler/CMain.asm` | `CmpHC`, `ExePutSHC`, `ExeFileHC`, `StreamExePrintHC` |
+| `Compiler/CMisc.asm` | `StreamPrintHC`, `StreamDirHC` |
+| `Compiler/LexLib.asm` | `MemberMetaDataHC`, `MemberMetaFindHC`, `MemberFindHC` |
+
+These C++ ABI additions have moved out of `Kernel/KUtils.asm`.
+Their arguments, saved registers, cleanup, and public names are
+unchanged. `HC_FRAME_ENTER`, `HC_FRAME_CALL`, `HOLYC_CPP`, and
+`HOLYC_PRINT` are defined once in `Kernel/KernelA.inc` and used by
+both the kernel and compiler adapters. Including these definitions
+emits no instructions. The adapter move preserves the assembled
+instruction bytes and relocation records.
+
+The reference intentionally imports compiler routines back into the
+kernel. `ExeCmdLine` belongs to
+[`Kernel/KTask.HC`](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Kernel/KTask.HC)
+and calls `LexStmt2Bin`; `Compiler/CMain.HC` calls `ExeCmdLine`.
+[`Kernel/KHashB.HC`](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Kernel/KHashB.HC)
+also identifies `ClassMemberLstDel` as an import to the kernel.
+Those responsibilities stay in their reference subsystems. The native
+`CmpCall` helper in `Kernel/KTask.cpp` adapts checked HolyC execution;
+the reference uses `Call(machine_code)` at that point.
+
+The current kernel still links the compiler and Adam statically.
+Separating the compiler requires explicit bindings for the calls back
+into it, a HolyC entry that initializes its native implementation,
+packaging `Compiler/Compiler.BIN`, and loading it before any compiler
+caller runs. The reference sequence in `Kernel/KMain.HC` loads the
+compiler from `/Compiler`, runs `CInit` from `Compiler/CMain.HC`,
+sets the `RLf_COMPILER` bit in `sys_run_level`, and then executes
+`StartOS.HC`.
+Current boot probes can initialize and call the compiler before
+`Kernel/KMain.cpp` checks its opcode dictionary. That ordering and
+the probes' first-load coverage must be addressed during the cutover.
+
+Later separation of Adam also needs the reference's late imports.
+`Compiler/CExts.HC` imports DolDoc functions before Adam is loaded.
+The native `LoadPass2` currently skips module entry points while
+any imports remain unresolved,
+whereas the reference executes the compiler's initialization with
+those late imports still pending. Publishing native addresses and
+moving the adapters does not complete this initialization work.
 
 ## Relocation mapping
 
@@ -136,6 +217,23 @@ output and native record bounds, and supplies malformed ELF and manifest
 inputs. Rejected inputs must leave an existing destination byte for byte
 intact. A crash is a test failure. GCC and Clang compile both the producer
 and the freestanding fixture independently.
+
+The focused native-import coverage uses
+`Linux/Fixtures/NativeImportProbe.cpp`, its assembly entry, and its
+explicit binding manifest. It checks direct and indirect calls to
+`__unholyos_sysv.PutS` and `__unholyos_sysv.StrCmpCpp`, alongside a
+call to the public HolyC `PutS`. Exported addresses let the harness
+check that the private native entries and public HolyC entry remain
+distinct. GCC and Clang builds passed the native fixture and the
+pinned-guest comparison, with matching result and binding masks.
+
+For the pinned-guest comparison,
+`Linux/Fixtures/NativeImportReference.asm` supplies test-only System V
+adapters around TempleOS's HolyC `PutS` and `_STRCMP`.
+`NativeImportLoadProbe.HC` checks that the private names are initially
+absent, loads that bridge, and checks the fixture's bindings.
+The bridge is verification scaffolding; it does not establish native
+C++ support in TempleOS.
 
 The guest harness and its reproduced results are recorded in
 [Booting from DVD](Boot.md). This tool alone does not establish separate

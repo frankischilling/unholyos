@@ -137,21 +137,22 @@ static void VerifyOpcodeResource(const Bytes &disc, uint64_t root)
         "Packaged Compiler/OpCodes.DD differs from the reference source");
 }
 
-static void VerifyHostModuleMedia(const fs::path &iso, const fs::path &module)
+static void VerifyHostModuleMedia(const fs::path &iso, const fs::path &module,
+                                  const char *name = "HostModuleProbe.BIN")
 {
   constexpr size_t blk = 512, redsea = 88 * blk;
   const auto disc = FileRead(iso), expected = FileRead(module);
   const auto root = ReadLE(disc, redsea + 24, 8);
-  const auto entry = FindRedSeaEntry(disc, root, "HostModuleProbe.BIN");
+  const auto entry = FindRedSeaEntry(disc, root, name);
   const auto start = ReadLE(disc, entry + 40, 8);
   const auto size = ReadLE(disc, entry + 48, 8);
-  Check(ReadLE(disc, entry, 2) == 0x800 && !expected.empty() &&
-            size == expected.size() && start < disc.size() / blk &&
-            size <= disc.size() - start * blk,
-        "Invalid HostModuleProbe.BIN extent");
-  Check(
-      std::equal(expected.begin(), expected.end(), disc.begin() + start * blk),
-      "Packaged HostModuleProbe.BIN differs from the host module");
+  if (ReadLE(disc, entry, 2) != 0x800 || expected.empty() ||
+      size != expected.size() || start >= disc.size() / blk ||
+      size > disc.size() - start * blk)
+    throw std::runtime_error("Invalid " + std::string(name) + " extent");
+  if (!std::equal(expected.begin(), expected.end(), disc.begin() + start * blk))
+    throw std::runtime_error("Packaged " + std::string(name) +
+                             " differs from the host module");
   std::cout << "Verified " << size << " packaged host module bytes\n";
 }
 
@@ -1779,6 +1780,51 @@ constexpr std::string_view host_module_output =
 constexpr CTextProbe host_module_probes[]{
     {"host-module", "/HostModuleLoadProbe.HC", "/HostModuleProbe.BIN",
      "HM results ", "HM DONE", host_module_output}};
+
+constexpr std::string_view native_import_output =
+    "NI START\n"
+    "NI native direct\n"
+    "NI native indirect\n"
+    "NI HolyC public\n"
+    "NI result 000000000000001F\n"
+    "NI bindings 0000000000000007\n"
+    "NI DONE\n";
+constexpr CTextProbe native_import_probes[]{
+    {"native-import", "/NativeImportLoadProbe.HC", "/NativeImportProbe.BIN",
+     "NI START", "NI DONE", native_import_output}};
+
+constexpr std::string_view assert_warning_output = "AW result 42\nAW DONE\n";
+constexpr CTextProbe assert_warning_probes[]{
+    {"assert-warning", "/AssertWarningProbe.HC", "/AssertWarningProbe.BIN.Z",
+     "AW result ", "AW DONE", assert_warning_output}};
+
+static void CheckAssertWarning(std::string_view serial)
+{
+  constexpr std::string_view warning =
+      ". . . . WARNING: Assert Failed T:/AssertWarningProbe.HC,4\n";
+  CheckProgramOutput(serial, "/AssertWarningProbe.HC",
+                     std::string(warning) + std::string(assert_warning_output),
+                     '1');
+  CheckProgramOutput(serial, "/AssertWarningProbe.BIN.Z", assert_warning_output,
+                     '1');
+  constexpr std::string_view source_end =
+      "UnholyOS: finished /AssertWarningProbe.HC, checks "
+      "0x0000000000000001\r\n";
+  constexpr std::string_view module_start =
+      "UnholyOS: executing /AssertWarningProbe.BIN.Z\r\n";
+  auto begin = serial.find(source_end);
+  Check(begin != std::string_view::npos,
+        "Missing assert warning source completion");
+  begin += source_end.size();
+  const auto end = serial.find(module_start, begin);
+  Check(end != std::string_view::npos,
+        "Missing assert warning module execution");
+  const auto compiled = serial.substr(begin, end - begin);
+  const std::regex expected(
+      R"(\. \. \. \. WARNING: Assert Failed T:/AssertWarningProbe\.HC,4\nErrs:0 Warns:1 Code:[0-9A-F]+ Size:[0-9A-F]+\n)");
+  Check(std::regex_match(compiled.begin(), compiled.end(), expected),
+        "Assert warning AOT diagnostic or warning count differs");
+}
 
 static void VerifyFormatRefusal(CMonitor &vm, const fs::path &dir,
                                 const std::string &boot)
@@ -4043,6 +4089,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       Check(output.find("UnholyOS: opcode resource checks "
                         "0x0000000000000007\r\n") != std::string::npos,
             "Opcode resource first load, retry, or cache checks failed");
+      CheckAssertWarning(output);
       CheckProgramOutput(output, "/DCProbe.HC", dc_output, '1');
       CheckProgramOutput(output, "/BitmapDiffProbe.HC", "bitmap diff 7F E76D01B74919B2D4\n", '1');
       CheckProgramOutput(output, "/CaptureProbe.HC", "capture probe 7F\n", '1');
@@ -4615,43 +4662,61 @@ static void VerifyDatabaseRecords(const Bytes &disk)
 
 int main(int argc, char **argv)
 {
-  if ((argc == 5 || argc == 6) &&
-      (std::string_view(argv[1]) == "--host-module" ||
-       std::string_view(argv[1]) == "--host-module-reference")) {
+  if (((argc == 5 || argc == 6) &&
+       (std::string_view(argv[1]) == "--host-module" ||
+        std::string_view(argv[1]) == "--host-module-reference" ||
+        std::string_view(argv[1]) == "--native-import")) ||
+      ((argc == 6 || argc == 7) &&
+       std::string_view(argv[1]) == "--native-import-reference")) {
     const bool reference = std::string_view(argv[1]).ends_with("-reference");
+    const bool native_import =
+        std::string_view(argv[1]).starts_with("--native-import");
+    const int capture_arg = native_import && reference ? 6 : 5;
+    const char *name = native_import ? "native-import" : "host-module";
+    const char *guest_name =
+        native_import ? "NativeImportProbe.BIN" : "HostModuleProbe.BIN";
+    std::span<const CTextProbe> probes = host_module_probes;
+    if (native_import)
+      probes = native_import_probes;
     char path[] = "/tmp/unholyos-host-module-XXXXXX";
-    if (argc == 5 && !mkdtemp(path))
+    if (argc == capture_arg && !mkdtemp(path))
       return 1;
-    const fs::path dir = argc == 6 ? fs::absolute(argv[5]) : fs::path(path);
+    const fs::path dir =
+        argc > capture_arg ? fs::absolute(argv[capture_arg]) : fs::path(path);
     try {
       fs::create_directories(dir);
       if (!reference)
-        VerifyHostModuleMedia(argv[3], argv[4]);
+        VerifyHostModuleMedia(argv[3], argv[4], guest_name);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false,
                   reference);
       vm.Connect();
-      if (reference)
+      if (reference) {
+        const CModuleFile modules[]{
+            {fs::absolute(argv[4]), guest_name, name},
+            {native_import ? fs::absolute(argv[5]) : fs::path{},
+             "NativeImportReference.BIN", "native-import-reference"}};
         DriveCharacterGraphics(vm, dir, "", true, false, false, false, false,
-                               false, false, false, false, host_module_probes,
-                               fs::absolute(argv[4]));
-      else {
+                               false, false, false, false, probes,
+                               std::span(modules, native_import ? 2 : 1));
+      } else {
         const auto serial = vm.Boot(dir / "serial.log");
-        const auto first = serial.find("HM results ");
-        const auto last = serial.find("HM DONE\r\n", first);
+        const auto first = serial.find(probes[0].first);
+        const auto finish = std::string(probes[0].finish) + "\r\n";
+        const auto last = serial.find(finish, first);
         Check(first != std::string::npos && last != std::string::npos,
               "Missing native host module report");
-        auto output = serial.substr(first, last + 9 - first);
+        auto output = serial.substr(first, last + finish.size() - first);
         std::erase(output, '\r');
-        std::ofstream file(dir / "host-module-native.txt");
+        std::ofstream file(dir / (std::string(name) + "-native.txt"));
         file << output;
         file.close();
         Check(bool(file), "Could not record native host module output");
         std::cout << output;
-        Check(output == host_module_output,
+        Check(output == probes[0].expected,
               "Native host module results differ");
       }
       vm.Quit();
-      if (argc == 5)
+      if (argc == capture_arg)
         fs::remove_all(dir);
       return 0;
     } catch (const std::exception &error) {
@@ -4827,6 +4892,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--music-precision-reference" ||
        std::string_view(argv[1]) == "--strings" ||
        std::string_view(argv[1]) == "--strings-reference" ||
+       std::string_view(argv[1]) == "--assert-warning" ||
+       std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
        std::string_view(argv[1]) == "--tic-tac-toe-reference" ||
        std::string_view(argv[1]) == "--break" ||
@@ -4855,6 +4922,8 @@ int main(int argc, char **argv)
     bool sprite_flood = std::string_view(argv[1]).starts_with("--sprite-flood");
     bool blot = std::string_view(argv[1]).starts_with("--blot");
     bool math = std::string_view(argv[1]).starts_with("--math-helpers");
+    bool assert_warning =
+        std::string_view(argv[1]).starts_with("--assert-warning");
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -4862,6 +4931,8 @@ int main(int argc, char **argv)
       text_probes = music_precision_probes;
     else if (std::string_view(argv[1]).starts_with("--strings"))
       text_probes = string_probes;
+    else if (assert_warning)
+      text_probes = assert_warning_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -4872,12 +4943,24 @@ int main(int argc, char **argv)
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
       if (!text_probes.empty() && !reference) {
-        auto output = vm.Boot(dir / "serial.log");
+        auto output = assert_warning
+                          ? vm.WaitSerial(dir / "serial.log",
+                                          "UnholyOS: finished "
+                                          "/AssertWarningProbe.BIN.Z, checks "
+                                          "0x0000000000000001\r\n")
+                          : vm.Boot(dir / "serial.log");
         RecordTextProbes(output, text_probes, dir);
-        CheckTextProbes(output, text_probes);
-        std::cout << "Text probe sources and compiled modules matched\n";
+        if (assert_warning) {
+          CheckAssertWarning(output);
+          std::cout << "False assertion warned in source and AOT compilation; "
+                       "both executions completed\n";
+        } else {
+          CheckTextProbes(output, text_probes);
+          std::cout << "Text probe sources and compiled modules matched\n";
+        }
       } else if (character || tic || breaks || screen_capture || spline ||
-                 flood_fill || blot || sprite_flood || music_demo || !text_probes.empty())
+                 flood_fill || blot || sprite_flood || music_demo ||
+                 !text_probes.empty())
         DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
                                reference, tic, breaks, screen_capture, spline,
                                flood_fill, blot, sprite_flood, music_demo, text_probes);
@@ -4993,6 +5076,10 @@ int main(int argc, char **argv)
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]
+              << " --native-import qemu image.iso module.BIN [capture-dir]\n"
+              << "       " << argv[0]
+              << " --native-import-reference qemu image.iso module.BIN bridge.BIN [capture-dir]\n"
+              << "       " << argv[0]
               << " --digits qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --character-graphics[-reference] qemu image.iso [capture-dir]\n"
@@ -5013,6 +5100,8 @@ int main(int argc, char **argv)
               << " --math-helpers[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --strings[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --assert-warning[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --sprite-flood-reference qemu image.iso [capture-dir]\n"
               << "       " << argv[0]

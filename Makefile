@@ -15,7 +15,7 @@ ASM_SRC := Kernel/KStart16.asm Kernel/KStart32.asm Kernel/KStart64.asm Kernel/KU
 	Kernel/KMathA.asm Kernel/StrA.asm Kernel/KInts.asm Kernel/KExcept.asm Kernel/Sched.asm Kernel/PCIBIOS.asm \
 	Kernel/Mem/PageTables.asm Kernel/SerialDev/SerialBoot.asm Adam/Opt/Boot/DskISORedSea.asm \
 	Adam/Gr/GrAsm.asm Adam/Gr/GrTextBase.asm \
-	Compiler/CExcept.asm
+	Compiler/CExcept.asm Compiler/CMain.asm Compiler/CMisc.asm Compiler/LexLib.asm
 CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp Kernel/KDbg.cpp Kernel/MultiProc.cpp Kernel/Display.cpp Kernel/FontStd.cpp Kernel/FontCyrillic.cpp Kernel/SerialDev/Serial.cpp \
 	Kernel/KTask.cpp Kernel/Sched.cpp Kernel/KHashA.cpp Kernel/KHashB.cpp Kernel/KLoad.cpp Kernel/KMathB.cpp Kernel/StrA.cpp \
 	Kernel/KDataTypes.cpp Kernel/KDate.cpp Kernel/KExcept.cpp Kernel/QSort.cpp \
@@ -54,6 +54,15 @@ HOST_MODULE_OBJECT := $(BUILD)/Linux/Fixtures/HostModuleProbe.o
 HOST_MODULE := $(BUILD)/Linux/Fixtures/HostModuleProbe.BIN
 HOST_MODULE_BINDINGS := Linux/Fixtures/HostModuleProbe.bindings
 HOST_MODULE_TEST_ISO := $(BUILD)/host-modules-test.iso
+NATIVE_IMPORT_CPP := $(BUILD)/Linux/Fixtures/NativeImportProbe.cpp.o
+NATIVE_IMPORT_ASM := $(BUILD)/Linux/Fixtures/NativeImportProbe.asm.o
+NATIVE_IMPORT_OBJECT := $(BUILD)/Linux/Fixtures/NativeImportProbe.o
+NATIVE_IMPORT := $(BUILD)/Linux/Fixtures/NativeImportProbe.BIN
+NATIVE_IMPORT_BINDINGS := Linux/Fixtures/NativeImportProbe.bindings
+NATIVE_IMPORT_REFERENCE_OBJECT := $(BUILD)/Linux/Fixtures/NativeImportReference.asm.o
+NATIVE_IMPORT_REFERENCE := $(BUILD)/Linux/Fixtures/NativeImportReference.BIN
+NATIVE_IMPORT_REFERENCE_BINDINGS := Linux/Fixtures/NativeImportReference.bindings
+NATIVE_IMPORT_TEST_ISO := $(BUILD)/native-import-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
 FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
@@ -100,7 +109,7 @@ PRINT_SOURCE_PROBES := $(addprefix Linux/Fixtures/,Print.HC PrintSourceProbe.HC)
 STREAM_PROBES := $(addprefix Linux/Fixtures/,StreamProbe.HC StreamNested.HC)
 MEMORY_PROBES := $(addprefix Linux/Fixtures/,MemoryProbe.HC SubIntAccess.HC AggregateProbe.HC CompoundProbe.HC)
 ISO_PROBE := Linux/Fixtures/RedSeaISOProbe.HC
-CMP_PROBES := $(addprefix Linux/Fixtures/,CmpProbeRunner.HC CmpProbe.PRJ CmpProbe.HH CmpInvalid.HC \
+CMP_PROBES := $(addprefix Linux/Fixtures/,CmpProbeRunner.HC CmpProbe.PRJ CmpProbe.HH CmpInvalid.HC AssertWarningProbe.HC \
 	ImportCaller.HC ImportProvider.HC ImportBuild.HC ImportExtern.HC ImportLate.HC \
 	AsmBuild.HC AsmProbe.HC DivByHand.HC AsmHelloWorld.HC MulByHand.HC PutDec.HC \
 	AsmAndC3.HC InlineAsmProbe.HC GotoProbe.HC \
@@ -123,7 +132,7 @@ QUEUE_PROBE := Linux/Fixtures/QueueProbe.HC
 TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInputProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 
-.PHONY: all run test test-host-modules
+.PHONY: all run test test-host-modules test-native-imports
 all: $(ISO)
 
 $(LOADER): Adam/Opt/Boot/BootDVD.asm Kernel/KernelA.inc
@@ -174,11 +183,11 @@ $(MAKE_BIN_TEST): Linux/TestMakeBIN.cpp Linux/BootMedia.hpp Kernel/KernelA.hpp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
 
-$(HOST_MODULE_CPP): Linux/Fixtures/HostModuleProbe.cpp
+$(HOST_MODULE_CPP) $(NATIVE_IMPORT_CPP): $(BUILD)/Linux/Fixtures/%.cpp.o: Linux/Fixtures/%.cpp
 	mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) -fPIC -fcf-protection=none -c -o $@ $<
 
-$(HOST_MODULE_ASM): Linux/Fixtures/HostModuleProbe.asm
+$(HOST_MODULE_ASM) $(NATIVE_IMPORT_ASM) $(NATIVE_IMPORT_REFERENCE_OBJECT): $(BUILD)/Linux/Fixtures/%.asm.o: Linux/Fixtures/%.asm
 	mkdir -p $(@D)
 	$(NASM) $(NASMFLAGS) -f elf64 -o $@ $<
 
@@ -187,6 +196,15 @@ $(HOST_MODULE_OBJECT): $(HOST_MODULE_CPP) $(HOST_MODULE_ASM)
 
 $(HOST_MODULE): $(HOST_MODULE_OBJECT) $(HOST_MODULE_BINDINGS) $(BIN_TOOL)
 	$(BIN_TOOL) $(HOST_MODULE_OBJECT) $(HOST_MODULE_BINDINGS) $@
+
+$(NATIVE_IMPORT_OBJECT): $(NATIVE_IMPORT_CPP) $(NATIVE_IMPORT_ASM)
+	$(LD) -m elf_x86_64 -r --no-relax --force-group-allocation -o $@ $^
+
+$(NATIVE_IMPORT): $(NATIVE_IMPORT_OBJECT) $(NATIVE_IMPORT_BINDINGS) $(BIN_TOOL)
+	$(BIN_TOOL) $(NATIVE_IMPORT_OBJECT) $(NATIVE_IMPORT_BINDINGS) $@
+
+$(NATIVE_IMPORT_REFERENCE): $(NATIVE_IMPORT_REFERENCE_OBJECT) $(NATIVE_IMPORT_REFERENCE_BINDINGS) $(BIN_TOOL)
+	$(BIN_TOOL) $(NATIVE_IMPORT_REFERENCE_OBJECT) $(NATIVE_IMPORT_REFERENCE_BINDINGS) $@
 
 $(FAT_TOOL): Linux/MakeFAT32.cpp
 	mkdir -p $(@D)
@@ -204,10 +222,13 @@ $(FAT_WRITE_DISK): $(FAT_TOOL)
 $(ISO) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(ATA_TEST_ISO) $(FAT_WRITE_ISO) \
 $(FAT_FORMAT_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(BREAK_TEST_ISO) \
 $(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(STRINGS_TEST_ISO) \
-$(HOST_MODULE_TEST_ISO): $(COMPILER_RESOURCE)
+$(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO): $(COMPILER_RESOURCE)
 
 $(HOST_MODULE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(HOST_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(HOST_MODULE)
+
+$(NATIVE_IMPORT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(NATIVE_IMPORT)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(NATIVE_IMPORT)
 
 $(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
@@ -259,10 +280,13 @@ test-host-modules: $(HOST_MODULE_TEST_ISO) $(BOOT_TEST) $(MAKE_BIN_TEST)
 	$(MAKE_BIN_TEST) $(BIN_TOOL) $(HOST_MODULE_OBJECT) $(HOST_MODULE_BINDINGS) $(BUILD)/make-bin-test
 	$(BOOT_TEST) --host-module "$(QEMU)" $(HOST_MODULE_TEST_ISO) $(HOST_MODULE)
 
+test-native-imports: $(NATIVE_IMPORT_TEST_ISO) $(NATIVE_IMPORT_REFERENCE) $(BOOT_TEST)
+	$(BOOT_TEST) --native-import "$(QEMU)" $(NATIVE_IMPORT_TEST_ISO) $(NATIVE_IMPORT)
+
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) test-host-modules
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) test-host-modules test-native-imports
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
 	$(STR_COMPARE_TEST)
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_DISK) valid
@@ -283,4 +307,4 @@ test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_IS
 	$(BOOT_TEST) --database "$(QEMU)" $<
 	$(BOOT_TEST) --database-persistent "$(QEMU)" $< $(FAT_WRITE_DISK)
 
--include $(CXX_OBJ:.o=.d) $(HOST_MODULE_CPP:.o=.d)
+-include $(CXX_OBJ:.o=.d) $(HOST_MODULE_CPP:.o=.d) $(NATIVE_IMPORT_CPP:.o=.d)
