@@ -2332,6 +2332,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"StrCpy", U0, FF_RET1, {{"dst", U8Ptr}, {"src", U8Ptr}}, "_STRCPY"},
       {"DefineSub", U8Ptr, FF_RET1, {{"sub", I64}, {"name", U8Ptr}}},
       {"DefineLstLoad", DefinePtr, FF_RET1, {{"dname", U8Ptr}, {"lst", U8Ptr}}},
+      {"DefineMatch", I64, FF_RET1,
+       {{"needle", U8Ptr}, {"haystack_lst_dname", U8Ptr}, {"flags", I64, true}}},
       {"DocPutKey", U0, FF_RET1, {{"doc", DocPtr}, {"ch", I64, true}, {"sc", I64, true}}},
       {"DocTermNew", U0, FF_RET1, {}},
       {"DocGetKey", I64, FF_RET1, {{"_sc", I64Ptr, true}}},

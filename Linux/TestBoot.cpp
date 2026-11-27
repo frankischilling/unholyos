@@ -312,9 +312,23 @@ static Bytes VerifyCompilerMedia(const Bytes &disc, uint64_t root,
   const auto file = FindRedSeaEntry(disc, compiler, "Compiler.BIN");
   const auto start = ReadLE(disc, file + 40, 8);
   const auto size = ReadLE(disc, file + 48, 8);
-  auto expected = CompilerVariant(
-      FileRead(kernel_path.parent_path().parent_path() / "Compiler/Compiler.BIN"),
-      phase);
+  auto expected = FileRead(kernel_path.parent_path().parent_path() /
+                           "Compiler/Compiler.BIN");
+  std::set<std::string> import_names;
+  size_t native_imports = 0, data_imports = 0;
+  for (const auto &record : CompilerRecords(expected))
+    if ((record.type == 8 || record.type == 11) && !record.name.empty()) {
+      Check(import_names.insert(record.name).second,
+            "Duplicate compiler import group");
+      if (record.name.starts_with("__unholyos_sysv."))
+        ++native_imports;
+      else
+        ++data_imports;
+    }
+  Check(native_imports == 45 && data_imports == 30 &&
+            import_names.contains("__unholyos_sysv.DefineLstLoadCpp"),
+        "Compiler native or data import contract differs");
+  expected = CompilerVariant(std::move(expected), phase);
   Check(ReadLE(disc, file, 2) == 0x800 && !expected.empty() &&
             size == expected.size() && start < disc.size() / blk &&
             size <= disc.size() - start * blk,
@@ -831,6 +845,8 @@ static uint64_t VerifyCompilerAllocation(CMonitor &vm, uint64_t pointer,
 struct CCompilerState
 {
   uint64_t code_used = 0, data_used = 0;
+  uint64_t payload_begin = 0, payload_end = 0;
+  bool init_started = false;
   std::string unresolved;
 };
 
@@ -848,6 +864,22 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
       "MemberMetaData", "MemberMetaFind", "MemberFind"};
   constexpr std::string_view status_name = "__unholyos_compiler.CInitStatus";
   auto symbols = ReadBootSymbols(vm);
+  const auto define_native =
+      symbols.exports.find("__unholyos_sysv.DefineLstLoadCpp");
+  const auto define_public = symbols.exports.find("DefineLstLoad");
+  const auto kernel = symbols.modules.find("/Kernel/Kernel");
+  Check(
+      kernel != symbols.modules.end() &&
+          define_native != symbols.exports.end() &&
+          define_public != symbols.exports.end() &&
+          symbols.export_counts["__unholyos_sysv.DefineLstLoadCpp"] == 1 &&
+          symbols.export_counts["DefineLstLoad"] == 1 &&
+          define_native->second != define_public->second &&
+          define_native->second >= kernel->second + 32 &&
+          define_native->second < kernel->second + media.kernel_size &&
+          define_public->second >= kernel->second + 32 &&
+          define_public->second < kernel->second + media.kernel_size,
+      "Compiler definition import does not use a distinct native kernel entry");
   const auto level = symbols.exports.find("SYS_RUN_LEVEL");
   Check(level != symbols.exports.end(), "Missing live compiler run level");
   Check(ReadPhysical<1>(vm, level->second, 'w')[0] ==
@@ -995,6 +1027,9 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
   const auto misalignment = (0 - uint64_t{32}) & (alignment - 1);
   result.code_used = VerifyCompilerAllocation(
       vm, image, 0x101188, size + alignment - 1 + 8 + misalignment, true);
+  result.payload_begin = base;
+  result.payload_end = image + patch;
+  result.init_started = CompilerBound(phase);
   result.unresolved = unresolved;
   std::cout << "Verified compiler module " << size << " bytes, " << records.size()
             << " patch records, imports " << (bindings ? 16 : 0)
@@ -1334,6 +1369,77 @@ constexpr uint64_t late_used = 0x2828, fault_used = 0x7E8;
 constexpr uint64_t drive_pages = 7 + 9, drive_alloced = drive_pages * 512;
 constexpr uint64_t drive_used = drive_alloced - 2 * 24 + 40 + 40 + 32 + 24;
 
+struct CCompilerDefine
+{
+  std::string_view name, data;
+  size_t count;
+
+  template <size_t Size>
+  constexpr CCompilerDefine(std::string_view list_name,
+                            const char (&list_data)[Size], size_t list_count)
+      : name(list_name), data(list_data, Size), count(list_count)
+  {
+  }
+};
+
+// Terry A. Davis's Compiler/CInit.HC::CmpLoadDefines at the pinned revision.
+// Include the final implicit NUL so both terminators are checked.
+constexpr CCompilerDefine compiler_defines[]{
+    {"ST_RAW_TYPES",
+     " \0 \0I0\0U0\0I8\0U8\0I16\0U16\0I32\0U32\0I64\0U64\0"
+     "F32\0UF32\0F64\0UF64\0",
+     16},
+    {"ST_NATURAL_TYPES", "I8\0U8\0I16\0U16\0I32\0U32\0I64\0U64\0F64\0String\0",
+     10},
+    {"ST_INT_SIZE_TYPES", "I8\0U8\0I16\0U16\0I32\0U32\0I64\0U64\0", 8},
+    {"ST_TY_TYPES", "NULL\0STK\0IMM\0REG\0DISP\0SIB\0RIP\0", 7},
+    {"ST_U8_REGS",
+     "AL\0CL\0DL\0BL\0AH\0CH\0DH\0BH\0"
+     "R8u8\0R9u8\0R10u8\0R11u8\0R12u8\0R13u8\0R14u8\0R15u8\0",
+     16},
+    {"ST_U8_REX_REGS",
+     "AL\0CL\0DL\0BL\0RSPu8\0RBPu8\0RSIu8\0RDIu8\0"
+     "R8u8\0R9u8\0R10u8\0R11u8\0R12u8\0R13u8\0R14u8\0R15u8\0",
+     16},
+    {"ST_U16_REGS",
+     "AX\0CX\0DX\0BX\0SP\0BP\0SI\0DI\0"
+     "R8u16\0R9u16\0R10u16\0R11u16\0R12u16\0R13u16\0R14u16\0R15u16\0",
+     16},
+    {"ST_U32_REGS",
+     "EAX\0ECX\0EDX\0EBX\0ESP\0EBP\0ESI\0EDI\0"
+     "R8u32\0R9u32\0R10u32\0R11u32\0R12u32\0R13u32\0R14u32\0R15u32\0",
+     16},
+    {"ST_U64_REGS",
+     "RAX\0RCX\0RDX\0RBX\0RSP\0RBP\0RSI\0RDI\0"
+     "R8\0R9\0R10\0R11\0R12\0R13\0R14\0R15\0",
+     16},
+    {"ST_MM_REGS", "MM0\0MM1\0MM2\0MM3\0MM4\0MM5\0MM6\0MM7\0", 8},
+    {"ST_XMM_REGS", "XMM0\0XMM1\0XMM2\0XMM3\0XMM4\0XMM5\0XMM6\0XMM7\0", 8},
+    {"ST_ARG_TYPES",
+     "NONE\0REL8\0REL16\0REL32\0"
+     "IMM8\0IMM16\0IMM32\0IMM64\0UIMM8\0UIMM16\0UIMM32\0UIMM64\0"
+     "R8\0R16\0R32\0R64\0RM8\0RM16\0RM32\0RM64\0"
+     "M8\0M16\0M32\0M64\0M1632\0M16N32\0M16N16\0M32N32\0"
+     "MOFFS8\0MOFFS16\0MOFFS32\0MOFFS64\0"
+     "AL\0AX\0EAX\0RAX\0CL\0DX\0 \0SREG\0"
+     "SS\0DS\0ES\0FS\0GS\0CS\0ST0\0STI\0"
+     "MM\0MM32\0MM64\0XMM\0XMM32\0XMM64\0XMM128\0XMM0\0",
+     56},
+    {"ST_SEG_REGS", "ES\0CS\0SS\0DS\0FS\0GS\0", 6},
+    {"ST_FSTK_REGS", "ST0\0ST1\0ST2\0ST3\0ST4\0ST5\0ST6\0ST7\0", 8}};
+
+static bool GuestBytesEqual(CMonitor &vm, uint64_t address,
+                            std::string_view expected)
+{
+  for (size_t offset = 0; offset < expected.size(); offset += 8) {
+    auto word = ReadPhysical<1>(vm, address + offset)[0];
+    for (size_t i = 0; i < 8 && offset + i < expected.size(); ++i, word >>= 8)
+      if ((word & 255) != static_cast<uint8_t>(expected[offset + i]))
+        return false;
+  }
+  return true;
+}
+
 static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
                                     uint64_t owner, uint64_t &graphics,
                                     uint64_t &winmgr_slot, bool desktop,
@@ -1342,6 +1448,8 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
   uint64_t used = 0, count = 0;
   bool kernel = false, hash_del = false, hash_src = false, put_str = false;
   bool colors = false, rainbow = false, os_name = false, file_util = false;
+  std::array<bool, std::size(compiler_defines)> defines_seen{};
+  uint64_t compiler_define_used = 0;
   for (uint64_t i = 0; i < 1024; i += 64) {
     auto buckets = ReadPhysical<64>(vm, table_body + i * 8);
     for (size_t j = 0; j < buckets.size(); j++) {
@@ -1385,12 +1493,19 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           Check(str == compiler.unresolved,
                 "Unexpected unresolved boot symbol");
         if (define) {
-          Check(desktop, "Compiler failure initialized Adam definitions");
+          const auto compiler_define = std::find_if(
+              std::begin(compiler_defines), std::end(compiler_defines),
+              [&](const auto &list) { return list.name == str; });
+          const bool compiler_list =
+              compiler_define != std::end(compiler_defines);
+          Check(compiler_list ? compiler.init_started : desktop,
+                "Definition was created before its initialization phase");
           bool color_list = str == "ST_COLORS";
           bool rainbow_list = str == "ST_RAINBOW_10";
           bool startup_name = str == "DD_OS_NAME_VERSION";
           bool file_util_list = str == "ST_FILE_UTIL_FLAGS";
-          Check(color_list || rainbow_list || startup_name || file_util_list,
+          Check(compiler_list || color_list || rainbow_list || startup_name ||
+                    file_util_list,
                 "Unexpected boot definition");
           constexpr char color_data[] =
               "BLACK\0BLUE\0GREEN\0CYAN\0RED\0PURPLE\0BROWN\0LTGRAY\0DKGRAY\0"
@@ -1401,11 +1516,16 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           constexpr char file_util_data[] =
               "r\0d\0i\0a\0c\0R\0p\0m\0x\0s\0D\0F\0T\0$\0S\0A\0J\0G\0Z\0O\0P\0f\0l\0lb\0la\0";
           auto def = ReadPhysical<11>(vm, addr);
-          uint64_t entries = color_list ? 16 : rainbow_list ? 10 : file_util_list ? 25 : 1;
-          uint64_t data_size = color_list     ? sizeof(color_data)
-                               : rainbow_list ? sizeof(rainbow_data)
+          uint64_t entries = compiler_list    ? compiler_define->count
+                             : color_list     ? 16
+                             : rainbow_list   ? 10
+                             : file_util_list ? 25
+                                              : 1;
+          uint64_t data_size = compiler_list    ? compiler_define->data.size()
+                               : color_list     ? sizeof(color_data)
+                               : rainbow_list   ? sizeof(rainbow_data)
                                : file_util_list ? sizeof(file_util_data)
-                                              : sizeof(os_name_data);
+                                                : sizeof(os_name_data);
           Check(def[10] == entries && def[3] >= 16 && def[8] >= 16 &&
                     def[9] >= 16,
                 "Invalid boot definition");
@@ -1417,6 +1537,38 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
                                                     (data_size + 23) & ~7ULL} &&
                     index == std::array<uint64_t, 2>{owner, 16 + entries * 8},
                 "Invalid boot definition allocation");
+          if (compiler_list) {
+            const auto n = compiler_define - std::begin(compiler_defines);
+            Check(!defines_seen[n], "Duplicate compiler definition");
+            defines_seen[n] = true;
+            constexpr char source_link[] = "AD:0x0";
+            Check(!def[4] && !def[5] && !def[6] && !def[7] &&
+                      GuestBytesEqual(vm, def[3],
+                                      {source_link, sizeof(source_link)}) &&
+                      GuestBytesEqual(vm, def[8], compiler_define->data),
+                  "Compiler definition data or source link differs");
+            const auto source = ReadPhysical<1>(vm, def[9])[0];
+            Check(
+                source >= compiler.payload_begin &&
+                    source <= compiler.payload_end &&
+                    data_size <= compiler.payload_end - source &&
+                    GuestBytesEqual(vm, source, compiler_define->data),
+                "Compiler definition index does not retain its module literal");
+            size_t offset = 0;
+            for (size_t entry = 0; entry < entries; ++entry) {
+              Check(ReadPhysical<1>(vm, def[9] + entry * 8)[0] ==
+                        source + offset,
+                    "Compiler definition index offset differs");
+              const auto end = compiler_define->data.find('\0', offset);
+              Check(end != std::string_view::npos,
+                    "Compiler definition expectation is unterminated");
+              offset = end + 1;
+            }
+            Check(offset + 1 == data_size,
+                  "Compiler definition count omits list bytes");
+            compiler_define_used +=
+                entry[1] + name[1] + link[1] + data[1] + index[1];
+          }
           used += link[1] + data[1] + index[1];
           colors |= color_list;
           rainbow |= rainbow_list;
@@ -1440,6 +1592,13 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
             (desktop ? colors && rainbow && os_name && file_util
                      : !colors && !rainbow && !os_name && !file_util),
         "Missing boot symbols");
+  Check(std::all_of(defines_seen.begin(), defines_seen.end(),
+                    [&](bool seen) { return seen == compiler.init_started; }) &&
+            compiler_define_used == (compiler.init_started ? 5360u : 0u),
+        "Compiler definitions or their allocation total differ by startup phase");
+  std::cout << "Verified compiler definitions "
+            << (compiler.init_started ? std::size(compiler_defines) : 0)
+            << ", heap bytes " << compiler_define_used << '\n';
   return used;
 }
 
@@ -2325,6 +2484,52 @@ constexpr std::string_view load_pass2_output =
 constexpr CTextProbe load_pass2_probes[]{
     {"load-pass2", "/LoadPass2Probe.HC", "/LateImportConsumer.BIN", "LP table ",
      "LP DONE", load_pass2_output}};
+
+constexpr std::string_view compiler_defines_output = "CD lists 3FFF 3FFF\n"
+                                                     "CD entries 207 207\n"
+                                                     "CD bytes 3FFF 3FFF\n"
+                                                     "CD stable 3FFF\n"
+                                                     "CD selected FF\n"
+                                                     "CD compile 42\n"
+                                                     "CD DONE\n";
+constexpr CTextProbe compiler_defines_probes[]{
+    {"compiler-defines", "/CompilerDefinesProbe.HC", "", "CD lists ", "CD DONE",
+     compiler_defines_output}};
+
+static void CheckCompilerDefines(const std::string &serial, const fs::path &dir)
+{
+  const auto &probe = compiler_defines_probes[0];
+  const auto output = ProgramOutput(serial, probe.source, '1');
+  const auto start =
+      std::string("UnholyOS: executing ") + probe.source + "\r\n";
+  const auto finish = std::string("UnholyOS: finished ") + probe.source +
+                      ", checks 0x0000000000000001\r\n";
+  const auto begin = serial.find(start), end = serial.find(finish, begin);
+  const auto module = serial.find("UnholyOS: compiler module ");
+  const auto boot = serial.find(BOOT_MARKER);
+  std::smatch initialized;
+  Check(
+      std::regex_search(
+          serial, initialized,
+          std::regex(
+              R"(UnholyOS: text base 0x[0-9a-f]+, compiler run level (0x[0-9a-f]+)\r\n)")) &&
+          std::stoull(initialized[1].str(), nullptr, 16) == 0x12FF &&
+          module != std::string::npos &&
+          module < size_t(initialized.position()) &&
+          size_t(initialized.position()) < begin && begin < end &&
+          boot != std::string::npos && end + finish.size() <= boot &&
+          serial.find(start, begin + start.size()) == std::string::npos &&
+          serial.find(finish, end + finish.size()) == std::string::npos,
+      "Compiler definition source did not run once between initialization and "
+      "startup");
+  std::ofstream file(dir / "compiler-defines-native.txt");
+  file << output;
+  file.close();
+  Check(bool(file), "Could not record compiler definition output");
+  std::cout << output;
+  Check(output == probe.expected,
+        "Compiler definition output differs from TempleOS");
+}
 
 constexpr std::string_view assert_warning_output = "AW result 42\nAW DONE\n";
 constexpr CTextProbe assert_warning_probes[]{
@@ -5567,6 +5772,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--music-precision-reference" ||
        std::string_view(argv[1]) == "--strings" ||
        std::string_view(argv[1]) == "--strings-reference" ||
+       std::string_view(argv[1]) == "--compiler-defines" ||
+       std::string_view(argv[1]) == "--compiler-defines-reference" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -5599,6 +5806,8 @@ int main(int argc, char **argv)
     bool math = std::string_view(argv[1]).starts_with("--math-helpers");
     bool assert_warning =
         std::string_view(argv[1]).starts_with("--assert-warning");
+    bool compiler_defines_probe =
+        std::string_view(argv[1]).starts_with("--compiler-defines");
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -5608,6 +5817,8 @@ int main(int argc, char **argv)
       text_probes = string_probes;
     else if (assert_warning)
       text_probes = assert_warning_probes;
+    else if (compiler_defines_probe)
+      text_probes = compiler_defines_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -5615,6 +5826,10 @@ int main(int argc, char **argv)
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
+      if (compiler_defines_probe && !reference)
+        VerifyHostModuleMedia(
+            argv[3], "Linux/Fixtures/CompilerDefinesProbe.HC",
+            "CompilerDefinesProbe.HC");
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
       if (!text_probes.empty() && !reference) {
@@ -5624,14 +5839,19 @@ int main(int argc, char **argv)
                                           "/AssertWarningProbe.BIN.Z, checks "
                                           "0x0000000000000001\r\n")
                           : vm.Boot(dir / "serial.log");
-        RecordTextProbes(output, text_probes, dir);
-        if (assert_warning) {
-          CheckAssertWarning(output);
-          std::cout << "False assertion warned in source and AOT compilation; "
-                       "both executions completed\n";
-        } else {
-          CheckTextProbes(output, text_probes);
-          std::cout << "Text probe sources and compiled modules matched\n";
+        if (compiler_defines_probe)
+          CheckCompilerDefines(output, dir);
+        else {
+          RecordTextProbes(output, text_probes, dir);
+          if (assert_warning) {
+            CheckAssertWarning(output);
+            std::cout
+                << "False assertion warned in source and AOT compilation; "
+                   "both executions completed\n";
+          } else {
+            CheckTextProbes(output, text_probes);
+            std::cout << "Text probe sources and compiled modules matched\n";
+          }
         }
       } else if (character || tic || breaks || screen_capture || spline ||
                  flood_fill || blot || sprite_flood || music_demo ||
@@ -5750,6 +5970,8 @@ int main(int argc, char **argv)
               << " --q35-no-compiler qemu image.iso kernel\n"
               << "       " << argv[0]
               << " --compiler-failures qemu image.iso kernel\n"
+              << "       " << argv[0]
+              << " --compiler-defines[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]

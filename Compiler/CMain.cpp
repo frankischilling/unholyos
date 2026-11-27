@@ -345,6 +345,6 @@ int64_t CInitStatus = 0;
 extern "C" void CInitCpp()
 {
   CInitStatus = -1;
-  if (AsmHashLoad())
+  if (CmpLoadDefines() && AsmHashLoad())
     CInitStatus = 1;
 }

@@ -2607,7 +2607,7 @@ commit and the GCC and Clang CI results.
 ## Loading the compiler from the boot volume
 
 The host build now puts the existing compiler implementation in
-`Compiler/Compiler.BIN`. Its 16 C++ and four NASM objects are absent from
+`Compiler/Compiler.BIN`. Its 17 C++ and four NASM objects are absent from
 the kernel ELF link. Every ISO includes the module beside Terry A.
 Davis's unchanged `Compiler/OpCodes.DD`. This follows the separate
 compiler load in pinned `Kernel/KMain.HC`: keyboard and mouse setup,
@@ -2616,7 +2616,7 @@ compiler load in pinned `Kernel/KMain.HC`: keyboard and mouse setup,
 `/Compiler/Compiler.BIN` and still initializes several Adam subsystems
 directly afterward.
 
-The module imports 44 native functions and 30 data symbols through the
+The module imports 45 native functions and 30 data symbols through the
 explicit `Compiler/Compiler.bindings` manifest. It publishes the nine
 existing public HolyC adapters and 16 private native compiler entries.
 `Kernel/KExts.asm` dispatches kernel and Adam calls through a validated
@@ -2709,13 +2709,113 @@ publish a partial table. These are native failure checks, not claims
 about how the pinned system handles deliberately corrupted media.
 
 Source review establishes the corresponding compiler load boundary.
-The current `CInitCpp` still calls only `AsmHashLoad`; the reference's
-`CmpLoadDefines`, `CmpFillTables`, `cmp.ic_nop` setup, and `UAsmHashLoad`
-sequence remain incomplete. Adam remains linked into the kernel,
+The current `CInitCpp` calls `CmpLoadDefines` before `AsmHashLoad`; the
+reference's `CmpFillTables`, `cmp.ic_nop` setup, and `UAsmHashLoad` steps
+remain incomplete. Adam remains linked into the kernel,
 and complete `StartOS.HC`/`Adam/MakeAdam.HC` execution still needs work.
 The guest ISO builder copies existing files, including this compiler
 module. Rebuilding C++20, HolyC, and assembly components entirely in
 the guest remains a later milestone.
+
+## Compiler definition lists
+
+`Compiler/CInit.cpp::CmpLoadDefines` installs the 14 lists from Terry A.
+Davis's pinned `Compiler/CInit.HC::CmpLoadDefines` before `AsmHashLoad`.
+The common `CompilerDefinesProbe.HC` ran unchanged in the pinned guest
+and the GCC 13.3.0 and Clang 20.1.2 native builds. All three produced
+these exact 109 normalized output bytes:
+
+```text
+CD lists 3FFF 3FFF
+CD entries 207 207
+CD bytes 3FFF 3FFF
+CD stable 3FFF
+CD selected FF
+CD compile 42
+CD DONE
+```
+
+Each inspection checks all 14 counts, all 207 indexed strings, and all
+946 copied list bytes, including each terminating empty string. It also
+rejects duplicate definitions and checks out-of-range `DefineSub` calls.
+The index entries retain the reference's pointers into the original
+compiler literals, while each record's `data` is a separate heap copy.
+The second inspection follows a nested `ExePutS` assignment that sets a
+fixture global to 42. All record, data, index-array, and individual index
+pointers remain unchanged. This exercises ordinary compiler use; it does
+not call compiler initialization again.
+
+Selected `DefineMatch` and `%Z` cases check the two space entries in
+`ST_RAW_TYPES`, the space at index 38 in `ST_ARG_TYPES`, and the different
+meanings of byte-register indices 4 and 7 with and without REX.
+The fixture uses the public `DefineMatch` declaration and its default
+zero flags, matching `Kernel/KernelC.HH`. The native metadata now exposes
+that existing three-argument HolyC bridge.
+
+The native ISO contains only this source fixture alongside the normal
+compiler and startup resources. The driver compares its packaged bytes,
+requires one execution with `checks 1`, and checks the complete trace.
+The source runs after Adam's existing file, DolDoc, and graphics
+initialization, at run level `0x12ff`, before `RLF_DOC` and user startup
+tasks. The reference transport reads back all 6,074 source bytes and the
+terminating NUL before `ExePutS`, then retains the complete text and
+screen and requires an empty prompt after completion.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Common `CompilerDefinesProbe.HC` | 6,074 | `b4ce39e3677b0fb2c9253b9afd9ab1611050b9ea5d304c8cdaa5db0f44a141cc` |
+| Reference source readback, including NUL | 6,075 | `01dc6a9dbfe0c4f62138be7bb36da1ca12aa66f04760278ad241db08a658d90f` |
+| Normalized trace | 109 | `fde5ac798f52f3dd24802a45f9533c3cc1a2059ed90f909e865f2c5bd89f4c68` |
+
+```sh
+make -j6 all build/unholyos-startup-test.iso test-compiler-defines
+make -j6 BUILD=build/clang CXX=clang++ HOSTCXX=clang++ \
+  all build/clang/unholyos-startup-test.iso test-compiler-defines
+build/Linux/TestBoot --compiler-failures qemu-system-x86_64 \
+  build/unholyos.iso build/0000Boot/0000Kernel.BIN.C
+build/clang/Linux/TestBoot --compiler-failures qemu-system-x86_64 \
+  build/clang/unholyos.iso build/clang/0000Boot/0000Kernel.BIN.C
+build/compiler-defines-audit/TestBoot.gcc --compiler-defines-reference \
+  qemu-system-x86_64 ../reference-media/TOS_Distro.ISO \
+  build/compiler-defines-reference-final
+```
+
+The reference command used the separately compiled GCC host driver from
+the same `Linux/TestBoot.cpp`. The Clang build selected the installed
+Clang 20 binary for both compiler variables. The native ISOs are
+`build/compiler-defines-test.iso` and
+`build/clang/compiler-defines-test.iso`. The commands exited successfully;
+native logs are `build/compiler-defines-gcc-final.log` and
+`build/compiler-defines-clang-final.log`. Reference evidence is retained
+in `build/compiler-defines-reference-final` and its matching `.log`.
+
+The reference checkout was verified clean through the Git Human Workflow
+helper before and after execution at
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`. Its ISO SHA-256 is
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+All runs used QEMU 8.2.2 (`1:8.2.2+ds-0ubuntu1.18`),
+`-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`, one default vCPU,
+`-display none -monitor none -qmp stdio -no-reboot`, and serial capture.
+The reference also used the debug console and GDB on port 45362; the VM
+exited and released that port.
+
+Separate host checks inspect the live records, copied bytes, heap
+ownership, and every index's bounded location in the compiler payload.
+They require all 14 lists in the successful and opcode-failure phases.
+The missing and malformed opcode cases stop before Adam initialization;
+loading and binding failures stop before entry and retain no lists.
+The native initializer's null caller frame produces the checked `AD:0x0`
+source links; the reference records its `Caller`-derived source location.
+Both compiler builds passed all seven refreshed failure cases. The two
+opcode failures retain 14 definitions in 70 allocations using 5,360 heap
+bytes; the five earlier failures retain none. Their logs are
+`build/compiler-defines-failures-gcc-final.log` and
+`build/compiler-defines-failures-clang-final.log`.
+These comparisons do not inject allocation failures.
+
+`make test` includes this fixture in the complete regression gate. The
+pull request records the exact tested commit and the GCC and Clang CI
+results.
 
 ## Subsystem map
 
