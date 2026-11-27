@@ -189,6 +189,13 @@ extern "C" void KMainCpp()
     return;
   }
   SYS_RUN_LEVEL |= RLF_COMPILER;
+  BootKernelCfgReport();
+  if (!(SYS_RUN_LEVEL & RLF_VGA)) {
+    BootPutS("Text mode: kernel ready; graphical Adam startup disabled");
+    SerialPutS("UnholyOS: text mode kernel ready; graphical Adam startup disabled\r\n");
+    for (;;)
+      asm volatile("cli; hlt" : : : "memory");
+  }
   if (!GrPaletteInit()) {
     SerialPutS("UnholyOS: Could not register color names\r\n");
     return;

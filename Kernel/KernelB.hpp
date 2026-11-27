@@ -1,6 +1,7 @@
 #pragma once
 
 #include "KernelA.hpp"
+#include "KCfg.hpp"
 #include "../Adam/ASnd.hpp"
 
 inline void MemSet(void *dst, uint8_t value, size_t count)
@@ -419,7 +420,6 @@ extern CBlkDevGlbls blkdev;
 extern CDbgGlbls dbg;
 extern CSema sys_semas[SEMA_SEMAS_NUM];
 extern CScrnCastGlbls scrncast;
-extern uint8_t sys_var_init_flag, sys_var_init_val;
 extern CJob sys_macro_head;
 extern CTask *sys_macro_task;
 extern CDevGlbls dev;

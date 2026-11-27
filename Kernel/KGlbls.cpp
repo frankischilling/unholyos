@@ -15,7 +15,6 @@ CTextGlbls text;
 CMsHardStateGlbls ms_hard, ms_hard_last;
 CMsStateGlbls ms, ms_last, old_ms;
 CGridGlbls ms_grid;
-uint8_t sys_var_init_flag, sys_var_init_val;
 CJob sys_macro_head;
 CTask *sys_macro_task;
 CDevGlbls dev;

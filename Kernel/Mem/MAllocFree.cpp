@@ -76,23 +76,28 @@ uint8_t *MAlloc(size_t size, CHeapCtrl *hc)
     return nullptr;
   size = (size + sizeof(CMemUsed) + 7) & ~size_t{7};
 
-  CMemLock lock(hc->locked_flags);
   CMemUsed *used;
-  if (size >= MEM_HEAP_HASH_SIZE) {
-    auto *blk = MemPagTaskAlloc(
-        (size + sizeof(CMemBlk) + MEM_PAG_SIZE - 1) >> MEM_PAG_BITS, hc);
-    if (!blk)
+  {
+    CMemLock lock(hc->locked_flags);
+    if (size >= MEM_HEAP_HASH_SIZE) {
+      auto *blk = MemPagTaskAlloc(
+          (size + sizeof(CMemBlk) + MEM_PAG_SIZE - 1) >> MEM_PAG_BITS, hc);
+      if (!blk)
+        return nullptr;
+      used = reinterpret_cast<CMemUsed *>(blk + 1);
+      size = (uint64_t{blk->pags} << MEM_PAG_BITS) - sizeof(CMemBlk);
+    } else if (!(used = MAllocSmall(size, hc))) {
       return nullptr;
-    used = reinterpret_cast<CMemUsed *>(blk + 1);
-    size = (uint64_t{blk->pags} << MEM_PAG_BITS) - sizeof(CMemBlk);
-  } else if (!(used = MAllocSmall(size, hc))) {
-    return nullptr;
+    }
+    hc->used_u8s += size;
+    used->size = size;
+    used->hc = hc;
   }
 
-  hc->used_u8s += size;
-  used->size = size;
-  used->hc = hc;
-  return reinterpret_cast<uint8_t *>(used + 1);
+  auto *res=reinterpret_cast<uint8_t *>(used + 1);
+  if (sys_heap_init_flag&1)
+    MemSet(res,sys_heap_init_val,size-sizeof(CMemUsed));
+  return res;
 }
 
 uint8_t *CAlloc(size_t size, CHeapCtrl *hc)
