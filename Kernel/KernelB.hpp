@@ -481,6 +481,58 @@ bool ATAPIReadBytes(const CBlkDev &bd, uint8_t *buf, uint64_t pos,
 CDrv *BlkDevsInitAll();
 bool BlkDevGlblsInit();
 CDrv *MountedDrive(char letter);
+extern uint64_t disk_lock_flags;
+CBlkDev *BlkDevLockTarget(CBlkDev *bd);
+bool BlkDevLockOwner(CBlkDev *bd);
+bool BlkDevUnlockOwner(CBlkDev *bd,bool rst);
+bool DrvLockOwner(CDrv *dv);
+bool DrvUnlockOwner(CDrv *dv);
+extern "C" uint64_t DrvLockCpp(CDrv *dv);
+extern "C" uint64_t DrvUnlockCpp(CDrv *dv,uint8_t rst);
+extern "C" void DrvsReleaseCpp();
+extern "C" uint64_t BlkDevLockCpp(CBlkDev *bd);
+extern "C" uint64_t BlkDevUnlockCpp(CBlkDev *bd,uint8_t rst);
+bool BlkDevEnsureInitialized(CBlkDev &bd);
+extern "C" uint64_t BlkDevInitCpp(CBlkDev *bd);
+extern "C" void BlkDevsReleaseCpp();
+extern "C" void DskCacheInitCpp(int64_t size_in_U8s);
+extern "C" void DskCacheAddCpp(CDrv *dv,const uint8_t *buf,int64_t blk,int64_t cnt);
+extern "C" void DskCacheInvalidate2Cpp(CDrv *dv);
+extern "C" void RCacheCpp(CDrv *dv,uint8_t **buf,int64_t *blk,int64_t *cnt);
+void DskCacheInvalidateDevice(CBlkDev *bd);
+void DskCacheWriteThrough(CBlkDev *bd,const uint8_t *buf,uint64_t pos,
+                          size_t bytes,bool okay);
+bool DrvReadBytes(const CDrv &drive,uint8_t *buf,uint64_t pos,size_t bytes);
+
+// Native scopes retain existing non-yielding I/O and preserve outer ownership.
+// Acquire before disabling interrupts; release without entering the scheduler.
+class CDiskLock
+{
+public:
+  explicit CDiskLock(CBlkDev &bd) : CDiskLock(&bd,nullptr) {}
+  explicit CDiskLock(CDrv &dv) : CDiskLock(dv.bd,&dv) {}
+  ~CDiskLock()
+  {
+    if (unlock_dv) DrvUnlockOwner(dv);
+    if (unlock_bd) BlkDevUnlockOwner(bd,false);
+    SetRFlags(rflags);
+  }
+  CDiskLock(const CDiskLock &)=delete;
+  CDiskLock &operator=(const CDiskLock &)=delete;
+private:
+  CDiskLock(CBlkDev *device,CDrv *drive) :
+      bd(BlkDevLockTarget(device)),dv(drive),
+      unlock_bd(bd && BlkDevLockOwner(bd)),
+      unlock_dv(dv && DrvLockOwner(dv)),rflags(GetRFlags())
+  {
+    asm volatile("cli" : : : "memory");
+  }
+  CBlkDev *bd;
+  CDrv *dv;
+  bool unlock_bd,unlock_dv;
+  uint64_t rflags;
+};
+
 extern "C" CDrv *DrvMakeFreeSlotCpp(uint8_t drv_let);
 extern "C" uint64_t DrvNextFreeLetCpp(uint8_t first_drv_let);
 extern "C" CDrv *DrvChkCpp(CDrv *dv,uint8_t except);

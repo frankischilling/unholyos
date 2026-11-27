@@ -340,7 +340,25 @@ constexpr char DFT_ISO_FILENAME[] = "::/Tmp/CDDVD.ISO",
                DFT_ISO_C_FILENAME[] = "::/Tmp/CDDVD.ISO.C",
                DFT_TMP_FILENAME[] = "~/Tmp.DD.Z";
 
-struct CCacheBlk;
+constexpr size_t DSK_CACHE_HASH_SIZE = 0x2000;
+
+struct CCacheBlk
+{
+  CCacheBlk *next_lru, *last_lru;
+  CCacheBlk *next_hash, *last_hash;
+  CDrv *dv;
+  int64_t blk;
+  uint8_t body[BLK_SIZE];
+};
+
+static_assert(sizeof(CCacheBlk) == 560 &&
+              offsetof(CCacheBlk, next_lru) == 0 &&
+              offsetof(CCacheBlk, last_lru) == 8 &&
+              offsetof(CCacheBlk, next_hash) == 16 &&
+              offsetof(CCacheBlk, last_hash) == 24 &&
+              offsetof(CCacheBlk, dv) == 32 &&
+              offsetof(CCacheBlk, blk) == 40 &&
+              offsetof(CCacheBlk, body) == 48);
 
 struct CBlkDevGlbls
 {
@@ -368,6 +386,7 @@ enum : size_t
   SEMA_REFRESH_IN_PROGRESS = 8,
   SEMA_FLUSH_VGA_IMAGE = 9,
   SEMA_SINGLE_USER = 10,
+  SEMA_DSK_CACHE = 11,
   SEMA_VGA = 14,
   SEMA_UPDATE_WIN_Z_BUF = 15,
   SEMA_MUTE = 17,

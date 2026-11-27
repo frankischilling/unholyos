@@ -8,7 +8,7 @@ in UnholyOS. It includes include-only and project-organization files.
 
 | Directory | Reference files | Corresponding paths | Missing paths |
 | --- | ---: | ---: | ---: |
-| `Kernel` | 76 | 67 | 9 |
+| `Kernel` | 76 | 68 | 8 |
 | `Compiler` | 33 | 18 | 15 |
 | `Adam` | 132 | 44 | 88 |
 | `Apps` | 71 | 3 | 68 |
@@ -21,12 +21,14 @@ part of the full rewrite.
 
 ## Remaining kernel work
 
-- `Kernel/BlkDev/DskCache.HC` and `FileSysISO.HC`: restore the cache layer
-  and ISO filesystem, then integrate them into filesystem and device
-  operations. `DskClus.cpp` now supplies cluster traversal, allocation,
+- `Kernel/BlkDev/FileSysISO.HC`: restore the ISO filesystem and its
+  mount and file operations. `DskCache.cpp` now supplies the block cache,
+  and drive and device locking use task ownership. The per-drive FAT
+  sector cache, RedSea free lists and complete media lifecycle remain
+  separate work. `DskClus.cpp` supplies cluster traversal, allocation,
   reads and writes, and `DirNew` publishes RedSea and FAT32 directory
   entries. Complete chain ownership and error recovery, mount lifecycle,
-  removable media and task-owned device locks still need work.
+  removable media and multi-CPU locking still need work.
   `DskCluster.HC` is present in the reference tree but not included by
   its `MakeBlkDev.HC`; the active cluster implementation is `DskClus.HC`.
 - `Kernel/BlkDev/MakeBlkDev.HC`, `Kernel/Mem/MakeMem.HC`,

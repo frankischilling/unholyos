@@ -4,12 +4,68 @@ extern "C" void PrintCpp(const char *fmt,int64_t argc,const uint64_t *argv);
 extern "C" void PrintErrCpp(const char *fmt,int64_t argc,const uint64_t *argv,
                            const uintptr_t *frame);
 
+bool DrvLockOwner(CDrv *dv)
+{
+  auto *task=CurrentTask();
+  for (;;) {
+    {
+      CMemLock lock(disk_lock_flags);
+      if (!(dv->locked_flags&1)) {
+        dv->locked_flags|=1;
+        dv->owning_task=task;
+        return true;
+      }
+      if (dv->owning_task==task) return false;
+    }
+    _YIELD();
+  }
+}
+
+bool DrvUnlockOwner(CDrv *dv)
+{
+  CMemLock lock(disk_lock_flags);
+  if (!(dv->locked_flags&1) || dv->owning_task!=CurrentTask())
+    return false;
+  dv->owning_task=nullptr;
+  dv->locked_flags&=~uint64_t(1);
+  return true;
+}
+
+extern "C" uint64_t DrvLockCpp(CDrv *dv)
+{
+  DrvChkCpp(dv,true);
+  BlkDevLockCpp(dv->bd);
+  return DrvLockOwner(dv);
+}
+
+extern "C" uint64_t DrvUnlockCpp(CDrv *dv,uint8_t rst)
+{
+  DrvChkCpp(dv,true);
+  if (!DrvUnlockOwner(dv)) return false;
+  if (auto *bd=BlkDevLockTarget(dv->bd)) BlkDevUnlockOwner(bd,rst);
+  _YIELD();
+  return true;
+}
+
+extern "C" void DrvsReleaseCpp()
+{
+  if (!blkdev.drvs) return;
+  for (size_t i=0;i<DRVS_NUM;i++) {
+    auto *dv=&blkdev.drvs[i];
+    if (dv->dv_signature==DRV_SIGNATURE_VAL && DrvUnlockOwner(dv)) {
+      if (auto *bd=BlkDevLockTarget(dv->bd)) BlkDevUnlockOwner(bd,true);
+    }
+  }
+}
+
 extern "C" CDrv *DrvMakeFreeSlotCpp(uint8_t drv_let)
 {
   int64_t i=Let2LetCpp(drv_let)-'A';
   if (!(0<=i && i<static_cast<int64_t>(DRVS_NUM)))
     RaiseHolyC(0x767244); // Drv
   auto *res=&blkdev.drvs[i];
+  if (res->locked_flags&1) RaiseHolyC(0x767244);
+  DskCacheInvalidate2Cpp(res);
   MemSet(res,0,sizeof(CDrv));
   res->drv_let='A'+i;
   return res;

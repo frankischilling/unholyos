@@ -106,6 +106,17 @@ void DirEntryCompareClusHC();
 void DirFilesSortHC();
 void DirFilesFlattenHC();
 void FilesFind2HC();
+void DrvLockHC();
+void DrvUnlockHC();
+void DrvsReleaseHC();
+void BlkDevLockHC();
+void BlkDevUnlockHC();
+void BlkDevInitHC();
+void BlkDevsReleaseHC();
+void DskCacheInitHC();
+void DskCacheAddHC();
+void DskCacheInvalidate2HC();
+void RCacheHC();
 void DrvMakeFreeSlotHC();
 void DrvNextFreeLetHC();
 void DrvChkHC();
@@ -977,6 +988,17 @@ bool LoadKernel(CTask &task)
       {"DirFilesSort", reinterpret_cast<uintptr_t>(DirFilesSortHC)},
       {"DirFilesFlatten", reinterpret_cast<uintptr_t>(DirFilesFlattenHC)},
       {"FilesFind2", reinterpret_cast<uintptr_t>(FilesFind2HC)},
+      {"DrvLock", reinterpret_cast<uintptr_t>(DrvLockHC)},
+      {"DrvUnlock", reinterpret_cast<uintptr_t>(DrvUnlockHC)},
+      {"DrvsRelease", reinterpret_cast<uintptr_t>(DrvsReleaseHC)},
+      {"BlkDevLock", reinterpret_cast<uintptr_t>(BlkDevLockHC)},
+      {"BlkDevUnlock", reinterpret_cast<uintptr_t>(BlkDevUnlockHC)},
+      {"BlkDevInit", reinterpret_cast<uintptr_t>(BlkDevInitHC)},
+      {"BlkDevsRelease", reinterpret_cast<uintptr_t>(BlkDevsReleaseHC)},
+      {"DskCacheInit", reinterpret_cast<uintptr_t>(DskCacheInitHC)},
+      {"DskCacheAdd", reinterpret_cast<uintptr_t>(DskCacheAddHC)},
+      {"DskCacheInvalidate2", reinterpret_cast<uintptr_t>(DskCacheInvalidate2HC)},
+      {"RCache", reinterpret_cast<uintptr_t>(RCacheHC)},
       {"DrvMakeFreeSlot", reinterpret_cast<uintptr_t>(DrvMakeFreeSlotHC)},
       {"DrvNextFreeLet", reinterpret_cast<uintptr_t>(DrvNextFreeLetHC)},
       {"DrvChk", reinterpret_cast<uintptr_t>(DrvChkHC)},
