@@ -24,7 +24,10 @@ CMemberLst *MemberAdd(CHashClass &owner, const char *name, CHashClass &cls,
   member->offset = offset;
   ++owner.member_cnt;
   *link = member;
-  if (owner.last_in_member_lst)
+  // The empty tail's next link is the root slot assigned above.
+  if (owner.last_in_member_lst &&
+      owner.last_in_member_lst !=
+          reinterpret_cast<CMemberLst *>(&owner.member_lst_and_root))
     owner.last_in_member_lst->next = member;
   owner.last_in_member_lst = member;
   return member;
@@ -53,16 +56,19 @@ CHashClass *PrsStars(CCmpCtrl &cc, CHashClass *cls)
 CHashClass *PrsClassNew()
 {
   auto *cls = reinterpret_cast<CHashClass *>(CAlloc(
-      sizeof(CHashClass) * (PTR_STARS_NUM + 1), CurrentTask()->data_heap));
+      sizeof(CHashClass) * (PTR_STARS_NUM + 1), CurrentTask()->code_heap));
   if (!cls)
     return nullptr;
   for (unsigned stars = 0; stars <= PTR_STARS_NUM; ++stars) {
     auto &type = cls[stars];
     type.sym.hash.type = HTT_CLASS;
-    type.ptr_stars_cnt = stars;
     type.raw_type = RT_I64;
-    type.size = stars ? sizeof(uint64_t) : 0;
+    type.size = sizeof(uint8_t *);
+    type.ptr_stars_cnt = stars;
   }
+  cls->last_in_member_lst =
+      reinterpret_cast<CMemberLst *>(&cls->member_lst_and_root);
+  cls->size = 0;
   return cls;
 }
 

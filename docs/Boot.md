@@ -3252,10 +3252,13 @@ empty links. Six integer view classes retain raw type 10 and forward to
 their scalar types; all 24 members are checked for offsets, dimensions,
 effective types, and signed or unsigned reads. A fixture union forwarded
 through `I16` checks a two-link chain and preserves raw type 10. These
-checks do not compare every byte of each 128-byte class record. Native
-`PrsClassNew` still uses the current task's data heap instead of the
-reference code heap, and initializes `last_in_member_lst` to NULL instead
-of the reference's `&member_lst_and_root` sentinel.
+checks do not compare every byte of each 128-byte class record. These
+runs tested `24030d55f5cda28c6e4bec473fc203a61e5a501f`. At that revision,
+native `PrsClassNew` used the current task's data heap instead of the
+reference code heap, and initialized `last_in_member_lst` to NULL instead
+of the reference's `&member_lst_and_root` sentinel. See
+[Compiler class records](#compiler-class-records) for the subsequent
+allocation and list-initialization checks with distinct heaps.
 
 `I0` and `I0i` have raw type 2 and size zero; `U0` and `U0i` retain raw
 type 3. Their pointer widths, direct and typed function-pointer calls,
@@ -3346,6 +3349,112 @@ to an empty prompt after each probe, then exited and released the port.
 `make test` includes the primitive fixture in the complete regression
 gate. The pull request records the exact tested commit and the GCC and
 Clang CI results.
+
+## Compiler class records
+
+`ClassRecordsProbe.HC` follows Terry A. Davis's `Compiler/PrsLib.HC`,
+`PrsStmt.HC`, and `LexLib.HC` at the pinned revision. The common source
+creates an extern class through `ExePutS`, completes the same record,
+uses its members, then removes the owned class. Both comparison modes
+use 3,072 MiB: at 512 MiB the code and data heap pointers alias, which
+would not establish the allocation's ownership. Pinned TempleOS and the
+GCC and Clang native builds produced these same 92 normalized bytes:
+
+```text
+CR heaps 1
+CR forward FF pointers F
+CR complete FF members 3
+CR cleanup 7
+CR heap 3
+CR DONE
+```
+
+The fixture requires distinct heaps and a 640-byte class allocation
+owned by `Fs->code_heap`. Before using the forward declaration, it checks
+the base's empty fields and `&member_lst_and_root` tail sentinel, then
+compares all 128 bytes of each of its four contiguous pointer companions.
+Completing the declaration must retain the same base and create three
+members on the data heap. Public `MemberFind`, declaration order, search
+tree links, offsets, dimensions, and the final tail are checked. Actual
+writes to a packed 13-byte object verify unaligned fields and preserve
+eight guard bytes at each end. Removing the exact owned record must leave
+no duplicate, restore both heap counters, and preserve RSP and exception
+queue links.
+
+These checks cover the stated base and member fields, not every byte of
+their records. In particular, reference `LexLib.HC::MemberAdd` leaves an
+ordinary member's `member_class_base` NULL, while the current C++ member
+record retains its scalar class base. Primitive registration lifetime
+and broader parser-failure cleanup parity are also outside this
+comparison.
+
+The separate native `BootClassRecordsReport` runs only after the common
+source completes successfully. It creates another forward declaration,
+attempts a definition that inserts a member before rejecting a negative
+array extent, and requires the same record to recover its empty list and
+self sentinel. A valid retry must produce the two ordered members;
+deletion must restore both allocation counters. The host requires exactly
+one `UnholyOS: class record recovery checks 0x00000000000000ff` line after
+the source completion and before normal boot completion. This is a native
+recovery regression, separate from the common reference trace.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Common `ClassRecordsProbe.HC` | 6,671 | `e46dd44b61de331da935f31b63cca61db427769e224392e2e5d27b8d152113f3` |
+| Reference upload readback, including NUL | 6,672 | `2cb67ee9958312f58f8ce1f464e854cb871c10f38b16554e727a439abdb4c601` |
+| Common execution trace | 92 | `35c2c07fd3eecd0c04a10c5def0891140e4b9c79b9aea494a017ee01991f232f` |
+
+```sh
+make -j4 all build/unholyos-startup-test.iso build/class-records-test.iso
+make -j4 BUILD=build/clang \
+  CXX=/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  HOSTCXX=/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  all build/clang/unholyos-startup-test.iso build/clang/class-records-test.iso
+g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+  -o build/class-records-audit/TestBoot.memory.gcc Linux/TestBoot.cpp
+/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  -std=c++20 -O2 -Wall -Wextra -Werror \
+  -o build/class-records-audit/TestBoot.memory.clang Linux/TestBoot.cpp
+build/class-records-audit/TestBoot.memory.gcc --class-records \
+  qemu-system-x86_64 build/class-records-test.iso build/class-records-gcc
+build/class-records-audit/TestBoot.memory.clang --class-records \
+  qemu-system-x86_64 build/clang/class-records-test.iso build/class-records-clang
+build/class-records-audit/TestBoot.memory.gcc --class-records-reference \
+  qemu-system-x86_64 ../reference-media/TOS_Distro.ISO \
+  build/class-records-reference
+```
+
+All three focused driver commands exited successfully. Native logs and
+captures are `build/class-records-gcc` and `build/class-records-clang`;
+both verify all 6,671 packaged source bytes, the exact common trace,
+source completion with `checks 1`, and the recovery `ff` marker in order.
+The repaired image-build logs are `build/class-records-images-gcc-fixed.log`
+and its Clang counterpart. The initial image link exposed a test helper
+call to compiler-private `MemberFind`; the helper now inspects its owned
+list directly, while the common HolyC fixture still exercises the public
+function. No new production reverse import was added.
+
+The reference's complete source-plus-NUL readback, normalized text,
+terminal screen, and PPM are retained in `build/class-records-reference`,
+with the log at the same stem. The upload address was `0xacfade28`, above
+the transport's previous 512 MiB limit. The shared reader now checks
+each address and complete extent against the configured 3 GiB bound for
+this mode; other modes retain their 512 MiB default. The entire readback
+must equal the fixture plus its terminating NUL.
+
+The separate reference checkout was verified clean through the Git Human
+Workflow helper before and after execution at
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`. The ISO SHA-256 is
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+QEMU 8.2.2 (`1:8.2.2+ds-0ubuntu1.18`) used
+`-machine pc -cpu qemu64 -m 3072 -boot d -cdrom <iso>`, one default vCPU,
+`-display none -monitor none -qmp stdio -no-reboot`, and serial capture.
+The reference also used the debug console and GDB port 45362, returned to
+an empty `T:/Home>` prompt, then exited and released the port.
+
+`make test` includes the dedicated class-record fixture and native
+recovery check. The pull request records the exact tested commit and the
+GCC and Clang CI results.
 
 ## Subsystem map
 

@@ -241,6 +241,8 @@ extern "C" CMemberLstMeta *MemberMetaFindCpp(const char *name, CMemberLst *membe
 extern "C" uint64_t MemberMetaDataCpp(const char *name, CMemberLst *member);
 extern "C" CMemberLst *MemberFindCpp(const char *name, CHashClass *cls);
 bool PrsMemberMeta(CCmpCtrl &cc, CMemberLst &member);
+static_assert(offsetof(CMemberLst, next) == 0 &&
+              offsetof(CHashClass, last_in_member_lst) == 104);
 CMemberLst *MemberAdd(CHashClass &owner, const char *name, CHashClass &cls,
                       int64_t offset);
 CHashClass *PrsClass(const CCmpCtrl &cc);

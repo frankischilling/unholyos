@@ -97,8 +97,12 @@ static void DriveCharacterGraphics(
     bool spline = false, bool flood_fill = false, bool blot = false,
     bool sprite_flood = false, bool music_demo = false,
     std::span<const CTextProbe> text_probes = {},
-    std::span<const CModuleFile> module_files = {})
+    std::span<const CModuleFile> module_files = {},
+    uint64_t memory_limit = 0x20000000)
 {
+  auto in_memory = [memory_limit](uint64_t addr, uint64_t size) {
+    return addr && size <= memory_limit && addr <= memory_limit - size;
+  };
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
     vm.Hmp("sendkey " + name + " 35");
@@ -165,7 +169,7 @@ static void DriveCharacterGraphics(
           "Missing text base address");
     base = std::stoull(match[1].str(), nullptr, 16);
   }
-  Check(base && base < 0x20000000, "Invalid character graphics text address");
+  Check(in_memory(base, 19200), "Invalid character graphics text buffer");
   auto path = dir / "character-text.bin";
   using Cells = std::array<uint32_t, 80 * 60>;
   auto capture = [&] {
@@ -210,7 +214,8 @@ static void DriveCharacterGraphics(
     vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
                (dir / (std::string(name) + ".ppm")).string() + R"("}})");
   };
-  auto addresses = [&](std::string_view marker) {
+  auto addresses = [&](std::string_view marker,
+                       std::array<uint64_t, 3> sizes = {8, 8, 8}) {
     const std::regex pattern(std::string(marker) +
                              "([0-9A-Fa-f]+) ([0-9A-Fa-f]+) ([0-9A-Fa-f]+)");
     std::smatch match;
@@ -222,7 +227,7 @@ static void DriveCharacterGraphics(
     std::array<uint64_t, 3> result{};
     for (size_t i = 0; i < result.size(); i++) {
       result[i] = std::stoull(match[i + 1].str(), nullptr, 16);
-      Check(result[i] && result[i] < 0x20000000, "Invalid graphics runtime address");
+      Check(in_memory(result[i], sizes[i]), "Invalid graphics runtime address");
     }
     return result;
   };
@@ -233,7 +238,7 @@ static void DriveCharacterGraphics(
     cmd("I64 mu1=&scrncast.snd_head,mu2=&scrncast.ona;");
     cmd("I64 mu3=&music.play_note_num;");
     cmd(R"("Sound MU %X %X %X\n",mu1,mu2,mu3;)");
-    auto [head, ona, note_num] = addresses("MU ");
+    auto [head, ona, note_num] = addresses("MU ", {24, 1, 8});
     cmd("ScrnCast(1,1);DocClear(,1);");
     cmd(R"(ExeFile("::/Demo/Snd/OhGreat.HC");)");
     wait([&](const Cells &cells) {
@@ -257,7 +262,7 @@ static void DriveCharacterGraphics(
     Bytes notes;
     std::set<uint64_t> visited;
     while (node != head) {
-      Check(node && node < 0x20000000 && visited.insert(node).second &&
+      Check(in_memory(node, 25) && visited.insert(node).second &&
                 notes.size() < 512, "Invalid recorded song queue");
       auto entry = ReadPhysical<3>(vm, node);
       Check(entry[1] == previous && entry[2] >= last_time,
@@ -300,7 +305,7 @@ static void DriveCharacterGraphics(
   }
   if (blot) {
     cmd(R"("BL %X %X %X\n",gr.dc->body,&Fs->pix_left,&Fs->pix_top;)");
-    auto [pixels, left, top] = addresses("BL ");
+    auto [pixels, left, top] = addresses("BL ", {640 * 480, 8, 8});
     cmd("DocClear(,1);DCFill;MsSet(620,460);");
     cmd(R"(ExeFile("::/Demo/Graphics/Blot.HC");)");
     wait_text("PRESS A KEY");
@@ -347,7 +352,7 @@ static void DriveCharacterGraphics(
     wait_text("=66");
     cmd("CTask *sct=gr.dc->win_task;");
     cmd(R"("SC %X %X %X\n",gr.dc->body,&sct->pix_left,&sct->pix_top;)");
-    auto [pixels, left, top] = addresses("SC ");
+    auto [pixels, left, top] = addresses("SC ", {640 * 480, 8, 8});
     cmd("DocClear(,1);DCFill;MsSet(480,360);");
     cmd("U8 *scbody=gr.dc->body;");
     cmd("I64 sci;for(sci=0;sci<8;sci++)MemSet(scbody+156484+sci*640,4,16);");
@@ -415,8 +420,7 @@ static void DriveCharacterGraphics(
       return std::regex_search(screen, match, pattern);
     }, "Missing reference probe buffer address");
     auto addr = std::stoull(match[1].str(), nullptr, 16);
-    Check(addr && addr <= 0x20000000 - allocation,
-          "Invalid reference probe buffer");
+    Check(in_memory(addr, allocation), "Invalid reference probe buffer");
     char payload[] = "/tmp/unholyos-character-probe-XXXXXX";
     int fd = mkstemp(payload);
     Check(fd >= 0, "Cannot create reference probe transfer file");
@@ -487,7 +491,7 @@ static void DriveCharacterGraphics(
       const auto size = std::stoull(match[2].str(), nullptr, 16);
       const auto cluster = std::stoull(match[3].str(), nullptr, 16);
       Check(size == expected.size() && cluster && cluster != UINT64_MAX &&
-                addr && addr <= 0x20000000 - size,
+                in_memory(addr, size),
             "Invalid reference module file readback");
       const auto readback =
           dir / (std::string(module.evidence_name) + "-file-readback.bin");
@@ -611,11 +615,11 @@ static void DriveCharacterGraphics(
   }
   if (spline) {
     cmd(R"("SP1 %X %X %X\n",gr.dc->body,&ms.pos.x,&winmgr.updates;)");
-    auto [pixels, mouse, updates] = addresses("SP1 ");
+    auto [pixels, mouse, updates] = addresses("SP1 ", {640 * 480, 16, 8});
     cmd(R"("SP2 %X %X %X\n",&Fs->pix_left,&Fs->pix_top,&Fs->win_inhibit;)");
-    auto [left, top, inhibit] = addresses("SP2 ");
+    auto [left, top, inhibit] = addresses("SP2 ", {8, 8, 4});
     cmd(R"("SP3 %X %X %X\n",&ms.lb,&ms.rb,&Fs->scroll_x;)");
-    auto [lb, rb, scroll] = addresses("SP3 ");
+    auto [lb, rb, scroll] = addresses("SP3 ", {1, 1, 24});
     auto old_inhibit = ReadPhysical<1>(vm, inhibit, 'w')[0];
     auto old_scroll = ReadPhysical<3>(vm, scroll);
     cmd("DocClear(,1);MsSet(32,32);");
@@ -756,9 +760,9 @@ static void DriveCharacterGraphics(
   }
   if (tic) {
     cmd(R"("TT1 %X %X %X\n",gr.dc->body,Fs->hash_table,&ms.pos.x;)");
-    auto [pixels, table, mouse] = addresses("TT1 ");
+    auto [pixels, table, mouse] = addresses("TT1 ", {640 * 480, 32, 16});
     cmd(R"("TT2 %X %X %X\n",&Fs->pix_left,&Fs->pix_top,&ms.lb;)");
-    auto [left, top, button] = addresses("TT2 ");
+    auto [left, top, button] = addresses("TT2 ", {8, 8, 1});
     cmd(R"("TT3 %X %X %X\n",&winmgr.updates,&Fs->task_flags,&Fs->except_ch;)");
     auto [updates, flags, exception] = addresses("TT3 ");
     cmd("DocClear(,1);MsSet(32,32);");
@@ -776,13 +780,21 @@ static void DriveCharacterGraphics(
     uint64_t board_addr = 0;
     for (unsigned tries = 0; tries < 20 && !board_addr; tries++) {
       for (uint64_t tab = table; tab && !board_addr;) {
+        Check(in_memory(tab, 32), "Invalid TicTacToe hash table");
         auto hdr = ReadPhysical<4>(vm, tab);
-        auto entry = ReadPhysical<1>(vm, hdr[3] + (hash & hdr[1]) * 8)[0];
+        auto slot = hash & hdr[1];
+        Check(in_memory(hdr[3], 8) && slot <= (memory_limit - hdr[3] - 8) / 8,
+              "Invalid TicTacToe hash bucket");
+        auto entry = ReadPhysical<1>(vm, hdr[3] + slot * 8)[0];
         for (unsigned i = 0; entry && i < 128; i++) {
+          Check(in_memory(entry, 24), "Invalid TicTacToe hash entry");
           auto h = ReadPhysical<3>(vm, entry);
+          if ((h[2] & 8) && h[1])
+            Check(in_memory(h[1], 6), "Invalid TicTacToe global name");
           if ((h[2] & 8) && h[1] &&
               ReadPhysical<6>(vm, h[1], 'b') ==
                   std::array<uint64_t, 6>{'b','o','a','r','d',0}) {
+            Check(in_memory(entry, 128), "Invalid TicTacToe global record");
             board_addr = ReadPhysical<1>(vm, entry + 120)[0];
             break;
           }
@@ -793,7 +805,7 @@ static void DriveCharacterGraphics(
       if (!board_addr)
         std::this_thread::sleep_for(100ms);
     }
-    Check(board_addr && board_addr < 0x20000000, "TicTacToe board was not compiled");
+    Check(in_memory(board_addr, 9), "TicTacToe board was not compiled");
     using Board = std::array<uint64_t, 9>;
     Board expected{};
     auto board = [&] { return ReadPhysical<9>(vm, board_addr, 'b'); };
@@ -954,11 +966,11 @@ static void DriveCharacterGraphics(
   }
   cmd("CDoc *cgdoc=DocPut;");
   cmd(R"("CG1 %X %X %X\n",&text.font,&gr.pan_text_x,&gr.hide_row;)");
-  auto [font_slot, pan_slot, hide_slot] = addresses("CG1 ");
+  auto [font_slot, pan_slot, hide_slot] = addresses("CG1 ", {8, 16, 2});
   cmd(R"("CG2 %X %X %X\n",&Fs->draw_it,&Fs->animate_task,&cgdoc->flags;)");
   auto [draw_slot, anim_slot, flags_slot] = addresses("CG2 ");
   cmd(R"("CG3 %X %X %X\n",&ms.pos.x,&Fs->win_left,&Fs->scroll_x;)");
-  auto [mouse_slot, window_slot, scroll_slot] = addresses("CG3 ");
+  auto [mouse_slot, window_slot, scroll_slot] = addresses("CG3 ", {16, 32, 24});
   auto old_font = ReadPhysical<1>(vm, font_slot)[0];
   auto old_draw = ReadPhysical<1>(vm, draw_slot)[0];
   auto old_anim = ReadPhysical<1>(vm, anim_slot)[0];
@@ -1013,6 +1025,8 @@ static void DriveCharacterGraphics(
   uint64_t font = 0;
   for (unsigned i = 0; i < 100; i++) {
     font = ReadPhysical<1>(vm, font_slot)[0];
+    if (font)
+      Check(in_memory(font, ('^' + 1) * 8), "Invalid animated font buffer");
     if (font && font != old_font &&
         ReadPhysical<1>(vm, font + '*' * 8)[0] == 0x18187E7E3C3C18) {
       auto wave = ReadPhysical<1>(vm, font + '^' * 8)[0];

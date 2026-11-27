@@ -2739,6 +2739,16 @@ const CTextProbe internal_types_reference_probes[]{
     {"internal-types-aot", "/InternalTypesAOTProbe.HC", "", "IT table ",
      "IT AOT DONE", internal_types_aot_output}};
 
+constexpr std::string_view class_records_output = "CR heaps 1\n"
+                                                  "CR forward FF pointers F\n"
+                                                  "CR complete FF members 3\n"
+                                                  "CR cleanup 7\n"
+                                                  "CR heap 3\n"
+                                                  "CR DONE\n";
+constexpr CTextProbe class_records_probes[]{
+    {"class-records", "/ClassRecordsProbe.HC", "", "CR heaps ", "CR DONE",
+     class_records_output}};
+
 static void CheckBootProbeOrder(const std::string &serial,
                                 std::span<const char *const> paths)
 {
@@ -2782,6 +2792,28 @@ static void CheckBootSourceProbe(const std::string &serial,
   Check(bool(file), "Could not record source probe output");
   std::cout << output;
   Check(output == probe.expected, "Source probe output differs from TempleOS");
+}
+
+static void CheckClassRecordRecovery(std::string_view serial)
+{
+  constexpr std::string_view prefix = "UnholyOS: class record recovery checks ";
+  constexpr std::string_view expected =
+      "UnholyOS: class record recovery checks 0x00000000000000ff\r\n";
+  constexpr std::string_view source_finished =
+      "UnholyOS: finished /ClassRecordsProbe.HC, checks 0x0000000000000001\r\n";
+  const auto source = serial.find(source_finished);
+  const auto recovery = serial.find(prefix), boot = serial.find(BOOT_MARKER);
+  Check(source != std::string_view::npos &&
+            recovery != std::string_view::npos &&
+            boot != std::string_view::npos &&
+            source + source_finished.size() <= recovery &&
+            serial[recovery - 1] == '\n' &&
+            serial.substr(recovery, expected.size()) == expected &&
+            recovery + expected.size() <= boot &&
+            serial.find(prefix, recovery + prefix.size()) ==
+                std::string_view::npos,
+        "Class record recovery did not complete once between the source probe "
+        "and startup");
 }
 
 constexpr std::string_view assert_warning_output = "AW result 42\nAW DONE\n";
@@ -6037,6 +6069,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--format-missing-args-reference" ||
        std::string_view(argv[1]) == "--internal-types" ||
        std::string_view(argv[1]) == "--internal-types-reference" ||
+       std::string_view(argv[1]) == "--class-records" ||
+       std::string_view(argv[1]) == "--class-records-reference" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -6081,9 +6115,11 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--format-missing-args");
     bool internal_types_probe =
         std::string_view(argv[1]).starts_with("--internal-types");
+    bool class_records_probe =
+        std::string_view(argv[1]).starts_with("--class-records");
     const bool source_probe = compiler_defines_probe || string_defines_probe ||
                               system_defines_probe || color_conversions_probe ||
-                              format_missing_args_probe;
+                              format_missing_args_probe || class_records_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6105,6 +6141,8 @@ int main(int argc, char **argv)
       text_probes = format_missing_args_probes;
     else if (internal_types_probe)
       text_probes = internal_types_probes;
+    else if (class_records_probe)
+      text_probes = class_records_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -6118,7 +6156,9 @@ int main(int argc, char **argv)
                               std::string("Linux/Fixtures") + probe.source,
                               probe.source + 1);
       }
-      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
+      const char *memory = class_records_probe ? "3072" : "512";
+      CMonitor vm(argv[2], argv[3], dir, "pc", memory, false, {}, false,
+                  reference);
       vm.Connect();
       if (!text_probes.empty() && !reference) {
         auto output = assert_warning
@@ -6127,9 +6167,11 @@ int main(int argc, char **argv)
                                           "/AssertWarningProbe.BIN.Z, checks "
                                           "0x0000000000000001\r\n")
                           : vm.Boot(dir / "serial.log");
-        if (source_probe)
+        if (source_probe) {
           CheckBootSourceProbe(output, text_probes[0], dir);
-        else {
+          if (class_records_probe)
+            CheckClassRecordRecovery(output);
+        } else {
           RecordTextProbes(output, text_probes, dir);
           if (assert_warning) {
             CheckAssertWarning(output);
@@ -6156,9 +6198,11 @@ int main(int argc, char **argv)
       } else if (character || tic || breaks || screen_capture || spline ||
                  flood_fill || blot || sprite_flood || music_demo ||
                  !text_probes.empty())
-        DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
-                               reference, tic, breaks, screen_capture, spline,
-                               flood_fill, blot, sprite_flood, music_demo, text_probes);
+        DriveCharacterGraphics(
+            vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
+            tic, breaks, screen_capture, spline, flood_fill, blot, sprite_flood,
+            music_demo, text_probes, {},
+            class_records_probe && reference ? 0xC0000000ULL : 0x20000000ULL);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");
@@ -6282,6 +6326,8 @@ int main(int argc, char **argv)
               << " --format-missing-args[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --internal-types[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --class-records[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]
