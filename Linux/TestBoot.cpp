@@ -2307,8 +2307,11 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
               ReadPhysical<10>(vm, graphics + 10408) == std::array<uint64_t, 10>{},
           "Compiler failure allocated Adam graphics state");
   }
-  // Compiler startup keeps the shared assembler table in Adam's heap.
-  const uint64_t asm_hash_used = desktop ? 0x10518 : 0;
+  // Compiler startup keeps the shared assembler dictionary and both decoder
+  // indices in Adam's data heap. OpCodes.DD has 923 non-alias forms, of which
+  // 908 lack IEF_NOT_IN_64_BIT.
+  const uint64_t asm_hash_used = desktop ? 0x10518 +
+      CompilerAllocationSize(923 * 8) + CompilerAllocationSize(908 * 8) : 0;
   std::smatch raw_screen;
   Check(std::regex_search(output,raw_screen,
                          std::regex(R"(raw screen (0x[0-9a-f]+))")),
