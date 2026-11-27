@@ -9,7 +9,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | Directory | Reference files | Corresponding paths | Missing paths |
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 68 | 8 |
-| `Compiler` | 33 | 18 | 15 |
+| `Compiler` | 33 | 19 | 14 |
 | `Adam` | 132 | 45 | 87 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 22 | 181 |
@@ -50,11 +50,15 @@ part of the full rewrite.
 ## Remaining compiler and Adam work
 
 - The unmatched compiler files are `BackA.HC`, `BackB.HC`, `BackFA.HC`,
-  `BackFB.HC`, `BackLib.HC`, `CExts.HC`, `CompilerB.HH`, `OptPass012.HC`,
+  `BackFB.HC`, `BackLib.HC`, `CExts.HC`, `CompilerB.HH`,
   `OptPass3.HC`, `OptPass4.HC`, `OptPass5.HC`, `OptPass6.HC`,
   `OptPass789A.HC`, `Templates.HC` and `UAsm.HC`. Translate the
   intermediate-code, optimization and code-generation pipeline as
   connected work, preserving the reference's representation and ABI.
+  `OptPass012.cpp` implements typed simplification and immediate lowering
+  in the current indexed expression IR. Full operand-location analysis,
+  register allocation, later optimizer passes, and reference code-generation
+  parity remain outstanding.
 - Move remaining Adam initialization to the guest startup path after
   compiler support permits the original project and startup files.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal

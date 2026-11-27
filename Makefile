@@ -36,7 +36,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 GUEST_TEST_SRC := Linux/BootProbe.cpp
 COMPILER_ASM_SRC := Compiler/CExcept.asm Compiler/CMain.asm Compiler/CMisc.asm Compiler/LexLib.asm
 COMPILER_CXX_SRC := Compiler/CInit.cpp Compiler/CMain.cpp Compiler/Asm.cpp Compiler/AsmResolve.cpp Compiler/AsmLib.cpp Compiler/CHash.cpp Compiler/CExcept.cpp Compiler/CMisc.cpp Compiler/Lex.cpp Compiler/LexLib.cpp Compiler/AsmInit.cpp Compiler/PrsLib.cpp \
-	Compiler/PrsExp.cpp Compiler/PrsStmt.cpp Compiler/PrsVar.cpp Compiler/OptLib.cpp Compiler/BackC.cpp
+	Compiler/PrsExp.cpp Compiler/PrsStmt.cpp Compiler/PrsVar.cpp Compiler/OptLib.cpp Compiler/OptPass012.cpp Compiler/BackC.cpp
 ASM_OBJ := $(ASM_SRC:%.asm=$(BUILD)/%.asm.o)
 CXX_OBJ := $(CXX_SRC:%.cpp=$(BUILD)/%.o) $(GUEST_TEST_SRC:%.cpp=$(BUILD)/%.o)
 COMPILER_ASM_OBJ := $(COMPILER_ASM_SRC:%.asm=$(BUILD)/%.asm.o)
@@ -51,6 +51,7 @@ ISO_TOOL := $(BUILD)/Linux/MakeISO
 BOOT_TEST := $(BUILD)/Linux/TestBoot
 COMPRESS_TEST := $(BUILD)/Linux/TestCompress
 STR_COMPARE_TEST := $(BUILD)/Linux/TestStrCompare
+OPT_PASS_TEST := $(BUILD)/Linux/TestOptPass012
 BIN_TOOL := $(BUILD)/Linux/MakeBIN
 MAKE_BIN_TEST := $(BUILD)/Linux/TestMakeBIN
 HOST_MODULE_CPP := $(BUILD)/Linux/Fixtures/HostModuleProbe.cpp.o
@@ -109,6 +110,10 @@ STORAGE_LIFECYCLE_PROBE := $(addprefix Linux/Fixtures/,StorageLifecycleProbe.HC 
 STORAGE_LIFECYCLE_TEST_ISO := $(BUILD)/storage-lifecycle-test.iso
 FILE_BACKED_REDSEA_PROBES := $(addprefix Linux/Fixtures/,FileBackedRedSeaProbe.HC FileBackedRedSeaWriteProbe.HC FileBackedRedSeaNativeProbe.HC)
 FILE_BACKED_REDSEA_TEST_ISO := $(BUILD)/file-backed-redsea-test.iso
+OPTIMIZER_PROBE := Linux/Fixtures/OptimizerProbe.HC
+OPTIMIZER_AOT_PROBE := Linux/Fixtures/OptimizerAOTProbe.HC
+OPTIMIZER_TEST_ISO := $(BUILD)/optimizer-test.iso
+OPTIMIZER_AOT_TEST_ISO := $(BUILD)/optimizer-aot-test.iso
 NESTED_REDSEA_PROBES := $(addprefix Linux/Fixtures/,NestedRedSeaProbe.HC RedSeaFreeListProbe.HC RedSeaISOImageProbe.HC NestedRedSeaNativeProbe.HC)
 NESTED_REDSEA_TEST_ISO := $(BUILD)/nested-redsea-test.iso
 FAT32_IMAGE_PROBE := Linux/Fixtures/Fat32ImageProbe.HC
@@ -240,6 +245,16 @@ $(STR_COMPARE_TEST): Linux/TestStrCompare.cpp $(BUILD)/Kernel/StrA.asm.o
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -fno-pie -no-pie -mno-red-zone -o $@ $^
 
+$(OPT_PASS_TEST): Linux/Fixtures/OptPass012Probe.cpp Compiler/OptPass012.cpp Compiler/CompilerA.hpp Kernel/KernelA.hpp
+	mkdir -p $(@D)
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
+
+.PHONY: test-opt-pass012
+test-opt-pass012: $(OPT_PASS_TEST)
+	$(OPT_PASS_TEST)
+
+test: test-opt-pass012
+
 $(BIN_TOOL): Linux/MakeBIN.cpp Linux/BootMedia.hpp Kernel/KernelA.hpp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
@@ -357,6 +372,12 @@ $(STORAGE_LIFECYCLE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(
 
 $(FILE_BACKED_REDSEA_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FILE_BACKED_REDSEA_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(FILE_BACKED_REDSEA_PROBES))
+
+$(OPTIMIZER_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(OPTIMIZER_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(OPTIMIZER_PROBE)
+
+$(OPTIMIZER_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(OPTIMIZER_PROBE) $(OPTIMIZER_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(OPTIMIZER_PROBE) --file $(OPTIMIZER_AOT_PROBE)
 
 $(NESTED_REDSEA_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(NESTED_REDSEA_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(NESTED_REDSEA_PROBES))
@@ -494,6 +515,13 @@ test-file-backed-redsea: $(FILE_BACKED_REDSEA_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --file-backed-redsea "$(QEMU)" $(FILE_BACKED_REDSEA_TEST_ISO)
 
 test: test-file-backed-redsea
+
+.PHONY: test-optimizer
+test-optimizer: $(OPTIMIZER_TEST_ISO) $(OPTIMIZER_AOT_TEST_ISO) $(BOOT_TEST) test-opt-pass012
+	$(BOOT_TEST) --optimizer "$(QEMU)" $(OPTIMIZER_TEST_ISO)
+	$(BOOT_TEST) --optimizer-aot "$(QEMU)" $(OPTIMIZER_AOT_TEST_ISO)
+
+test: test-optimizer
 
 .PHONY: test-nested-redsea test-fat32-image test-optical-image
 test-nested-redsea: $(NESTED_REDSEA_TEST_ISO) $(BOOT_TEST)

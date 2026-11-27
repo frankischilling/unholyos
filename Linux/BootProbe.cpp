@@ -2060,6 +2060,13 @@ void BootProbe()
     BootFileProgramReport(*adam_task->cur_dv, "/NestedRedSeaNativeProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/OpticalImageProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ListUtilitiesProbe.HC");
+    CRedSeaDirEntry optimizer_entry;
+    size_t optimizer_prefix;
+    if (RedSeaFileLookup(*adam_task->cur_dv, "/OptimizerAOTProbe.HC", false,
+                         false, optimizer_entry, optimizer_prefix))
+      BootFileProgramReport(*adam_task->cur_dv, "/OptimizerAOTProbe.HC");
+    else
+      BootFileProgramReport(*adam_task->cur_dv, "/OptimizerProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/ColorConversionsProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/FormatMissingArgsProbe.HC");
     BootFileProgramReport(*adam_task->cur_dv, "/SystemDefinesProbe.HC");
