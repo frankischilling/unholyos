@@ -1786,8 +1786,39 @@ the existing memory lowering. The pass does not
 yet reproduce the reference's full register pool, stack layout,
 operand-location tracking or clobber metadata. Arbitrary frame aliases
 fabricated through externally supplied addresses remain outside the
-verified behavior. `OptPass4.HC` and the subsequent backend passes
-still need translation.
+verified behavior.
+
+## Address and right-operand lowering
+
+`OptPass4.cpp` annotates scalar dereferences with an x86-64 base, optional
+index, scale and signed displacement. It folds the indexed expression
+tree without removing or duplicating evaluation of its dynamic operands.
+`BackLib.cpp` selects ModR/M, SIB, REX and displacement fields, including
+the special RBP, R13, RSP and R12 cases. Typed loads sign- or zero-extend
+narrow integers, and stores write only the destination width. Floating
+loads and stores retain the raw binary64 representation.
+
+`BackC.cpp` consumes these annotations for direct frame loads, stores,
+compound assignments and increments. For a dynamic destination it captures
+the address before evaluating the right operand, then reads the current
+destination value for a compound update. Ordinary pointer increments use
+the full pointee size rather than truncating the immediate to eight bits.
+For a class pointer directly updated inside an arrow expression,
+`PrsExp.cpp` preserves the reference's one-byte stride: the reference's
+`PrsUnaryModifier` changes the class on the update before its emission.
+The prefix and postfix forms of both increment and decrement were checked
+for packed three-byte and 136-byte classes. Standalone updates and direct
+scalar and pointer-pointer dereferences retain their full stride.
+
+`OptPass5.cpp` selects sign-extended immediate, promoted register and simple
+64-bit frame-memory operands for integer addition, subtraction,
+multiplication, bitwise operations and comparisons. Frame-memory operands
+are read after the left subtree. Comparison chains and flag-sensitive
+functions retain the existing lowering. These are selected portions of
+the reference `OptPass4.HC`, `OptPass5.HC` and `BackLib.HC`, adapted to
+the indexed IR. Full operand allocation, variable shifts and division
+operand selection, complex memory operands, instruction scheduling and
+reference machine-code parity remain incomplete.
 
 ## Remaining structural work
 

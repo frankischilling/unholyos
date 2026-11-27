@@ -36,7 +36,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 GUEST_TEST_SRC := Linux/BootProbe.cpp
 COMPILER_ASM_SRC := Compiler/CExcept.asm Compiler/CMain.asm Compiler/CMisc.asm Compiler/LexLib.asm
 COMPILER_CXX_SRC := Compiler/CInit.cpp Compiler/CMain.cpp Compiler/Asm.cpp Compiler/AsmResolve.cpp Compiler/AsmLib.cpp Compiler/CHash.cpp Compiler/CExcept.cpp Compiler/CMisc.cpp Compiler/Lex.cpp Compiler/LexLib.cpp Compiler/AsmInit.cpp Compiler/PrsLib.cpp \
-	Compiler/PrsExp.cpp Compiler/PrsStmt.cpp Compiler/PrsVar.cpp Compiler/OptLib.cpp Compiler/OptPass012.cpp Compiler/OptPass3.cpp Compiler/BackC.cpp
+	Compiler/PrsExp.cpp Compiler/PrsStmt.cpp Compiler/PrsVar.cpp Compiler/OptLib.cpp Compiler/OptPass012.cpp Compiler/OptPass3.cpp Compiler/OptPass4.cpp Compiler/OptPass5.cpp Compiler/BackLib.cpp Compiler/BackC.cpp
 ASM_OBJ := $(ASM_SRC:%.asm=$(BUILD)/%.asm.o)
 CXX_OBJ := $(CXX_SRC:%.cpp=$(BUILD)/%.o) $(GUEST_TEST_SRC:%.cpp=$(BUILD)/%.o)
 COMPILER_ASM_OBJ := $(COMPILER_ASM_SRC:%.asm=$(BUILD)/%.asm.o)
@@ -53,6 +53,7 @@ COMPRESS_TEST := $(BUILD)/Linux/TestCompress
 STR_COMPARE_TEST := $(BUILD)/Linux/TestStrCompare
 OPT_PASS_TEST := $(BUILD)/Linux/TestOptPass012
 OPT_PASS3_TEST := $(BUILD)/Linux/TestOptPass3
+OPERAND_LOWERING_TEST := $(BUILD)/Linux/TestOperandLowering
 BIN_TOOL := $(BUILD)/Linux/MakeBIN
 MAKE_BIN_TEST := $(BUILD)/Linux/TestMakeBIN
 HOST_MODULE_CPP := $(BUILD)/Linux/Fixtures/HostModuleProbe.cpp.o
@@ -119,6 +120,10 @@ REGISTER_ALLOCATION_PROBES := $(addprefix Linux/Fixtures/,RegisterAllocationProb
 REGISTER_ALLOCATION_TEST_ISO := $(BUILD)/register-allocation-test.iso
 REGISTER_ALLOCATION_AOT_PROBE := Linux/Fixtures/RegisterAllocationAOTProbe.HC
 REGISTER_ALLOCATION_AOT_TEST_ISO := $(BUILD)/register-allocation-aot-test.iso
+ADDRESS_FOLD_PROBES := $(addprefix Linux/Fixtures/,AddressFoldProbe.HC AddressFoldNativeProbe.HC)
+ADDRESS_FOLD_TEST_ISO := $(BUILD)/address-fold-test.iso
+ADDRESS_FOLD_AOT_PROBE := Linux/Fixtures/AddressFoldAOTProbe.HC
+ADDRESS_FOLD_AOT_TEST_ISO := $(BUILD)/address-fold-aot-test.iso
 NESTED_REDSEA_PROBES := $(addprefix Linux/Fixtures/,NestedRedSeaProbe.HC RedSeaFreeListProbe.HC RedSeaISOImageProbe.HC NestedRedSeaNativeProbe.HC)
 NESTED_REDSEA_TEST_ISO := $(BUILD)/nested-redsea-test.iso
 FAT32_IMAGE_PROBE := Linux/Fixtures/Fat32ImageProbe.HC
@@ -270,6 +275,16 @@ test-opt-pass3: $(OPT_PASS3_TEST)
 
 test: test-opt-pass3
 
+$(OPERAND_LOWERING_TEST): Linux/Fixtures/OperandLoweringProbe.cpp Compiler/BackLib.cpp Compiler/OptPass5.cpp Compiler/OptPass4.cpp Compiler/CompilerA.hpp Kernel/KernelA.hpp
+	mkdir -p $(@D)
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
+
+.PHONY: test-operand-lowering
+test-operand-lowering: $(OPERAND_LOWERING_TEST)
+	$(OPERAND_LOWERING_TEST)
+
+test: test-operand-lowering
+
 $(BIN_TOOL): Linux/MakeBIN.cpp Linux/BootMedia.hpp Kernel/KernelA.hpp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
@@ -399,6 +414,12 @@ $(REGISTER_ALLOCATION_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) 
 
 $(REGISTER_ALLOCATION_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(firstword $(REGISTER_ALLOCATION_PROBES)) $(REGISTER_ALLOCATION_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(firstword $(REGISTER_ALLOCATION_PROBES)) --file $(REGISTER_ALLOCATION_AOT_PROBE)
+
+$(ADDRESS_FOLD_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADDRESS_FOLD_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(ADDRESS_FOLD_PROBES))
+
+$(ADDRESS_FOLD_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(firstword $(ADDRESS_FOLD_PROBES)) $(ADDRESS_FOLD_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(firstword $(ADDRESS_FOLD_PROBES)) --file $(ADDRESS_FOLD_AOT_PROBE)
 
 $(NESTED_REDSEA_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(NESTED_REDSEA_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(NESTED_REDSEA_PROBES))
@@ -550,6 +571,13 @@ test-register-allocation: $(REGISTER_ALLOCATION_TEST_ISO) $(REGISTER_ALLOCATION_
 	$(BOOT_TEST) --register-allocation-aot "$(QEMU)" $(REGISTER_ALLOCATION_AOT_TEST_ISO)
 
 test: test-register-allocation
+
+.PHONY: test-address-fold
+test-address-fold: $(ADDRESS_FOLD_TEST_ISO) $(ADDRESS_FOLD_AOT_TEST_ISO) $(BOOT_TEST) test-operand-lowering
+	$(BOOT_TEST) --address-fold "$(QEMU)" $(ADDRESS_FOLD_TEST_ISO)
+	$(BOOT_TEST) --address-fold-aot "$(QEMU)" $(ADDRESS_FOLD_AOT_TEST_ISO)
+
+test: test-address-fold
 
 .PHONY: test-nested-redsea test-fat32-image test-optical-image
 test-nested-redsea: $(NESTED_REDSEA_TEST_ISO) $(BOOT_TEST)

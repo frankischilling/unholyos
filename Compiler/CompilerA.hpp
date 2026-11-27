@@ -449,6 +449,30 @@ constexpr bool ICIsCompoundAssign(CICode code)
 
 constexpr uint32_t NO_IC = UINT32_MAX;
 
+struct COptAddress
+{
+  uint32_t base=NO_IC,index=NO_IC;
+  int32_t disp=0;
+  uint8_t shift=0;
+  bool valid=false;
+};
+
+enum class COptRhsKind : uint8_t { Stack, Imm32, Reg, Frame };
+struct COptRhs
+{
+  COptRhsKind kind=COptRhsKind::Stack;
+  int32_t disp=0;
+  uint8_t reg=0;
+};
+
+struct CCodeBytes
+{
+  uint8_t bytes[16]{};
+  uint8_t count=0;
+};
+
+enum class CMemOp : uint8_t { Lea, Load, Store };
+
 struct CIntermediateCode
 {
   uint64_t data;
@@ -463,6 +487,8 @@ struct CIntermediateCode
   uint32_t call_target = NO_IC;
   bool cmp_link = false;
   uint8_t local_reg = 0; // Promoted IC_DEREF operand; zero uses memory.
+  COptAddress address{};
+  COptRhs rhs{};
 };
 
 struct COptReg
@@ -614,6 +640,11 @@ uint32_t PrsPrint(CCmpCtrl &cc, CCodeCtrl &coc);
 void OptPass012(CIntermediateCode *code, uint32_t count);
 void OptPass3(CIntermediateCode *code, uint32_t count, CHashFun &fun,
               COptRegPlan &plan);
+void OptPass4(CIntermediateCode *code,uint32_t count);
+void OptPass5(CIntermediateCode *code,uint32_t count);
+CCodeBytes ICModr1(CMemOp op,CRawType type,uint8_t base,
+                    uint8_t index=16,uint8_t shift=0,int32_t disp=0);
+CCodeBytes ICBinaryRhs(CICode op,const COptRhs &rhs);
 bool OptBranch(CCodeCtrl &coc, uint32_t value, CICode branch, uint32_t target,
                unsigned depth = 0);
 bool LexExpression(CCmpCtrl &cc, uint64_t &result);
