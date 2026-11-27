@@ -1,7 +1,26 @@
 #include "../KernelB.hpp"
 
-static bool ram_owned[BLKDEVS_NUM];
-static uint64_t mount_flags;
+static uint8_t *ram_owned[BLKDEVS_NUM];
+uint64_t mount_flags;
+
+uint8_t *BlkDevOwnedRAM(const CBlkDev *bd)
+{
+  if (!blkdev.blkdevs) return nullptr;
+  for (size_t i=0;i<BLKDEVS_NUM;i++)
+    if (bd==&blkdev.blkdevs[i]) return ram_owned[i];
+  return nullptr;
+}
+
+void BlkDevReleaseRAM(CBlkDev &bd,uint8_t *keep_ram)
+{
+  if (!blkdev.blkdevs) return;
+  for (size_t i=0;i<BLKDEVS_NUM;i++)
+    if (&bd==&blkdev.blkdevs[i]) {
+      if (ram_owned[i]!=keep_ram) Free(ram_owned[i]);
+      ram_owned[i]=nullptr;
+      return;
+    }
+}
 
 static void BlkDevShareController(CBlkDev &bd)
 {
@@ -83,7 +102,8 @@ static int64_t BlkDevAddATA(CBlkDev *bd,int64_t prt_num,bool whole_drv)
     MemCpy(&size,p+12,sizeof(size));
     if (!offset || !size || uint64_t(offset)+size>uint64_t(device.max_blk)+1)
       continue;
-    while (letter<='L' && MountedDrive(letter))
+    while (letter<='L' && (MountedDrive(letter) ||
+           blkdev.drvs[letter-'A'].dv_signature==DRV_SIGNATURE_VAL))
       letter++;
     if (letter>'L')
       break;
@@ -95,11 +115,19 @@ static int64_t BlkDevAddATA(CBlkDev *bd,int64_t prt_num,bool whole_drv)
     drive.drv_let=letter;
     if (!FAT32Init(drive) || !DrvFATCacheInit(drive))
       continue;
-    auto &target=*blkdev.let_to_drv[letter-'A'];
-    DrvFATCacheDrop(target);
-    drive.dv_signature=DRV_SIGNATURE_VAL;
-    drive.bd=bd;
-    MemCpy(&target,&drive,sizeof(drive));
+    auto &target=blkdev.drvs[letter-'A'];
+    {
+      CMemLock lock(disk_lock_flags);
+      if (!DrvDeleteReady(&target)) {
+        DrvFATCacheDrop(drive);
+        continue;
+      }
+      DrvDelete(target);
+      blkdev.let_to_drv[letter-'A']=&target;
+      drive.dv_signature=DRV_SIGNATURE_VAL;
+      drive.bd=bd;
+      MemCpy(&target,&drive,sizeof(drive));
+    }
     res++;
     letter++;
   }
@@ -130,16 +158,35 @@ extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole_drv,
     return 0;
   char letter = bd->first_drv_let;
   if (!make_free) {
-    while (letter <= 'B' && MountedDrive(letter))
+    while (letter <= 'B' && (MountedDrive(letter) ||
+           blkdev.drvs[letter-'A'].dv_signature==DRV_SIGNATURE_VAL))
       letter++;
     if (letter > 'B')
       return 0;
   }
-  auto &target = *blkdev.let_to_drv[letter - 'A'];
-  if (target.dv_signature==DRV_SIGNATURE_VAL &&
-      ((target.locked_flags&1) || (target.fat_blk_dirty&1) ||
-       (target.bd && (target.bd->locked_flags&1))))
-    return 0;
+  auto &target = blkdev.drvs[letter - 'A'];
+  CBlkDev *old=nullptr;
+  {
+    CMemLock lock(disk_lock_flags);
+    if (!DrvDeleteReady(&target))
+      return 0;
+    if (target.dv_signature==DRV_SIGNATURE_VAL) {
+      old=target.bd;
+      if (old->type!=BDT_RAM || !BlkDevDeleteReady(old))
+        return 0;
+      for (size_t i=0;i<DRVS_NUM;i++)
+        if (&target!=&blkdev.drvs[i] && blkdev.drvs[i].bd==old)
+          return 0;
+    }
+    if (bd->RAM_dsk)
+      for (size_t i=0;i<BLKDEVS_NUM;i++) {
+        auto *other=&blkdev.blkdevs[i];
+        if (other!=old && other!=bd &&
+            other->bd_signature==BD_SIGNATURE_VAL &&
+            other->RAM_dsk==bd->RAM_dsk)
+          return 0;
+      }
+  }
 
   CBlkDev device;
   MemCpy(&device, bd, sizeof(device));
@@ -167,34 +214,62 @@ extern "C" int64_t BlkDevAddCpp(CBlkDev *bd, int64_t prt_num, uint8_t whole_drv,
   if (!(owned ? RedSeaFormatRAM(drive, root_blocks)
               : RedSeaInit(drive) || RedSeaFormatRAM(drive, root_blocks)) ||
       !DrvFATCacheInit(drive)) {
+    DrvFATCacheDrop(drive);
     if (owned)
       Free(device.RAM_dsk);
     return 0;
   }
 
-  if (target.dv_signature == DRV_SIGNATURE_VAL) {
-    DskCacheInvalidate2Cpp(&target);
-    ResidentDriveClear(letter);
-    auto *old = target.bd;
-    for (size_t i = 0; i < BLKDEVS_NUM; i++) {
-      if (old != &blkdev.blkdevs[i] || old->type != BDT_RAM)
-        continue;
-      DskCacheInvalidateDevice(old);
-      if (old->RAM_dsk == device.RAM_dsk)
-        owned |= ram_owned[i];
-      else if (ram_owned[i])
-        Free(old->RAM_dsk);
-      MemSet(old, 0, sizeof(*old));
-      ram_owned[i] = false;
-      break;
+  {
+    CMemLock lock(disk_lock_flags);
+    if (!DrvDeleteReady(&target) || (old && !BlkDevDeleteReady(old))) {
+      DrvFATCacheDrop(drive);
+      if (owned) Free(device.RAM_dsk);
+      return 0;
+    }
+    if (old) {
+      owned |= BlkDevOwnedRAM(old)==device.RAM_dsk;
+      BlkDevDelete(*old,device.RAM_dsk);
+    } else
+      DrvDelete(target);
+    if (adam_task && adam_task->hash_table)
+      ResidentDriveClear(letter);
+    blkdev.let_to_drv[letter-'A']=&target;
+    MemCpy(bd, &device, sizeof(device));
+    drive.bd = bd;
+    MemCpy(&target, &drive, sizeof(target));
+    ram_owned[slot] = owned?device.RAM_dsk:nullptr;
+  }
+  return 1;
+}
+
+extern "C" uint64_t DrvEnableCpp(uint8_t drv_let,uint8_t val)
+{
+  auto *dv=Let2DrvCpp(drv_let,false);
+  if (!dv) return false;
+  bool old,okay;
+  {
+    CMemLock mount(mount_flags);
+    CMemLock lock(disk_lock_flags);
+    old=!(dv->fs_type&(1u<<FStf_DISABLE));
+    auto *bd=BlkDevLockTarget(dv->bd);
+    okay=dv->dv_signature==DRV_SIGNATURE_VAL && bd &&
+         (!(dv->locked_flags&1) || dv->owning_task==CurrentTask()) &&
+         (!(bd->locked_flags&1) || bd->owning_task==CurrentTask()) &&
+         (val || !(dv->fat_blk_dirty&1));
+    if (okay) {
+      if (val)
+        dv->fs_type&=FSG_TYPE_MASK;
+      else {
+        dv->fs_type|=1u<<FStf_DISABLE;
+        if (adam_task && adam_task->hash_table)
+          for (size_t i=0;i<DRVS_NUM;i++)
+            if (blkdev.let_to_drv[i]==dv) ResidentDriveClear('A'+i);
+      }
     }
   }
-  DrvFATCacheDrop(target);
-  MemCpy(bd, &device, sizeof(device));
-  drive.bd = bd;
-  MemCpy(&target, &drive, sizeof(target));
-  ram_owned[slot] = owned;
-  return 1;
+  if (!okay) RaiseHolyC(0x767244); // Drv
+  return old;
 }
 
 CDrv *BlkDevsInitAll()

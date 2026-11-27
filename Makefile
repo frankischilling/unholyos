@@ -105,6 +105,8 @@ DISK_CACHE_PROBE := Linux/Fixtures/DiskCacheProbe.HC
 DISK_CACHE_TEST_ISO := $(BUILD)/disk-cache-test.iso
 FAT_SECTOR_CACHE_PROBE := $(addprefix Linux/Fixtures/,FatSectorCacheProbe.HC FatSectorCacheNativeProbe.HC)
 FAT_SECTOR_CACHE_TEST_ISO := $(BUILD)/fat-sector-cache-test.iso
+STORAGE_LIFECYCLE_PROBE := $(addprefix Linux/Fixtures/,StorageLifecycleProbe.HC StorageLifecycleNativeProbe.HC)
+STORAGE_LIFECYCLE_TEST_ISO := $(BUILD)/storage-lifecycle-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
 FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
@@ -340,6 +342,9 @@ $(DISK_CACHE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(DISK_CA
 $(FAT_SECTOR_CACHE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_SECTOR_CACHE_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(FAT_SECTOR_CACHE_PROBE))
 
+$(STORAGE_LIFECYCLE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STORAGE_LIFECYCLE_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(STORAGE_LIFECYCLE_PROBE))
+
 $(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
 
@@ -451,6 +456,12 @@ test-fat-sector-cache: $(FAT_SECTOR_CACHE_TEST_ISO) $(FAT_WRITE_DISK) $(BOOT_TES
 	$(BOOT_TEST) --fat-sector-cache "$(QEMU)" $(FAT_SECTOR_CACHE_TEST_ISO) $(FAT_WRITE_DISK)
 
 test: test-fat-sector-cache
+
+.PHONY: test-storage-lifecycle
+test-storage-lifecycle: $(STORAGE_LIFECYCLE_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --storage-lifecycle "$(QEMU)" $(STORAGE_LIFECYCLE_TEST_ISO)
+
+test: test-storage-lifecycle
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio

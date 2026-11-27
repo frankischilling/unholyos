@@ -29,8 +29,10 @@ part of the full rewrite.
   `DskCache.cpp` now supplies the block cache and drive and device
   locking use task ownership. `DskClus.cpp` supplies cluster traversal, allocation,
   reads and writes, and `DirNew` publishes RedSea and FAT32 directory
-  entries. Complete chain ownership and error recovery, mount lifecycle,
-  removable media and multi-CPU locking still need work.
+  entries. Drive and device deletion, enabling/disabling, and initial
+  disk-change handling are implemented; complete chain ownership,
+  error recovery, backing-file and open-stream lifetime, removable-media
+  behavior and multi-CPU locking still need work.
   `DskCluster.HC` is present in the reference tree but not included by
   its `MakeBlkDev.HC`; the active cluster implementation is `DskClus.HC`.
 - `Kernel/BlkDev/MakeBlkDev.HC`, `Kernel/Mem/MakeMem.HC`,
