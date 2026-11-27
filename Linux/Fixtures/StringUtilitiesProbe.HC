@@ -59,7 +59,7 @@ U0 StringUtilitiesProbe()
     }
   }
   if (used==Fs->data_heap->used_u8s) res|=4;
-  "SU transforms %X %X %X %X\n",h,t,u,v;
+  "SU trans %X %X %X %X\n",h,t,u,v;
   h=14695981039346656037;
   used=Fs->data_heap->used_u8s;
   for (i=0;i<2048;i++) {
