@@ -178,6 +178,8 @@ const char *DefineSub(int64_t index, const char *name, bool &defined);
 const char *LstSub(int64_t index, const char *list);
 extern "C" char *StrPrintJoin(char *dst, const char *fmt, int64_t argc,
                               const uint64_t *argv);
+extern "C" void PrintWarnCpp(const char *fmt, int64_t argc,
+                             const uint64_t *argv, const uintptr_t *frame);
 const CHash *FunSegFind(uintptr_t addr, uint64_t &offset);
 int64_t YearStartDate(int64_t year);
 CDate Struct2Date(const CDateStruct &ds);

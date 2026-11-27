@@ -1,0 +1,6 @@
+entry NativeImportMain
+export NativeImportResult NativeImportResult
+export NativeImportBindings NativeImportBindings
+import native PutS __unholyos_sysv.PutS
+import native StrCmpCpp __unholyos_sysv.StrCmpCpp
+import holyc NativeImportPublicPutS PutS

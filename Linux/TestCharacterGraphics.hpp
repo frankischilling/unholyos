@@ -84,16 +84,20 @@ constexpr CTextProbe music_precision_probes[]{
     {"music-precision", "/MusicPrecision.HC", "/MusicPrecision.BIN.Z",
      "MP initial ", "MP DONE", music_precision_output}};
 
+struct CModuleFile
+{
+  fs::path source;
+  const char *guest_name, *evidence_name;
+};
+
 // Uses the same QMP input and physical-memory readers as the boot tests.
-static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
-                                   const std::string &boot, bool reference,
-                                   bool tic = false, bool breaks = false,
-                                   bool screen_capture = false,
-                                   bool spline = false, bool flood_fill = false,
-                                   bool blot = false, bool sprite_flood = false,
-                                   bool music_demo = false,
-                                   std::span<const CTextProbe> text_probes = {},
-                                   const fs::path &module_binary = {})
+static void DriveCharacterGraphics(
+    CMonitor &vm, const fs::path &dir, const std::string &boot, bool reference,
+    bool tic = false, bool breaks = false, bool screen_capture = false,
+    bool spline = false, bool flood_fill = false, bool blot = false,
+    bool sprite_flood = false, bool music_demo = false,
+    std::span<const CTextProbe> text_probes = {},
+    std::span<const CModuleFile> module_files = {})
 {
   vm.ResetDeadline(150s);
   auto key = [&](std::string name) {
@@ -448,47 +452,54 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
       cmd(clear ? "DocClear(,1);ExePutS(cgprobe);Free(cgprobe);"
                 : "ExePutS(cgprobe);Free(cgprobe);");
   };
-  if (!module_binary.empty()) {
+  if (!module_files.empty()) {
     Check(reference && !text_probes.empty(),
           "A module transfer needs a reference text probe");
     vm.ResetDeadline(300s);
-    const auto expected = FileRead(module_binary);
-    cmd("DocClear(,1);");
-    upload(module_binary, false, false);
     cmd("CBlkDev *hmdrive=Let2BlkDev('B',FALSE);");
-    cmd("Bool hmready=hmdrive && hmdrive->type==BDT_RAM;");
-    cmd(R"(hmready=hmready && FileFind("B:/HostModuleProbe.BIN")==0;)");
-    cmd(R"("HMREADY:%d:END\n",hmready;)");
-    wait_text("HMREADY:1:END");
-    cmd("I64 hmcluster=FileWrite(\"B:/HostModuleProbe.BIN\",cgprobe," +
-        std::to_string(expected.size()) + ");");
-    cmd("Free(cgprobe);");
-    cmd(R"(I64 hmsize=0;U8 *hmfile=FileRead("B:/HostModuleProbe.BIN",&hmsize);)");
-    cmd(R"("HMFILE:%X:%X:%X:END\n",hmfile,hmsize,hmcluster;)");
-    const std::regex pattern(
-        "HMFILE:([0-9A-Fa-f]+):([0-9A-Fa-f]+):([0-9A-Fa-f]+):END");
-    std::smatch match;
-    std::string screen;
-    wait(
-        [&](const Cells &cells) {
-          screen = visible(cells);
-          return std::regex_search(screen, match, pattern);
-        },
-        "Missing reference module file readback");
-    const auto addr = std::stoull(match[1].str(), nullptr, 16);
-    const auto size = std::stoull(match[2].str(), nullptr, 16);
-    const auto cluster = std::stoull(match[3].str(), nullptr, 16);
-    Check(size == expected.size() && cluster && cluster != UINT64_MAX && addr &&
-              addr <= 0x20000000 - size,
-          "Invalid reference module file readback");
-    const auto readback = dir / "host-module-file-readback.bin";
-    vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
-               std::to_string(addr) + R"(,"size":)" + std::to_string(size) +
-               R"(,"filename":")" + readback.string() + R"("}})");
-    Check(FileRead(readback) == expected, "Reference module file bytes differ");
-    cmd("Free(hmfile);");
-    std::cout << "Verified " << size
-              << " module bytes after upload and RAM-file readback\n";
+    cmd("I64 hmcluster=0,hmsize=0;U8 *hmfile,*hmpath;Bool hmready;");
+    for (const auto &module : module_files) {
+      vm.ResetDeadline(300s);
+      const auto expected = FileRead(module.source);
+      cmd("DocClear(,1);");
+      upload(module.source, false, false);
+      cmd(std::string("hmpath=\"B:/") + module.guest_name + "\";");
+      cmd("hmready=hmdrive && hmdrive->type==BDT_RAM;");
+      cmd("hmready=hmready && FileFind(hmpath)==0;");
+      cmd(R"("HMREADY:%d:END\n",hmready;)");
+      wait_text("HMREADY:1:END");
+      cmd("hmcluster=FileWrite(hmpath,cgprobe," +
+          std::to_string(expected.size()) + ");");
+      cmd("Free(cgprobe);");
+      cmd("hmsize=0;hmfile=FileRead(hmpath,&hmsize);");
+      cmd(R"("HMFILE:%X:%X:%X:END\n",hmfile,hmsize,hmcluster;)");
+      const std::regex pattern(
+          "HMFILE:([0-9A-Fa-f]+):([0-9A-Fa-f]+):([0-9A-Fa-f]+):END");
+      std::smatch match;
+      std::string screen;
+      wait(
+          [&](const Cells &cells) {
+            screen = visible(cells);
+            return std::regex_search(screen, match, pattern);
+          },
+          "Missing reference module file readback");
+      const auto addr = std::stoull(match[1].str(), nullptr, 16);
+      const auto size = std::stoull(match[2].str(), nullptr, 16);
+      const auto cluster = std::stoull(match[3].str(), nullptr, 16);
+      Check(size == expected.size() && cluster && cluster != UINT64_MAX &&
+                addr && addr <= 0x20000000 - size,
+            "Invalid reference module file readback");
+      const auto readback =
+          dir / (std::string(module.evidence_name) + "-file-readback.bin");
+      vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+                 std::to_string(addr) + R"(,"size":)" + std::to_string(size) +
+                 R"(,"filename":")" + readback.string() + R"("}})");
+      Check(FileRead(readback) == expected,
+            "Reference module file bytes differ");
+      cmd("Free(hmfile);");
+      std::cout << "Verified " << size
+                << " module bytes after upload and RAM-file readback\n";
+    }
   }
   if (!text_probes.empty()) {
     std::string failures;
@@ -513,7 +524,24 @@ static void DriveCharacterGraphics(CMonitor &vm, const fs::path &dir,
       const auto first = screen.find(probe.first);
       Check(first != std::string::npos,
             "Missing first reference text probe line");
-      Check(first / 81 == 2 && first % 81 == 1,
+      if (std::string_view(probe.name) == "assert-warning") {
+        Check(first / 81 > 2 && first % 81 == 1,
+              "Reference assert warning did not precede the program body");
+        const auto diagnostic =
+            std::string_view(screen).substr(2 * 81 + 1, first - (2 * 81 + 1));
+        const auto warning = diagnostic.find("WARNING:");
+        const auto assertion = diagnostic.find("Assert Failed ");
+        Check(warning != std::string_view::npos && assertion > warning &&
+                  assertion != std::string_view::npos &&
+                  diagnostic.find("WARNING:", warning + 1) ==
+                      std::string_view::npos &&
+                  diagnostic.find("Assert Failed ", assertion + 1) ==
+                      std::string_view::npos &&
+                  diagnostic.find("ERROR:") == std::string_view::npos,
+              "Reference failed assertion did not produce exactly one warning");
+      } else
+        Check(
+            first / 81 == 2 && first % 81 == 1,
             "Reference text probe did not begin at the cleared window origin");
       const auto finish = screen.find(probe.finish, first);
       Check(finish != std::string::npos,

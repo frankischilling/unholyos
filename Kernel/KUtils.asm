@@ -1,3 +1,5 @@
+%include "Kernel/KernelA.inc"
+
 GLOBAL CPUStructInit,TaskInit,SET_GS_BASE,SET_FS_BASE,CallModuleMain,CallHolyC0,CallHolyC2
 GLOBAL _MEMCPY,_MEMSET,_MEMSET_U16,_MEMSET_U32,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_CLAMP_I64
 GLOBAL memcpy,memset
@@ -12,7 +14,6 @@ GLOBAL DocFormHC,DocEdHC,DocFormFwdHC,DocFormBwdHC,ViewHC,HomeSetHC,ToUpperHC
 GLOBAL GetI64HC,GetF64HC,GetDateHC
 GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
-GLOBAL MemberMetaDataHC,MemberMetaFindHC,MemberFindHC
 GLOBAL HashTableNewHC,HashTypeNumHC,CeilU64HC,Pow10I64HC
 GLOBAL ClampHC,MinHC,MaxHC,FloorU64HC,RoundI64HC,FloorI64HC,CeilI64HC
 GLOBAL LinkedLstDelHC,LinkedLstSizeHC,QueDelHC
@@ -37,7 +38,6 @@ GLOBAL BreakHC,BreakLockHC,BreakUnlockHC
 EXTERN BreakCpp,BreakLockCpp,BreakUnlockCpp
 GLOBAL StrPrintJoinHC,StrPrintHC,CatPrintHC,MStrPrintHC,PrintHC,PrintErrHC,PrintWarnHC
 GLOBAL PutSHC,PutHexHC
-GLOBAL ExePutSHC,ExeFileHC,StreamPrintHC,StreamExePrintHC,StreamDirHC
 GLOBAL PutCharsHC,IsRawHC,DefineLstLoadHC,DefineSubHC,DefineMatchHC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
 GLOBAL DocReadHC,DocTypeHC,TypeHC
@@ -198,7 +198,6 @@ EXTERN Spaces2TabsCpp,StrUtilCpp,StrFirstOccCpp,StrFirstRemCpp,StrLastOccCpp,Str
 EXTERN StrFindCpp,Tabs2SpacesCpp,ScaleIndentCpp,MStrUtilCpp
 EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
 EXTERN HashRemDelCpp,HashValCpp,HashDelCpp,HashTableDelCpp,HashSrcFileSetCpp,SysSymImportsResolveCpp
-EXTERN MemberMetaDataCpp,MemberMetaFindCpp,MemberFindCpp
 EXTERN HashTableNewCpp,HashTypeNumCpp,CeilU64Cpp,Pow10I64Cpp
 EXTERN ClampCpp,MinCpp,MaxCpp,FloorU64Cpp,RoundI64Cpp,FloorI64Cpp,CeilI64Cpp
 EXTERN LinkedLstDelCpp,LinkedLstSizeCpp,QueDelCpp
@@ -224,8 +223,6 @@ EXTERN DelCpp,CopyCpp,MoveCpp,CopyTreeCpp,DelTreeCpp,DirMkCpp,ScanFlagsCpp
 EXTERN RedSeaISOCpp
 EXTERN SysUntryCpp,PutExceptCpp,YorNCpp
 EXTERN StrPrintJoin,CatPrintCpp,MStrPrintCpp,PrintCpp,PrintErrCpp,PrintWarnCpp
-GLOBAL CmpHC
-EXTERN CmpCpp,ExePutSCpp,ExeFileCpp,StreamPrintCpp,StreamExePrintCpp,StreamDirCpp
 EXTERN PutCharsCpp,PutS,PutHexCpp,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineMatchCpp
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocReadCpp,DocTypeCpp,TypeCpp
@@ -269,84 +266,6 @@ EXTERN Note2OnaCpp,Ona2NoteCpp,Ona2OctaveCpp,PlayCpp,MusicSettingsRstCpp
 
 SECTION .text
 BITS 64
-
-; Adapt HolyC stack arguments and callee cleanup to C++.
-%macro HC_FRAME_ENTER 0
-	PUSH	RBP
-	MOV	RBP,RSP
-	PUSH	RSI
-	PUSH	RDI
-	PUSH	R10
-	PUSH	R11
-%endmacro
-
-%macro HC_FRAME_CALL 1-2 0
-	AND	RSP,-16
-%if %2>6
-	SUB	RSP,((%2-6)*8+15)&~15
-%assign %%arg 6
-%rep %2-6
-	MOV	RAX,[RBP+16+%%arg*8]
-	MOV	[RSP+(%%arg-6)*8],RAX
-%assign %%arg %%arg+1
-%endrep
-%endif
-	CALL	%1
-	LEA	RSP,[RBP-32]
-	POP	R11
-	POP	R10
-	POP	RDI
-	POP	RSI
-	POP	RBP
-%endmacro
-
-; The optional fourth argument widens a SysV U8 or Bool return for HolyC.
-%macro HOLYC_CPP 3-4 0
-%1:
-	HC_FRAME_ENTER
-%if %3>=1
-	MOV	RDI,[RBP+16]
-%endif
-%if %3>=2
-	MOV	RSI,[RBP+24]
-%endif
-%if %3>=3
-	MOV	RDX,[RBP+32]
-%endif
-%if %3>=4
-	MOV	RCX,[RBP+40]
-%endif
-%if %3>=5
-	MOV	R8,[RBP+48]
-%endif
-%if %3>=6
-	MOV	R9,[RBP+56]
-%endif
-	HC_FRAME_CALL %2,%3
-%if %4
-	MOVZX	EAX,AL
-%endif
-	RET	%3*8
-%endmacro
-
-; The caller pops fixed arguments, argc, and the inline argv for variadics.
-%macro HOLYC_PRINT 3-4 0
-%1:
-	HC_FRAME_ENTER
-	MOV	RDI,[RBP+16]
-	MOV	RSI,[RBP+24]
-%if %3=2
-	MOV	RDX,[RBP+32]
-	LEA	RCX,[RBP+40]
-%else
-	LEA	RDX,[RBP+32]
-%if %4
-	MOV	RCX,RBP
-%endif
-%endif
-	HC_FRAME_CALL %2
-	RET
-%endmacro
 
 HOLYC_CPP CPUStructInit,CPUStructInitCpp,3
 HOLYC_CPP TaskInit,TaskInitCpp,2
@@ -572,9 +491,6 @@ HOLYC_CPP HashValHC,HashValCpp,1
 HOLYC_CPP HashDelHC,HashDelCpp,1
 HOLYC_CPP HashTableDelHC,HashTableDelCpp,1
 HOLYC_CPP HashSrcFileSetHC,HashSrcFileSetCpp,3
-HOLYC_CPP MemberMetaDataHC,MemberMetaDataCpp,2
-HOLYC_CPP MemberMetaFindHC,MemberMetaFindCpp,2
-HOLYC_CPP MemberFindHC,MemberFindCpp,2
 HOLYC_CPP SysSymImportsResolveHC,SysSymImportsResolveCpp,2
 HOLYC_CPP HashTableNewHC,HashTableNewCpp,2
 HOLYC_CPP HashTypeNumHC,HashTypeNumCpp,1
@@ -687,12 +603,6 @@ HOLYC_PRINT PrintWarnHC,PrintWarnCpp,1,1
 HOLYC_CPP PutHexHC,PutHexCpp,2
 HOLYC_CPP PutCharsHC,PutCharsCpp,1
 HOLYC_CPP PutSHC,PutS,1
-HOLYC_CPP ExePutSHC,ExePutSCpp,4
-HOLYC_CPP CmpHC,CmpCpp,4
-HOLYC_CPP ExeFileHC,ExeFileCpp,2
-HOLYC_PRINT StreamPrintHC,StreamPrintCpp,1,1
-HOLYC_CPP StreamDirHC,StreamDirCpp,0
-HOLYC_PRINT StreamExePrintHC,StreamExePrintCpp,1,1
 HOLYC_CPP IsRawHC,IsRawCpp,0
 HOLYC_CPP DefineSubHC,DefineSubCpp,2
 HOLYC_CPP DefineMatchHC,DefineMatchCpp,3
