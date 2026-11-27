@@ -231,6 +231,7 @@ bool WinMgrInit();
 extern uint64_t sys_font_std[256],sys_font_cyrillic[256];
 void WinDerivedValsUpdate(CTask *task);
 bool StartUpTasks();
+bool MakeAdam();
 extern "C" uint64_t RandU16Cpp();
 extern "C" CDC *DCNewCpp(int64_t width, int64_t height, CTask *task,
                          uint8_t null_bitmap);

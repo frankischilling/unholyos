@@ -8,6 +8,8 @@ export ExeFileHC ExeFile
 export StreamExePrintHC StreamExePrint
 export StreamPrintHC StreamPrint
 export StreamDirHC StreamDir
+export OptionHC Option
+export GetOptionHC GetOption
 export MemberMetaDataHC MemberMetaData
 export MemberMetaFindHC MemberMetaFind
 export MemberFindHC MemberFind

@@ -14,6 +14,7 @@ GLOBAL DocFormHC,DocEdHC,DocFormFwdHC,DocFormBwdHC,ViewHC,HomeSetHC,ToUpperHC
 GLOBAL GetI64HC,GetF64HC,GetDateHC
 GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
+GLOBAL HashTablePurgeHC
 GLOBAL HashTableNewHC,HashTypeNumHC,CeilU64HC,Pow10I64HC
 GLOBAL ClampHC,MinHC,MaxHC,FloorU64HC,RoundI64HC,FloorI64HC,CeilI64HC
 GLOBAL LinkedLstDelHC,LinkedLstCopyHC,LinkedLstCntHC,LinkedLstSizeHC
@@ -150,6 +151,7 @@ GLOBAL SndShiftHC,AUWriteHC
 GLOBAL SndTaskEndCBHC,tMHC,BeatHC,MusicSetOctaveHC,MusicSetMeterHC,MusicSetNoteLenHC
 GLOBAL Note2OnaHC,Ona2NoteHC,Ona2OctaveHC,PlayHC,MusicSettingsRstHC
 GLOBAL SpawnHC,TaskValidateHC,SuspendHC,IsSuspendedHC,TaskQueInsHC,TaskQueRemHC
+GLOBAL KillHC
 GLOBAL SingleUserHC,IsSingleUserHC
 GLOBAL JobDelHC,TaskRstAwaitingMsgHC,TaskExeHC,TaskTextHC
 GLOBAL TaskMsgHC,JobResScanHC,JobResGetHC,TaskWaitHC
@@ -208,6 +210,7 @@ GLOBAL DCSymmetrySetHC,RefreshHC
 GLOBAL ScanCharHC,ScanKeyHC,GetKeyHC,GetCharHC
 EXTERN CPUStructInitCpp,TaskInitCpp
 EXTERN SpawnCpp,TaskValidateCpp,SuspendCpp,IsSuspendedCpp,TaskQueInsCpp,TaskQueRemCpp
+EXTERN KillCpp
 EXTERN SingleUserCpp,IsSingleUserCpp
 EXTERN JobDelCpp,TaskRstAwaitingMsgCpp,TaskExeCpp,TaskTextCpp
 EXTERN TaskMsgCpp,JobResScanCpp,JobResGetCpp,TaskWaitCpp
@@ -269,6 +272,7 @@ EXTERN Spaces2TabsCpp,StrUtilCpp,StrFirstOccCpp,StrFirstRemCpp,StrLastOccCpp,Str
 EXTERN StrFindCpp,Tabs2SpacesCpp,ScaleIndentCpp,MStrUtilCpp
 EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
 EXTERN HashRemDelCpp,HashValCpp,HashDelCpp,HashTableDelCpp,HashSrcFileSetCpp,SysSymImportsResolveCpp
+EXTERN HashTablePurgeCpp
 EXTERN HashTableNewCpp,HashTypeNumCpp,CeilU64Cpp,Pow10I64Cpp
 EXTERN ClampCpp,MinCpp,MaxCpp,FloorU64Cpp,RoundI64Cpp,FloorI64Cpp,CeilI64Cpp
 EXTERN LinkedLstDelCpp,LinkedLstCopyCpp,LinkedLstCntCpp,LinkedLstSizeCpp
@@ -412,6 +416,7 @@ BITS 64
 HOLYC_CPP CPUStructInit,CPUStructInitCpp,3
 HOLYC_CPP TaskInit,TaskInitCpp,2
 HOLYC_CPP TaskValidateHC,TaskValidateCpp,1
+HOLYC_CPP KillHC,KillCpp,3
 HOLYC_CPP SuspendHC,SuspendCpp,2
 HOLYC_CPP IsSuspendedHC,IsSuspendedCpp,1
 HOLYC_CPP TaskQueInsHC,TaskQueInsCpp,2
@@ -632,6 +637,7 @@ HOLYC_CPP _HASH_REM_DEL,HashRemDelCpp,3
 HOLYC_CPP HashValHC,HashValCpp,1
 HOLYC_CPP HashDelHC,HashDelCpp,1
 HOLYC_CPP HashTableDelHC,HashTableDelCpp,1
+HOLYC_CPP HashTablePurgeHC,HashTablePurgeCpp,1
 HOLYC_CPP HashSrcFileSetHC,HashSrcFileSetCpp,3
 HOLYC_CPP SysSymImportsResolveHC,SysSymImportsResolveCpp,2
 HOLYC_CPP HashTableNewHC,HashTableNewCpp,2

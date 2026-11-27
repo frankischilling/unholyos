@@ -510,12 +510,16 @@ static void DriveCharacterGraphics(
     for (const auto &probe : text_probes) {
       vm.ResetDeadline(150s);
       cmd("DocClear(,1);");
-      upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
+      if (reference)
+        upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
+      else
+        cmd(std::string("ExeFile(\"::") + probe.source + "\");0;");
       const auto cells = wait(
           [&](const Cells &cells) {
             const auto screen = visible(cells);
-            return screen.find(probe.finish) != std::string::npos &&
-                   screen.find("T:/Home>") != std::string::npos;
+            const auto finish = screen.find(probe.finish);
+            return finish != std::string::npos &&
+                   screen.find("T:/Home>", finish) != std::string::npos;
           },
           "Missing completed reference text probe");
       const auto screen = visible(cells);
@@ -568,7 +572,8 @@ static void DriveCharacterGraphics(
                 terminal_line(prompt / 81) == "T:/Home>",
             "Reference probe did not return to an empty command prompt");
       bool timed = false;
-      const std::regex timing(R"([0-9]+\.[0-9]{6}s)");
+      const std::regex timing(reference ? R"([0-9]+\.[0-9]{6}s)"
+                                        : R"([0-9]+\.[0-9]{6}s ans=0x00000000=0)");
       for (size_t row = finish / 81 + 1; row < prompt / 81; row++) {
         const auto line = terminal_line(row);
         if (line.empty())

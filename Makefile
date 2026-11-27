@@ -32,7 +32,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp \
 	Adam/DolDoc/DocChar.cpp Adam/DolDoc/DocPutKey.cpp Adam/DolDoc/DocRun.cpp \
 	Adam/DolDoc/DocGet.cpp Adam/DolDoc/DocForm.cpp Adam/DolDoc/DocEd.cpp Adam/DolDoc/DocTerm.cpp HomeSys.cpp \
-	Adam/ABlkDev/ADskA.cpp Adam/ABlkDev/Mount.cpp Adam/Opt/Boot/DskISORedSea.cpp
+	Adam/ABlkDev/ADskA.cpp Adam/ABlkDev/Mount.cpp Adam/Opt/Boot/DskISORedSea.cpp Adam/MakeAdam.cpp
 GUEST_TEST_SRC := Linux/BootProbe.cpp
 COMPILER_ASM_SRC := Compiler/CExcept.asm Compiler/CMain.asm Compiler/CMisc.asm Compiler/LexLib.asm Compiler/Templates.asm
 COMPILER_CXX_SRC := Compiler/CInit.cpp Compiler/CMain.cpp Compiler/Asm.cpp Compiler/AsmResolve.cpp Compiler/AsmLib.cpp Compiler/CHash.cpp Compiler/CExcept.cpp Compiler/CMisc.cpp Compiler/Lex.cpp Compiler/LexLib.cpp Compiler/AsmInit.cpp Compiler/PrsLib.cpp \
@@ -145,6 +145,8 @@ ADAM_TASK_PROBE := Linux/Fixtures/AdamTaskProbe.HC
 ADAM_TASK_AOT_PROBE := Linux/Fixtures/AdamTaskAOTProbe.HC
 ADAM_TASK_TEST_ISO := $(BUILD)/adam-task-test.iso
 ADAM_TASK_AOT_TEST_ISO := $(BUILD)/adam-task-aot-test.iso
+ADAM_STARTUP_PROBE := Linux/Fixtures/AdamStartupProbe.HC
+ADAM_STARTUP_TEST_ISO := $(BUILD)/adam-startup-test.iso
 UASM_PROBES := $(addprefix Linux/Fixtures/,UAsmProbe.HC UAsmNativeProbe.HC)
 UASM_TEST_ISO := $(BUILD)/uasm-test.iso
 UASM_AOT_PROBE := Linux/Fixtures/UAsmAOTProbe.HC
@@ -185,8 +187,10 @@ STRINGS_PROBES := Linux/Fixtures/StrScanProbe.HC Linux/Fixtures/DocScanProbe.HC 
 STARTUP_FIXTURE := Linux/Fixtures/StartOS.HC.Z
 STARTUP_DOC := Doc/Start.DD
 COMPILER_RESOURCE := Compiler/OpCodes.DD
+ADAM_STARTUP_SOURCES := Adam/AMath.HC Adam/AMem.HC Adam/TaskRep.HC
 COMPILER_ISO_ARGS := --file-at $(COMPILER_RESOURCE) $(COMPILER_RESOURCE) \
-	--file-at Compiler/Compiler.BIN $(COMPILER_MODULE)
+	--file-at Compiler/Compiler.BIN $(COMPILER_MODULE) \
+	$(foreach source,$(ADAM_STARTUP_SOURCES),--file-at $(source) $(source))
 MODULE_PROBE := Linux/Fixtures/LoadProbe.BIN
 MODULE_CALLER := Linux/Fixtures/LoadCaller.BIN
 RUNTIME_PROBE := Linux/Fixtures/RuntimeProbe.BIN
@@ -227,6 +231,9 @@ QUEUE_PROBE := Linux/Fixtures/QueueProbe.HC
 TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInputProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 
+# Every bootable test image uses the same Adam source initialization.
+$(ISO) $(foreach target,$(filter %_ISO,$(.VARIABLES)),$($(target))): $(ADAM_STARTUP_SOURCES)
+
 .PHONY: all run test test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args test-internal-types test-class-records
 all: $(ISO)
 
@@ -256,7 +263,7 @@ test-kernel-cfg: $(BUILD)/Linux/TestKernelCfg
 
 test: test-kernel-cfg
 
-$(BUILD)/kernel-cfg-test.iso: $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) Linux/Fixtures/KernelCfgProbe.HC $(COMPILER_MODULE) $(COMPILER_RESOURCE)
+$(BUILD)/kernel-cfg-test.iso: $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) Linux/Fixtures/KernelCfgProbe.HC $(COMPILER_MODULE) $(COMPILER_RESOURCE) $(ADAM_STARTUP_SOURCES)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --dir Account --file Linux/Fixtures/KernelCfgProbe.HC
 
 KCFG_TEST_PROFILE ?= default
@@ -502,22 +509,25 @@ $(BACKEND_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(firstw
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(firstword $(BACKEND_PROBES)) --file $(BACKEND_AOT_PROBE)
 
 $(ADAM_MATH_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MATH_SOURCE) $(ADAM_MATH_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
-	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file-at Adam/AMath.HC $(ADAM_MATH_SOURCE) --file $(ADAM_MATH_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_MATH_PROBE)
 
 $(ADAM_MATH_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MATH_SOURCE) $(ADAM_MATH_PROBE) $(ADAM_MATH_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
-	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file-at Adam/AMath.HC $(ADAM_MATH_SOURCE) --file $(ADAM_MATH_PROBE) --file $(ADAM_MATH_AOT_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_MATH_PROBE) --file $(ADAM_MATH_AOT_PROBE)
 
 $(ADAM_MEM_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_SOURCE) $(ADAM_MEM_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
-	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file-at Adam/AMem.HC $(ADAM_MEM_SOURCE) --file $(ADAM_MEM_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_MEM_PROBE)
 
 $(ADAM_MEM_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_SOURCE) $(ADAM_MEM_PROBE) $(ADAM_MEM_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
-	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file-at Adam/AMem.HC $(ADAM_MEM_SOURCE) --file $(ADAM_MEM_PROBE) --file $(ADAM_MEM_AOT_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_MEM_PROBE) --file $(ADAM_MEM_AOT_PROBE)
 
 $(ADAM_TASK_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_SOURCE) $(ADAM_TASK_SOURCE) $(ADAM_TASK_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
-	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file-at Adam/AMem.HC $(ADAM_MEM_SOURCE) --file-at Adam/TaskRep.HC $(ADAM_TASK_SOURCE) --file $(ADAM_TASK_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_TASK_PROBE)
 
 $(ADAM_TASK_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_SOURCE) $(ADAM_TASK_SOURCE) $(ADAM_TASK_PROBE) $(ADAM_TASK_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
-	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file-at Adam/AMem.HC $(ADAM_MEM_SOURCE) --file-at Adam/TaskRep.HC $(ADAM_TASK_SOURCE) --file $(ADAM_TASK_PROBE) --file $(ADAM_TASK_AOT_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_TASK_PROBE) --file $(ADAM_TASK_AOT_PROBE)
+
+$(ADAM_STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_STARTUP_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_STARTUP_PROBE)
 
 $(UASM_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(UASM_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(UASM_PROBES))
@@ -712,6 +722,12 @@ test-adam-task: $(ADAM_TASK_TEST_ISO) $(ADAM_TASK_AOT_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --adam-task-aot "$(QEMU)" $(ADAM_TASK_AOT_TEST_ISO)
 
 test: test-adam-task
+
+.PHONY: test-adam-startup
+test-adam-startup: $(ADAM_STARTUP_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --adam-startup "$(QEMU)" $(ADAM_STARTUP_TEST_ISO)
+
+test: test-adam-startup
 
 .PHONY: test-uasm
 test-uasm: $(UASM_TEST_ISO) $(UASM_AOT_TEST_ISO) $(BOOT_TEST)

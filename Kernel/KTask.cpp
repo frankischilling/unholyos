@@ -204,6 +204,23 @@ bool KillTask(CTask *task, bool wait)
   return true;
 }
 
+extern "C" uint64_t KillCpp(CTask *task, uint8_t wait, uint8_t just_break)
+{
+  if (!TaskValidateCpp(task))
+    return false;
+  if (!just_break)
+    return KillTask(task, wait);
+  // The reference Break branch acts on the caller when the supplied task
+  // differs from Fs. For Fs it schedules the Ctrl-Alt-C path instead.
+  if (task != CurrentTask()) {
+    BreakCpp();
+    return false;
+  }
+  sys_focus_task = task;
+  __atomic_fetch_or(&sys_ctrl_alt_flags, 1U << 1, __ATOMIC_RELAXED);
+  return true;
+}
+
 extern "C" uint64_t SuspendCpp(CTask *task, uint8_t state)
 {
   if (!task)

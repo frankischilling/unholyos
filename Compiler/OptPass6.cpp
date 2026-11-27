@@ -84,10 +84,11 @@ static bool OptR9Safe(const CIntermediateCode *code,uint32_t i,
   }
 }
 
-void OptPass6(CIntermediateCode *code,uint32_t count,CHashFun *fun)
+void OptPass6(CIntermediateCode *code,uint32_t count,CHashFun *fun,
+              bool no_reg_var)
 {
   constexpr uint32_t r9_mask=1U<<9; // REGG_STK_TMP in KernelA.HH.
-  bool safe=!fun || !(fun->cls.flags&FF_DOT_DOT_DOT);
+  bool safe=(!fun || !(fun->cls.flags&FF_DOT_DOT_DOT)) && !no_reg_var;
   for (uint32_t i=0;i<count;i++) {
     code[i].stack_reg=false;
     switch (code[i].code) {

@@ -179,6 +179,7 @@ void DefineSubHC(), DefineMatchHC();
 void DefineHC(), DefineLoadHC(), DefineCntHC(), DefinePrintHC();
 void Color2StrHC(), Str2ColorU16HC(), Str2ColorU32HC();
 void HashValHC(), HashDelHC(), HashTableDelHC(), HashSrcFileSetHC();
+void HashTablePurgeHC(), KillHC();
 void SpawnHC(), TaskValidateHC(), SuspendHC(), IsSuspendedHC();
 void TaskQueInsHC(), TaskQueRemHC(), SingleUserHC(), IsSingleUserHC();
 void _TASK_END_NOW();
@@ -943,6 +944,9 @@ bool LoadKernel(CTask &task)
       {"HashVal", reinterpret_cast<uintptr_t>(HashValHC)},
       {"HashDel", reinterpret_cast<uintptr_t>(HashDelHC)},
       {"HashTableDel", reinterpret_cast<uintptr_t>(HashTableDelHC)},
+      {"HashTablePurge", reinterpret_cast<uintptr_t>(HashTablePurgeHC)},
+      {"HashAdd", reinterpret_cast<uintptr_t>(_HASH_ADD)},
+      {"HashSingleTableFind", reinterpret_cast<uintptr_t>(_HASH_SINGLE_TABLE_FIND)},
       {"HashSrcFileSet", reinterpret_cast<uintptr_t>(HashSrcFileSetHC)},
       {"_HASH_REM_DEL", reinterpret_cast<uintptr_t>(_HASH_REM_DEL)},
       {"SysSymImportsResolve",
@@ -1155,6 +1159,7 @@ bool LoadKernel(CTask &task)
       {"Spawn", reinterpret_cast<uintptr_t>(SpawnHC)},
       {"Exit", reinterpret_cast<uintptr_t>(Exit)},
       {"TaskValidate", reinterpret_cast<uintptr_t>(TaskValidateHC)},
+      {"Kill", reinterpret_cast<uintptr_t>(KillHC)},
       {"Suspend", reinterpret_cast<uintptr_t>(SuspendHC)},
       {"IsSuspended", reinterpret_cast<uintptr_t>(IsSuspendedHC)},
       {"TaskQueIns", reinterpret_cast<uintptr_t>(TaskQueInsHC)},
