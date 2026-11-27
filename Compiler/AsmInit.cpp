@@ -655,6 +655,23 @@ static bool CmpQueData(CHashTable *table)
   return true;
 }
 
+static bool CmpComplexData(CHashTable *table)
+{
+  auto *cls=CmpKernelClass(table,"Complex",sizeof(Complex));
+  auto *f64=FindType("F64",table);
+  if (!cls || !f64)
+    return false;
+  const char *fields[]{"x","y"};
+  for (const char *field : fields) {
+    auto *name=StrNew(field,CurrentTask()->data_heap);
+    if (!name || !MemberAdd(*cls,name,*f64,*field=='x'?0:8)) {
+      Free(name);
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool CmpFifoData(CHashTable *table)
 {
   auto *u8 = CmpKernelClass(table, "CFifoU8", sizeof(CFifoU8));
@@ -2678,6 +2695,21 @@ static bool CmpRuntimeHeaders(CHashTable *table)
         {"step", I64, true, 1}, {"start_radians", F64, true},
         {"len_radians", F64, true, 0x401921FB54442D18}}},
       {"Arg", F64, FF_RET1, {{"x", F64}, {"y", F64}}},
+      {"Sign", F64, FF_RET1, {{"d", F64}}, "_SIGN"},
+      {"Round", F64, FF_RET1, {{"d", F64}}, "_ROUND"},
+      {"Trunc", F64, FF_RET1, {{"d", F64}}, "_TRUNC"},
+      {"Floor", F64, FF_RET1, {{"d", F64}}, "_FLOOR"},
+      {"Ceil", F64, FF_RET1, {{"d", F64}}, "_CEIL"},
+      {"Pow", F64, FF_RET1, {{"base", F64}, {"power", F64}}, "_POW"},
+      {"Pow10", F64, FF_RET1, {{"d", F64}}, "_POW10"},
+      {"Exp", F64, FF_RET1, {{"d", F64}}, "_EXP"},
+      {"Ln", F64, FF_RET1, {{"d", F64}}, "_LN"},
+      {"Log10", F64, FF_RET1, {{"d", F64}}, "_LOG10"},
+      {"Log2", F64, FF_RET1, {{"d", F64}}, "_LOG2"},
+      {"Fldcw", U0, FF_RET1, {{"w", U16}}, "_FLDCW"},
+      {"Fstcw", U16, 0, {}, "_FSTCW"},
+      {"Fstsw", U16, 0, {}, "_FSTSW"},
+      {"Fclex", U0, 0, {}, "_FCLEX"},
       {"Line", Bool, FF_RET1,
        {{"aux_data", U8Ptr},
         {"x1", I64},
@@ -3366,7 +3398,7 @@ static bool CmpFillHash(CHashTable *table)
   }
   auto *task = CmpKernelClass(table, "CTask", sizeof(CTask));
   return task && CmpMemberData(table) && CmpRuntimeData(table) &&
-         CmpQueData(table) && CmpFifoData(table) && CmpDateData(table) &&
+         CmpComplexData(table) && CmpQueData(table) && CmpFifoData(table) && CmpDateData(table) &&
          CmpBinData(table) && CmpDirData(table) &&
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
          CmpKbdData(table) && CmpTextData(table) &&

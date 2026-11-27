@@ -1893,6 +1893,18 @@ free it. Unsupported opcodes, wrong arities and variadic or array arguments
 are rejected. Full reference intrinsic declarations and operand-selection
 parity remain incomplete.
 
+## Original Adam math
+
+`Adam/AMath.HC` is an unchanged reference source. `Kernel/KMathA.asm`
+provides its missing exponential and logarithmic operations and related
+rounding, sign, power and x87 control entries using the HolyC stack-call
+ABI. `Kernel/KLoad.cpp` exports the assembly labels and public aliases;
+`Compiler/AsmInit.cpp` registers their typed headers and the two-member
+`Complex` class. The class occupies 16 bytes with binary64 members at
+offsets 0 and 8. The native compiler processes the original math file in
+the JIT and AOT test media; the full original startup sequence remains
+pending. The tested scope and reference comparison are in [Boot.md](Boot.md).
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. Earlier reports now cover the kernel state before compiler loading and the loaded compiler image; the opcode-resource probe runs before the module entry. These reports remain in `Linux/BootProbe.cpp`. [Source structure verification](SourceStructureVerification.md) records the earlier layout review; the compiler load cutover requires its own runtime evidence in [Boot.md](Boot.md).

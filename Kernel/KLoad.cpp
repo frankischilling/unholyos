@@ -57,6 +57,8 @@ CDocEntryBase *DocPutLineCpp(CDoc *doc, CDocEntryBase *entry);
 char *ExtChgCpp(const char *name, const char *ext);
 uint64_t F64PowerBits(uint64_t base, uint64_t exponent);
 void SYS_POW();
+void _SIGN(),_ROUND(),_TRUNC(),_FLOOR(),_CEIL(),_POW(),_POW10(),_EXP();
+void _LOG10(),_LOG2(),_LN(),_FLDCW(),_FSTCW(),_FSTSW(),_FCLEX();
 uint64_t I64MulF64Bits(int64_t value, uint64_t scale);
 void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
@@ -1182,6 +1184,36 @@ bool LoadKernel(CTask &task)
       {"DrawStdMs", reinterpret_cast<uintptr_t>(DrawStdMsHC)},
       {"PaletteSetStd", reinterpret_cast<uintptr_t>(PaletteSetStdHC)},
       {"SYS_POW", reinterpret_cast<uintptr_t>(SYS_POW)},
+      {"_SIGN", reinterpret_cast<uintptr_t>(_SIGN)},
+      {"Sign", reinterpret_cast<uintptr_t>(_SIGN)},
+      {"_ROUND", reinterpret_cast<uintptr_t>(_ROUND)},
+      {"Round", reinterpret_cast<uintptr_t>(_ROUND)},
+      {"_TRUNC", reinterpret_cast<uintptr_t>(_TRUNC)},
+      {"Trunc", reinterpret_cast<uintptr_t>(_TRUNC)},
+      {"_FLOOR", reinterpret_cast<uintptr_t>(_FLOOR)},
+      {"Floor", reinterpret_cast<uintptr_t>(_FLOOR)},
+      {"_CEIL", reinterpret_cast<uintptr_t>(_CEIL)},
+      {"Ceil", reinterpret_cast<uintptr_t>(_CEIL)},
+      {"_POW", reinterpret_cast<uintptr_t>(_POW)},
+      {"Pow", reinterpret_cast<uintptr_t>(_POW)},
+      {"_POW10", reinterpret_cast<uintptr_t>(_POW10)},
+      {"Pow10", reinterpret_cast<uintptr_t>(_POW10)},
+      {"_EXP", reinterpret_cast<uintptr_t>(_EXP)},
+      {"Exp", reinterpret_cast<uintptr_t>(_EXP)},
+      {"_LOG10", reinterpret_cast<uintptr_t>(_LOG10)},
+      {"Log10", reinterpret_cast<uintptr_t>(_LOG10)},
+      {"_LOG2", reinterpret_cast<uintptr_t>(_LOG2)},
+      {"Log2", reinterpret_cast<uintptr_t>(_LOG2)},
+      {"_LN", reinterpret_cast<uintptr_t>(_LN)},
+      {"Ln", reinterpret_cast<uintptr_t>(_LN)},
+      {"_FLDCW", reinterpret_cast<uintptr_t>(_FLDCW)},
+      {"Fldcw", reinterpret_cast<uintptr_t>(_FLDCW)},
+      {"_FSTCW", reinterpret_cast<uintptr_t>(_FSTCW)},
+      {"Fstcw", reinterpret_cast<uintptr_t>(_FSTCW)},
+      {"_FSTSW", reinterpret_cast<uintptr_t>(_FSTSW)},
+      {"Fstsw", reinterpret_cast<uintptr_t>(_FSTSW)},
+      {"_FCLEX", reinterpret_cast<uintptr_t>(_FCLEX)},
+      {"Fclex", reinterpret_cast<uintptr_t>(_FCLEX)},
       {"SignI64", reinterpret_cast<uintptr_t>(SignI64HC)},
       {"RandI16", reinterpret_cast<uintptr_t>(RandI16HC)},
       {"RandU16", reinterpret_cast<uintptr_t>(RandU16HC)},

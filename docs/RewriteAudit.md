@@ -10,7 +10,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 68 | 8 |
 | `Compiler` | 33 | 33 | 0 |
-| `Adam` | 132 | 45 | 87 |
+| `Adam` | 132 | 46 | 86 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 22 | 181 |
 
@@ -81,6 +81,10 @@ part of the full rewrite.
   `_intern` declarations work for the supported opcode and arity set in
   JIT and AOT. Remaining intrinsic opcodes and complete operand-location
   selection are still needed for the original headers and startup.
+- Original `Adam/AMath.HC` is included without source changes and runs
+  in both native JIT and AOT probes. Kernel floating math entries and
+  `Complex` metadata supply its dependencies. This is not yet execution
+  of the complete original Adam startup sequence.
 - Move remaining Adam initialization to the guest startup path after
   compiler support permits the original project and startup files.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal

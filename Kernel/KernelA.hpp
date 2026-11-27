@@ -1427,6 +1427,12 @@ struct CD3
   uint64_t x, y, z;
 };
 
+struct Complex
+{
+  uint64_t x, y; // binary64 bit patterns
+};
+static_assert(sizeof(Complex)==16 && offsetof(Complex,y)==8);
+
 struct [[gnu::packed]] CMsHardStateGlbls
 {
   CD3I64 pos, prescale;

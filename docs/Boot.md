@@ -3971,6 +3971,34 @@ formatting, source-link or debugger parity, or compatibility for every
 16/32-bit instruction. `Un` deliberately bounds decoding by the given
 byte range, including at a partial final instruction.
 
+## Original Adam math source
+
+`Adam/AMath.HC` is preserved byte-for-byte from the pinned reference
+(2593 bytes, SHA-256
+`1dee3be762957b408b784061410349f6e9197d49744fa1ed0e0ac3b4ca7784c3`).
+The test media place it at its original path. `AdamMathProbe.HC`
+includes it and exercises coordinate conversion, optional outputs,
+angle wrapping, inverse trigonometry, hyperbolic functions, complex
+arithmetic and polynomials, rounding and x87 control-word restoration.
+The original inverse-trigonometric endpoint behavior is retained.
+
+The shared probe (2271 bytes, SHA-256
+`fde2f46aef0f3d51ba102b6763b7cee20af3c88456d4f35116d4364621089f48`)
+produces `Adam math 1FFF` in GCC and Clang JIT builds and on the pinned
+TempleOS distribution. Both native AOT builds produce compile result 0,
+the same mask, and load result 1.
+
+```sh
+make -j6 test-adam-math
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-adam-math
+build/Linux/TestBoot --adam-math-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/adam-math-reference
+```
+
+This validates the selected math behavior and the original source's
+execution, not the entire `MakeAdam.HC` startup or every exceptional
+floating-point input.
+
 ## Nested images, FAT32 backing, and mounted ISO generation
 
 The shared `NestedRedSeaProbe.HC`, `RedSeaFreeListProbe.HC`, and `Fat32ImageProbe.HC` fixtures run on

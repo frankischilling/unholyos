@@ -2088,6 +2088,11 @@ void BootProbe()
       BootFileProgramReport(*adam_task->cur_dv,"/BackendProbe.HC");
       BootFileProgramReport(*adam_task->cur_dv,"/BackendNativeProbe.HC");
     }
+    if (RedSeaFileLookup(*adam_task->cur_dv,"/AdamMathAOTProbe.HC",
+                         false,false,optimizer_entry,optimizer_prefix))
+      BootFileProgramReport(*adam_task->cur_dv,"/AdamMathAOTProbe.HC");
+    else
+      BootFileProgramReport(*adam_task->cur_dv,"/AdamMathProbe.HC");
     if (RedSeaFileLookup(*adam_task->cur_dv,"/UAsmAOTProbe.HC",
                          false,false,optimizer_entry,optimizer_prefix))
       BootFileProgramReport(*adam_task->cur_dv,"/UAsmAOTProbe.HC");
