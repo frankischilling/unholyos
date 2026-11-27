@@ -126,7 +126,8 @@ static void AOTDel(CAOT &aot, CHashTable *table)
       for (auto *entry = table->body[i]; entry; entry = entry->next)
         if (entry->type & HTT_FUN) {
           auto &fun = *reinterpret_cast<CHashFun *>(entry);
-          if (!(fun.cls.flags & FF__EXTERN))
+          // Internal declarations store an IC opcode, not allocated code.
+          if (!(fun.cls.flags & (FF__EXTERN | FF_INTERNAL)))
             Free(fun.exe_addr);
           for (auto *member = fun.cls.member_lst_and_root; member;
                member = member->next)

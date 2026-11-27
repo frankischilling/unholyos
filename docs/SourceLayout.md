@@ -1880,6 +1880,19 @@ cases for execution. `CExts.cpp` resolves register-ABI exports, including
 `Kernel/KMathA.asm`. AOT uses a named import rather than embedding a host
 address; the compiler no longer imports `__unholyos_sysv.F64PowerBits`.
 
+The bit-operation, swap, unsigned remainder and port-I/O families add
+eighteen typed intrinsic signatures from `Kernel/KernelB.HH`.
+`BackB.cpp` emits memory bit instructions with the reference's immediate
+operand widths and lock prefix, width-specific swaps, `DIV` with quotient
+writeback, and immediate or DX-based port accesses. `BackC.cpp` preserves
+right-to-left operand evaluation and stack alignment while lowering these
+operations. `PrsStmt.cpp` evaluates `_intern` opcode expressions and creates
+typed function records for implemented intrinsic opcodes. These records
+hold an opcode rather than a machine-code address, so `AOTDel` does not
+free it. Unsupported opcodes, wrong arities and variadic or array arguments
+are rejected. Full reference intrinsic declarations and operand-selection
+parity remain incomplete.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. Earlier reports now cover the kernel state before compiler loading and the loaded compiler image; the opcode-resource probe runs before the module entry. These reports remain in `Linux/BootProbe.cpp`. [Source structure verification](SourceStructureVerification.md) records the earlier layout review; the compiler load cutover requires its own runtime evidence in [Boot.md](Boot.md).

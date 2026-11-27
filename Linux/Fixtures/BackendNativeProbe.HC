@@ -71,6 +71,34 @@ Bool BackendNativeBytes(U8 *name,U8 *entry,I64 first,I64 second)
   return FALSE;
 }
 
+Bool BackendNativeLocked(U8 *p,I64 bit)
+{
+  return LBts(p,bit);
+}
+
+Bool BackendNativeImmediate(U8 *p)
+{
+  return Btr(p,31);
+}
+
+Bool BackendNativeImmediate64(U8 *p)
+{
+  return Btc(p,63);
+}
+
+U64 BackendNativeModulo(U64 *p,U64 d)
+{
+  return ModU64(p,d);
+}
+
+U0 BackendNativePortOut(I64 port,I64 val)
+{
+  OutU16(port,val);
+  OutU16(0x80,val);
+  OutU32(port,val);
+  OutU8(0x80,val);
+}
+
 U0 BackendNativeProbe()
 {
   I64 res=0;
@@ -112,6 +140,28 @@ U0 BackendNativeProbe()
       BackendNativeBytes("BackendNativeSpill",&BackendNativeSpill,0x41,0x51) &&
       BackendNativeBytes("BackendNativeSpill",&BackendNativeSpill,0x41,0x59))
     res|=128;
+  if (BackendNativeMeta("Bt",0x77,2,4) &&
+      BackendNativeMeta("Bts",0x78,2,4) &&
+      BackendNativeMeta("Btr",0x79,2,4) &&
+      BackendNativeMeta("Btc",0x7A,2,4) &&
+      BackendNativeMeta("LBts",0x7B,2,4) &&
+      BackendNativeMeta("LBtr",0x7C,2,4) &&
+      BackendNativeMeta("LBtc",0x7D,2,4) &&
+      BackendNativeMeta("ModU64",0xAF,2,11) &&
+      BackendNativeMeta("SwapU8",0xA5,2,3) &&
+      BackendNativeMeta("SwapU16",0xA6,2,3) &&
+      BackendNativeMeta("SwapU32",0xA7,2,3) &&
+      BackendNativeMeta("SwapI64",0xA8,2,3)) res|=256;
+  if (BackendNativeBytes("BackendNativeLocked",&BackendNativeLocked,0xF0,0x48) &&
+      BackendNativeBytes("BackendNativeLocked",&BackendNativeLocked,0x0F,0xAB) &&
+      BackendNativeBytes("BackendNativeImmediate",&BackendNativeImmediate,0xBA,0x32) &&
+      BackendNativeBytes("BackendNativeImmediate64",&BackendNativeImmediate64,0xBA,0x3A) &&
+      BackendNativeBytes("BackendNativeModulo",&BackendNativeModulo,0xF7,0xF1))
+    res|=512;
+  if (BackendNativeBytes("BackendNativePortOut",&BackendNativePortOut,0x66,0xEF) &&
+      BackendNativeBytes("BackendNativePortOut",&BackendNativePortOut,0x66,0xE7) &&
+      BackendNativeBytes("BackendNativePortOut",&BackendNativePortOut,0xE6,0x80))
+    res|=1024;
   "Backend native %X\n",res;
 }
 

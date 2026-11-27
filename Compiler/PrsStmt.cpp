@@ -686,7 +686,35 @@ struct CPrsDecl
 
   int64_t mode = -1;
   char *alias = nullptr;
+  uint64_t internal_op = 0;
 };
+
+// Only admit opcodes with an implemented intrinsic expression lowering.
+// Other IC records can carry unrelated indices, labels or data addresses.
+static int PrsInternalArgCount(uint64_t op)
+{
+  switch (op) {
+  case IC_FS: case IC_GS: case IC_GET_RFLAGS: case IC_RDTSC:
+    return 0;
+  case IC_TO_I64: case IC_TO_F64: case IC_TO_BOOL: case IC_TOUPPER:
+  case IC_IN_U8: case IC_IN_U16: case IC_IN_U32:
+  case IC_BSF: case IC_BSR: case IC_QUE_INIT: case IC_QUE_REM:
+  case IC_STRLEN: case IC_ABS_I64: case IC_SIGN_I64:
+  case IC_SQR_I64: case IC_SQR_U64: case IC_SQR: case IC_ABS:
+  case IC_SQRT: case IC_SIN: case IC_COS: case IC_TAN: case IC_ATAN:
+    return 1;
+  case IC_OUT_U8: case IC_OUT_U16: case IC_OUT_U32:
+  case IC_BT: case IC_BTS: case IC_BTR: case IC_BTC:
+  case IC_LBTS: case IC_LBTR: case IC_LBTC:
+  case IC_QUE_INS: case IC_QUE_INS_REV:
+  case IC_SWAP_U8: case IC_SWAP_U16: case IC_SWAP_U32: case IC_SWAP_I64:
+  case IC_MIN_I64: case IC_MIN_U64: case IC_MAX_I64: case IC_MAX_U64:
+  case IC_MOD_U64:
+    return 2;
+  default:
+    return -1;
+  }
+}
 
 static const CHashExport *PrsExternSym(const char *name, CHashTable *table)
 {
@@ -703,7 +731,17 @@ static bool PrsFunDecl(CCmpCtrl &cc, CHashFun &fun, const CPrsDecl &decl,
   auto *table = cc.htc.glbl_hash_table;
   if (cc.token != ';')
     return false;
-  if (decl.Import()) {
+  if (decl.mode == KW__INTERN) {
+    if (PrsInternalArgCount(decl.internal_op) != int(fun.arg_cnt) ||
+        (fun.cls.flags & FF_DOT_DOT_DOT))
+      return false;
+    for (auto *member = fun.cls.member_lst_and_root; member; member = member->next)
+      if (member->dim.next || !member->member_class ||
+          !TypeSize(ClassRawType(*member->member_class)))
+        return false;
+    fun.cls.flags = (fun.cls.flags & ~CF_EXTERN) | FF_INTERNAL;
+    fun.exe_addr = reinterpret_cast<uint8_t *>(decl.internal_op);
+  } else if (decl.Import()) {
     if (!aot || (decl.alias && *decl.alias != '_'))
       return false;
     sym.import_name = StrNew(decl.alias ? decl.alias : sym.hash.str,
@@ -842,6 +880,8 @@ static bool PrsFun(CCmpCtrl &cc, CHashClass &type, char *name,
 static bool PrsGlobalDecl(CCmpCtrl &cc, CHashGlblVar &var, const CPrsDecl &decl,
                           CAOT *aot)
 {
+  if (decl.mode == KW__INTERN)
+    return false;
   auto &sym = var.sym;
   if (decl.Import()) {
     if (!aot)
@@ -995,7 +1035,17 @@ bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
   auto keyword = Keyword(cc);
   if (keyword == KW_ASM)
     return !visibility && !flags && PrsAsmBlk(cc, aot);
-  if (keyword == KW_EXTERN || keyword == KW_IMPORT || keyword == KW__IMPORT ||
+  if (keyword == KW__INTERN) {
+    decl.mode = keyword;
+    Lex(cc);
+    auto *machine_code = LexTypedExpression2Bin(cc, RT_I64);
+    if (!machine_code)
+      return false;
+    bool okay = CmpCall(cc, machine_code, decl.internal_op);
+    Free(machine_code);
+    if (!okay || PrsInternalArgCount(decl.internal_op) < 0)
+      return false;
+  } else if (keyword == KW_EXTERN || keyword == KW_IMPORT || keyword == KW__IMPORT ||
       keyword == KW__EXTERN) {
     decl.mode = keyword;
     Lex(cc);

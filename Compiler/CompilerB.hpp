@@ -342,6 +342,10 @@ void ICCompoundAssign(CCodeOut &out,CIntermediateCode node,
                       uint8_t local_reg=0,const COptAddress *frame=nullptr);
 bool ICUnary(CCodeOut &out,CICode op,CRawType type);
 void ICMinMax(CCodeOut &out,CICode op);
+void ICBitOps(CCodeOut &out,CICode op,bool immediate,int64_t bit);
+void ICModU64(CCodeOut &out);
+void ICSwap(CCodeOut &out,CICode op);
+void ICPort(CCodeOut &out,CICode op,bool immediate,uint8_t port);
 bool ICCopyTemplate(CCodeOut &out,CmpTemplate id);
 bool ICFTemplateFun(CCodeOut &out,CICode op,CRawType type);
 uintptr_t CmpSysExport(const char *name);

@@ -3089,12 +3089,12 @@ constexpr CTextProbe address_fold_aot_probes[]{
 
 constexpr CTextProbe backend_probes[]{
     {"backend","/BackendProbe.HC","","Backend probe ","Backend probe ",
-     "Backend probe 1FFFF\n",{},true},
+     "Backend probe 7FFFFF\n",{},true},
     {"backend-native","/BackendNativeProbe.HC","","Backend native ","Backend native ",
-     "Backend native FF\n",{},true}};
+     "Backend native 7FF\n",{},true}};
 constexpr CTextProbe backend_aot_probes[]{
     {"backend-aot","/BackendAOTProbe.HC","","Backend AOT compile ","Backend AOT load ",
-     "Backend AOT compile 0\nBackend probe 1FFFF\nBackend AOT load 1\n",{},true}};
+     "Backend AOT compile 0\nBackend probe 7FFFFF\nBackend AOT load 1\n",{},true}};
 
 constexpr CTextProbe uasm_probes[]{
     {"uasm","/UAsmProbe.HC","","UAsm probe ","UAsm probe ",
