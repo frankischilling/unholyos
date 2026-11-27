@@ -1015,6 +1015,25 @@ static void DriveCharacterGraphics(
           hash = (hash ^ uint8_t(cells[y * 80 + x] >> shift)) * 0x100000001B3;
     return hash;
   };
+  // Observe each guest refresh rather than depending on the host sampling a
+  // transient pan value before the scroll task finishes.
+  cmd("I64 *cgpan=CAlloc(32);");
+  cmd("U0 CGWatch(I64){while(cgpan[2]==0){Refresh;cgpan[3]++;"
+      "if(gr.hide_row&&gr.pan_text_x<7)cgpan[0]++;"
+      "if(gr.hide_col&&gr.pan_text_y<7)cgpan[1]++;}cgpan[2]=2;}");
+  cmd(R"(CTask *cgwatch=Spawn(&CGWatch,0,"Pan Watch",,Fs);)");
+  cmd(R"("CG4 %X %X %X\n",&cgpan[0],cgwatch,&winmgr.updates;)");
+  auto [pan_watch, watch_task, watch_updates] = addresses("CG4 ", {32, 8, 8});
+  (void)watch_task;
+  (void)watch_updates;
+  const auto initial_observer = ReadPhysical<4>(vm, pan_watch);
+  Check(!initial_observer[0] && !initial_observer[1] && !initial_observer[2],
+        "CharDemo pan observer was not initialized");
+  wait([&](const Cells &) {
+    const auto observed = ReadPhysical<4>(vm, pan_watch);
+    return !observed[2] && observed[3] > initial_observer[3];
+  },
+       "CharDemo pan observer did not start");
   cmd("Seed(12345);DocClear(,1);");
   cmd(R"(ExeFile("::/Demo/Games/CharDemo.HC");)");
   auto initial = wait(map_visible, "CharDemo did not draw its terrain");
@@ -1062,14 +1081,27 @@ static void DriveCharacterGraphics(
   };
   auto scroll = [&](const Cells &before, const char *button, int dx, int dy,
                     const char *name) {
+    const size_t axis = dx ? 0 : 1;
+    const auto start = ReadPhysical<4>(vm, pan_watch);
     key(button);
-    bool subcell = false;
-    auto cells = wait([&](const Cells &now) {
-      auto pan = ReadPhysical<2>(vm, pan_slot);
-      subcell |= pan[0] != 7 || pan[1] != 7;
-      return subcell && pan[0] == 7 && pan[1] == 7 &&
-             matches_shift(before, now, dx, dy);
-    }, "CharDemo did not scroll exactly four cells");
+    std::array<uint64_t, 2> pan{};
+    std::array<uint64_t, 4> observed{};
+    bool shifted = false;
+    Cells cells;
+    try {
+      cells = wait([&](const Cells &now) {
+        pan = ReadPhysical<2>(vm, pan_slot);
+        observed = ReadPhysical<4>(vm, pan_watch);
+        shifted = matches_shift(before, now, dx, dy);
+        return observed[axis] > start[axis] && pan[0] == 7 && pan[1] == 7 && shifted;
+      }, "CharDemo did not scroll exactly four cells");
+    } catch (...) {
+      std::cerr << name << " pan " << pan[0] << ' ' << pan[1]
+                << " observer " << start[0] << ' ' << start[1] << ' ' << start[3]
+                << " -> " << observed[0] << ' ' << observed[1] << ' ' << observed[3]
+                << " shifted " << shifted << '\n';
+      throw;
+    }
     snapshot(name);
     return cells;
   };
@@ -1095,6 +1127,9 @@ static void DriveCharacterGraphics(
   wait_text("T:/Home>");
   wait_restored();
   snapshot("char-exit");
+  cmd(R"(cgpan[2]=1;while(TaskValidate(cgwatch))Yield;"CGWATCH %d\n",cgpan[2];)");
+  wait_text("CGWATCH 2");
+  cmd("Free(cgpan);cgpan=NULL;");
   std::cout << "CharDemo.HC animated all four glyphs, scrolled four ways, restarted and restored state\n";
 
   auto move_to = [&](int x, int y) {
