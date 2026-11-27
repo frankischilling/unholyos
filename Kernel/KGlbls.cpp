@@ -2,6 +2,8 @@
 
 CTask *adam_task, *sys_focus_task, *sys_winmgr_task,
     *sys_task_being_scrn_updated;
+CCPU *cpu_structs;
+int64_t mp_cnt;
 CAutoCompleteGlbls ac;
 CBlkDevGlbls blkdev;
 CDate local_time_offset;

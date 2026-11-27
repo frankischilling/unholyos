@@ -3121,6 +3121,13 @@ constexpr CTextProbe adam_mem_aot_probes[]{
     {"adam-mem-aot","/AdamMemAOTProbe.HC","","Adam memory AOT compile ","Adam memory AOT load ",
      "Adam memory AOT compile 0\nTask can't HeapRep on self.\nTask can't HeapRep on self.\nAdam memory FFF\nAdam memory AOT load 1\n",{},true}};
 
+constexpr CTextProbe adam_task_probes[]{
+    {"adam-task","/AdamTaskProbe.HC","","Adam tasks ","Adam tasks ",
+     "Adam tasks FF\n",{},true}};
+constexpr CTextProbe adam_task_aot_probes[]{
+    {"adam-task-aot","/AdamTaskAOTProbe.HC","","Adam tasks AOT compile ","Adam tasks AOT load ",
+     "Adam tasks AOT compile 0\nAdam tasks FF\nAdam tasks AOT load 1\n",{},true}};
+
 constexpr CTextProbe uasm_probes[]{
     {"uasm","/UAsmProbe.HC","","UAsm probe ","UAsm probe ",
      "UAsm probe FFF\n",{},true},
@@ -6634,6 +6641,9 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--adam-mem-large" ||
        std::string_view(argv[1]) == "--adam-mem-large-reference" ||
        std::string_view(argv[1]) == "--adam-mem-large-aot" ||
+       std::string_view(argv[1]) == "--adam-task" ||
+       std::string_view(argv[1]) == "--adam-task-reference" ||
+       std::string_view(argv[1]) == "--adam-task-aot" ||
        std::string_view(argv[1]) == "--uasm" ||
        std::string_view(argv[1]) == "--uasm-reference" ||
        std::string_view(argv[1]) == "--uasm-aot" ||
@@ -6713,6 +6723,8 @@ int main(int argc, char **argv)
     bool adam_mem_probe=std::string_view(argv[1]).starts_with("--adam-mem");
     bool adam_mem_aot=adam_mem_probe && std::string_view(argv[1]).ends_with("-aot");
     bool adam_mem_large=std::string_view(argv[1]).starts_with("--adam-mem-large");
+    bool adam_task_probe=std::string_view(argv[1]).starts_with("--adam-task");
+    bool adam_task_aot=std::string_view(argv[1])=="--adam-task-aot";
     bool uasm_probe=std::string_view(argv[1]).starts_with("--uasm");
     bool uasm_aot=std::string_view(argv[1])=="--uasm-aot";
     bool storage_services_probe =
@@ -6733,7 +6745,7 @@ int main(int argc, char **argv)
                               format_missing_args_probe || class_records_probe ||
                               list_utilities_probe || storage_services_probe ||
                               cluster_entry_probe || disk_cache_probe || storage_lifecycle_probe ||
-                              file_backed_redsea_probe || nested_redsea_probe || optical_image_probe || optimizer_probe || register_allocation_probe || address_fold_probe || backend_probe || uasm_probe || adam_math_probe || adam_mem_probe;
+                              file_backed_redsea_probe || nested_redsea_probe || optical_image_probe || optimizer_probe || register_allocation_probe || address_fold_probe || backend_probe || uasm_probe || adam_math_probe || adam_mem_probe || adam_task_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6779,6 +6791,9 @@ int main(int argc, char **argv)
     else if (adam_mem_probe)
       text_probes=adam_mem_aot?std::span<const CTextProbe>(adam_mem_aot_probes):
                               std::span<const CTextProbe>(adam_mem_probes);
+    else if (adam_task_probe)
+      text_probes=adam_task_aot?std::span<const CTextProbe>(adam_task_aot_probes):
+                               std::span<const CTextProbe>(adam_task_probes);
     else if (uasm_probe)
       text_probes=uasm_aot?std::span<const CTextProbe>(uasm_aot_probes):
                           std::span<const CTextProbe>(uasm_probes);
@@ -6848,6 +6863,13 @@ int main(int argc, char **argv)
                                 "AdamMemProbe.HC");
         if (adam_mem_probe)
           VerifyHostModuleMedia(argv[3],"Adam/AMem.HC","AMem.HC","Adam");
+        if (adam_task_probe) {
+          VerifyHostModuleMedia(argv[3],"Adam/AMem.HC","AMem.HC","Adam");
+          VerifyHostModuleMedia(argv[3],"Adam/TaskRep.HC","TaskRep.HC","Adam");
+        }
+        if (adam_task_aot)
+          VerifyHostModuleMedia(argv[3],"Linux/Fixtures/AdamTaskProbe.HC",
+                                "AdamTaskProbe.HC");
         if (uasm_aot)
           VerifyHostModuleMedia(argv[3],"Linux/Fixtures/UAsmProbe.HC",
                                 "UAsmProbe.HC");
@@ -7048,6 +7070,7 @@ int main(int argc, char **argv)
               << " --adam-mem-reference qemu image.iso [capture-dir]\n"
               << " --adam-mem-aot qemu image.iso [capture-dir]\n"
               << " --adam-mem-large[-reference|-aot] qemu image.iso [capture-dir]\n"
+              << " --adam-task[-reference|-aot] qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"

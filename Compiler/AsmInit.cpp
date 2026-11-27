@@ -3,6 +3,7 @@
 #include "../Adam/Gr/GrGlbls.hpp"
 #include "../Adam/Menu.hpp"
 #include "CompilerA.hpp"
+#include "CompilerB.hpp"
 
 extern "C" int64_t LstMatchCpp(const uint8_t *needle, const uint8_t *list,
                                uint64_t flags);
@@ -2028,7 +2029,11 @@ static bool CmpClassReportData(CHashTable *table, CHashClass &task)
       cls->last_in_member_lst = m;
     }
   }
-  return true;
+  auto *cpus = reinterpret_cast<void *>(CmpSysExport("cpu_structs"));
+  auto *count = reinterpret_cast<void *>(CmpSysExport("mp_cnt"));
+  return cpus && count &&
+         CmpKernelGlobal(table, "cpu_structs", cpu + 1, cpus) &&
+         CmpKernelGlobal(table, "mp_cnt", i64, count);
 }
 
 static bool CmpRuntimeHeaders(CHashTable *table)
@@ -2555,6 +2560,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"task", TaskPtr, true}, {"l", I64}, {"r", I64}, {"t", I64}, {"b", I64},
         {"attr", I64}, {"solid", Bool}}},
       {"DocNew", DocPtr, FF_RET1, {{"filename", U8Ptr, true}, {"task", TaskPtr, true}}},
+      {"IsRaw", Bool, FF_RET1, {}},
+      {"Raw", Bool, FF_RET1, {{"val", Bool}}},
       {"DocRead", DocPtr, FF_RET1, {{"name", U8Ptr, true}, {"flags", I64, true}}},
       {"DocSave", U8Ptr, FF_RET1, {{"doc", DocPtr}, {"_size", I64Ptr, true}}},
       {"DocType", Bool, FF_RET1,
@@ -3271,7 +3278,7 @@ static bool CmpFillHash(CHashTable *table)
       {"CH_SHIFT_ESC", "0x1C"},
       {"GSF_SHIFT_ESC_EXIT", "1"},
       {"GSF_WITH_NEW_LINE", "2"},
-      {"DOCF_BORDER_DOC", "0x100"},
+      {"DOCF_NO_CURSOR", "0x8"}, {"DOCF_BORDER_DOC", "0x100"},
       {"DOCF_HIDE_CURSOR", "0x800"},
       {"DOCF_NO_SCROLL_BARS", "0x2000"}, {"TSF_SAME_SONG", "1"},
       {"CDATE_FREQ", "49710"},

@@ -1905,6 +1905,18 @@ offsets 0 and 8. The native compiler processes the original math file in
 the JIT and AOT test media; the full original startup sequence remains
 pending. The tested scope and reference comparison are in [Boot.md](Boot.md).
 
+## Original Adam task reporting
+
+`Adam/TaskRep.HC` uses the unchanged recursive report from the pinned
+reference. `Kernel/MultiProc.cpp` initializes the CPU-record pointer and
+active CPU count for core zero. `Kernel/KLoad.cpp` exports both public
+names and their reference system-symbol names. The compiler resolves
+their typed global aliases through the kernel export table. Typed
+`Raw` and `IsRaw` declarations and `DOCF_NO_CURSOR` allow a guest to
+capture the original report with its DolDoc formatting intact.
+Additional processor initialization, interactive Kill links and the
+complete original Adam startup remain pending.
+
 ## Original Adam memory inspection
 
 `Adam/AMem.HC` is preserved from the pinned reference. `CmpHeapData`
