@@ -1330,6 +1330,16 @@ constexpr uint8_t SC_ENTER = 0x1C, SC_SHIFT = 0x2A, SC_CTRL = 0x1D,
                   SC_INS = 0x52, SC_DELETE = 0x53, SC_GUI = 0xDB;
 constexpr int64_t GSF_SHIFT_ESC_EXIT = 1, GSF_WITH_NEW_LINE = 2;
 
+constexpr int64_t SUF_REM_CTRL_CHARS = 0x001, SUF_REM_LEADING = 0x002,
+                  SUF_REM_TRAILING = 0x004, SUF_REM_SPACES = 0x008,
+                  SUF_SINGLE_SPACE = 0x010, SUF_TO_UPPER = 0x020,
+                  SUF_TO_LOWER = 0x040, SUF_S2T = 0x080, SUF_T2S = 0x100,
+                  SUF_SCALE_INDENT = 0x200, SUF_SAFE_DOLLAR = 0x400;
+constexpr int64_t SFF_IGNORE_CASE = 1, SFF_WHOLE_LABELS_BEFORE = 2,
+                  SFF_WHOLE_LABELS_AFTER = 4,
+                  SFG_WHOLE_LABELS = SFF_WHOLE_LABELS_BEFORE |
+                                     SFF_WHOLE_LABELS_AFTER;
+
 template <typename T> struct CFifo
 {
   T *buf;
