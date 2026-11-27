@@ -6548,6 +6548,9 @@ int main(int argc, char **argv)
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
+      if (character && !reference)
+        VerifyHostModuleMedia(argv[3],"Linux/Fixtures/CharPanObserver.HC",
+                              "CharPanObserver.HC");
       if ((source_probe || internal_types_probe) && !reference) {
         for (const auto &probe:text_probes)
           VerifyHostModuleMedia(argv[3],
