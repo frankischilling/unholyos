@@ -1430,6 +1430,101 @@ static void BootModuleReport(const CDrv &dv, CTask &task)
   SerialPutS("\r\n");
 }
 
+static void BootHostModuleReport(const CDrv &dv, CTask &task)
+{
+  CRedSeaDirEntry file;
+  if (!RedSeaFileFind(dv, dv.root_clus, "HostModuleProbe.BIN", false, file))
+    return;
+  struct CSample
+  {
+    uintptr_t header, base, end, image_end, result, anchor;
+    uint64_t value, values[5], checks;
+  } samples[2]{};
+  auto take = [&](CSample &s) {
+    if (!Load(dv, "/HostModuleProbe.BIN", task, LDF_SILENT))
+      return;
+    // The native loader returns an opaque module; its hash record names the BIN
+    // header.
+    auto *module = reinterpret_cast<CHashGeneric *>(
+        HashFind("/HostModuleProbe", task.hash_table, HTT_MODULE));
+    auto *result = reinterpret_cast<CHashExport *>(
+        HashFind("HostModuleResult", task.hash_table, HTT_EXPORT_SYS_SYM));
+    auto *anchor = reinterpret_cast<CHashExport *>(
+        HashFind("HostModuleAnchor", task.hash_table, HTT_EXPORT_SYS_SYM));
+    if (!module || !result || !anchor)
+      return;
+    s.header = module->user_data0;
+    CBinFile header;
+    MemCpy(&header, reinterpret_cast<const void *>(s.header), sizeof(header));
+    if (header.bin_signature != BIN_SIGNATURE_VAL ||
+        header.org != INVALID_PTR || header.file_size != file.size ||
+        header.patch_table_offset < sizeof(header) ||
+        header.patch_table_offset >= header.file_size)
+      return;
+    s.base = s.header + sizeof(header);
+    s.end = s.header + header.patch_table_offset;
+    s.image_end = s.header + header.file_size;
+    s.result = result->val;
+    s.anchor = anchor->val;
+    s.checks = 32;
+    auto inside = [&](uintptr_t address, size_t size) {
+      return address >= s.base && address <= s.end && size <= s.end - address;
+    };
+    if (!inside(s.result, sizeof(s.value)) ||
+        !inside(s.anchor, sizeof(s.values)))
+      return;
+    MemCpy(&s.value, reinterpret_cast<const void *>(s.result), sizeof(s.value));
+    MemCpy(s.values, reinterpret_cast<const void *>(s.anchor),
+           sizeof(s.values));
+    if (s.values[0] == s.anchor)
+      s.checks |= 1;
+    if (inside(s.values[1], 32) && inside(s.values[2], 8) &&
+        inside(s.values[3], 1))
+      s.checks |= 2;
+    if (s.values[2] == s.values[1] + 16)
+      s.checks |= 4;
+    if (s.values[4] == reinterpret_cast<uintptr_t>(char_bmp_alpha))
+      s.checks |= 8;
+    if (!(s.base & 63) && !(s.values[1] & 63))
+      s.checks |= 16;
+  };
+  take(samples[0]);
+  take(samples[1]);
+  const auto &first = samples[0], &second = samples[1];
+  uint64_t pair = 0;
+  if ((first.checks & 1) && (second.checks & 1)) {
+    if (first.image_end <= second.header || second.image_end <= first.header)
+      pair |= 1;
+    bool distinct = first.result != second.result;
+    bool offsets = first.result - first.base == second.result - second.base;
+    bool retained =
+        *reinterpret_cast<volatile uint64_t *>(first.result) == first.value;
+    for (unsigned i = 0; i < 5; i++) {
+      if (i < 4) {
+        distinct = distinct && first.values[i] != second.values[i];
+        offsets = offsets && first.values[i] - first.base ==
+                                 second.values[i] - second.base;
+      }
+      retained = retained && reinterpret_cast<volatile uint64_t *>(
+                                 first.anchor)[i] == first.values[i];
+    }
+    if (distinct)
+      pair |= 2;
+    if (offsets)
+      pair |= 4;
+    if (first.values[4] == second.values[4])
+      pair |= 8;
+    if (retained)
+      pair |= 16;
+  }
+  uint64_t args[]{first.value, second.value, first.checks, second.checks, pair};
+  char text[192];
+  SerialPutS(StrPrintJoin(text,
+                          "HM results %016X %016X\r\nHM local %016X "
+                          "%016X\r\nHM pair %016X\r\nHM DONE\r\n",
+                          5, args));
+}
+
 static void BootATAByteReport(CDrv &dv)
 {
   if (dv.fs_type!=FSt_FAT32 || dv.drv_offset!=2048 || dv.size!=132130)
@@ -1538,6 +1633,7 @@ void BootProbe()
   if (adam_task->cur_dv) {
     BootOpcodeResourceReport(*adam_task->cur_dv);
     BootDVDReport(*adam_task->cur_dv);
+    BootHostModuleReport(*adam_task->cur_dv, *adam_task);
     if (MountedDrive('C')) {
       BootFileProgramReport(*adam_task->cur_dv,"/Fat32ReadProbe.HC");
       if (BootFileProgramReport(*adam_task->cur_dv,"/AtaWriteProbe.HC").okay)

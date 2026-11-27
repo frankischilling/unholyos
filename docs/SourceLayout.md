@@ -1138,6 +1138,14 @@ load path remains structural work. Shared source/module probe execution
 in `Linux/BootProbe.cpp` avoids duplicating the same compile-and-load
 code within this limited boot image.
 
+`Linux/MakeBIN.cpp` supplies a C++20 host producer for the native TOSB
+module format. It converts explicitly bound ELF64 objects and retains
+the patch semantics from `Compiler/CMain.HC` and `Kernel/KLoad.HC`.
+Its freestanding C++/NASM fixture tests the module boundary before
+runtime components move across it. The tool does not change their
+current placement or supply a guest C++ compiler. [Host modules](HostModules.md)
+records the ABI choices, supported relocations, and rejected inputs.
+
 The [development milestones](Development.md) define completion in the required order: full rewrite, full compatibility, bootstrap, then self-hosting. Host GCC or Clang and NASM support the current development builds.
 
 The guest's `RedSeaISO` follows the sizing and directory-copy steps from
