@@ -1,6 +1,7 @@
 BITS 64
 SECTION .text
 GLOBAL PUT_HEX_U64,PUT_HEX_U32,PUT_HEX_U16,PUT_HEX_U8,PUT_CHARS,PUT_STR
+GLOBAL _STRMATCH,StrMatchCpp
 EXTERN PutHexHC,PutCharsHC,PutSHC
 
 %macro PUSH_C_REGS 0
@@ -49,5 +50,51 @@ PUT_STR:
 	CALL	PutSHC
 	POP_C_REGS
 	RET
+
+; Map SysV arguments to the reference HolyC stack entry point.
+StrMatchCpp:
+		PUSH	RSI
+		PUSH	RDI
+		CALL	_STRMATCH
+		RET
+
+_STRMATCH:
+		PUSH	RBP
+		MOV	RBP,RSP
+		PUSH	RSI
+		PUSH	RDI
+		MOV	RSI,[RBP+24]
+		TEST	RSI,RSI
+		JZ	.L25
+		MOV	RDI,[RBP+16]
+		TEST	RDI,RDI
+		JZ	.L25
+		MOV	DL,[RDI]
+		TEST	DL,DL
+		JZ	.L20
+		JMP	.L10
+.L05:		INC	RSI
+.L10:		LODSB
+		TEST	AL,AL
+		JZ	.L25
+		CMP	AL,DL
+		JNE	.L10
+		DEC	RSI
+		MOV	RCX,1
+.L15:		MOV	AL,[RDI+RCX]
+		TEST	AL,AL
+		JZ	.L20
+		CMP	AL,[RSI+RCX]
+		JNE	.L05
+		INC	RCX
+		JMP	.L15
+		DEC	RSI
+.L20:		MOV	RAX,RSI
+		JMP	.L30
+.L25:		XOR	RAX,RAX
+.L30:		POP	RDI
+		POP	RSI
+		POP	RBP
+		RET	16
 
 SECTION .note.GNU-stack noalloc noexec nowrite progbits

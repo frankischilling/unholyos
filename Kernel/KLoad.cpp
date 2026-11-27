@@ -36,6 +36,9 @@ void _MEMCPY(), _MEMSET(), _MEMSET_U16(), _MEMSET_U32(), _MEMSET_I64(), _MEMCMP(
 void _MALLOC(), _FREE(), _MHEAP_CTRL(), _MSIZE(), _MSIZE2();
 void CAllocHC(), MAllocIdentHC(), StrNewHC(), AStrNewHC();
 void _STRCMP(), _STRCPY(), _STRIMATCH(), StrOccHC();
+void _STRMATCH(), Spaces2TabsHC(), StrUtilHC(), StrFirstOccHC(), StrFirstRemHC();
+void StrLastOccHC(), StrLastRemHC(), StrFindHC(), Tabs2SpacesHC(), ScaleIndentHC();
+void MStrUtilHC();
 void _HASH_ADD(), _HASH_ADD_AFTER(), _HASH_FIND(), _HASH_SINGLE_TABLE_FIND();
 void HashTableNewHC(), HashTypeNumHC(), CeilU64HC(), Pow10I64HC();
 void ClampHC(), MinHC(), MaxHC(), FloorU64HC(), RoundI64HC(), FloorI64HC(), CeilI64HC();
@@ -617,7 +620,20 @@ bool LoadKernel(CTask &task)
       {"_STRCPY", reinterpret_cast<uintptr_t>(_STRCPY)},
       {"StrCpy", reinterpret_cast<uintptr_t>(_STRCPY)},
       {"_STRIMATCH", reinterpret_cast<uintptr_t>(_STRIMATCH)},
+      {"StrIMatch", reinterpret_cast<uintptr_t>(_STRIMATCH)},
       {"StrOcc", reinterpret_cast<uintptr_t>(StrOccHC)},
+      {"_STRMATCH", reinterpret_cast<uintptr_t>(_STRMATCH)},
+      {"StrMatch", reinterpret_cast<uintptr_t>(_STRMATCH)},
+      {"Spaces2Tabs", reinterpret_cast<uintptr_t>(Spaces2TabsHC)},
+      {"StrUtil", reinterpret_cast<uintptr_t>(StrUtilHC)},
+      {"StrFirstOcc", reinterpret_cast<uintptr_t>(StrFirstOccHC)},
+      {"StrFirstRem", reinterpret_cast<uintptr_t>(StrFirstRemHC)},
+      {"StrLastOcc", reinterpret_cast<uintptr_t>(StrLastOccHC)},
+      {"StrLastRem", reinterpret_cast<uintptr_t>(StrLastRemHC)},
+      {"StrFind", reinterpret_cast<uintptr_t>(StrFindHC)},
+      {"Tabs2Spaces", reinterpret_cast<uintptr_t>(Tabs2SpacesHC)},
+      {"ScaleIndent", reinterpret_cast<uintptr_t>(ScaleIndentHC)},
+      {"MStrUtil", reinterpret_cast<uintptr_t>(MStrUtilHC)},
       {"_HASH_ADD", reinterpret_cast<uintptr_t>(_HASH_ADD)},
       {"_HASH_ADD_AFTER", reinterpret_cast<uintptr_t>(_HASH_ADD_AFTER)},
       {"_HASH_FIND", reinterpret_cast<uintptr_t>(_HASH_FIND)},

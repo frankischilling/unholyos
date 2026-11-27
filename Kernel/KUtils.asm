@@ -3,6 +3,8 @@ GLOBAL _MEMCPY,_MEMSET,_MEMSET_U16,_MEMSET_U32,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_
 GLOBAL memcpy,memset
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
+GLOBAL Spaces2TabsHC,StrUtilHC,StrFirstOccHC,StrFirstRemHC,StrLastOccHC,StrLastRemHC
+GLOBAL StrFindHC,Tabs2SpacesHC,ScaleIndentHC,MStrUtilHC
 GLOBAL Str2I64HC,Str2DateHC
 GLOBAL Str2F64HC,ChkPtrHC,ClassRep2HC,ClassRepHC,ClassRepDHC
 GLOBAL DocMaxHC,DocDataFmtHC,DocDataScanHC
@@ -192,6 +194,8 @@ EXTERN DCSymmetrySetCpp,RefreshCpp
 EXTERN ScanCharCpp,ScanKeyCpp,GetKeyCpp,GetCharCpp
 EXTERN MAllocCpp,FreeCpp,MSizeCpp,MSize2Cpp,MHeapCtrlCpp,CAllocCpp,MAllocIdentCpp
 EXTERN StrNewCpp,AStrNewCpp,StrCpyCpp,StrCmpCpp,StrIMatchCpp,StrOccCpp
+EXTERN Spaces2TabsCpp,StrUtilCpp,StrFirstOccCpp,StrFirstRemCpp,StrLastOccCpp,StrLastRemCpp
+EXTERN StrFindCpp,Tabs2SpacesCpp,ScaleIndentCpp,MStrUtilCpp
 EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
 EXTERN HashRemDelCpp,HashValCpp,HashDelCpp,HashTableDelCpp,HashSrcFileSetCpp,SysSymImportsResolveCpp
 EXTERN MemberMetaDataCpp,MemberMetaFindCpp,MemberFindCpp
@@ -549,6 +553,16 @@ HOLYC_CPP _STRCPY,StrCpyCpp,2
 HOLYC_CPP _STRCMP,StrCmpCpp,2
 HOLYC_CPP _STRIMATCH,StrIMatchCpp,2
 HOLYC_CPP StrOccHC,StrOccCpp,2
+HOLYC_CPP Spaces2TabsHC,Spaces2TabsCpp,2
+HOLYC_CPP StrUtilHC,StrUtilCpp,2
+HOLYC_CPP StrFirstOccHC,StrFirstOccCpp,2
+HOLYC_CPP StrFirstRemHC,StrFirstRemCpp,3
+HOLYC_CPP StrLastOccHC,StrLastOccCpp,2
+HOLYC_CPP StrLastRemHC,StrLastRemCpp,3
+HOLYC_CPP StrFindHC,StrFindCpp,3
+HOLYC_CPP Tabs2SpacesHC,Tabs2SpacesCpp,1
+HOLYC_CPP ScaleIndentHC,ScaleIndentCpp,2
+HOLYC_CPP MStrUtilHC,MStrUtilCpp,3
 HOLYC_CPP _HASH_ADD,HashAddCpp,2
 HOLYC_CPP _HASH_ADD_AFTER,HashAddAfterCpp,3
 HOLYC_CPP _HASH_FIND,HashFindCpp,4

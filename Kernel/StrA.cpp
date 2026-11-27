@@ -172,3 +172,185 @@ const char *LstSub(int64_t index, const char *list)
   }
   return !index && *list ? list : nullptr;
 }
+
+extern "C" int64_t Spaces2TabsCpp(char *dst, const char *src)
+{
+  const char *src2;
+  int64_t chged = 0, space_cnt, space_cnt2, col = 0;
+  if (*src)
+    for (;;) {
+      src2 = src;
+      while (*src2 == ' ')
+        src2++;
+      space_cnt = src2 - src;
+      while (col + space_cnt >= 8) {
+        space_cnt2 = 8 - col;
+        if (space_cnt2 == 1)
+          *dst++ = ' ';
+        else {
+          *dst++ = '\t';
+          chged += space_cnt2 - 1;
+        }
+        space_cnt -= space_cnt2;
+        col = 0;
+      }
+      if (*src2 == '\t') {
+        if (space_cnt == 1 && col == 7)
+          *dst++ = ' ';
+        else
+          chged += space_cnt;
+        *dst++ = '\t';
+        col = 0;
+      } else {
+        while (space_cnt--) {
+          *dst++ = ' ';
+          if (++col == 8)
+            col = 0;
+        }
+        if (*src2) {
+          *dst++ = *src2;
+          if (++col == 8)
+            col = 0;
+        } else
+          break;
+      }
+      src = ++src2;
+    }
+  *dst = 0;
+  return chged;
+}
+
+static bool StrCharBit(const uint32_t *bitmap, uint8_t ch)
+{
+  return (bitmap[ch >> 5] >> (ch & 31)) & 1;
+}
+
+extern "C" char *StrUtilCpp(char *_src, int64_t flags)
+{
+  char *src = _src, *dst = _src;
+  uint8_t ch;
+  if (flags & SUF_REM_LEADING)
+    while (StrCharBit(char_bmp_white_space, *src))
+      src++;
+  while ((ch = *src++))
+    if (StrCharBit(char_bmp_white_space, ch)) {
+      if (!(flags & SUF_REM_SPACES)) {
+        if (flags & SUF_SINGLE_SPACE) {
+          *dst++ = ' ';
+          while ((ch = *src++) && StrCharBit(char_bmp_white_space, ch))
+            ;
+          src--;
+        } else
+          *dst++ = ch;
+      }
+    } else if (!(flags & SUF_REM_CTRL_CHARS) || ch >= CH_SHIFT_SPACE)
+      *dst++ = ch;
+  *dst = 0;
+
+  if (flags & SUF_REM_TRAILING)
+    while (dst != _src && (!*dst || StrCharBit(char_bmp_white_space, *dst)))
+      *dst-- = 0;
+  if (flags & SUF_TO_UPPER)
+    for (dst = _src; *dst; dst++) {
+      ch = *dst;
+      if (ch >= 'a' && ch <= 'z')
+        *dst = ch - 0x20;
+    }
+  if (flags & SUF_TO_LOWER)
+    for (dst = _src; *dst; dst++) {
+      ch = *dst;
+      if (ch >= 'A' && ch <= 'Z')
+        *dst = ch + 0x20;
+    }
+  if (flags & SUF_SAFE_DOLLAR)
+    for (dst = _src; *dst; dst++)
+      if (!StrCharBit(char_bmp_safe_dollar, *dst))
+        *dst = '.';
+  if (flags & SUF_S2T)
+    Spaces2TabsCpp(_src, _src);
+  return _src;
+}
+
+extern "C" char *StrFirstOccCpp(char *src, const uint8_t *marker)
+{
+  uint8_t ch;
+  while ((ch = *src++) && !StrOccCpp(marker, ch))
+    ;
+  return ch ? src - 1 : nullptr;
+}
+
+extern "C" char *StrFirstRemCpp(char *src, const uint8_t *marker, char *dst)
+{
+  uint8_t ch;
+  char *ptr = src, *res = dst;
+  if (dst) {
+    while ((ch = *ptr++) && !StrOccCpp(marker, ch))
+      *dst++ = ch;
+    *dst = 0;
+  } else
+    while ((ch = *ptr++) && !StrOccCpp(marker, ch))
+      ;
+  if (ch)
+    StrCpyCpp(src, ptr);
+  else
+    *src = 0;
+  return res;
+}
+
+extern "C" char *StrLastOccCpp(char *src, const uint8_t *marker)
+{
+  uint8_t ch;
+  char *res = nullptr;
+  while ((ch = *src++))
+    if (StrOccCpp(marker, ch))
+      res = src - 1;
+  return res;
+}
+
+extern "C" char *StrLastRemCpp(char *src, const uint8_t *marker, char *dst)
+{
+  char *ptr = StrLastOccCpp(src, marker);
+  if (ptr) {
+    if (dst)
+      StrCpyCpp(dst, ptr + 1);
+    *ptr = 0;
+  } else {
+    if (dst)
+      StrCpyCpp(dst, src);
+    *src = 0;
+  }
+  return dst;
+}
+
+extern "C" const char *StrFindCpp(const char *needle, const char *haystack_str,
+                                  int64_t flags)
+{
+  bool cont;
+  const char *saved_haystack_str = haystack_str;
+  size_t plen = StrLen(needle);
+  do {
+    cont = false;
+    if (flags & SFF_IGNORE_CASE)
+      haystack_str = StrIMatchCpp(needle, haystack_str);
+    else
+      haystack_str = StrMatchCpp(needle, haystack_str);
+    if (haystack_str && (flags & SFF_WHOLE_LABELS_BEFORE) &&
+        haystack_str != saved_haystack_str &&
+        StrCharBit(char_bmp_alpha_numeric, *(haystack_str - 1))) {
+      haystack_str++;
+      if (*haystack_str)
+        cont = true;
+      else
+        haystack_str = nullptr;
+    }
+    if (haystack_str && (flags & SFF_WHOLE_LABELS_AFTER) &&
+        StrCharBit(char_bmp_alpha_numeric, *(haystack_str + plen))) {
+      haystack_str++;
+      if (*haystack_str)
+        cont = true;
+      else
+        haystack_str = nullptr;
+    }
+  } while (cont);
+  return haystack_str;
+}
