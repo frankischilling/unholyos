@@ -77,6 +77,8 @@ LOAD_API_CONSUMER_OBJECT := $(BUILD)/Linux/Fixtures/LoadApiConsumer.asm.o
 LOAD_API_CONSUMER := $(BUILD)/Linux/Fixtures/LoadApiConsumer.BIN
 LOAD_API_PROBE := Linux/Fixtures/LoadApiProbe.HC
 LOAD_API_TEST_ISO := $(BUILD)/load-api-test.iso
+LOAD_PASS2_PROBE := Linux/Fixtures/LoadPass2Probe.HC
+LOAD_PASS2_TEST_ISO := $(BUILD)/load-pass2-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
 FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
@@ -147,7 +149,7 @@ QUEUE_PROBE := Linux/Fixtures/QueueProbe.HC
 TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInputProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 
-.PHONY: all run test test-host-modules test-native-imports test-late-imports test-load-api
+.PHONY: all run test test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2
 all: $(ISO)
 
 $(LOADER): Adam/Opt/Boot/BootDVD.asm Kernel/KernelA.inc
@@ -256,7 +258,7 @@ $(FAT_WRITE_DISK): $(FAT_TOOL)
 $(ISO) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(ATA_TEST_ISO) $(FAT_WRITE_ISO) \
 $(FAT_FORMAT_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(BREAK_TEST_ISO) \
 $(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(STRINGS_TEST_ISO) \
-$(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO) $(LATE_IMPORT_TEST_ISO) $(LOAD_API_TEST_ISO): $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+$(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO) $(LATE_IMPORT_TEST_ISO) $(LOAD_API_TEST_ISO) $(LOAD_PASS2_TEST_ISO): $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 
 $(HOST_MODULE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(HOST_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(HOST_MODULE)
@@ -269,6 +271,9 @@ $(LATE_IMPORT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(LATE_I
 
 $(LOAD_API_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(LOAD_API_CONSUMER) $(LATE_IMPORT_PROVIDER) $(LOAD_API_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(LOAD_API_CONSUMER) --file $(LATE_IMPORT_PROVIDER) --file $(LOAD_API_PROBE)
+
+$(LOAD_PASS2_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(LATE_IMPORT_CONSUMER) $(LATE_IMPORT_PROVIDER) $(LOAD_PASS2_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(LATE_IMPORT_CONSUMER) --file $(LATE_IMPORT_PROVIDER) --file $(LOAD_PASS2_PROBE)
 
 $(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
@@ -329,10 +334,13 @@ test-late-imports: $(LATE_IMPORT_TEST_ISO) $(BOOT_TEST)
 test-load-api: $(LOAD_API_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --load-api "$(QEMU)" $(LOAD_API_TEST_ISO) $(LOAD_API_CONSUMER) $(LATE_IMPORT_PROVIDER)
 
+test-load-pass2: $(LOAD_PASS2_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --load-pass2 "$(QEMU)" $(LOAD_PASS2_TEST_ISO) $(LATE_IMPORT_CONSUMER) $(LATE_IMPORT_PROVIDER)
+
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) test-host-modules test-native-imports test-late-imports test-load-api
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
 	$(STR_COMPARE_TEST)
 	$(BOOT_TEST) --compiler-failures "$(QEMU)" $(ISO) $(KERNEL)

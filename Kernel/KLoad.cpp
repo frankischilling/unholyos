@@ -161,7 +161,7 @@ void Mat4x4EquHC(),Mat4x4NewHC(),Mat4x4MulMat4x4EquHC(),Mat4x4MulMat4x4NewHC();
 void Mat4x4RotXHC(),Mat4x4RotYHC(),Mat4x4RotZHC(),Mat4x4ScaleHC();
 void Mat4x4TranslationEquHC(),Mat4x4TranslationAddHC(),DCSymmetrySetHC(),RefreshHC();
 void ScanCharHC(),ScanKeyHC(),GetKeyHC(),GetCharHC();
-void _HASH_REM_DEL(), SysSymImportsResolveHC(), LoadHC();
+void _HASH_REM_DEL(), SysSymImportsResolveHC(), LoadPass2HC(), LoadHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
     DocWriteHC();
 void DocReadHC(), DocTypeHC(), TypeHC();
@@ -458,12 +458,39 @@ static void LoadPass1(CLoadedModule &module, CHashTable *table, unsigned flags)
   }
 }
 
+extern "C" void LoadPass2Cpp(const uint8_t *src, uint8_t *module_base, int64_t)
+{
+  while (uint8_t etype = *src++) {
+    uint64_t i = ReadWidth(src, sizeof(uint32_t));
+    src += sizeof(uint32_t);
+    auto *st_ptr = reinterpret_cast<const char *>(src);
+    src += StrLen(st_ptr) + 1;
+    switch (etype) {
+    case IET_MAIN:
+      if (auto target = reinterpret_cast<uintptr_t>(module_base) + i)
+        CallModuleMain(reinterpret_cast<const uint8_t *>(target));
+      break;
+    case IET_ABS_ADDR:
+      src += sizeof(uint32_t) * i;
+      break;
+    case IET_CODE_HEAP:
+    case IET_ZEROED_CODE_HEAP:
+      src += 4 + sizeof(uint32_t) * i;
+      break;
+    case IET_DATA_HEAP:
+    case IET_ZEROED_DATA_HEAP:
+      src += 8 + sizeof(uint32_t) * i;
+      break;
+    }
+  }
+}
+
 bool LoadPass2(CLoadedModule &module)
 {
   module.started = true;
-  for (size_t i = 0; i < module.count; i++)
-    if (module.records[i].type == IET_MAIN)
-      CallModuleMain(ModuleBase(module) + module.records[i].value);
+  auto offset = ReadWidth(module.image + offsetof(CBinFile, patch_table_offset),
+                          sizeof(uint64_t));
+  LoadPass2Cpp(module.image + offset, ModuleBase(module), 0);
   return true;
 }
 
@@ -836,6 +863,7 @@ bool LoadKernel(CTask &task)
       {"_HASH_REM_DEL", reinterpret_cast<uintptr_t>(_HASH_REM_DEL)},
       {"SysSymImportsResolve",
        reinterpret_cast<uintptr_t>(SysSymImportsResolveHC)},
+      {"LoadPass2", reinterpret_cast<uintptr_t>(LoadPass2HC)},
       {"Load", reinterpret_cast<uintptr_t>(LoadHC)},
       {"Clamp", reinterpret_cast<uintptr_t>(ClampHC)},
       {"Min", reinterpret_cast<uintptr_t>(MinHC)},

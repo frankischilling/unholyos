@@ -176,9 +176,60 @@ builds match its path selection, header and hash identity, flags, low
 retained earlier images. The small-alignment test checks the resulting
 allocation's owner and capacity; retention of the exact temporary input
 pointer is established by source review. [Boot.md](Boot.md#public-holyc-load)
-records the commands, hashes, full trace, and limits. The raw public
-HolyC `LoadPass2` interface remains separate work; the existing C++
-descriptor overload has a different ABI.
+records the commands, hashes, full trace, and limits.
+
+## Raw HolyC second pass
+
+`Kernel/KLoad.HC::LoadPass2` is available through a raw export rather than
+a declaration in the reference kernel headers. A HolyC program can declare
+it explicitly:
+
+```c
+extern U0 LoadPass2(U8 *src,U8 *module_base,I64 flags);
+```
+
+`src` points directly to the serialized patch table. The call needs no
+binary header or native descriptor. It reads a nonzero record type,
+zero-extends the following unaligned `U32` value, and skips the
+NUL-terminated name. Its remaining work depends on the record:
+
+| Record | Second-pass action |
+| --- | --- |
+| `IET_END` | Stop immediately, before reading a value or name |
+| `IET_MAIN` | Call `module_base+value` if the resulting address is nonzero |
+| `IET_ABS_ADDR` | Skip `4*value` bytes |
+| `IET_CODE_HEAP`, `IET_ZEROED_CODE_HEAP` | Skip the four-byte size and `4*value` offset bytes |
+| `IET_DATA_HEAP`, `IET_ZEROED_DATA_HEAP` | Skip the eight-byte size and `4*value` offset bytes |
+| Other nonzero types | Continue after the common value and name |
+
+Every explicit pass runs its entries in table order. The third argument
+is ignored, including `LDF_JUST_LOAD`; that flag controls whether `Load`
+invokes the second pass. An entry's HolyC exception propagates to the
+surrounding handler and prevents later entries from running. The null
+target check preserves `Kernel/KUtils.HC::Call`.
+
+`Kernel/KLoad.asm::LoadPass2HC` adapts the three HolyC stack arguments
+and removes 24 argument bytes. The shared C++ scanner uses the existing
+unchecked `CallModuleMain` entry so exceptions keep their guest behavior.
+The internal descriptor overload marks its module started, invokes this
+scanner, and returns true after normal completion. The raw interface
+does not search for or update native descriptors.
+
+The raw API trusts its table, as the reference does: it has no length
+argument or bounded-image validation. Normal `Load` still validates
+the complete image before it reaches this scanner. The compiler's
+reverse-import binder keeps its separate validation and initialization
+guards.
+
+`make test-load-pass2` runs the common `LoadPass2Probe.HC` source with
+the unchanged late-import consumer and provider. The pinned guest and
+native GCC and Clang builds produced the same 134-byte trace and `FFFF`
+check mask. The probe covers all tail kinds, unsigned offsets with their
+high bit set, repeated passes, ignored flags, null targets, exceptions,
+and an entry that runs while its unrelated function import remains
+pending. [Boot.md](Boot.md#raw-holyc-loadpass2) records the inputs and
+observed results. Malformed pointers and unterminated raw tables are
+outside this comparison.
 
 ## Compiler module ownership and startup
 

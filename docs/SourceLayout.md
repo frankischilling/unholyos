@@ -90,9 +90,21 @@ unchanged in both guests against the same NASM consumer and provider.
 The native boot probe stages and verifies its RAM-drive inputs; it does
 not implement the public API. [Host modules](HostModules.md#public-holyc-loader)
 describes the contract and [Boot.md](Boot.md#public-holyc-load) records the
-matching GCC, Clang, and pinned-guest results. Raw public HolyC
-`LoadPass2`, invalid destination handling, and allocation-failure parity
-remain unverified or unfinished.
+matching GCC, Clang, and pinned-guest results. Invalid destination handling
+and allocation-failure parity remain unverified.
+
+`Kernel/KLoad.cpp::LoadPass2Cpp` scans the serialized patch table in the
+order of `Kernel/KLoad.HC::LoadPass2`. Its raw HolyC export uses a
+three-argument adapter in `Kernel/KLoad.asm`, with no additional built-in
+compiler declaration. The existing C++ descriptor overload calls the
+same scanner. Direct calls trust the supplied table, ignore their third
+argument, preserve `Call`'s null-target check, and propagate MAIN
+exceptions through the unchecked HolyC call entry. These responsibilities
+remain in the loader; the descriptor and ABI adapter are C++ additions.
+`Linux/Fixtures/LoadPass2Probe.HC` verifies the same raw tables and loaded
+module behavior in the pinned guest and native GCC and Clang builds.
+Its local hash-record views remain test support. The matching trace and
+input hashes are recorded in [Boot.md](Boot.md#raw-holyc-loadpass2).
 
 ## Compiler ABI ownership
 
