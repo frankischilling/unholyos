@@ -107,6 +107,8 @@ FAT_SECTOR_CACHE_PROBE := $(addprefix Linux/Fixtures/,FatSectorCacheProbe.HC Fat
 FAT_SECTOR_CACHE_TEST_ISO := $(BUILD)/fat-sector-cache-test.iso
 STORAGE_LIFECYCLE_PROBE := $(addprefix Linux/Fixtures/,StorageLifecycleProbe.HC StorageLifecycleNativeProbe.HC)
 STORAGE_LIFECYCLE_TEST_ISO := $(BUILD)/storage-lifecycle-test.iso
+CHARACTER_GRAPHICS_PROBE := Linux/Fixtures/CharPanObserver.HC
+CHARACTER_GRAPHICS_TEST_ISO := $(BUILD)/character-graphics-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
 FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
@@ -379,6 +381,10 @@ $(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GRAPHICS_DEMOS) $(GAME_
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home \
 		$(foreach demo,$(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS),--file-at $(demo) $(demo))
 
+$(CHARACTER_GRAPHICS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(GAME_DEMOS) $(CHARACTER_GRAPHICS_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(CHARACTER_GRAPHICS_PROBE) \
+		$(foreach demo,$(GAME_DEMOS),--file-at $(demo) $(demo))
+
 TEST_MODULES := $(MODULE_PROBE) $(MODULE_CALLER) $(RUNTIME_PROBE) $(FILE_READ_PROBE) \
 	$(FILE_WRITE_PROBE) $(EXCEPT_PROBE) $(FORMAT_PROBE) $(HASH_CALLER) $(HASH_PROBE) \
 	$(DOC_PROBE) $(COMPILER_RUNTIME_PROBE)
@@ -466,7 +472,7 @@ test: test-storage-lifecycle
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args test-internal-types test-class-records
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) $(CHARACTER_GRAPHICS_TEST_ISO) test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args test-internal-types test-class-records
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
 	$(STR_COMPARE_TEST)
 	$(BOOT_TEST) --compiler-failures "$(QEMU)" $(ISO) $(KERNEL)
@@ -478,7 +484,7 @@ test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_IS
 	$(BOOT_TEST) --fat32-stream "$(QEMU)" $(FAT_STREAM_ISO) $(FAT_WRITE_DISK)
 	$(BOOT_TEST) --fat32-tree "$(QEMU)" $(FAT_TREE_ISO) $(FAT_WRITE_DISK)
 	$(BOOT_TEST) "$(QEMU)" $< $(KERNEL) $(STARTUP_TEST_ISO)
-	$(BOOT_TEST) --character-graphics "$(QEMU)" $<
+	$(BOOT_TEST) --character-graphics "$(QEMU)" $(CHARACTER_GRAPHICS_TEST_ISO)
 	$(BOOT_TEST) --music "$(QEMU)" $<
 	$(BOOT_TEST) --tic-tac-toe "$(QEMU)" $<
 	$(BOOT_TEST) --screen-capture "$(QEMU)" $<

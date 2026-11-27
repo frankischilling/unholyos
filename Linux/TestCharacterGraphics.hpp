@@ -1015,27 +1015,36 @@ static void DriveCharacterGraphics(
           hash = (hash ^ uint8_t(cells[y * 80 + x] >> shift)) * 0x100000001B3;
     return hash;
   };
-  // Observe each guest refresh rather than depending on the host sampling a
-  // transient pan value before the scroll task finishes.
-  cmd("I64 *cgpan=CAlloc(32);");
-  cmd("U0 CGWatch(I64){while(cgpan[2]==0){Refresh;cgpan[3]++;"
-      "if(gr.hide_row&&gr.pan_text_x<7)cgpan[0]++;"
-      "if(gr.hide_col&&gr.pan_text_y<7)cgpan[1]++;}cgpan[2]=2;}");
-  cmd(R"(CTask *cgwatch=Spawn(&CGWatch,0,"Pan Watch",,Fs);)");
-  cmd(R"("CG4 %X %X %X\n",&cgpan[0],cgwatch,&winmgr.updates;)");
-  auto [pan_watch, watch_task, watch_updates] = addresses("CG4 ", {32, 8, 8});
-  (void)watch_task;
-  (void)watch_updates;
+  // Load identical test-only source on both guests. Long keyboard-entered
+  // definitions and address commands can leave the terminal panned or still
+  // editing when the host expects the observer's setup output.
+  cmd("DocClear(,1);");
+  if (reference)
+    upload(fs::absolute("Linux/Fixtures/CharPanObserver.HC"),true);
+  else
+    cmd(R"(ExeFile("::/CharPanObserver.HC");)");
+  // Column zero belongs to the window border (the reference spells its
+  // title vertically there). Match the complete marker inside the window.
+  const std::regex observer_marker(R"((?:^|\n). *CGPAN:([0-9A-Fa-f]+):END *\n)");
+  std::smatch observer_match;
+  std::string observer_screen;
+  wait([&](const Cells &cells) {
+    observer_screen=visible(cells);
+    return std::regex_search(observer_screen,observer_match,observer_marker) &&
+           observer_screen.find("T:/Home>",observer_match.position()+observer_match.length())!=std::string::npos;
+  },"CharDemo pan observer setup did not finish");
+  const auto pan_watch=std::stoull(observer_match[1].str(),nullptr,16);
+  Check(in_memory(pan_watch,32),"Invalid CharDemo pan observer address");
   const auto initial_observer = ReadPhysical<4>(vm, pan_watch);
-  Check(!initial_observer[0] && !initial_observer[1] && !initial_observer[2],
+  Check(initial_observer==std::array<uint64_t,4>{},
         "CharDemo pan observer was not initialized");
+  // Start the observer and enter the demo in one guest operation.
+  cmd("CGRun;");
   wait([&](const Cells &) {
     const auto observed = ReadPhysical<4>(vm, pan_watch);
     return !observed[2] && observed[3] > initial_observer[3];
   },
        "CharDemo pan observer did not start");
-  cmd("Seed(12345);DocClear(,1);");
-  cmd(R"(ExeFile("::/Demo/Games/CharDemo.HC");)");
   auto initial = wait(map_visible, "CharDemo did not draw its terrain");
   Check(terrain_hash(initial) == 0xB980E584B8EAAC9C,
         "CharDemo initial terrain differs from the pinned seed");
@@ -1127,9 +1136,20 @@ static void DriveCharacterGraphics(
   wait_text("T:/Home>");
   wait_restored();
   snapshot("char-exit");
-  cmd(R"(cgpan[2]=1;while(TaskValidate(cgwatch))Yield;"CGWATCH %d\n",cgpan[2];)");
-  wait_text("CGWATCH 2");
-  cmd("Free(cgpan);cgpan=NULL;");
+  wait([&](const Cells &) {
+    return ReadPhysical<4>(vm, pan_watch)[2] == 2;
+  }, "CharDemo pan observer did not stop");
+  wait([&](const Cells &cells) {
+    auto screen=visible(cells);
+    auto done=screen.find("CGWATCH 2");
+    return done!=std::string::npos && screen.find("T:/Home>",done)!=std::string::npos;
+  },"CharDemo pan observer did not exit");
+  cmd("CGDone;");
+  wait([&](const Cells &cells) {
+    auto screen=visible(cells);
+    auto done=screen.find("CGDONE");
+    return done!=std::string::npos && screen.find("T:/Home>",done)!=std::string::npos;
+  },"CharDemo pan observer cleanup did not finish");
   std::cout << "CharDemo.HC animated all four glyphs, scrolled four ways, restarted and restored state\n";
 
   auto move_to = [&](int x, int y) {
