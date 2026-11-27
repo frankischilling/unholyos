@@ -50,14 +50,14 @@ U0 StrScanProbe()
 
   StrCpy(text,"1.25;-2.5;3e2;0.5");
   ptr=StrScan(text,"%f;%e;%g;%n",&f,&g,&h,&j);
-  "scan floats %X %X %X %X %d\n",f(I64),g(I64),h(I64),j(I64),ptr-text;
+  "scan f %X %X %X %X %d\n",f(I64),g(I64),h(I64),j(I64),ptr-text;
   if (f==Str2F64("1.25") && g==Str2F64("-2.5") &&
       h==Str2F64("3e2") && j==Str2F64("0.5") && ptr==text+StrLen(text))
     res|=4;
 
   StrCpy(text,"1.25;1.25;1.25;1.25");
   ptr=StrScan(text,"%4.2f;%-4.*f;%*.1f;%*.*f",&f,7,&g,4,&h,4,9,&j);
-  "scan precision %X %X %X %X %d\n",f(I64),g(I64),h(I64),j(I64),ptr-text;
+  "scan p %X %X %X %X %d\n",f(I64),g(I64),h(I64),j(I64),ptr-text;
   if (f==Str2F64("1.25") && f==g && f==h && f==j && ptr==text+StrLen(text))
     res|=8;
 
@@ -124,7 +124,11 @@ U0 StrScanProbe()
 
   for (i=0;i<16;i++) {
     a=StrScanProbeError(i);
-    if (a==(i==6?'UndefDef':'Scan'))
+    if (i==6)
+      b='UndefDef';
+    else
+      b='Scan';
+    if (a==b)
       errors|=1<<i;
   }
   "scan errors %X\n",errors;

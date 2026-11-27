@@ -1583,6 +1583,27 @@ void BootProbe()
     BootVariadicReport(*adam_task->cur_dv, *adam_task, "/MusicPrecision.HC",
                        "/MusicPrecision.BIN.Z",
                        "Cmp(\"::/MusicPrecision.HC\",,\"B:/MusicPrecision.BIN.Z\");");
+    BootVariadicReport(
+        *adam_task->cur_dv, *adam_task, "/StrScanProbe.HC",
+        "/StrScanProbe.BIN.Z",
+        "Cmp(\"::/StrScanProbe.HC\",,\"B:/StrScanProbe.BIN.Z\");");
+    BootVariadicReport(
+        *adam_task->cur_dv, *adam_task, "/DocScanProbe.HC",
+        "/DocScanProbe.BIN.Z",
+        "Cmp(\"::/DocScanProbe.HC\",,\"B:/DocScanProbe.BIN.Z\");");
+    BootVariadicReport(*adam_task->cur_dv, *adam_task,
+                       "/StringUtilitiesProbe.HC",
+                       "/StringUtilitiesProbe.BIN.Z",
+                       "Cmp(\"::/StringUtilitiesProbe.HC\",,\"B:/"
+                       "StringUtilitiesProbe.BIN.Z\");");
+    BootVariadicReport(
+        *adam_task->cur_dv, *adam_task, "/FloatScanProbe.HC",
+        "/FloatScanProbe.BIN.Z",
+        "Cmp(\"::/FloatScanProbe.HC\",,\"B:/FloatScanProbe.BIN.Z\");");
+    BootVariadicReport(
+        *adam_task->cur_dv, *adam_task, "/DateScanProbe.HC",
+        "/DateScanProbe.BIN.Z",
+        "Cmp(\"::/DateScanProbe.HC\",,\"B:/DateScanProbe.BIN.Z\");");
     if (BootFileProgramReport(*adam_task->cur_dv, "/FifoProbe.HC").okay) {
       auto *fun = reinterpret_cast<CHashFun *>(
           HashFind("FifoProbe", adam_task->hash_table, HTT_FUN));

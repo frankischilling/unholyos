@@ -148,8 +148,7 @@ extern "C" uint64_t Str2DateCpp(const char *_src)
 {
   CDate res{};
   CDateStruct ds, ds_now;
-  char *src = MStrUtilCpp(_src, SUF_REM_SPACES | SUF_TO_UPPER,
-                          0x3FF0000000000000ULL),
+  char *src = MStrUtilCpp(_src, SUF_REM_SPACES | SUF_TO_UPPER, 0),
        *v = StrNew(src, CurrentTask()->data_heap), *ptr = src;
   bool start_mon = false, end_mon = false, start_year = false, end_year = false;
   const char *end;

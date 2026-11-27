@@ -875,9 +875,9 @@ checkboxes, and reallocated string fields. `DocEd.cpp` handles modal editing
 and restores the caller's document and window state. `DocPlain`, `DocPutKey`,
 and `DocRecalc` connect the entries to parsing, input, and rendering.
 The original `Demo/Dsk/DataBase.HC` and `Demo/DolDoc/Form.HC` run unchanged.
-The scan implementation supports the field formats exercised by the demos
-and class reports; general `StrScan` and the full editor status bar, menu,
-undo, and task-end handling remain incomplete. List selection uses a modal
+`DocDataScan` uses the shared `Kernel/StrScan.cpp` scanner for bound
+fields. The full editor status bar, menu, undo, and task-end handling
+remain incomplete. List selection uses a modal
 document in the current task rather than a separate popup task.
 
 `Kernel/BlkDev/DskDirB.cpp` exposes `HomeSet`, and the compiler headers expose
@@ -991,6 +991,75 @@ The focused fixture runs through both source execution and a guest-built
 TOSB module; the host driver compares them with the pinned runtime trace.
 Fault delivery for zero divisors and signed division overflow, and
 unmasked floating-point exceptions, remain outside this comparison.
+
+## String scanning and transformations
+
+`StrScan` in `Kernel/StrScan.cpp` follows `Kernel/StrScan.HC`'s format
+loop and conversion order. The variadic adapter in `Kernel/KUtils.asm`
+passes the two fixed arguments, argument count, and inline argument
+vector to C++. The caller retains responsibility for the variadic stack.
+`Kernel/KLoad.cpp` and `Compiler/AsmInit.cpp` expose the original name
+and typed signature.
+
+Literal format characters advance the source without testing equality.
+An unspecified width ends at the following format character; a fixed
+width consumes its full byte count, including embedded NUL bytes.
+Justification and precision values do not change conversion, but runtime
+widths and precision still consume their arguments. The zero-width
+precision branch retains its separate reference control flow. `%s`
+takes a pointer to a destination pointer, `%c` and `%C` write one byte,
+and numeric, date, list, and define conversions write eight bytes.
+Missing arguments and a null format raise `Scan`. Argument checks that
+follow allocation retain that ordering on the exception path.
+
+`Str2F64` follows the byte reads and branches in `Kernel/StrScan.HC`,
+including its lookahead for the CP437 infinity byte and its returned end
+pointer. Unsigned accumulators preserve the reference's signed 64-bit
+wraparound in the significand, fractional digit count, and exponent.
+The decimal scaling step loads the signed integer directly into x87,
+multiplies by `Pow10I64`, and stores the final binary64 result. Converting
+the integer to binary64 before multiplication loses a bit for inputs
+such as `9007199254740993e-1`. The existing null-input guard remains.
+
+`Str2Date` uses `MStrUtil`, `StrNew`, and `StrFirstRem` in the reference
+allocation and parsing order. Relative day offsets are parsed before
+reading the clock; calendar boundaries retain the fractional day and
+32-bit day wraparound. Each local-time adjustment reads the exposed
+`local_time_offset`. The documented calendar table guards still apply.
+
+`DocDataScan` in `Adam/DolDoc/DocForm.cpp` uses an eight-byte temporary
+for small scalar fields and passes larger destinations directly to
+`StrScan`. It retains tag truncation, terminator restoration, and
+reallocated string ownership from `DocForm.HC`. Like the reference,
+this routine does not acquire an inner document lock; a `Scan`
+exception can propagate without leaving that extra lock held. A list
+with no tag stores zero, and a checkbox with no tag still stores its
+checked state. The
+compiler exposes the existing `CDocEntry.define_str` and `my_fmt_data`
+members with offset assertions. Native pointer and metadata validation
+still restrict invalid document entries.
+
+The compiler also exposes the existing `MSize` and `MSize2` allocator
+entry points, `CTask.code_heap` and `data_heap`, and the signature,
+locking, accounting, and owner fields of `CHeapCtrl`. These declarations
+use the original HolyC types and the existing `_MSIZE` and `_MSIZE2`
+adapters. Assertions pin the shared record size and offsets; the rest
+of the heap-control record's metadata remains incomplete.
+
+`Kernel/StrA.cpp` implements `Spaces2Tabs`, `StrUtil`, the first and last
+marker operations, and `StrFind` in reference order. `Kernel/StrA.asm`
+retains the `_STRMATCH` instruction sequence, local label order, and
+`RET 16`, with a separate C++ argument adapter. `Kernel/StrB.cpp`
+implements `Tabs2Spaces`, `ScaleIndent`, and `MStrUtil`. The public
+`SUF_*` and `SFF_*` flags come from `Kernel/KernelA.HH`.
+
+Whitespace transformations precede case and safe-dollar conversion.
+Trailing-only trimming preserves the first whitespace byte, and tab
+columns continue across newline bytes. `StrFind` applies its leading
+and trailing label checks in sequence. Allocated transformations keep
+the reference allocation and freeing order; indentation uses the x87
+rounding helper. Invalid pointers, malformed widths, allocation
+exhaustion, and extreme indentation factors require further comparison.
 
 ## Music playback
 

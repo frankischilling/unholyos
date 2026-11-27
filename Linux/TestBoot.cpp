@@ -14,6 +14,7 @@
 #include <poll.h>
 #include <regex>
 #include <set>
+#include <span>
 #include <sstream>
 #include <string>
 #include <sys/socket.h>
@@ -43,8 +44,8 @@ static std::string ReadText(const fs::path &path)
   return out.str();
 }
 
-static void CheckProgramOutput(std::string_view serial, const char *path,
-                               std::string_view expected, char checks = '3')
+static std::string_view ProgramOutput(std::string_view serial, const char *path,
+                                     char checks = '3')
 {
   auto start = std::string("UnholyOS: executing ") + path + "\r\n";
   auto finish = std::string("UnholyOS: finished ") + path +
@@ -55,7 +56,13 @@ static void CheckProgramOutput(std::string_view serial, const char *path,
   auto end = serial.find(finish, begin);
   Check(end != std::string::npos,
         "The native HolyC source program or heap cleanup failed");
-  Check(serial.substr(begin, end - begin) == expected,
+  return serial.substr(begin, end - begin);
+}
+
+static void CheckProgramOutput(std::string_view serial, const char *path,
+                               std::string_view expected, char checks = '3')
+{
+  Check(ProgramOutput(serial, path, checks) == expected,
         "Native HolyC source output differed from TempleOS");
 }
 
@@ -1691,6 +1698,7 @@ static void DriveDigits(CMonitor &vm, const fs::path &dir,
   std::cout << "Digits.HC matched seeded patterns, score, restart and Escape\n";
 }
 
+#include "TestStrings.hpp"
 #include "TestCharacterGraphics.hpp"
 
 static void VerifyFormatRefusal(CMonitor &vm, const fs::path &dir,
@@ -3866,6 +3874,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
                        '1');
     CheckProgramOutput(boot, "/MusicPrecision.HC", music_precision_output, '1');
     CheckProgramOutput(boot, "/MusicPrecision.BIN.Z", music_precision_output, '1');
+    CheckTextProbes(boot, string_probes);
     CheckProgramOutput(boot, "/FifoProbe.HC", "FIFO probe 1FF\n", '1');
     Check(boot.find("UnholyOS: FIFO heap cleanup 0x0000000000000001") !=
           std::string::npos, "FIFO allocations leaked");
@@ -3995,6 +4004,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          '1');
       CheckProgramOutput(output, "/MusicPrecision.BIN.Z", music_precision_output,
                          '1');
+      CheckTextProbes(output, string_probes);
       CheckProgramOutput(output, "/FifoProbe.HC", "FIFO probe 1FF\n", '1');
       Check(output.find("UnholyOS: FIFO heap cleanup 0x0000000000000001") !=
             std::string::npos, "FIFO allocations leaked");
@@ -4672,6 +4682,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--music-reference" ||
        std::string_view(argv[1]) == "--music-precision" ||
        std::string_view(argv[1]) == "--music-precision-reference" ||
+       std::string_view(argv[1]) == "--strings" ||
+       std::string_view(argv[1]) == "--strings-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
        std::string_view(argv[1]) == "--tic-tac-toe-reference" ||
        std::string_view(argv[1]) == "--break" ||
@@ -4700,6 +4712,13 @@ int main(int argc, char **argv)
     bool sprite_flood = std::string_view(argv[1]).starts_with("--sprite-flood");
     bool blot = std::string_view(argv[1]).starts_with("--blot");
     bool math = std::string_view(argv[1]).starts_with("--math-helpers");
+    std::span<const CTextProbe> text_probes;
+    if (math)
+      text_probes = math_probes;
+    else if (music_precision)
+      text_probes = music_precision_probes;
+    else if (std::string_view(argv[1]).starts_with("--strings"))
+      text_probes = string_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -4709,24 +4728,16 @@ int main(int argc, char **argv)
       fs::create_directories(dir);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
-      if ((math || music_precision) && !reference) {
+      if (!text_probes.empty() && !reference) {
         auto output = vm.Boot(dir / "serial.log");
-        const auto expected = music_precision ? music_precision_output : math_helpers_output;
-        CheckProgramOutput(output, music_precision ? "/MusicPrecision.HC"
-                                                   : "/MathHelpersProbe.HC",
-                           expected, '1');
-        CheckProgramOutput(output, music_precision ? "/MusicPrecision.BIN.Z"
-                                                   : "/MathHelpersProbe.BIN.Z",
-                           expected, '1');
-        std::cout << expected << (music_precision
-            ? "Music precision source and compiled module matched\n"
-            : "Math helper source and compiled module matched\n");
+        RecordTextProbes(output, text_probes, dir);
+        CheckTextProbes(output, text_probes);
+        std::cout << "Text probe sources and compiled modules matched\n";
       } else if (character || tic || breaks || screen_capture || spline ||
-                 flood_fill || blot || math || sprite_flood || music_demo || music_precision)
+                 flood_fill || blot || sprite_flood || music_demo || !text_probes.empty())
         DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
                                reference, tic, breaks, screen_capture, spline,
-                               flood_fill, blot, math, sprite_flood, music_demo,
-                               music_precision);
+                               flood_fill, blot, sprite_flood, music_demo, text_probes);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");
@@ -4853,6 +4864,8 @@ int main(int argc, char **argv)
               << " --flood-fill-reference qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --math-helpers[-reference] qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --strings[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --sprite-flood-reference qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
