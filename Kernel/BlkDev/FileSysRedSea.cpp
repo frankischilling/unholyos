@@ -1,6 +1,8 @@
 #include "../KernelB.hpp"
 
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
+extern "C" void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
+                             const uintptr_t *frame);
 
 bool RedSeaInit(CDrv &dv)
 {
@@ -195,6 +197,87 @@ static CRedSeaDirEntry *RedSeaDirHead(const CDrv &dv, CRedSeaDir dir)
   return head;
 }
 
+static bool RedSeaRAMGeometry(const CDrv &dv)
+{
+  if (!WritableFS(dv) || dv.fs_type != FSt_REDSEA || !dv.bd->RAM_dsk ||
+      dv.bd->bd_signature != BD_SIGNATURE_VAL || dv.bd->max_blk < 0 ||
+      uint64_t(dv.bd->max_blk) >= SIZE_MAX / BLK_SIZE || dv.drv_offset < 0 ||
+      dv.size <= 0 || dv.spc != 1)
+    return false;
+  uint64_t first = dv.drv_offset, disk_end = uint64_t(dv.bd->max_blk) + 1;
+  if (first >= disk_end || uint64_t(dv.size) > disk_end - first ||
+      dv.fat1 != dv.drv_offset + 1 || dv.fat2 != dv.fat1 ||
+      dv.data_area <= dv.drv_offset || dv.root_clus <= dv.data_area)
+    return false;
+  uint64_t end = first + dv.size, data = dv.data_area;
+  return uint64_t(dv.root_clus) < end &&
+         (end - data - 1) / (BLK_SIZE * 8) < data - first &&
+         RedSeaClusterUsed(dv, data);
+}
+
+static bool RedSeaClusterRange(const CDrv &dv, uint64_t c, uint64_t cnt)
+{
+  uint64_t end = uint64_t(dv.drv_offset) + dv.size;
+  return c > uint64_t(dv.data_area) && c < end && cnt <= end - c;
+}
+
+static bool RedSeaAllocated(const CDrv &dv, uint64_t c, uint64_t cnt)
+{
+  if (!RedSeaClusterRange(dv, c, cnt))
+    return false;
+  for (uint64_t i = 0; i < cnt; i++)
+    if (!RedSeaClusterUsed(dv, c + i))
+      return false;
+  return true;
+}
+
+static bool RedSeaOverlap(uint64_t a, uint64_t an, uint64_t b, uint64_t bn)
+{
+  return an && bn && (a <= b ? b - a < an : a - b < bn);
+}
+
+static CRedSeaDirEntry *RedSeaAllocatedDir(const CDrv &dv, CRedSeaDir dir)
+{
+  auto *head = RedSeaDirHead(dv, dir);
+  if (!head || !(head->attr & RS_ATTR_DIR) || head->clus != dir.cluster ||
+      !RedSeaAllocated(dv, dir.cluster, RedSeaBlocks(head->size)))
+    return nullptr;
+  return head;
+}
+
+extern "C" void RedSeaFreeClusCpp(CDrv *dv, int64_t c, int64_t cnt)
+{
+  DrvChkCpp(dv, true);
+  if (!c || cnt <= 0)
+    return;
+  if (dv->fs_type != FSt_REDSEA) {
+    PrintErrCpp("Not RedSea Drv\n", 0, nullptr, nullptr);
+    return;
+  }
+  CMemLock lock(dv->locked_flags);
+  if (!RedSeaRAMGeometry(*dv) || !RedSeaClusterRange(*dv, c, cnt))
+    return;
+  auto *root = RedSeaAllocatedDir(*dv, {uint64_t(dv->root_clus), nullptr});
+  if (root && !RedSeaOverlap(c, cnt, dv->root_clus, RedSeaBlocks(root->size)))
+    RedSeaMark(*dv, c, cnt, false);
+}
+
+extern "C" int64_t RedSeaAllocClusCpp(CDrv *dv, int64_t cnt)
+{
+  if (cnt <= 0)
+    RaiseHolyC(0x767244); // Drv
+  DrvChkCpp(dv, true);
+  uint64_t c=INVALID_CLUS;
+  {
+    CMemLock lock(dv->locked_flags);
+    if (RedSeaRAMGeometry(*dv) && cnt<=dv->size &&
+        RedSeaAllocatedDir(*dv,{uint64_t(dv->root_clus),nullptr}))
+      c=RedSeaAllocClus(*dv,cnt);
+  }
+  if (c==INVALID_CLUS) RaiseHolyC(0x767244); // Drv
+  return int64_t(c);
+}
+
 static CRedSeaDirEntry *RedSeaDirGrow(CDrv &dv, CRedSeaDir &dir,
                                       CRedSeaDirEntry *head)
 {
@@ -303,6 +386,146 @@ static CRedSeaDirEntry *RedSeaChild(const CDrv &dv, CRedSeaDir dir,
     if (!(head[i].attr & RS_ATTR_DELETED) && RedSeaNameEq(head[i].name, name))
       return head + i;
   return nullptr;
+}
+
+static bool RedSeaDirPath(CDrv &dv, const char *path, CRedSeaDir *dirs,
+                          size_t &depth)
+{
+  depth = 1;
+  dirs[0] = {uint64_t(dv.root_clus), nullptr};
+  if (!RedSeaAllocatedDir(dv, dirs[0]))
+    return false;
+  while (*path) {
+    const char *part = path;
+    while (*path && *path != '/')
+      path++;
+    size_t len = path - part;
+    if (*path)
+      path++;
+    if (!len || (len == 1 && *part == '.'))
+      continue;
+    if (len == 2 && part[0] == '.' && part[1] == '.') {
+      if (depth > 1)
+        depth--;
+      continue;
+    }
+    char name[CDIR_FILENAME_LEN];
+    if (len >= sizeof(name))
+      return false;
+    MemCpy(name, part, len);
+    name[len] = 0;
+    auto *child = FileNameChk(name) ? RedSeaChild(dv, dirs[depth - 1], name)
+                                    : nullptr;
+    if (!child || !(child->attr & RS_ATTR_DIR))
+      return false;
+    CRedSeaDir next{child->clus, child};
+    auto *head = RedSeaAllocatedDir(dv, next);
+    if (!head || head->size != child->size)
+      return false;
+    for (size_t i = 0; i < depth; i++) {
+      auto *ancestor = RedSeaDirHead(dv, dirs[i]);
+      if (RedSeaOverlap(next.cluster, RedSeaBlocks(head->size), dirs[i].cluster,
+                         RedSeaBlocks(ancestor->size)))
+        return false;
+    }
+    dirs[depth++] = next;
+  }
+  return true;
+}
+
+static bool RedSeaDirExtentSafe(const CDrv &dv, const CRedSeaDir *dirs,
+                                size_t depth, uint64_t c, uint64_t blocks)
+{
+  if (!blocks)
+    return true;
+  if (!RedSeaAllocated(dv, c, blocks))
+    return false;
+  for (size_t i = 0; i < depth; i++) {
+    auto *head = RedSeaDirHead(dv, dirs[i]);
+    if (RedSeaOverlap(c, blocks, dirs[i].cluster, RedSeaBlocks(head->size)))
+      return false;
+  }
+  return true;
+}
+
+static void RedSeaDirPut(CDrv &dv, CRedSeaDir *dirs, size_t depth,
+                          const CRedSeaDirEntry &entry, bool free_old_chain)
+{
+  uint64_t blocks = RedSeaBlocks(entry.size);
+  uint64_t extent_blocks = blocks;
+  if (!extent_blocks && entry.clus && entry.clus != INVALID_CLUS)
+    extent_blocks = 1;
+  if ((entry.attr & RS_ATTR_DIR) && (!entry.size || entry.size % BLK_SIZE))
+    return;
+  if (!RedSeaDirExtentSafe(dv, dirs, depth, entry.clus, extent_blocks))
+    return;
+
+  auto &dir = dirs[depth - 1];
+  auto *head = RedSeaDirHead(dv, dir);
+  size_t capacity = head->size / sizeof(*head), empty = 0, i = 2;
+  for (; i < capacity && head[i].name[0]; i++) {
+    if (head[i].attr & RS_ATTR_DELETED) {
+      if (!empty)
+        empty = i;
+    } else if (RedSeaNameEq(head[i].name, entry.name)) {
+      uint64_t old_blocks = RedSeaBlocks(head[i].size),
+               old_cluster = head[i].clus;
+      if (free_old_chain && old_blocks &&
+          (!RedSeaDirExtentSafe(dv, dirs, depth, old_cluster, old_blocks) ||
+           RedSeaOverlap(old_cluster, old_blocks, entry.clus, extent_blocks)))
+        return;
+      if (empty) {
+        head[empty] = entry;
+        head[i].attr |= RS_ATTR_DELETED;
+      } else
+        head[i] = entry;
+      if (free_old_chain)
+        RedSeaMark(dv, old_cluster, old_blocks, false);
+      return;
+    }
+  }
+  if (i == capacity)
+    return;
+  if (i + 1 == capacity) {
+    head = RedSeaDirGrow(dv, dir, head);
+    if (!head)
+      return;
+  }
+  head[empty ? empty : i] = entry;
+}
+
+extern "C" uint64_t RedSeaDirNewCpp(CDrv *dv, const char *cur_dir,
+                                     CDirEntry *entry, uint8_t free_old_chain)
+{
+  static_assert(sizeof(CRedSeaDirEntry) == 64 &&
+                sizeof(CRedSeaDirEntry) == sizeof(CDirEntry) -
+                                               offsetof(CDirEntry, attr));
+  if (!entry)
+    return false;
+  entry->attr |= RS_ATTR_CONTIGUOUS;
+  if (!DrvChkCpp(dv, false) || !cur_dir || entry->size < 0 ||
+      !FileNameChk(entry->name) ||
+      (entry->name[0] == '.' && (!entry->name[1] ||
+                               (entry->name[1] == '.' && !entry->name[2]))))
+    return false;
+  CRedSeaDirEntry record;
+  MemCpy(&record, &entry->attr, sizeof(record));
+  size_t capacity = StrLen(cur_dir) / 2 + 2;
+  if (capacity > SIZE_MAX / sizeof(CRedSeaDir))
+    return false;
+  auto *dirs = reinterpret_cast<CRedSeaDir *>(
+      MAlloc(capacity * sizeof(CRedSeaDir), CurrentTask()->data_heap));
+  if (!dirs)
+    return false;
+  {
+    CMemLock lock(dv->locked_flags);
+    size_t depth;
+    if (RedSeaRAMGeometry(*dv) && RedSeaDirPath(*dv, cur_dir, dirs, depth))
+      RedSeaDirPut(*dv, dirs, depth, record, free_old_chain);
+  }
+  Free(dirs);
+  // The reference returns FALSE even after publishing a directory entry.
+  return false;
 }
 
 static bool RedSeaStreamDir(CDrv &dv, const char *path, CRedSeaDir &dir,

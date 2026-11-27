@@ -24,7 +24,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Kernel/Mem/BlkPool.cpp Kernel/Mem/HeapCtrl.cpp Kernel/Mem/MemPhysical.cpp Kernel/Mem/PageTables.cpp \
 	Kernel/BlkDev/DskATA.cpp Kernel/BlkDev/DskATAId.cpp Kernel/BlkDev/DskAddDev.cpp \
 	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/DskDrv.cpp Kernel/BlkDev/DskBlkDev.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/FileSysFAT.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
-	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskStrB.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/BlkDev/DskFmt.cpp Kernel/Compress.cpp \
+	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskStrB.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/BlkDev/DskClus.cpp Kernel/BlkDev/DskFmt.cpp Kernel/Compress.cpp \
 	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ASnd.cpp Adam/TaskSettings.cpp Adam/AutoComplete/ACTask.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
 	Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
 	Adam/Gr/SpriteNew.cpp Adam/Gr/GrSpritePlot.cpp Adam/Gr/ScrnCast.cpp \
@@ -97,6 +97,10 @@ LIST_UTILITIES_PROBE := Linux/Fixtures/ListUtilitiesProbe.HC
 LIST_UTILITIES_TEST_ISO := $(BUILD)/list-utilities-test.iso
 STORAGE_SERVICES_PROBES := $(addprefix Linux/Fixtures/,DriveServicesProbe.HC PathNamesProbe.HC DirectoryServicesProbe.HC)
 STORAGE_SERVICES_TEST_ISO := $(BUILD)/storage-services-test.iso
+CLUSTER_ENTRY_PROBE := Linux/Fixtures/ClusterEntryProbe.HC
+CLUSTER_ENTRY_TEST_ISO := $(BUILD)/cluster-entry-test.iso
+FAT_CLUSTER_PROBE := Linux/Fixtures/Fat32ClusterProbe.HC
+FAT_CLUSTER_TEST_ISO := $(BUILD)/fat32-cluster-test.iso
 CHARACTER_GRAPHICS_PROBE := Linux/Fixtures/CharPanObserver.HC
 CHARACTER_GRAPHICS_TEST_ISO := $(BUILD)/character-graphics-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
@@ -322,6 +326,12 @@ $(LIST_UTILITIES_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(LIS
 $(STORAGE_SERVICES_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STORAGE_SERVICES_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(STORAGE_SERVICES_PROBES))
 
+$(CLUSTER_ENTRY_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(CLUSTER_ENTRY_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(CLUSTER_ENTRY_PROBE)
+
+$(FAT_CLUSTER_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_CLUSTER_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_CLUSTER_PROBE)
+
 $(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
 
@@ -418,6 +428,13 @@ test-storage-services: $(STORAGE_SERVICES_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --storage-services "$(QEMU)" $(STORAGE_SERVICES_TEST_ISO)
 
 test: test-list-utilities test-storage-services
+
+.PHONY: test-cluster-entry
+test-cluster-entry: $(CLUSTER_ENTRY_TEST_ISO) $(FAT_CLUSTER_TEST_ISO) $(FAT_WRITE_DISK) $(BOOT_TEST)
+	$(BOOT_TEST) --cluster-entry "$(QEMU)" $(CLUSTER_ENTRY_TEST_ISO)
+	$(BOOT_TEST) --fat32-cluster "$(QEMU)" $(FAT_CLUSTER_TEST_ISO) $(FAT_WRITE_DISK)
+
+test: test-cluster-entry
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
