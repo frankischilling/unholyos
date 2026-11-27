@@ -1061,6 +1061,29 @@ the reference allocation and freeing order; indentation uses the x87
 rounding helper. Invalid pointers, malformed widths, allocation
 exhaustion, and extreme indentation factors require further comparison.
 
+## String comparison entries
+
+`Kernel/StrA.asm` retains the instruction and label order of `TO_UPPER`,
+`_STRICMP`, `_STRNCMP`, and `_STRNICMP` in `Kernel/StrA.HC`. The counted
+comparisons test the count before reading either string, so a zero count
+returns zero even for null pointers. Negative counts continue until a
+mismatch or NUL. Results are exactly -1, 0, or 1, with unsigned byte
+ordering and ASCII-only case folding.
+
+The raw `TO_UPPER` entry reads and writes `AL` while preserving the other
+bits of `RAX`. The comparison entries retain their HolyC stack arguments
+and `RET 16` or `RET 24` cleanup. Their explicit C++ adapters preserve
+`RBX`, which the reference routines use as byte scratch, and translate
+the SysV argument registers into that stack layout. `KLoad.cpp` exports
+the original raw symbols and public names; `AsmInit.cpp` supplies the
+signatures from `Kernel/KernelC.HH`, including required count arguments.
+
+`Str2F64` now calls `StrNCmp` for its infinity prefix, and `Str2Date`
+uses it for the four calendar prefixes. The date scanner calls the
+existing `StrOcc` for its slash test. Its public declaration retains
+the reference header's `U8` character argument, while the internal C++
+entry accepts the existing integer-width argument.
+
 ## Music playback
 
 `Adam/ASnd.cpp` follows the note conversion, timing, notation parsing,
@@ -1087,6 +1110,14 @@ pending. Terry A. Davis's original song stays in `Demo/Snd/OhGreat.HC`.
 `Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. The probes and their serial output belong to `Linux/BootProbe.cpp`; their bodies and execution order are preserved. [Verification evidence](SourceStructureVerification.md) records the source comparison, build, artifact hashes, and QEMU results.
 
 Startup remains partial. The current kernel initializes several Adam subsystems directly. The reference loads the compiler and executes `StartOS.HC`, which includes `Adam/MakeAdam.HC`. Matching that startup path requires further compiler and runtime work. The probe extraction does not establish startup parity.
+
+The host-linked image currently contains the compiler, Adam, and the
+boot probes in low memory. `Kernel/Kernel.ld` keeps it below the
+reference DVD loader at `0x96600`; the temporary boot stack occupies
+`0x96E00` through `0x96FFF`. Completing the separate compiler and Adam
+load path remains structural work. Shared source/module probe execution
+in `Linux/BootProbe.cpp` avoids duplicating the same compile-and-load
+code within this limited boot image.
 
 The [development milestones](Development.md) define completion in the required order: full rewrite, full compatibility, bootstrap, then self-hosting. Host GCC or Clang and NASM support the current development builds.
 

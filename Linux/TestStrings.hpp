@@ -93,6 +93,32 @@ constexpr std::string_view date_scan_output =
     "DS negative B47D440000000 B47EC40000000 B47D140000000 B491D40000000\n"
     "Date scan 3F\n";
 
+constexpr std::string_view string_compare_output =
+    "SC empty 0 0 0 1\n"
+    "SC left -1 -1 -1 1\n"
+    "SC right 1 1 1 1\n"
+    "SC case 0 -1 0 1\n"
+    "SC order -1 1 -1 1\n"
+    "SC punct -1 -1 -1 1\n"
+    "SC upperedge -1 -1 -1 1\n"
+    "SC loweredge 1 -1 1 1\n"
+    "SC late 0 1 0 1\n"
+    "SC short -1 0 0 1\n"
+    "SC long -1 -1 -1 1\n"
+    "SC term -1 -1 -1 1\n"
+    "SC negative 0 -1 0 1\n"
+    "SC negdiff -1 1 -1 1\n"
+    "SC mincount 0 1 0 1\n"
+    "SC embedded 0 0 0 1\n"
+    "SC overlap -1 -1 -1 1\n"
+    "SC high -1 -1 -1 1\n"
+    "SC extended 1 1 1 1\n"
+    "SC null 0 0\n"
+    "SC occ 2 0\n"
+    "SC bytes 562AF89B93749399 E94E7B76B0C5E825 562AF89B93749399\n"
+    "SC upper ED25B86AE3E78265 0\n"
+    "SC DONE\n";
+
 constexpr CTextProbe string_probes[]{
     {"str-scan", "/StrScanProbe.HC", "/StrScanProbe.BIN.Z", "scan integers ",
      "StrScan probe ", str_scan_output, str_scan_exceptions},
@@ -104,7 +130,9 @@ constexpr CTextProbe string_probes[]{
     {"float-scan", "/FloatScanProbe.HC", "/FloatScanProbe.BIN.Z", "FS empty ",
      "FS DONE", float_scan_output},
     {"date-scan", "/DateScanProbe.HC", "/DateScanProbe.BIN.Z", "DS boundary ",
-     "Date scan ", date_scan_output}};
+     "Date scan ", date_scan_output},
+    {"string-compare", "/StringCompareProbe.HC", "/StringCompareProbe.BIN.Z",
+     "SC empty ", "SC DONE", string_compare_output}};
 
 static std::string TextProbeOutput(std::string_view serial,
                                    const CTextProbe &probe, const char *path)

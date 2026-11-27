@@ -45,6 +45,7 @@ ISO := $(BUILD)/unholyos.iso
 ISO_TOOL := $(BUILD)/Linux/MakeISO
 BOOT_TEST := $(BUILD)/Linux/TestBoot
 COMPRESS_TEST := $(BUILD)/Linux/TestCompress
+STR_COMPARE_TEST := $(BUILD)/Linux/TestStrCompare
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
 FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
@@ -69,7 +70,7 @@ MUSIC_PRECISION_ISO := $(BUILD)/music-precision-test.iso
 MUSIC_PRECISION_PROBE := Linux/Fixtures/MusicPrecision.HC
 STRINGS_TEST_ISO := $(BUILD)/strings-test.iso
 STRINGS_PROBES := Linux/Fixtures/StrScanProbe.HC Linux/Fixtures/DocScanProbe.HC Linux/Fixtures/StringUtilitiesProbe.HC \
-	Linux/Fixtures/FloatScanProbe.HC Linux/Fixtures/DateScanProbe.HC
+	Linux/Fixtures/FloatScanProbe.HC Linux/Fixtures/DateScanProbe.HC Linux/Fixtures/StringCompareProbe.HC
 STARTUP_FIXTURE := Linux/Fixtures/StartOS.HC.Z
 STARTUP_DOC := Doc/Start.DD
 MODULE_PROBE := Linux/Fixtures/LoadProbe.BIN
@@ -152,6 +153,10 @@ $(COMPRESS_TEST): Linux/TestCompress.cpp Linux/BootMedia.hpp Kernel/Compress.cpp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ Linux/TestCompress.cpp Kernel/Compress.cpp
 
+$(STR_COMPARE_TEST): Linux/TestStrCompare.cpp $(BUILD)/Kernel/StrA.asm.o
+	mkdir -p $(@D)
+	$(HOSTCXX) $(HOSTCXXFLAGS) -fno-pie -no-pie -mno-red-zone -o $@ $^
+
 $(FAT_TOOL): Linux/MakeFAT32.cpp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
@@ -214,8 +219,9 @@ $(STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_FIXTURE) $(STARTU
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO)
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO)
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
+	$(STR_COMPARE_TEST)
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_DISK) valid
 	$(BOOT_TEST) --fat32 "$(QEMU)" $(FAT_TEST_ISO) $(FAT_INVALID_DISK) invalid
 	$(BOOT_TEST) --ata-write "$(QEMU)" $(ATA_TEST_ISO) $(FAT_DISK)
