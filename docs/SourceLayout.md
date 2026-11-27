@@ -15,6 +15,7 @@ Preserve the spelling and case of the reference directories and basenames. Use `
 | `Kernel/Mem/PageTables.HC` | `Kernel/Mem/PageTables.asm`, `PageTables.cpp` | Early page tables and memory mapping |
 | `Kernel/KMain.HC` | `Kernel/KMain.cpp` | Kernel initialization and startup |
 | `Kernel/KLoad.HC` | `Kernel/KLoad.cpp`, `KLoad.asm` | TOSB loading, patch records, module registration, and the public HolyC `Load` adapter |
+| `Kernel/KDefine.HC` | `Kernel/KDefine.cpp` | String and list definitions, lookup, formatting, and undefined-name exceptions as implemented |
 | Compiler imports in `Kernel/Kernel.PRJ`, guarded-import guidance in `Kernel/KExts.HC` | `Kernel/KExts.hpp`, `KExts.cpp`, `KExts.asm` | Typed native reverse imports and guards for the separately loaded compiler |
 | `Kernel/BlkDev/*.HC` | Corresponding `.cpp` files under `Kernel/BlkDev/` | Block devices, paths, files, and filesystems as implemented |
 | `Compiler/*.HC` | Corresponding `.cpp` and `.asm` files under `Compiler/` | HolyC scanning, parsing, code generation, execution, and explicit C++ ABI adapters as implemented |
@@ -1251,6 +1252,52 @@ uses it for the four calendar prefixes. The date scanner calls the
 existing `StrOcc` for its slash test. Its public declaration retains
 the reference header's `U8` character argument, while the internal C++
 entry accepts the existing integer-width argument.
+
+## Kernel string definitions
+
+`Kernel/KDefine.cpp` implements `DefineLoad`, `Define`, `DefineCnt`, and
+`DefinePrint` alongside the existing list functions from Terry A. Davis's
+`Kernel/KDefine.HC`. `DefineLoad` allocates the record in the current
+task's data heap, copies its name and string, sets `cnt` to -1, and leaves
+`sub_idx` null. A null source string becomes an allocated empty string.
+Adding another definition with the same name prepends a new record;
+removing it reveals the older definition.
+
+`Define` returns the record's copied data for either a string or a list.
+`DefineCnt` returns its signed count. A null lookup name returns null or
+-1, respectively; a missing non-null name uses the existing `UndefDef`
+exception and diagnostic. The formatter retains its deferred-error
+helpers so it can release temporary output before raising an exception.
+`DefinePrint` formats first, calls `DefineLoad`, then frees the temporary
+string. A formatting exception therefore occurs before publication.
+
+The public adapters remain in `Kernel/KUtils.asm`, with exports in
+`Kernel/KLoad.cpp` and declarations from `Kernel/KernelC.HH` registered
+by `Compiler/AsmInit.cpp`. `Define` and `DefineCnt` pop one stack argument;
+`DefineLoad` pops two and passes its real HolyC frame. `DefinePrint` has
+two fixed arguments followed by `argc` and inline `argv`, with caller
+cleanup. Its return type is `U0`.
+
+Direct `DefineLoad` calls record their HolyC caller's address.
+`DefinePrint` records its internal call site, as the reference does.
+The C++ implementation keeps `DefineLoadCpp` out of line and uses the
+actual native return address for that internal call; ordinary HolyC
+calls use the supplied frame. Existing native `DefineLstLoad` boot calls
+retain their separate null-frame `AD:0x0` convention.
+
+Native allocation failure frees unpublished string-definition storage
+and returns null. The reference does not check those allocations, so
+exhaustion behavior is not claimed to match. The existing native
+`StrPrintJoin` also releases its temporary output before a missing-argument
+exception; pinned `Kernel/StrPrint.HC::StrPrintJoin` allocates that buffer
+and throws without local cleanup. This formatter lifetime difference
+remains separate from the definition's no-publication behavior.
+Existing list index arrays
+still point to the original list strings, and `HashDel` still leaves
+their `sub_idx` allocation alone, following the pinned implementation.
+The common fixture and runtime evidence are recorded in
+[Boot.md](Boot.md#kernel-string-definitions). The remaining system and
+Adam definition initialization requires further translation.
 
 ## Music playback
 

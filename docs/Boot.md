@@ -2817,6 +2817,123 @@ These comparisons do not inject allocation failures.
 pull request records the exact tested commit and the GCC and Clang CI
 results.
 
+## Kernel string definitions
+
+`StringDefinesProbe.HC` runs unchanged in the pinned TempleOS guest and
+the GCC 13.3.0 and Clang 20.1.2 native builds. It exercises the public
+`DefineLoad`, `Define`, `DefineCnt`, and `DefinePrint` interfaces from
+Terry A. Davis's `Kernel/KDefine.HC` and `Kernel/KernelC.HH`. All three
+runs produced these exact 190 normalized output bytes:
+
+```text
+SD copy 1F
+SD values F
+SD duplicate F
+SD print F
+SD caller F
+ERROR: Undefined Define: 'ST_SD_MISSING_VALUE'.
+ERROR: Undefined Define: 'ST_SD_MISSING_COUNT'.
+SD errors F
+SD cleanup 7
+SD DONE
+```
+
+The copy checks mutate the caller's name and text buffers after loading
+and verify that the definition retains its own copies on the current
+task's heap. String records have `cnt=-1` and a null `sub_idx`. `Define`
+returns the record's data pointer; a write through that pointer is visible
+to the next lookup. Empty and null input text both produce allocated
+empty strings. For null names, `Define` returns null and `DefineCnt`
+returns -1 without an error. The existing `ST_U8_REGS` list still reports
+16 entries and supplies its indexed strings.
+
+Loading the same name twice creates two records. The newest shadows the
+older record, which remains available as hash instance 2. Removing the
+newest through the explicit `_HASH_REM_DEL` fixture alias exposes the
+older value, and removing that record leaves the name absent. Mixed
+`DefinePrint` arguments cover strings, signed and hexadecimal integers,
+a character, a literal percent, `%S` substitution, and an F64 value that
+formats as `1.50`. A second call has no variadic arguments. A test
+assembly helper samples the caller's RSP before and after `DefineLoad`,
+`Define`, `DefineCnt`, and both formatting calls; all five comparisons
+must match.
+
+Two direct `DefineLoad` call sites produce distinct nonzero source link
+addresses. Two `DefinePrint` calls retain the same nonzero internal
+`DefineLoad` call site address, distinct from both direct links. The
+runtime checks compare these relationships without embedding guest
+addresses. Source review and GCC/Clang disassembly also verify that the
+native internal link is the actual return PC of the call in
+`DefinePrintCpp`; its `DefineLoadCpp` callee remains uninlined for this
+purpose.
+
+The fixture catches `UndefDef` from both missing name queries and
+`StrPrint` from null format and missing format argument calls. Both
+formatting failures preserve the existing record, data pointer, and
+source link without publishing another definition. The native driver
+requires those four exception tags in order and retains both visible error rows.
+Every definition record created by the fixture is removed, the exception
+chain is restored, and a separate successful create/print/remove cycle
+restores the measured heap usage.
+
+The missing-argument failure has a known formatter allocation difference.
+Pinned `Kernel/StrPrint.HC::StrPrintJoin` allocates its temporary buffer
+before that argument check and throws without local cleanup. The native
+`Kernel/StrPrint.cpp::StrPrintJoin` frees its temporary buffer before
+raising the error. This difference is established by source review; the
+shared trace does not compare heap usage across the deliberate formatting
+failures. The null
+format fails before allocation in both implementations. Allocation
+failures are not injected by this fixture.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Common `StringDefinesProbe.HC` | 8,502 | `c185cc3e3be758532e1b8bc749a191c92e734523bbf4df037add657b63faae58` |
+| Reference source readback, including NUL | 8,503 | `2bf84be7d97600640f3731c90fc58d499e61b7346d5f27f68eb8aa523611127d` |
+| Normalized trace | 190 | `caa6036d0bab28755bc01ffbbc0dbe47ace1a916b8b47ebbd07f408448504d48` |
+
+```sh
+make -j4 test-string-defines
+make -j4 BUILD=build/clang \
+  CXX=/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  HOSTCXX=/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  test-string-defines
+mkdir -p build/string-defines-audit
+g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+  -o build/string-defines-audit/TestBoot.gcc Linux/TestBoot.cpp
+build/string-defines-audit/TestBoot.gcc --string-defines-reference \
+  qemu-system-x86_64 ../reference-media/TOS_Distro.ISO \
+  build/string-defines-reference-final
+```
+
+The reference command used the separately compiled GCC host driver from
+the same `Linux/TestBoot.cpp`. The Clang build selected the installed
+Clang 20 binary for both compiler variables. The native ISOs are
+`build/string-defines-test.iso` and `build/clang/string-defines-test.iso`.
+The native driver verifies every packaged source byte, one source
+execution at run level `0x12ff` before user startup tasks, completion
+with `checks 1`, and the complete trace. The reference transport verifies
+all 8,502 source bytes plus the terminating NUL before execution, saves
+the full text and screen, and requires an empty prompt after completion.
+All focused commands exited successfully. Native logs are
+`build/string-defines-gcc-final.log` and
+`build/string-defines-clang-final.log`; reference evidence is retained in
+`build/string-defines-reference-final` and its matching `.log`.
+
+The reference checkout was verified clean through the Git Human Workflow
+helper before and after execution at
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`. Its ISO SHA-256 is
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+All runs used QEMU 8.2.2 (`1:8.2.2+ds-0ubuntu1.18`),
+`-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`, one default vCPU,
+`-display none -monitor none -qmp stdio -no-reboot`, and serial capture.
+The reference also used the debug console and GDB on port 45362; the VM
+exited and released that port.
+
+`make test` includes this fixture in the complete regression gate. The
+pull request records the exact tested commit and the GCC and Clang CI
+results.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

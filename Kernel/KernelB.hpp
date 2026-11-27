@@ -243,6 +243,12 @@ extern "C" uint8_t *MAllocIdentCpp(const void *src, void *mem_task);
 extern "C" uint64_t FileWriteCpp(const char *filename, const uint8_t *data,
                                  uint64_t count, uint64_t date, uint64_t attr);
 extern "C" void PaletteSetStdCpp();
+extern "C" CHashDefineStr *DefineLoadCpp(const char *name, const char *text,
+                                         const uintptr_t *frame);
+extern "C" const char *DefineCpp(const char *name);
+extern "C" int64_t DefineCntCpp(const char *name);
+extern "C" void DefinePrintCpp(const char *name, const char *src, int64_t argc,
+                               const uint64_t *argv);
 extern "C" CHashDefineStr *DefineLstLoadCpp(const char *name, const char *list,
                                             const uintptr_t *frame);
 bool DefineInitColors();

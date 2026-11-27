@@ -39,6 +39,7 @@ EXTERN BreakCpp,BreakLockCpp,BreakUnlockCpp
 GLOBAL StrPrintJoinHC,StrPrintHC,CatPrintHC,MStrPrintHC,PrintHC,PrintErrHC,PrintWarnHC
 GLOBAL PutSHC,PutHexHC
 GLOBAL PutCharsHC,IsRawHC,DefineLstLoadHC,DefineSubHC,DefineMatchHC
+GLOBAL DefineHC,DefineLoadHC,DefineCntHC,DefinePrintHC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
 GLOBAL DocReadHC,DocTypeHC,TypeHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC,DocPutKeyHC
@@ -224,6 +225,7 @@ EXTERN RedSeaISOCpp
 EXTERN SysUntryCpp,PutExceptCpp,YorNCpp
 EXTERN StrPrintJoin,CatPrintCpp,MStrPrintCpp,PrintCpp,PrintErrCpp,PrintWarnCpp
 EXTERN PutCharsCpp,PutS,PutHexCpp,IsRawCpp,DefineLstLoadCpp,DefineSubCpp,DefineMatchCpp
+EXTERN DefineCpp,DefineLoadCpp,DefineCntCpp,DefinePrintCpp
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocReadCpp,DocTypeCpp,TypeCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp,DocPutKeyCpp
@@ -604,8 +606,11 @@ HOLYC_CPP PutHexHC,PutHexCpp,2
 HOLYC_CPP PutCharsHC,PutCharsCpp,1
 HOLYC_CPP PutSHC,PutS,1
 HOLYC_CPP IsRawHC,IsRawCpp,0
+HOLYC_CPP DefineHC,DefineCpp,1
 HOLYC_CPP DefineSubHC,DefineSubCpp,2
+HOLYC_CPP DefineCntHC,DefineCntCpp,1
 HOLYC_CPP DefineMatchHC,DefineMatchCpp,3
+HOLYC_PRINT DefinePrintHC,DefinePrintCpp,2
 HOLYC_CPP WinHorzHC,WinHorzCpp,3
 HOLYC_CPP WinVertHC,WinVertCpp,3
 HOLYC_CPP WinRefocusHC,WinRefocusCpp,1
@@ -734,6 +739,14 @@ HOLYC_CPP PutFileLinkHC,PutFileLinkCpp,4
 HOLYC_CPP PutSrcLinkHC,PutSrcLinkCpp,3
 HOLYC_CPP FixSetHC,FixSetCpp,2
 HOLYC_PRINT AdamErrHC,AdamErrCpp,1
+
+DefineLoadHC:
+	HC_FRAME_ENTER
+	MOV	RDI,[RBP+16]
+	MOV	RSI,[RBP+24]
+	MOV	RDX,RBP
+	HC_FRAME_CALL DefineLoadCpp
+	RET	16
 
 DefineLstLoadHC:
 	HC_FRAME_ENTER
