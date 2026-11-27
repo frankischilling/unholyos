@@ -105,6 +105,7 @@ void PUT_HEX_U64(), PUT_HEX_U32(), PUT_HEX_U16(), PUT_HEX_U8(), PUT_CHARS(),
     PUT_STR();
 void DefineSubHC(), DefineMatchHC();
 void DefineHC(), DefineLoadHC(), DefineCntHC(), DefinePrintHC();
+void Color2StrHC(), Str2ColorU16HC(), Str2ColorU32HC();
 void HashValHC(), HashDelHC(), HashTableDelHC(), HashSrcFileSetHC();
 void SpawnHC(), TaskValidateHC(), SuspendHC(), IsSuspendedHC();
 void TaskQueInsHC(), TaskQueRemHC(), SingleUserHC(), IsSingleUserHC();
@@ -1191,6 +1192,10 @@ bool LoadKernel(CTask &task)
       {"DefineCnt", reinterpret_cast<uintptr_t>(DefineCntHC)},
       {"DefineMatch", reinterpret_cast<uintptr_t>(DefineMatchHC)},
       {"DefinePrint", reinterpret_cast<uintptr_t>(DefinePrintHC)},
+      {"Color2Str", reinterpret_cast<uintptr_t>(Color2StrHC)},
+      {"str2color_lst", reinterpret_cast<uintptr_t>(&str2color_lst)},
+      {"Str2ColorU16", reinterpret_cast<uintptr_t>(Str2ColorU16HC)},
+      {"Str2ColorU32", reinterpret_cast<uintptr_t>(Str2ColorU32HC)},
       {"WinHorz", reinterpret_cast<uintptr_t>(WinHorzHC)},
       {"WinVert", reinterpret_cast<uintptr_t>(WinVertHC)},
       {"WinRefocus", reinterpret_cast<uintptr_t>(WinRefocusHC)},

@@ -178,6 +178,8 @@ const char *DefineSub(int64_t index, const char *name, bool &defined);
 const char *LstSub(int64_t index, const char *list);
 extern "C" char *StrPrintJoin(char *dst, const char *fmt, int64_t argc,
                               const uint64_t *argv);
+extern "C" char *CatPrintCpp(char *dst, const char *fmt, int64_t argc,
+                             const uint64_t *argv);
 extern "C" void PrintWarnCpp(const char *fmt, int64_t argc,
                              const uint64_t *argv, const uintptr_t *frame);
 const CHash *FunSegFind(uintptr_t addr, uint64_t &offset);
@@ -252,6 +254,10 @@ extern "C" void DefinePrintCpp(const char *name, const char *src, int64_t argc,
 extern "C" CHashDefineStr *DefineLstLoadCpp(const char *name, const char *list,
                                             const uintptr_t *frame);
 bool SysDefinesLoad();
+extern "C" char *Color2StrCpp(char *buf, uint32_t color);
+extern char *str2color_lst;
+extern "C" uint64_t Str2ColorU16Cpp(const char *st);
+extern "C" uint64_t Str2ColorU32Cpp(char *st);
 bool LoadDocDefines();
 extern "C" void PutS(const char *text);
 extern "C" void StrCpyCpp(char *dst, const char *src);

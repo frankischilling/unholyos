@@ -2876,15 +2876,19 @@ Every definition record created by the fixture is removed, the exception
 chain is restored, and a separate successful create/print/remove cycle
 restores the measured heap usage.
 
-The missing-argument failure has a known formatter allocation difference.
-Pinned `Kernel/StrPrint.HC::StrPrintJoin` allocates its temporary buffer
-before that argument check and throws without local cleanup. The native
-`Kernel/StrPrint.cpp::StrPrintJoin` frees its temporary buffer before
-raising the error. This difference is established by source review; the
-shared trace does not compare heap usage across the deliberate formatting
-failures. The null
-format fails before allocation in both implementations. Allocation
-failures are not injected by this fixture.
+At tested revision `8ba41befec13e116700ccb9d974e7fb86550b8f6`, the
+missing-argument failure had a formatter cleanup difference. Pinned
+`Kernel/StrPrint.HC::StrPrintJoin` allocated its temporary buffer before
+the argument check and threw without local cleanup. The native formatter
+freed its temporary buffer before raising the deferred error. The
+[missing format arguments](#missing-format-arguments) change now raises
+immediately when an argument is unavailable, preserving the bytes written
+before the failure. Native output allocation still starts lazily and
+grows as needed, while the reference allocates its initial buffer on
+entry. These allocation differences are source evidence; the shared
+string-definition trace does not compare heap usage across deliberate
+formatting failures. Null format fails before allocation in both
+implementations. Allocation failures are not injected by this fixture.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
@@ -3031,6 +3035,182 @@ The reference also used the debug console and GDB on port 45362; its VM
 exited and released that port.
 
 `make test` includes this fixture in the complete regression gate. The
+pull request records the exact tested commit and the GCC and Clang CI
+results.
+
+## Kernel color conversions
+
+`ColorConversionsProbe.HC` runs unchanged in the pinned TempleOS guest
+and the GCC and Clang native builds. It checks Terry A. Davis's
+`Kernel/KDefine.HC::Color2Str`, `Str2ColorU16`, and `Str2ColorU32`, with
+the public scalar records and declarations from `KernelA.HH` and
+`KernelC.HH`. All three runs produced these exact 121 normalized bytes:
+
+```text
+CC abi 3F
+CC names 16
+CC numeric 256
+CC u16 40
+CC u32 32
+CC format 18
+CC delimiters F
+CC shadow F
+CC heap 24 0 7
+CC DONE
+```
+
+Compile-time assertions check the two-byte and four-byte scalar records
+and every field offset. Guarded, unaligned stores check their packed
+values. Direct and typed function-pointer calls compare the results and
+sample RSP before and after each call. Parsing checks all 16 color names,
+case folding, all four combinations of `TWO` and `HALF`, 40 U16 edge
+cases, and the complete numeric range 0 through 255. Prefix ambiguity,
+transparent color, numeric
+prefixes, repeated color tokens, and invalid color 16 retain the
+reference behavior. For example, U16 `TWO` retains flags as `0x2010`,
+while U32 rejects a half whose color byte is 16.
+
+Every U16 call preserves all 128 input bytes. The 32 U32 cases compare
+the entire mutated buffer, including bytes after its new terminator,
+across `/`, `,`, `)`, `}`, and `>`; trailing and repeated delimiters;
+and valid or invalid halves. `Color2Str` returns the supplied buffer,
+uses `TWO|HALF|` order, distinguishes ordinary from probability dither,
+and formats numeric values outside the named colors as `INVALID`, except
+255 as `TRANSPARENT`. Eighteen additional packed-value cases cover flags
+and both halves. A raw hash lookup locates the mutable `str2color_lst`
+pointer slot; a temporary semicolon delimiter changes both parsers, and
+the original pointer and behavior are restored.
+
+A temporary `ST_COLORS` list verifies that color names remain formatting
+inputs: `Tone%%` becomes `Tone%`, and `%d` without an argument raises
+`StrPrint` before changing the empty output buffer. The fixture removes
+only its owned definition, restores the original lookup and exception
+chain, and requires exactly that one native exception. The shared
+formatter now raises at the missing argument check; the separate
+[formatter probe](#missing-format-arguments) checks its partial-output
+behavior more broadly.
+
+Pinned `Str2ColorU32` retains its first-segment allocation. The common
+fixture makes 73 nonnull calls with inputs shorter than 128 bytes and
+preserves that bounded behavior. A separate numeric `7/8` call, which
+needs no token allocations, increases heap usage by exactly 24 bytes in
+both guests. NULL U16 and U32 calls return 16 with no heap increase.
+This does not claim heap recovery across the nonnull U32 calls or test
+allocation failure. Sprite callers were reviewed in `SpriteCode.HC` and
+`SpriteBitMap.HC`; this fixture tests the conversions rather than their
+complete user interfaces.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Common `ColorConversionsProbe.HC` | 12,876 | `d53a0613c974734e148ee8caf7e6ec0f2243087d87eaab2977a93163ccff39b6` |
+| Reference source readback, including NUL | 12,877 | `6df5e3f00e857780da83ef87e1cff148c0f5ed92805ce430d38f36bd64b56ef6` |
+| Normalized color trace | 121 | `407a23f03d82a46bbe731ae78768e0ff506d5648ca4480ad4772b333dec86d25` |
+
+The final native build and focused checks used:
+
+```sh
+make -j4 all build/unholyos-startup-test.iso \
+  test-color-conversions test-format-missing-args
+make -j4 BUILD=build/clang \
+  CXX=/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  HOSTCXX=/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  all build/clang/unholyos-startup-test.iso \
+  test-color-conversions test-format-missing-args
+build/color-conversions-audit/TestBoot.gcc --color-conversions-reference \
+  qemu-system-x86_64 ../reference-media/TOS_Distro.ISO \
+  build/color-conversions-reference-final
+```
+
+All three commands exited successfully. Native color ISOs are
+`build/color-conversions-test.iso` and
+`build/clang/color-conversions-test.iso`. The native driver verifies
+every packaged source byte, one execution before user startup, completion
+with `checks 1`, the expected exception, and the full trace. Final native
+logs are `build/color-conversions-gcc-verified.log` and
+`build/color-conversions-clang-verified.log`. Reference evidence is in
+`build/color-conversions-reference-final` and its matching `.log`.
+Its transport verifies the full source plus NUL, saves text and screen,
+and requires an empty prompt after completion. The audit drivers were
+built with `-std=c++20 -O2 -Wall -Wextra -Werror`.
+
+Both reference comparisons in these two sections verified the separate
+checkout clean through the Git Human Workflow helper before and after
+execution at `c26482bb6ad3f80106d28504ec5db3c6a360732c`. The ISO SHA-256 is
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+The focused runs used QEMU 8.2.2 (`1:8.2.2+ds-0ubuntu1.18`),
+`-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`, one default vCPU,
+`-display none -monitor none -qmp stdio -no-reboot`, and serial capture.
+Each reference VM also used debugcon and GDB port 45362, exited, and
+released the port.
+
+## Missing format arguments
+
+The separate `FormatMissingArgsProbe.HC` runs unchanged in both native
+builds and the pinned guest. It checks eight supplied-buffer failures
+from `Kernel/StrPrint.HC`, producing the same exact 57 normalized bytes:
+
+```text
+FM errors FF
+FM bytes FF
+FM stack FF
+FM queue FF
+FM DONE
+```
+
+Each case compares all 128 destination bytes after catching `StrPrint`.
+The expected buffer contains only the bytes already written before the
+missing argument; the untouched suffix remains `0x5A`, without a
+synthetic zero value or NUL terminator.
+
+| Call | Bytes present before the unchanged suffix |
+| --- | --- |
+| `StrPrint(buf,"%d")` | None |
+| `StrPrint(buf,"pre%d")` | `pre` |
+| `StrPrint(buf,"ok=%d;bad=%d",7)` | `ok=7;bad=` |
+| `StrPrint(buf,"left%*d")` | `left` |
+| `StrPrint(buf,"left%.*f")` | `left` |
+| `StrPrint(buf,"left%*.*f",8,2)` | `left` |
+| `CatPrint(buf,"/%d")`, initially `saved` | `saved/` |
+| `StrPrint(buf,"list=%Z",0)` | `list=` |
+
+These cover missing value, width, precision, and list-name arguments.
+The append case overwrites the old terminator with `/` and leaves the
+following byte unchanged. Every call must throw without returning;
+standalone RSP samples and both exception-chain pointers must match
+before and after its try/catch. The native driver requires exactly eight
+ordered `StrPrint` records. The public variadic `CatPrint` declaration
+now matches pinned `Kernel/KernelC.HH`; its existing adapter is reused.
+All destinations are supplied buffers. This fixture makes no claim
+about the remaining lazy-versus-eager allocation behavior for NULL
+destinations described in [Kernel string definitions](#kernel-string-definitions).
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Common `FormatMissingArgsProbe.HC` | 1,938 | `3f035734ccefe241556ce2ee22539558a9b9845ccf6faf7bf0273dd174272e9d` |
+| Reference source readback, including NUL | 1,939 | `a76fb94366f0375252cea2056358e480950c459d169eebcbba5eb591b70523b6` |
+| Normalized formatter trace | 57 | `561b69179752c055d8bdaf75daf6cfa6dfbdfb87678a5c8f9cf259f7aa95485d` |
+
+```sh
+build/format-missing-args-audit/TestBoot.gcc --format-missing-args-reference \
+  qemu-system-x86_64 ../reference-media/TOS_Distro.ISO \
+  build/format-missing-args-reference
+```
+
+That command and both combined native commands above exited successfully.
+The native ISOs are `build/format-missing-args-test.iso` and
+`build/clang/format-missing-args-test.iso`; their results are in the same
+two verified native logs. Reference text, screen, and full source-plus-NUL
+readback are retained in `build/format-missing-args-reference` and its
+matching `.log`, using the driver flags and VM configuration above.
+
+Earlier captures remain available: the first color reference capture
+rejected unsupported C conditional expressions in the initial fixture;
+the first native color runs exposed the formatter's deferred error;
+and the first formatter source runs exposed the missing typed
+`CatPrint` declaration. Those failures are resolved. The final fixtures
+and both final native traces match the successful reference captures.
+
+`make test` includes both fixtures in the complete regression gate. The
 pull request records the exact tested commit and the GCC and Clang CI
 results.
 

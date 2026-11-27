@@ -15,7 +15,7 @@ Preserve the spelling and case of the reference directories and basenames. Use `
 | `Kernel/Mem/PageTables.HC` | `Kernel/Mem/PageTables.asm`, `PageTables.cpp` | Early page tables and memory mapping |
 | `Kernel/KMain.HC` | `Kernel/KMain.cpp` | Kernel initialization and startup |
 | `Kernel/KLoad.HC` | `Kernel/KLoad.cpp`, `KLoad.asm` | TOSB loading, patch records, module registration, and the public HolyC `Load` adapter |
-| `Kernel/KDefine.HC` | `Kernel/KDefine.cpp` | String and list definitions, lookup, formatting, and undefined-name exceptions as implemented |
+| `Kernel/KDefine.HC` | `Kernel/KDefine.cpp` | String and list definitions, lookup, formatting, undefined-name exceptions, and packed color conversion as implemented |
 | Compiler imports in `Kernel/Kernel.PRJ`, guarded-import guidance in `Kernel/KExts.HC` | `Kernel/KExts.hpp`, `KExts.cpp`, `KExts.asm` | Typed native reverse imports and guards for the separately loaded compiler |
 | `Kernel/BlkDev/*.HC` | Corresponding `.cpp` files under `Kernel/BlkDev/` | Block devices, paths, files, and filesystems as implemented |
 | `Compiler/*.HC` | Corresponding `.cpp` and `.asm` files under `Compiler/` | HolyC scanning, parsing, code generation, execution, and explicit C++ ABI adapters as implemented |
@@ -1268,7 +1268,7 @@ removing it reveals the older definition.
 `DefineCnt` returns its signed count. A null lookup name returns null or
 -1, respectively; a missing non-null name uses the existing `UndefDef`
 exception and diagnostic. The formatter retains its deferred-error
-helpers so it can release temporary output before raising an exception.
+helpers for undefined definitions so it can release temporary output.
 `DefinePrint` formats first, calls `DefineLoad`, then frees the temporary
 string. A formatting exception therefore occurs before publication.
 
@@ -1288,17 +1288,21 @@ retain their separate null-frame `AD:0x0` convention.
 
 Native allocation failure frees unpublished string-definition storage
 and returns null. The reference does not check those allocations, so
-exhaustion behavior is not claimed to match. The existing native
-`StrPrintJoin` also releases its temporary output before a missing-argument
-exception; pinned `Kernel/StrPrint.HC::StrPrintJoin` allocates that buffer
-and throws without local cleanup. This formatter lifetime difference
-remains separate from the definition's no-publication behavior.
+exhaustion behavior is not claimed to match. `StrPrintJoin` raises at the
+read of a missing argument, before formatting a replacement value or
+appending the completion NUL. Bytes written by earlier conversions or
+literal text remain intact. The pinned formatter checks arguments at the
+same point. Its null-destination allocation behavior still differs:
+TempleOS allocates `STR_LEN` bytes before reading the format, while native
+`CPrintOut` allocates lazily. A missing first argument therefore retains
+the reference's allocation but creates none natively; native output
+already allocated before a later missing argument remains retained.
 Existing list index arrays
 still point to the original list strings, and `HashDel` still leaves
 their `sub_idx` allocation alone, following the pinned implementation.
 The common fixture and runtime evidence are recorded in
-[Boot.md](Boot.md#kernel-string-definitions). The full Adam definition
-initialization and color conversion helpers require further translation.
+[Boot.md](Boot.md#kernel-string-definitions). Full Adam definition
+initialization requires further translation.
 
 ## Kernel system definitions
 
@@ -1352,6 +1356,65 @@ checks distinguish these kernel-owned literals from the compiler's
 literals and Adam's later definitions. The common fixture, phase checks,
 and remaining evidence limits are recorded in
 [Boot.md](Boot.md#kernel-system-definitions).
+
+## Color conversion
+
+`Kernel/KDefine.cpp` follows the remaining declarations in Terry A. Davis's
+pinned `Kernel/KDefine.HC`: `Color2Str`, `str2color_lst`, `Str2ColorU16`, and
+`Str2ColorU32`. The color records retain their two-byte and four-byte layouts.
+The native bridges pass packed integers, matching the reference's
+`public U16 class` and `public U32 class` declarations. Explicit HolyC
+adapters and typed compiler metadata preserve the argument and result types.
+The mutable `str2color_lst` pointer also has a raw data export, matching the
+reference's ordinary AOT global export. It has no added typed header
+declaration; both parsers read its current pointer value.
+
+| Function | HolyC arguments | Result | Stack cleanup |
+| --- | --- | --- | ---: |
+| `Color2Str` | Buffer, packed `CColorROPU32` | Original buffer pointer | 16 bytes |
+| `Str2ColorU16` | String pointer | Packed `CColorROPU16` | 8 bytes |
+| `Str2ColorU32` | Mutable string pointer | Packed `CColorROPU32` | 8 bytes |
+
+`Color2Str` clears the destination, writes `TWO|` before `HALF|`, then writes
+the palette name, `TRANSPARENT`, or `INVALID`. It writes the second color
+only when `ROPF_DITHER` is set; probability-dither alone does not select that
+path. Other raster-operation bits are omitted. Palette names are passed
+to `CatPrint` as format strings, as in the reference. A shadowed `ST_COLORS`
+definition can therefore expand percent escapes or raise a formatting
+exception.
+
+`Str2ColorU16` does not change its input. It stops at NUL or any character
+in `str2color_lst`, initially `/,)}>`. Alphabetic tokens accumulate `TWO`
+and `HALF` flags or replace the current color. Matching uses the existing
+case-insensitive definition lookup, including unique abbreviations and
+ambiguous-prefix rejection. Numeric parsing delegates to `Str2I64` with
+radix 10, retaining its explicit radix-prefix behavior. Values from 0
+through 255 fit the color byte; 16 is the invalid sentinel. An invalid
+token or out-of-range number returns that sentinel and discards flags.
+The parser allocates and frees alphabetic tokens in the reference order.
+
+`Str2ColorU32` allocates a segment buffer for each non-null call and uses
+`StrFirstRem` to remove the first segment and delimiter from the caller's
+string. A single color leaves an empty string. Remaining text supplies
+the second color and enables dither; the second parser stops at its next
+delimiter. The reference never frees the segment buffer, including on
+failure, and the translation retains that allocation. A null input returns
+the invalid sentinel without allocating. This lifetime is intentional
+compatibility behavior, not ownership transferred to the caller.
+The allocation paths retain the reference's unchecked behavior; allocation
+exhaustion is outside the reproduced cases.
+
+The reference Sprite code uses these routines when formatting and parsing
+color elements and building its bitmap menu. Those callers still require
+translation; the common public-API fixture does not establish Sprite
+subsystem parity. Exact comparisons and their limits are recorded in
+[Boot.md](Boot.md#kernel-color-conversions). The color-name formatting
+error case also exposed the shared formatter's deferred missing-argument
+error. `CPrintArgs::Take` now raises immediately; a separate supplied-buffer
+fixture checks partial output, dynamic arguments, and exception restoration.
+`Compiler/AsmInit.cpp` also registers the existing `CatPrint` export with
+the reference's two `U8 *` fixed arguments, variadic caller cleanup, and
+`U8 *` result.
 
 ## Music playback
 
