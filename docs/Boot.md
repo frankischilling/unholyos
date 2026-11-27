@@ -3398,6 +3398,15 @@ one `UnholyOS: class record recovery checks 0x00000000000000ff` line after
 the source completion and before normal boot completion. This is a native
 recovery regression, separate from the common reference trace.
 
+The native startup verifier also walks each terminal's owned class table.
+It requires the 17 primitive names, six integer views, and 58 runtime
+classes, with no duplicates. Each class block must belong to that task's
+code heap and contain the four complete pointer companions. The 81 blocks
+charge 656 bytes each, so the terminal's code-heap used count must equal
+53,136 bytes. Names and tables remain data-owned; idle and window-manager
+tasks require empty code heaps. This checks the allocation change within
+the existing full pool-coverage and startup-stack verification.
+
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
 | Common `ClassRecordsProbe.HC` | 6,671 | `e46dd44b61de331da935f31b63cca61db427769e224392e2e5d27b8d152113f3` |

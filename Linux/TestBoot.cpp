@@ -1810,6 +1810,181 @@ static CTestHeap VerifyHeap(CMonitor &vm, uint64_t heap, uint64_t pool,
   return result;
 }
 
+static void VerifyTaskClassRecords(CMonitor &vm, uint64_t task,
+                                   uint64_t code_heap, uint64_t data_heap,
+                                   const CTestHeap &code, const CTestHeap &data,
+                                   uint64_t inherited_table, bool terminal)
+{
+  auto contains = [](const BlockRanges &ranges, uint64_t address,
+                     uint64_t bytes) {
+    return std::any_of(ranges.begin(), ranges.end(), [&](const auto &range) {
+      return address >= range.first && address <= range.second &&
+             bytes <= range.second - address;
+    });
+  };
+  auto allocation = [&](uint64_t address, uint64_t bytes, uint64_t owner,
+                        const BlockRanges &ranges) {
+    const auto size = CompilerAllocationSize(bytes);
+    Check(address >= 16 && contains(ranges, address - 16, size) &&
+              ReadPhysical<2>(vm, address - 16) ==
+                  std::array<uint64_t, 2>{owner, size},
+          "Startup class metadata has the wrong allocation or owner");
+  };
+  auto table_header = [&](uint64_t address) {
+    allocation(address, 32, data_heap, data.ranges);
+    const auto header = ReadPhysical<4>(vm, address);
+    Check(header[1] == 1023 && !header[2], "Invalid startup class hash table");
+    allocation(header[3], 1024 * 8, data_heap, data.ranges);
+    return header;
+  };
+  const auto table = table_header(ReadPhysical<1>(vm, task + 0x3D0)[0]);
+  if (!terminal) {
+    Check(table[0] == inherited_table && !code.used && !code.alloced,
+          "Nonterminal startup task allocated compiler class records");
+    return;
+  }
+  Check(table[0] != inherited_table,
+        "Startup terminal has no owned compiler class table");
+  const auto classes = table_header(table[0]);
+  Check(classes[0] == inherited_table,
+        "Startup class table inherited the wrong symbols");
+  constexpr std::string_view views[]{"U16", "I16", "U32", "I32", "U64", "I64"};
+  constexpr std::string_view records[]{"CCntsGlbls",
+                                       "CHash",
+                                       "CHashSrcSym",
+                                       "CHashDefineStr",
+                                       "CHashTable",
+                                       "CArrayDim",
+                                       "CMemberLstMeta",
+                                       "CMemberLst",
+                                       "CHashClass",
+                                       "CHashFun",
+                                       "CJob",
+                                       "CJobCtrl",
+                                       "CDoc",
+                                       "CDocEntry",
+                                       "CDocBin",
+                                       "CQue",
+                                       "CFifoU8",
+                                       "CFifoI64",
+                                       "CDate",
+                                       "CDateStruct",
+                                       "CBinFile",
+                                       "CDirEntry",
+                                       "CDirContext",
+                                       "CDrv",
+                                       "CBlkDev",
+                                       "CFile",
+                                       "CBlkDevGlbls",
+                                       "CExcept",
+                                       "CHeapCtrl",
+                                       "CKbdStateGlbls",
+                                       "CTextGlbls",
+                                       "CD3I64",
+                                       "CD3",
+                                       "CMsStateGlbls",
+                                       "CMsHardStateGlbls",
+                                       "CGridGlbls",
+                                       "CBGR48",
+                                       "CColorROPU16",
+                                       "CColorROPU32",
+                                       "CD3I32",
+                                       "CGrSym",
+                                       "CDC",
+                                       "CGrGlbls",
+                                       "CWinMgrGlbls",
+                                       "CAUData",
+                                       "CSndData",
+                                       "CScrnCastGlbls",
+                                       "CMusicGlbls",
+                                       "CTaskSettings",
+                                       "CMenuEntry",
+                                       "CMenu",
+                                       "CCtrl",
+                                       "CWinScroll",
+                                       "CViewAngles",
+                                       "CCPU",
+                                       "CTaskDying",
+                                       "CTSS",
+                                       "CTask"};
+  constexpr size_t class_count = std::size(compiler_internal_types) +
+                                 std::size(views) + std::size(records);
+  static_assert(class_count == 81);
+  std::map<std::string, uint32_t> expected;
+  for (const auto &type : compiler_internal_types)
+    expected.emplace(type.name, 0x20);
+  for (auto name : views)
+    expected.emplace(name, 0x10);
+  for (auto name : records)
+    expected.emplace(name, 0x01000010);
+  std::set<uint64_t> seen;
+  uint64_t used = 0;
+  for (uint64_t bucket = 0; bucket < 1024; bucket += 64) {
+    const auto entries = ReadPhysical<64>(vm, classes[3] + bucket * 8);
+    for (size_t i = 0; i < entries.size(); ++i)
+      for (auto address = entries[i]; address;) {
+        Check(seen.size() < 1024 && seen.insert(address).second &&
+                  (contains(code.ranges, address, 24) ||
+                   contains(data.ranges, address, 24)),
+              "Invalid or repeated startup class hash entry");
+        const auto entry = ReadPhysical<3>(vm, address);
+        const auto type = uint32_t(entry[2]);
+        if ((type & 0x1FFFF) == 0x10 || (type & 0x1FFFF) == 0x20) {
+          allocation(address, 5 * 128, code_heap, code.ranges);
+          Check(entry[1] >= 16 && contains(data.ranges, entry[1] - 16, 16),
+                "Startup class name is outside its data heap");
+          const auto name_header = ReadPhysical<2>(vm, entry[1] - 16);
+          Check(name_header[0] == data_heap && name_header[1] >= 24 &&
+                    name_header[1] <= 64 && !(name_header[1] & 7) &&
+                    contains(data.ranges, entry[1] - 16, name_header[1]),
+                "Invalid startup class name allocation");
+          std::string name;
+          bool ended = false;
+          for (uint64_t offset = 0; offset < name_header[1] - 16 && !ended;
+               offset += 8) {
+            auto word = ReadPhysical<1>(vm, entry[1] + offset)[0];
+            for (unsigned byte = 0; byte < 8; ++byte, word >>= 8) {
+              if (!(word & 255)) {
+                ended = true;
+                break;
+              }
+              name.push_back(char(word));
+            }
+          }
+          const auto found = expected.find(name);
+          Check(ended && found != expected.end() && found->second == type &&
+                    CompilerAllocationSize(name.size() + 1) == name_header[1],
+                "Unexpected, duplicated or mistyped startup class name");
+          uint64_t hash = 0;
+          for (unsigned char ch : name)
+            hash = std::rotl(hash, 1) + ch;
+          hash += (hash >> 16) + ((hash >> 15) & 1);
+          Check((hash & 1023) == bucket + i,
+                "Startup class is in the wrong hash bucket");
+          const auto block = ReadPhysical<80>(vm, address);
+          Check(((block[10] >> 32) & 255) == 0,
+                "Startup class base has pointer stars");
+          for (uint64_t stars = 1; stars <= 4; ++stars) {
+            std::array<uint64_t, 16> companion{};
+            companion[2] = 0x10;
+            companion[8] = 8;
+            companion[10] = (stars << 32) | (10ULL << 40);
+            Check(std::equal(companion.begin(), companion.end(),
+                             block.begin() + stars * 16),
+                  "Startup class pointer companion differs");
+          }
+          expected.erase(found);
+          used += CompilerAllocationSize(5 * 128);
+        }
+        address = entry[0];
+      }
+  }
+  Check(expected.empty() && used == class_count * 656 && code.used == used,
+        "Startup terminal code usage differs from its owned class records");
+  std::cout << "Verified startup class records " << class_count
+            << ", code heap bytes " << used << '\n';
+}
+
 static void VerifyCoverage(BlockRanges blocks, const BlockRanges &ranges)
 {
   std::sort(blocks.begin(), blocks.end());
@@ -2062,9 +2237,12 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
     if (pool) {
       auto data_hc = ReadPhysical<2>(vm, heaps[1] - 16);
       auto task_data = VerifyHeap(vm, heaps[1], pool, task);
-      Check(!task_code.alloced && data_hc[0] == expected_data_hc &&
+      Check(data_hc[0] == expected_data_hc &&
                 task_data.alloced > 256 * 1024,
             "Invalid startup task data heap usage");
+      VerifyTaskClassRecords(vm, task, heaps[0], heaps[1], task_code, task_data,
+                             ReadPhysical<1>(vm, adam + 0x3D0)[0],
+                             task == left || task == right);
       data_used += code_hc[1] + data_hc[1];
       data_alloced += task_data.alloced;
       data_used_ranges.insert(data_used_ranges.end(), task_data.ranges.begin(),
