@@ -134,3 +134,4 @@ Linux/Fixtures/MulByHand.HC -text whitespace=cr-at-eol,-blank-at-eof
 Linux/Fixtures/PutDec.HC -text whitespace=cr-at-eol
 Linux/Fixtures/AsmBuild.HC text eol=lf
 Linux/Fixtures/AsmProbe.HC text eol=lf
+Linux/Fixtures/FloatScanProbe.HC text eol=lf

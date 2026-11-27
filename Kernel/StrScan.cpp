@@ -63,50 +63,85 @@ extern "C" uint64_t Str2F64Cpp(const char *src, const char **end)
       *end = nullptr;
     return 0;
   }
-  while (char_bmp_white_space[uint8_t(*src) / 32] &
-         (uint32_t{1} << (uint8_t(*src) % 32)))
-    src++;
-  bool neg = *src == '-';
-  if (neg)
-    src++;
-  uint64_t result;
-  if (src[0] == 'i' && src[1] == 'n' && src[2] == 'f') {
-    result = 0x7FF0000000000000;
-    src += 3;
-  } else if (uint8_t(*src) == 0xEC) {
-    result = 0x7FF0000000000000;
-    src++;
-  } else {
-    uint64_t i = 0;
-    int64_t k = 0, j = 0;
-    while ('0' <= *src && *src <= '9')
-      i = i * 10 + *src++ - '0';
-    if (*src == '.') {
-      src++;
-      while ('0' <= *src && *src <= '9') {
-        i = i * 10 + *src++ - '0';
-        if (k < 1000000)
-          k++;
-      }
-    }
-    if (*src == 'e' || *src == 'E') {
-      src++;
-      bool neg_e = *src == '-';
-      if (neg_e)
-        src++;
-      while ('0' <= *src && *src <= '9') {
-        if (j < 1000000)
-          j = j * 10 + *src - '0';
-        src++;
-      }
-      if (neg_e)
-        j = -j;
-    }
-    result = F64MulBits(F64FromI64(int64_t(i)), Pow10I64Cpp(j - k));
+  // HolyC I64 accumulators wrap in both the significand and exponent loops.
+  uint64_t i, j, k, d;
+  uint8_t ch;
+  bool neg = false, neg_e = false;
+  auto scale = [](uint64_t value, uint64_t exponent) {
+    uint64_t power = Pow10I64Cpp(static_cast<int64_t>(exponent)), result;
+    // Str2F64 keeps the signed integer exact in x87 until the final F64 store.
+    asm volatile("fildq %1; fmull %2; fstpl %0"
+                 : "=m"(result)
+                 : "m"(value), "m"(power));
+    return result;
+  };
+
+  ch = *src++;
+  while (char_bmp_white_space[ch / 32] & (uint32_t{1} << (ch % 32)))
+    ch = *src++;
+  if (ch == '-') {
+    neg = true;
+    ch = *src++;
   }
+  if (src[-1] == 'i' && src[0] == 'n' && src[1] == 'f') {
+    d = 0x7FF0000000000000;
+    src += 3;
+    goto a2f_end;
+  }
+  if (uint8_t(*src) == 0xEC) {
+    d = 0x7FF0000000000000;
+    src++;
+    goto a2f_end;
+  }
+  i = 0;
+  while (true) {
+    if (char_bmp_dec_numeric[ch / 32] & (uint32_t{1} << (ch % 32)))
+      i = i * 10 + ch - '0';
+    else {
+      if (ch == '.' || ch == 'e' || ch == 'E')
+        break;
+      d = F64FromI64(static_cast<int64_t>(i));
+      goto a2f_end;
+    }
+    ch = *src++;
+  }
+  if (ch == '.')
+    ch = *src++;
+  k = 0;
+  while (true) {
+    if (char_bmp_dec_numeric[ch / 32] & (uint32_t{1} << (ch % 32))) {
+      i = i * 10 + ch - '0';
+      k++;
+    } else {
+      if (ch == 'e' || ch == 'E')
+        break;
+      d = scale(i, 0 - k);
+      goto a2f_end;
+    }
+    ch = *src++;
+  }
+  ch = *src++;
+  if (ch == '-') {
+    neg_e = true;
+    ch = *src++;
+  }
+  j = 0;
+  while (true) {
+    if (char_bmp_dec_numeric[ch / 32] & (uint32_t{1} << (ch % 32)))
+      j = j * 10 + ch - '0';
+    else {
+      if (neg_e)
+        d = scale(i, 0 - j - k);
+      else
+        d = scale(i, j - k);
+      goto a2f_end;
+    }
+    ch = *src++;
+  }
+a2f_end:
   if (end)
-    *end = src;
-  return result ^ (neg ? uint64_t{1} << 63 : 0);
+    *end = src - 1;
+  return d ^ (neg ? uint64_t{1} << 63 : 0);
 }
 
 extern "C" uint64_t Str2DateCpp(const char *_src)
