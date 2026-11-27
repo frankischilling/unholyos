@@ -1337,8 +1337,8 @@ constexpr int64_t SUF_REM_CTRL_CHARS = 0x001, SUF_REM_LEADING = 0x002,
                   SUF_SCALE_INDENT = 0x200, SUF_SAFE_DOLLAR = 0x400;
 constexpr int64_t SFF_IGNORE_CASE = 1, SFF_WHOLE_LABELS_BEFORE = 2,
                   SFF_WHOLE_LABELS_AFTER = 4,
-                  SFG_WHOLE_LABELS = SFF_WHOLE_LABELS_BEFORE |
-                                     SFF_WHOLE_LABELS_AFTER;
+                  SFG_WHOLE_LABELS =
+                      SFF_WHOLE_LABELS_BEFORE | SFF_WHOLE_LABELS_AFTER;
 
 template <typename T> struct CFifo
 {

@@ -869,11 +869,53 @@ static CHashClass *CmpExceptData(CHashTable *table)
   return cls;
 }
 
+static CHashClass *CmpHeapData(CHashTable *table, CHashClass *task)
+{
+  auto *cls = CmpKernelClass(table, "CHeapCtrl", sizeof(CHeapCtrl));
+  if (!cls)
+    return nullptr;
+  auto *heap = CurrentTask()->data_heap;
+  auto *u32 = FindType("U32", table);
+  auto *i64 = FindType("I64", table);
+  static_assert(sizeof(CHeapCtrl) == 0x460 &&
+                offsetof(CHeapCtrl, hc_signature) == 8 &&
+                offsetof(CHeapCtrl, locked_flags) == 0x10 &&
+                offsetof(CHeapCtrl, alloced_u8s) == 0x18 &&
+                offsetof(CHeapCtrl, used_u8s) == 0x20 &&
+                offsetof(CHeapCtrl, mem_task) == 0x28);
+  const struct
+  {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+  } members[]{
+      {"hc_signature", u32, offsetof(CHeapCtrl, hc_signature)},
+      {"pad", u32, offsetof(CHeapCtrl, pad)},
+      {"locked_flags", i64, offsetof(CHeapCtrl, locked_flags)},
+      {"alloced_u8s", i64, offsetof(CHeapCtrl, alloced_u8s)},
+      {"used_u8s", i64, offsetof(CHeapCtrl, used_u8s)},
+      {"mem_task", task + 1, offsetof(CHeapCtrl, mem_task)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    if (!name || !MemberAdd(*cls, name, *member.type, member.offset)) {
+      Free(name);
+      return nullptr;
+    }
+  }
+  return cls;
+}
+
 static bool CmpTaskData(CHashTable *table, CHashClass *cls)
 {
   auto *except = CmpExceptData(table);
   if (!except)
     return false;
+  auto *hc = CmpHeapData(table, cls);
+  if (!hc)
+    return false;
+  static_assert(offsetof(CTask, code_heap) == 0x20 &&
+                offsetof(CTask, data_heap) == 0x28);
   auto *heap = CurrentTask()->data_heap;
   auto *u32 = FindType("U32", table);
   auto *i64 = FindType("I64", table);
@@ -902,6 +944,8 @@ static bool CmpTaskData(CHashTable *table, CHashClass *cls)
       {"wake_jiffy", i64, offsetof(CTask, wake_jiffy)},
       {"task_flags", u32, offsetof(CTask, task_flags)},
       {"display_flags", u32, offsetof(CTask, display_flags)},
+      {"code_heap", hc + 1, offsetof(CTask, code_heap)},
+      {"data_heap", hc + 1, offsetof(CTask, data_heap)},
       {"text_attr", u8, offsetof(CTask, text_attr)},
       {"border_attr", u8, offsetof(CTask, border_attr)},
       {"border_src", u8, offsetof(CTask, border_src)},
@@ -2036,6 +2080,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"BreakUnlock", Bool, FF_RET1, {{"task", TaskPtr, true}}},
       {"YorN", Bool, FF_RET1, {}},
       {"Free", U0, FF_RET1, {{"addr", U8Ptr}}, "_FREE"},
+      {"MSize", I64, FF_RET1, {{"src", U8Ptr}}, "_MSIZE"},
+      {"MSize2", I64, FF_RET1, {{"src", U8Ptr}}, "_MSIZE2"},
       {"HashFind", HashPtr, FF_RET1,
        {{"needle_str", U8Ptr}, {"haystack_table", HashTablePtr}, {"mask", I64},
         {"instance", I64, true, 1}}, "_HASH_FIND"},
@@ -2926,6 +2972,7 @@ static bool CmpFillHash(CHashTable *table)
       {"DOCT_DATA", "30"}, {"DOCT_CHECK_BOX", "31"}, {"DOCT_LST", "32"},
       {"DOCT_TREE", "36"},
       {"DOCEF_TAG", "1"}, {"DOCEF_AUX_STR", "4"}, {"DOCEF_DEFINE", "8"},
+      {"DOCEF_CHECKED_COLLAPSED", "(1<<43)"},
       {"DOCEF_REFRESH_DATA", "(1<<45)"}, {"DOCEF_UPDATE_DATA", "(1<<46)"},
       {"DOCEF_DEREF_DATA", "(1<<47)"}, {"DOCEF_HAS_TERMINATOR", "(1<<49)"},
       {"DOCEF_REMALLOC_DATA", "(1<<48)"}, {"DOCEF_LST", "(1<<53)"},

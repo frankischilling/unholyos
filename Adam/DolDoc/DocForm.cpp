@@ -188,10 +188,9 @@ void DocDataFmt(CDoc &doc, CDocEntry &entry, int64_t d)
 bool DocDataScan(CDoc &doc, CDocEntry &entry)
 {
   auto &base = entry.base;
-  if (!base.tag ||
-      (base.Type() != DOCT_CHECK_BOX && !(base.de_flags & DOCEF_LST) &&
-       (base.Type() != DOCT_DATA || !(base.de_flags & DOCEF_AUX_STR) ||
-        !entry.aux_str)))
+  if (base.Type() != DOCT_CHECK_BOX && !(base.de_flags & DOCEF_LST) &&
+      (base.Type() != DOCT_DATA || !(base.de_flags & DOCEF_AUX_STR) ||
+       !entry.aux_str))
     return false;
   uint8_t *ptr;
   size_t size;
@@ -199,6 +198,8 @@ bool DocDataScan(CDoc &doc, CDocEntry &entry)
     return false;
   uint64_t value = 0;
   if (base.Type() == DOCT_DATA) {
+    if (!base.tag)
+      return false;
     size_t len = StrLen(base.tag);
     bool terminator = base.de_flags & DOCEF_HAS_TERMINATOR;
     if (terminator) {
@@ -235,8 +236,10 @@ bool DocDataScan(CDoc &doc, CDocEntry &entry)
       return true;
     }
   } else if (base.de_flags & DOCEF_LST) {
-    auto *list = DataList(doc, entry);
-    if ((base.de_flags & DOCEF_DEFINE) && list) {
+    auto *list = base.tag && (base.de_flags & DOCEF_DEFINE)
+                     ? DataList(doc, entry)
+                     : nullptr;
+    if (list) {
       auto *label = StrNew(base.tag, CurrentTask()->data_heap);
       if (!label)
         RaiseHolyC(0x6D654D74754FULL); // OutMem

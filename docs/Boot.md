@@ -1912,6 +1912,89 @@ This evidence covers the listed values and default x87 environment;
 zero-divisor faults, signed division overflow, and unmasked floating-point
 exceptions are not part of the comparison.
 
+## String scanning and transformations
+
+Five separate HolyC fixtures exercise the translated routines in
+`Kernel/StrA.cpp`, `StrB.cpp`, and `StrScan.cpp`, the original comparison
+entry in `StrA.asm`, and `DocDataScan` in `Adam/DolDoc/DocForm.cpp`.
+The native guest executes each source, compiles it with `Cmp`, and loads
+the resulting TOSB module. All ten native traces match the corresponding
+fresh TempleOS trace byte for byte: 71 lines for source execution and
+the same 71 lines for module execution.
+
+| Fixture | Compared output | Covered behavior |
+| --- | --- | --- |
+| `StrScanProbe.HC` | 14 lines; `StrScan probe 7FFF` | Integer, float, date, string, character, list, and define conversions; fixed and runtime widths; precision quirks; pointer advancement; narrow stores; 16 caught errors; indirect variadic calls |
+| `DocScanProbe.HC` | 1 line; `DocScan probe 3FFF` | Adjacent-byte preservation, list and define fields, floating fields, string pointers, reallocation and `MSize`, terminator restoration, exception propagation, and lists and checkboxes with null tags |
+| `StringUtilitiesProbe.HC` | 5 lines; `String utilities 7FF` | All 2,048 flag combinations on two `StrUtil` inputs and one `MStrUtil` input; 400 space/tab cases; 40 growing tab expansions; 120 indentation cases; marker removal, label boundaries, indirect calls, and heap accounting |
+| `FloatScanProbe.HC` | 44 data lines and `FS DONE` | Binary64 results and end-pointer offsets for whitespace, signs, decimal fractions, infinity lookahead, signed zero, overflowing integers and exponents, and x87 rounding |
+| `DateScanProbe.HC` | 6 lines; `Date scan 3F` | Leap-year boundaries, whitespace and case normalization, suffix arithmetic, positive and negative local-time offsets, and a clock-bracketed relative-date expression |
+
+Fixture SHA-256 values are:
+
+| Fixture | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `StrScanProbe.HC` | 4,447 | `c6812ec950717996dc340a378e3c8ea4a56b1f311e13bc4b1948bc218496583c` |
+| `DocScanProbe.HC` | 3,153 | `4f403181c729562466686ac95d5a725e70b48ceb5889737c995169bf34d0f961` |
+| `StringUtilitiesProbe.HC` | 2,902 | `d9fb57d7fb909f358479fbbda0aad74b6858c0473db96f968ffdfca93781e0e7` |
+| `FloatScanProbe.HC` | 1,762 | `0f8baca7578760e49afe0e04e17c5c70e5d6f1bb98f4c586257030fdcb808458` |
+| `DateScanProbe.HC` | 2,261 | `6a9a07286117eb7962670dddaa7f005a08a4c39bf686fd54806f143523e6c8bd` |
+
+The five complete reference traces, including their final newline, have
+these SHA-256 values:
+
+| Trace | Bytes | SHA-256 |
+| --- | ---: | --- |
+| String scanner | 466 | `d43947b011d53ed71e4b772567edac217f8533a1f15e4cd00935dd297c2443a3` |
+| Document scanner | 19 | `9b7a0c9eb5cf80c0e330572a2cfbde72dceb2aa18756da611769848961e99352` |
+| String utilities | 181 | `35b88b4e06d9c55524d7227da96e3dd6afb8623296f77a5f1a1cec0fd0a0b3da` |
+| Floating scanner | 1,204 | `d3ca3067b33c56ab8f5a2678852aa0c710fb0633435a5ee5c5500163dcd47048` |
+| Date scanner | 348 | `63501b6560dfd85b726a9287c1606c58a93e5f1ca6796f3272fc0b8843a8624f` |
+
+`Linux/TestStrings.hpp` contains the full expected traces. Native
+exception diagnostics include task-dependent caller addresses. The
+driver validates their exact tag, count, order, and address format before
+removing those diagnostic lines from the comparison; the original serial
+log is retained. The undefined-define error text remains in the compared
+output. The reference driver checks the source and its terminating NUL
+after upload, captures the text cells and screenshot, and requires a
+return to the empty terminal prompt. Only blank lines and the reference
+elapsed-time line may appear after a fixture's final marker.
+
+The floating comparison exposed 15 differing cases in the previous
+native converter: six infinity-lookahead/end-pointer cases, five
+overflowing-exponent cases, and four cases requiring the signed integer
+to remain exact in x87 until after decimal scaling. For example,
+`9007199254740993e-1` produces `0x430999999999999B`; rounding the integer
+to binary64 before multiplication instead produces
+`0x430999999999999A`. The revised converter matches all 44 cases.
+
+Rebuild and compare the focused image from the repository root:
+
+```sh
+make -j6 build/strings-test.iso build/Linux/TestBoot
+build/Linux/TestBoot --strings qemu-system-x86_64 \
+  build/strings-test.iso build/strings-native
+build/Linux/TestBoot --strings-reference qemu-system-x86_64 \
+  /path/to/TOS_Distro.ISO build/strings-reference
+```
+
+Both guests use QEMU 8.2.2, `pc`, `qemu64`, one CPU, 512 MiB, and a clean
+CD boot. The QEMU arguments are `-machine pc -cpu qemu64 -m 512 -boot d
+-cdrom <image.iso> -display none -monitor none -serial file:<serial.log>
+-qmp stdio -no-reboot`. The reference also uses
+`-debugcon file:<debugcon.bin> -gdb tcp:127.0.0.1:45362` for the fixture
+transfer. Its `TOS_Distro.ISO` SHA-256 is
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+The source comparison uses the separate, clean checkout at
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`.
+
+The startup and guest-built ISO tests enforce the same source and module
+traces. The fixture comparison covers the listed inputs under the
+default x87 environment. Allocation exhaustion, invalid pointers,
+malformed widths, nonfinite indentation factors, altered x87 exception
+masks, and complete editor behavior remain outside this evidence.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

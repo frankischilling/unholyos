@@ -3,7 +3,8 @@
 extern "C" char *Tabs2SpacesCpp(const char *src)
 {
   int64_t ch, i, j, l = (StrLen(src) << 1) + 2, col = 0;
-  char *dst = reinterpret_cast<char *>(MAlloc(l, CurrentTask()->data_heap)), *tmp;
+  char *dst = reinterpret_cast<char *>(MAlloc(l, CurrentTask()->data_heap)),
+       *tmp;
   if (!dst)
     RaiseHolyC(0x6D654D74754FULL);
   while ((ch = uint8_t(*src++))) {
@@ -12,7 +13,8 @@ extern "C" char *Tabs2SpacesCpp(const char *src)
       for (i = col; i < j; i++) {
         dst[i] = ' ';
         if (i >= l - 2) {
-          tmp = reinterpret_cast<char *>(MAlloc(l << 1, CurrentTask()->data_heap));
+          tmp = reinterpret_cast<char *>(
+              MAlloc(l << 1, CurrentTask()->data_heap));
           if (!tmp)
             RaiseHolyC(0x6D654D74754FULL);
           MemCpy(tmp, dst, i + 1);
@@ -25,7 +27,8 @@ extern "C" char *Tabs2SpacesCpp(const char *src)
     } else {
       dst[col] = ch;
       if (col >= l - 2) {
-        tmp = reinterpret_cast<char *>(MAlloc(l << 1, CurrentTask()->data_heap));
+        tmp =
+            reinterpret_cast<char *>(MAlloc(l << 1, CurrentTask()->data_heap));
         if (!tmp)
           RaiseHolyC(0x6D654D74754FULL);
         MemCpy(tmp, dst, col + 1);

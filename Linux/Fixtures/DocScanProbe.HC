@@ -9,7 +9,7 @@ U0 DocScanProbe()
 {
   I64 res=0,value=0,error=0;
   F64 real=0;
-  U8 dest[32],*out=dest,*list="red\0@rouge\0green\0gray\0";
+  U8 dest[32],*out=dest,*list="red\0@rouge\0green\0gray\0",*tag;
   CDoc *doc=DocNew;
   CDocEntry *e=CAlloc(sizeof(CDocEntry));
   DocScanSmall small;
@@ -112,6 +112,26 @@ U0 DocScanProbe()
   }
   if (error=='Scan' && !(doc->locked_flags&1))
     res|=1024;
+  tag=e->tag;
+  e->tag=NULL;
+  e->de_flags=DOCEF_DEFINE|DOCEF_LST|DOCEF_DEREF_DATA;
+  e->type_u8=DOCT_LST;
+  value=123;
+  DocDataScan(doc,e);
+  if (!value)
+    res|=2048;
+  e->type_u8=DOCT_CHECK_BOX;
+  e->de_flags=DOCEF_DEREF_DATA|DOCEF_CHECKED_COLLAPSED;
+  value=123;
+  DocDataScan(doc,e);
+  if (value==1)
+    res|=4096;
+  e->de_flags=DOCEF_DEREF_DATA;
+  value=123;
+  DocDataScan(doc,e);
+  if (!value)
+    res|=8192;
+  e->tag=tag;
   Free(e->tag);
   Free(e);
   DocDel(doc);

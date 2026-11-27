@@ -16,9 +16,13 @@ U0 StringUtilitiesProbe()
   I64 i,j,k,res=0,changed;
   U64 h=14695981039346656037,t=h,u=h,v=h,used;
   U8 all[256],a[512],b[512],*p,*q;
-  F64 factors[6]={0.0,0.5,1.5,2.0,0.25,0.75};
-  U8 *(*find)(U8 *needle,U8 *haystack,I64 flags)=&StrFind;
-  U8 *(*alloc)(U8 *src,I64 flags,F64 scale)=&MStrUtil;
+  F64 factors[6];
+  U8 *(*find)(U8 *needle,U8 *haystack,I64 flags);
+  U8 *(*alloc)(U8 *src,I64 flags,F64 scale);
+  find=&StrFind;
+  alloc=&MStrUtil;
+  factors[0]=0.0; factors[1]=0.5; factors[2]=1.5;
+  factors[3]=2.0; factors[4]=0.25; factors[5]=0.75;
   for (i=0;i<255;i++) all[i]=i+1;
   all[255]=0;
   for (i=0;i<2048;i++) {
