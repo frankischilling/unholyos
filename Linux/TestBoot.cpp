@@ -410,12 +410,13 @@ static Bytes VerifyCompilerMedia(const Bytes &disc, uint64_t root,
       Check(record.type == 16 && export_names.insert(record.name).second,
             "Compiler exports must be unique and relative");
     }
-  Check(native_imports == 48 && data_imports == 34 &&
+  Check(native_imports == 49 && data_imports == 34 &&
             import_names.contains("god") &&
             import_names.contains("__unholyos_sysv.AdamErrCpp") &&
             import_names.contains("__unholyos_sysv.DefineLstLoadCpp") &&
             import_names.contains("__unholyos_sysv.FixSetCpp") &&
             import_names.contains("__unholyos_sysv.IsRawCpp") &&
+            import_names.contains("__unholyos_sysv.MSize") &&
             import_names.contains("__unholyos_sysv.PutFileLinkCpp") &&
             import_names.contains("char_bmp_displayable") &&
             !import_names.contains("__unholyos_sysv.F64PowerBits"),
