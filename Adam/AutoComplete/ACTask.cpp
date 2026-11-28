@@ -227,10 +227,9 @@ extern "C" void ACTaskCpp()
 
   int64_t scan_code = 0, last_scan_code = 0;
   for (;;) {
-    auto last_event = ms_hard.timestamp > kbd.timestamp ? ms_hard.timestamp
-                                                       : kbd.new_key_timestamp;
     if ((scan_code & (SCF_CTRL | SCF_ALT)) ||
-        GetTSC() > uint64_t(last_event) + (uint64_t(cnts.time_stamp_freq) >> 1)) {
+        GetTSC() > uint64_t(KbdMsEvtTimeCpp()) +
+                       (uint64_t(cnts.time_stamp_freq) >> 1)) {
       last_scan_code = scan_code;
       scan_code = kbd.scan_code;
     }

@@ -42,6 +42,30 @@ U0 KeyMapProbeReader(I64 unused)
     keymap_probe_remote=1;
 }
 
+Bool KeyMapProbeTimestamp()
+{
+  I64 mouse,key,new_key;
+  Bool result;
+  PUSHFD
+  CLI
+  mouse=ms_hard.timestamp;
+  key=kbd.timestamp;
+  new_key=kbd.new_key_timestamp;
+  kbd.timestamp=20;
+  kbd.new_key_timestamp=10;
+  ms_hard.timestamp=21;
+  result=KbdMsEvtTime==21;
+  ms_hard.timestamp=20;
+  result=result && KbdMsEvtTime==10;
+  ms_hard.timestamp=19;
+  result=result && KbdMsEvtTime==10;
+  ms_hard.timestamp=mouse;
+  kbd.timestamp=key;
+  kbd.new_key_timestamp=new_key;
+  POPFD
+  return result;
+}
+
 U0 KeyMapProbe()
 {
   I64 i,bits=0,priority=0x20000000;
@@ -86,6 +110,8 @@ U0 KeyMapProbe()
     if (TaskValidate(reader))
       Kill(reader);
   }
+  if (KeyMapProbeTimestamp)
+    bits|=128;
   CtrlAltCBSet('Q',NULL);
   KeyDevRem(entry);
   DocBottom;

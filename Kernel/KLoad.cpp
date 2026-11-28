@@ -197,6 +197,7 @@ void PostMsgHC(),PostMsgWaitHC(),MsgHC(),JobsHndlrHC();
 void SrvTaskContHC(),ScanMsgHC(),FlushMsgsHC(),GetMsgHC();
 void InputFilterTaskHC();
 void Char2ScanCodeHC(),ScanCode2CharHC(),KbdTypeMaticHC(),PutKeyHC();
+void KbdMsEvtTimeHC();
 void KeyDescSetHC(),KeyDevAddHC(),KeyDevRemHC(),CtrlAltCBSetHC();
 void GridInitHC(),MsSetHC();
 void GrPaletteColorSetHC(),GrPaletteColorGetHC();
@@ -1305,6 +1306,7 @@ bool LoadKernel(CTask &task)
       {"Char2ScanCode", reinterpret_cast<uintptr_t>(Char2ScanCodeHC)},
       {"ScanCode2Char", reinterpret_cast<uintptr_t>(ScanCode2CharHC)},
       {"KbdTypeMatic", reinterpret_cast<uintptr_t>(KbdTypeMaticHC)},
+      {"KbdMsEvtTime", reinterpret_cast<uintptr_t>(KbdMsEvtTimeHC)},
       {"GridInit", reinterpret_cast<uintptr_t>(GridInitHC)},
       {"MsSet", reinterpret_cast<uintptr_t>(MsSetHC)},
       {"GrPaletteColorSet", reinterpret_cast<uintptr_t>(GrPaletteColorSetHC)},

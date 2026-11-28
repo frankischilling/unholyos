@@ -2868,6 +2868,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Char2ScanCode", I64, FF_RET1, {{"ch", I64}, {"sc_flags", I64, true}}},
       {"ScanCode2Char", U8, FF_RET1, {{"sc", I64}}},
       {"KbdTypeMatic", U0, FF_RET1, {{"delay", U8}}},
+      {"KbdMsEvtTime", I64, FF_RET1, {}},
       {"GridInit", U0, FF_RET1, {}},
       {"CPURep", U0, FF_RET1, {{"full", Bool, true}}},
       {"PCIRep", U0, FF_RET1, {}},

@@ -4545,8 +4545,9 @@ build/Linux/TestBoot --file-editor-reference qemu-system-x86_64 \
 character and string interception, and description queries against the
 editor and a separate task. It invokes a Ctrl-Alt-Q handler through the
 PS/2 keyboard, then checks the generated map for the guest hook and
-Ctrl-Alt descriptions. GCC, Clang, and pinned TempleOS report
-`Key map probe 7F`.
+Ctrl-Alt descriptions. The probe also checks `KbdMsEvtTime` with newer,
+equal, and older mouse timestamps while interrupts are disabled.
+GCC, Clang, and pinned TempleOS report `Key map probe FF`.
 
 ```sh
 make -j4 test-key-map

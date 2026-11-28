@@ -189,7 +189,7 @@ GLOBAL TaskMsgHC,JobResScanHC,JobResGetHC,TaskWaitHC
 GLOBAL PostMsgHC,PostMsgWaitHC,MsgHC,JobsHndlrHC
 GLOBAL SrvTaskContHC,ScanMsgHC,FlushMsgsHC,GetMsgHC
 GLOBAL InputFilterTaskHC
-GLOBAL Char2ScanCodeHC,ScanCode2CharHC,KbdTypeMaticHC,PutKeyHC
+GLOBAL Char2ScanCodeHC,ScanCode2CharHC,KbdTypeMaticHC,PutKeyHC,KbdMsEvtTimeHC
 GLOBAL KeyDescSetHC,KeyDevAddHC,KeyDevRemHC
 GLOBAL CtrlAltCBSetHC,CtrlAltCHC,CtrlAltFHC,CtrlAltZHC
 GLOBAL KDInputFilterPutKeyHC,KDInputFilterPutSHC,KDRawPutKeyHC,KDRawPutSHC
@@ -254,7 +254,7 @@ EXTERN PostMsgCpp,PostMsgWaitCpp,MsgCpp,JobsHndlrCpp
 EXTERN SrvTaskContCpp,ScanMsgCpp,FlushMsgsCpp,GetMsgCpp
 EXTERN PopUpCpp,PopUpPrintCpp,SrvCmdLineCpp,OneTimePopUpCpp,RegOneTimePopUpCpp
 EXTERN InputFilterTaskCpp
-EXTERN Char2ScanCodeCpp,ScanCode2CharCpp,KbdTypeMaticCpp,PutKeyCpp
+EXTERN Char2ScanCodeCpp,ScanCode2CharCpp,KbdTypeMaticCpp,PutKeyCpp,KbdMsEvtTimeCpp
 EXTERN KeyDescSetCpp,KeyDevAddCpp,KeyDevRemCpp
 EXTERN CtrlAltCBSetCpp,CtrlAltCCpp,CtrlAltFCpp,CtrlAltZCpp
 EXTERN KDInputFilterPutKeyCpp,KDInputFilterPutSCpp,KDRawPutKeyCpp,KDRawPutSCpp
@@ -512,6 +512,7 @@ HOLYC_CPP InputFilterTaskHC,InputFilterTaskCpp,0
 HOLYC_CPP Char2ScanCodeHC,Char2ScanCodeCpp,2
 HOLYC_CPP ScanCode2CharHC,ScanCode2CharCpp,1,1
 HOLYC_CPP KbdTypeMaticHC,KbdTypeMaticCpp,1
+HOLYC_CPP KbdMsEvtTimeHC,KbdMsEvtTimeCpp,0
 HOLYC_CPP GridInitHC,GridInitCpp,0
 HOLYC_CPP MsSetHC,MsSetCpp,5
 HOLYC_CPP GrPaletteColorSetHC,GrPaletteColorSetCpp,2

@@ -116,8 +116,8 @@ constexpr CTextProbe file_editor_probes[]{
     {"file-editor", "/FileEditorProbe.HC", "",
      "File editor ", "File editor 1FF", "File editor 1FF\n", {}, true}};
 constexpr CTextProbe key_map_probes[]{
-    {"key-map", "/KeyMapProbe.HC", "", "Key map probe ", "Key map probe 7F",
-     "Key map probe 7F\n", {}, true}};
+    {"key-map", "/KeyMapProbe.HC", "", "Key map probe ", "Key map probe FF",
+     "Key map probe FF\n", {}, true}};
 constexpr CTextProbe dictionary_probes[]{
     {"dictionary", "/DictionaryProbe.HC", "", "Dictionary probe ",
      "Dictionary probe 3F", "Dictionary probe 3F\n", {}, true}};

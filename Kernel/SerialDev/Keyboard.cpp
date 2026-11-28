@@ -431,6 +431,13 @@ static void KbdMsgsQue()
   }
 }
 
+extern "C" int64_t KbdMsEvtTimeCpp()
+{
+  if (ms_hard.timestamp > kbd.timestamp)
+    return ms_hard.timestamp;
+  return kbd.new_key_timestamp;
+}
+
 extern "C" void KbdMsService()
 {
   if (!kbd.fifo2)

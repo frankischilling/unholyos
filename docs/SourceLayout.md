@@ -513,6 +513,12 @@ and the declarations from `KernelC.HH`; the HolyC stack adapters in
 `Kernel/KUtils.asm` are published by `Kernel/KLoad.cpp`.
 The keyboard and mouse records expose their FIFO pointers with those types.
 
+`KbdMsEvtTime` in `Keyboard.cpp` returns the mouse timestamp when it
+exceeds the raw keyboard timestamp. Otherwise it returns
+`kbd.new_key_timestamp`, including when the two raw timestamps are equal.
+The AutoComplete timer uses this function, as in
+`Adam/AutoComplete/ACTask.HC`.
+
 `Kernel/SerialDev/Message.cpp` carries the reference `ScanChar`,
 `ScanKey`, `GetKey`, and `GetChar` paths. Echo and the raw cursor use
 the current text output in `Kernel/KeyDev.cpp`. Key name formatting
