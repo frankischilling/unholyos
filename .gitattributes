@@ -94,6 +94,7 @@ Linux/Fixtures/CmpProbeRunner.HC text eol=lf
 Linux/Fixtures/CmpProbe.PRJ text eol=lf
 Linux/Fixtures/CmpProbe.HH text eol=lf
 Linux/Fixtures/CompilerWarningProbe.HC text eol=lf
+Linux/Fixtures/BitFieldProbe.HC text eol=lf
 Linux/Fixtures/CmpInvalid.HC text eol=lf
 Linux/Fixtures/ImportCaller.HC text eol=lf
 Linux/Fixtures/ImportProvider.HC text eol=lf
