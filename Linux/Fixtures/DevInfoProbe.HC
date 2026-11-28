@@ -12,8 +12,8 @@ U0 DevInfoProbe()
   report=DocSave(doc);
   if (StrMatch("PCI Busses:1",report)) checks|=1;
   if (StrMatch("00:00:0 0600",report) &&
-      StrMatch("Intel Corporation",report) &&
-      StrMatch("82440LX/EX PCI & Memory",report)) checks|=2;
+      StrMatch("$$FG,2$$Intel Corporation $$FG,3$$82440LX/EX PCI & Memory$$FG$$",
+               report)) checks|=2;
   if (StrMatch("00:01:1 0101",report) &&
       StrMatch("82371SB PIIX3 IDE Interface (Triton II)",report)) checks|=4;
   if (StrMatch("Unknown",report)) checks|=8;

@@ -4089,8 +4089,8 @@ and `MakeAdam.HC` project sequence has not yet been executed.
 
 `DevInfoProbe.HC` calls `PCIRep`, `MemBIOSRep` and `MemPageRep` from
 the HolyC terminal and examines the saved DolDoc output. It checks the
-Intel host bridge and IDE controller names and class codes, the
-`Unknown` fallback, repeated PCI output, the 32-bit device window, the
+Intel host bridge and IDE controller names and class codes, DolDoc color
+commands, the `Unknown` fallback, repeated PCI output, the 32-bit device window, the
 E801 and E820 memory ranges, and all three page counts. The standard
 DVD ships the pinned `Misc/PCIDevices.DD` at its compressed path.
 

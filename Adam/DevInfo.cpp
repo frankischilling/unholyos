@@ -143,9 +143,9 @@ extern "C" void PCIRep()
   PCILookUpDevs();
   auto &head = dev.pci_head;
   for (auto *tmppci = head.next; tmppci != &head; tmppci = tmppci->next)
-    RepPrint("%02X:%02X:%01X %02X%02X $$GREEN$$%s $$CYAN$$%s$$FG$$\n",
-             tmppci->bus, tmppci->dev, tmppci->fun, tmppci->base_code,
-             tmppci->sub_code, tmppci->vendor_str, tmppci->dev_id_str);
+    RepPrint("%02X:%02X:%01X %02X%02X $GREEN$%s $CYAN$%s$FG$\n", tmppci->bus,
+             tmppci->dev, tmppci->fun, tmppci->base_code, tmppci->sub_code,
+             tmppci->vendor_str, tmppci->dev_id_str);
 }
 
 extern "C" void MemBIOSRep()
