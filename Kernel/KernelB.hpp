@@ -131,6 +131,16 @@ extern CMsStateGlbls ms, ms_last, old_ms;
 extern CGridGlbls ms_grid;
 extern "C" void PutKeyCpp(int64_t ch, int64_t sc);
 extern "C" void PutCharsCpp(uint64_t chars);
+extern "C" CKeyDevGlbls keydev;
+bool KeyDevInit();
+extern "C" CKeyDevEntry *KeyDevAddCpp(uintptr_t put_key, uintptr_t put_s,
+                                     int64_t priority, uint8_t key_descs);
+extern "C" void CtrlAltCBSetCpp(uint8_t ch, uintptr_t hndlr, const char *no_shift,
+                                const char *shift, uint8_t in_irq);
+void GrEnd();
+void SetKeyDescription(const char *desc, uintptr_t hndlr = 0);
+void KbdCtrlAltKey(int64_t sc);
+extern "C" uint8_t ScanCode2CharCpp(int64_t sc);
 extern "C" char *Char2KeyNameCpp(int64_t ch, uint8_t include_ctrl);
 extern "C" char *ScanCode2KeyNameCpp(int64_t sc);
 extern "C" int64_t GetKeyCpp(int64_t *sc, uint8_t echo, uint8_t raw_cursor);
@@ -171,6 +181,7 @@ extern "C" bool CallHolyC3Checked(uintptr_t function, uint64_t arg1,
 extern "C" bool CallHolyC4Checked(uintptr_t function, uint64_t arg1,
                                   uint64_t arg2, uint64_t arg3, uint64_t arg4,
                                   uint64_t *result);
+extern "C" int64_t CallHolyC1(uintptr_t function, uint64_t arg1);
 extern "C" int64_t CallHolyC2(uintptr_t function, uint64_t arg1, uint64_t arg2);
 extern "C" int64_t CallHolyC3(uintptr_t function, uint64_t arg1, uint64_t arg2,
                               uint64_t arg3);
@@ -191,6 +202,7 @@ extern "C" char *CatPrintCpp(char *dst, const char *fmt, int64_t argc,
 extern "C" void PrintWarnCpp(const char *fmt, int64_t argc,
                              const uint64_t *argv, const uintptr_t *frame);
 const CHash *FunSegFind(uintptr_t addr, uint64_t &offset);
+char *SrcEdLink(uintptr_t addr, int64_t count);
 int64_t YearStartDate(int64_t year);
 CDate Struct2Date(const CDateStruct &ds);
 int64_t DayOfWeek(int64_t date);
@@ -268,6 +280,7 @@ extern char *str2color_lst;
 extern "C" uint64_t Str2ColorU16Cpp(const char *st);
 extern "C" uint64_t Str2ColorU32Cpp(char *st);
 bool LoadDocDefines();
+bool MakeDoc();
 extern "C" void PutS(const char *text);
 extern "C" void StrCpyCpp(char *dst, const char *src);
 void PutTaskS(CTask &task, const char *text);

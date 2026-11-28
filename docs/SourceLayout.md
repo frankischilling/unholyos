@@ -2026,6 +2026,29 @@ star-delimited DolDoc section. Counting the sections first avoids the
 reference's unbounded traversal for a file with no tips. The copy skips
 error entries and preserves the remaining DolDoc entries and links.
 
+## Keyboard output hooks and key maps
+
+`Kernel/KeyDev.cpp` follows `Kernel/KeyDev.HC` for the priority-ordered
+output chain and the `KeyDescSet` and `CtrlAltCBSet` tables. A hook can
+replace itself at the same priority. The output path looks up the next
+priority again after a callback so a removed entry is never used after
+the callback returns. The input-filter and raw hooks are registered at
+kernel startup. DolDoc joins the chain from `Adam/DolDoc/MakeDoc.cpp`.
+
+`Adam/Training.cpp` builds `KeyMap` by querying the live hooks with
+`SCF_KEY_DESC`, sorting the results, and linking to guest callback
+source when it is available. `DocGet` temporarily enables description
+messages while the editor waits for ordinary keys. `DocPutKey`
+describes the editor actions currently implemented and leaves the
+document untouched during those requests.
+
+`Kernel/SerialDev/Keyboard.cpp` dispatches registered Ctrl-Alt handlers
+from the staged PS/2 decoder. Native interrupt-time dispatch remains
+pending. The current built-ins register Break, the auxiliary font, and
+both zoom directions. The rest of the reference default registrations,
+source descriptions for additional editor commands, and the modifier
+pane in `Adam/AutoComplete/ACTask.HC` still need work.
+
 ## Popup tasks and document menus
 
 `Adam/DolDoc/DocPopUp.cpp` follows `PopUp1`, `PopUp2`, `PopUpOk`,

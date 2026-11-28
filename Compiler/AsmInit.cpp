@@ -1306,6 +1306,60 @@ static bool CmpKbdData(CHashTable *table)
   return CmpKernelGlobal(table, "kbd", cls, &kbd);
 }
 
+static bool CmpKeyDevData(CHashTable *table)
+{
+  auto *entry = CmpKernelClass(table, "CKeyDevEntry", sizeof(CKeyDevEntry));
+  auto *glbls = CmpKernelClass(table, "CKeyDevGlbls", sizeof(CKeyDevGlbls));
+  if (!entry || !glbls)
+    return false;
+  auto *i64 = FindType("I64", table), *u8 = FindType("U8", table);
+  auto *boolean = FindType("Bool", table);
+  auto *heap = CurrentTask()->data_heap;
+  const struct {
+    const char *name;
+    CHashClass *record, *type;
+    size_t offset;
+  } members[]{
+      {"next", entry, entry + 1, offsetof(CKeyDevEntry, next)},
+      {"last", entry, entry + 1, offsetof(CKeyDevEntry, last)},
+      {"priority", entry, i64, offsetof(CKeyDevEntry, priority)},
+      {"flags", entry, i64, offsetof(CKeyDevEntry, flags)},
+      {"put_key_head", glbls, entry, offsetof(CKeyDevGlbls, put_key_head)},
+      {"ctrl_alt_in_irq_flags", glbls, i64, offsetof(CKeyDevGlbls, ctrl_alt_in_irq_flags)},
+      {"ctrl_alt_no_shift_descs", glbls, u8 + 2, offsetof(CKeyDevGlbls, ctrl_alt_no_shift_descs)},
+      {"ctrl_alt_shift_descs", glbls, u8 + 2, offsetof(CKeyDevGlbls, ctrl_alt_shift_descs)},
+      {"hndlr", glbls, u8 + 1, offsetof(CKeyDevGlbls, hndlr)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    if (!name || !MemberAdd(*member.record, name, *member.type, member.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  auto *name = StrNew("desc", heap);
+  auto *desc = name ? MemberAdd(*glbls, name, *u8, offsetof(CKeyDevGlbls, desc)) : nullptr;
+  if (!desc) {
+    Free(name);
+    return false;
+  }
+  auto *dim = reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+  if (!dim)
+    return false;
+  dim->cnt = sizeof(CKeyDevGlbls::desc);
+  dim->total_cnt = 1;
+  desc->dim.next = dim;
+  desc->dim.total_cnt = desc->size = dim->cnt;
+  const char *kn[]{"ch", "sc"}, *sn[]{"st"};
+  CHashClass *kt[]{i64, i64}, *st[]{u8 + 1};
+  return CmpKernelCallback(table, *entry, "put_key", offsetof(CKeyDevEntry, put_key),
+                           *boolean, 2, kn, kt) &&
+         CmpKernelCallback(table, *entry, "put_s", offsetof(CKeyDevEntry, put_s),
+                           *boolean, 1, sn, st) &&
+         CmpKernelGlobal(table, "keydev", glbls,
+                         reinterpret_cast<void *>(CmpSysExport("keydev")));
+}
+
 static bool CmpTextData(CHashTable *table)
 {
   auto *cls=CmpKernelClass(table,"CTextGlbls",sizeof(CTextGlbls));
@@ -2199,7 +2253,11 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     U64Ptr,
     TaskPtrPtr,
     HashGenericPtr,
+    KeyDevEntryPtr,
     PlotFn,
+    PutKeyFn,
+    PutSFn,
+    CtrlAltFn,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -2248,6 +2306,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("U64", table) + 1,
       FindType("CTask", table) + 2,
       FindType("CHashGeneric", table) + 1,
+      FindType("CKeyDevEntry", table) + 1,
   };
   auto *task = CurrentTask();
   enum CDefaultKind : uint8_t { Numeric, String, LastClass };
@@ -2755,6 +2814,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"DocType", Bool, FF_RET1,
        {{"doc", DocPtr, true}, {"filename", U8Ptr}, {"trailing_new_lines", I64, true, 1}}},
       {"Type", Bool, FF_RET1, {{"filename", U8Ptr}, {"trailing_new_lines", I64, true, 1}}},
+      {"KeyMap", U0, FF_RET1, {{"task", TaskPtr, true}}},
       {"TipOfDay", U0, FF_RET1, {{"tip_file", U8Ptr, true, 0, "::/Doc/Tips.DD"}}},
       {"DocPut", DocPtr, FF_RET1, {{"task", TaskPtr, true}}},
       {"DocDisplay", DocPtr, FF_RET1, {{"task", TaskPtr, true}}},
@@ -3158,6 +3218,13 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Refresh", U0, FF_RET1, {{"cnt", I64, true, 1}, {"force", Bool, true}}},
       {"Mat4x4New", I64Ptr, FF_RET1, {{"src", I64Ptr}, {"mem_task", TaskPtr, true}}},
       {"PutKey", U0, FF_RET1, {{"ch", I64, true}, {"sc", I64, true}}},
+      {"KeyDescSet", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
+      {"KeyDevAdd", KeyDevEntryPtr, FF_RET1,
+       {{"fp_put_key", PutKeyFn}, {"fp_puts", PutSFn}, {"priority", I64}, {"key_descs", Bool, true}}},
+      {"KeyDevRem", U0, FF_RET1, {{"tmpk", KeyDevEntryPtr}}},
+      {"CtrlAltCBSet", U0, FF_RET1,
+       {{"ch", U8}, {"fp_hndlr", CtrlAltFn}, {"no_shift_desc", U8Ptr, true},
+        {"shift_desc", U8Ptr, true}, {"in_irq", Bool, true}}},
       {"ScanChar", I64, FF_RET1, {}},
       {"ScanKey", Bool, FF_RET1,
        {{"_ch", I64Ptr, true}, {"_scan_code", I64Ptr, true}, {"echo", Bool, true}}},
@@ -3271,11 +3338,27 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     for (const auto &arg : header.args) {
       if (!arg.name)
         break;
-      if (arg.type == PlotFn) {
+      if (arg.type >= PlotFn) {
         const char *names[]{"aux", "x", "y", "z"};
         CHashClass *signature[]{types[U8Ptr], types[I64], types[I64], types[I64]};
+        unsigned count = 4;
+        auto *result = types[Bool];
+        if (arg.type == PutKeyFn) {
+          names[0] = "ch";
+          names[1] = "sc";
+          signature[0] = types[I64];
+          count = 2;
+        } else if (arg.type == PutSFn) {
+          names[0] = "st";
+          count = 1;
+        } else if (arg.type == CtrlAltFn) {
+          names[0] = "sc";
+          signature[0] = types[I64];
+          result = types[U0];
+          count = 1;
+        }
         if (!CmpKernelCallback(table, fun->cls, arg.name, 16 + 8 * fun->arg_cnt,
-                               *types[Bool], 4, names, signature)) {
+                               *result, count, names, signature)) {
           HashDel(&fun->cls.sym.hash);
           return false;
         }
@@ -3660,6 +3743,8 @@ static bool CmpFillHash(CHashTable *table)
       {"SC_DELETE", "0x53"},
       {"SC_GUI", "0xDB"},
       {"SCF_NO_SHIFT", "(1<<30)"},
+      {"SCF_KEY_DESC", "(1<<31)"},
+      {"KDF_HAS_DESCS", "1"},
       {"SCF_MS_L_DOWN", "(1<<16)"},
       {"SCF_MS_R_DOWN", "(1<<17)"},
       {"SCF_E0_PREFIX", "(1<<7)"},
@@ -3725,7 +3810,7 @@ static bool CmpFillHash(CHashTable *table)
          CmpComplexData(table) && CmpQueData(table) && CmpFifoData(table) && CmpDateData(table) &&
          CmpBinData(table) && CmpDirData(table) &&
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
-         CmpKbdData(table) && CmpTextData(table) &&
+         CmpKbdData(table) && CmpKeyDevData(table) && CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
          CmpScrnCastData(table) && CmpMusicData(table) &&
          CmpTaskSettingsData(table) && CmpMenuData(table, task) &&

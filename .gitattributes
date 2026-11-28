@@ -111,6 +111,7 @@ Linux/Fixtures/AsmListingScope.HC text eol=lf
 Linux/Fixtures/SchedulerProbe.HC text eol=lf
 Linux/Fixtures/JobProbe.HC text eol=lf
 Linux/Fixtures/KeyboardProbe.HC text eol=lf
+Linux/Fixtures/KeyMapProbe.HC text eol=lf
 Linux/Fixtures/MouseProbe.HC text eol=lf
 Linux/Fixtures/PaletteProbe.HC text eol=lf
 Linux/Fixtures/ViewAnglesProbe.HC text eol=lf

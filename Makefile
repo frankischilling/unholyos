@@ -30,7 +30,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Adam/Gr/SpriteNew.cpp Adam/Gr/GrSpritePlot.cpp Adam/Gr/ScrnCast.cpp \
 	Adam/DolDoc/DocNew.cpp Adam/DolDoc/DocDblBuf.cpp Adam/DolDoc/DocRecalc.cpp Adam/DolDoc/DocRecalcLib.cpp \
 	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp Adam/DolDoc/DocClipBoard.cpp Adam/DolDoc/DocTree.cpp \
-	Adam/DolDoc/DocChar.cpp Adam/DolDoc/DocPutKey.cpp Adam/DolDoc/DocRun.cpp \
+	Adam/DolDoc/DocChar.cpp Adam/DolDoc/DocPutKey.cpp Adam/DolDoc/DocRun.cpp Adam/DolDoc/MakeDoc.cpp \
 	Adam/DolDoc/DocGet.cpp Adam/DolDoc/DocForm.cpp Adam/DolDoc/DocEd.cpp Adam/DolDoc/DocFind.cpp Adam/DolDoc/DocLink.cpp Adam/DolDoc/DocPopUp.cpp Adam/DolDoc/DocTerm.cpp HomeSys.cpp \
 	Adam/ABlkDev/ADskA.cpp Adam/ABlkDev/Mount.cpp Adam/Opt/Boot/DskISORedSea.cpp Adam/MakeAdam.cpp
 GUEST_TEST_SRC := Linux/BootProbe.cpp
@@ -152,6 +152,8 @@ CPU_REP_TEST_ISO := $(BUILD)/cpu-rep-test.iso
 CPU_REP_PROBE := Linux/Fixtures/CPURepProbe.HC
 ADAM_STARTUP_TEST_ISO := $(BUILD)/adam-startup-test.iso
 DOC_TREE_PROBE := Linux/Fixtures/DocTreeProbe.HC
+KEY_MAP_PROBE := Linux/Fixtures/KeyMapProbe.HC
+KEY_MAP_TEST_ISO := $(BUILD)/key-map-test.iso
 DOC_TREE_AOT_PROBE := Linux/Fixtures/DocTreeAOTProbe.HC
 DOC_TREE_TEST_ISO := $(BUILD)/doc-tree-test.iso
 REGISTRY_DEMO := Demo/RegistryDemo.HC
@@ -561,6 +563,9 @@ $(ADAM_STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_
 $(DOC_TREE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(DOC_TREE_PROBE) $(DOC_TREE_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(DOC_TREE_PROBE) --file $(DOC_TREE_AOT_PROBE)
 
+$(KEY_MAP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(KEY_MAP_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(KEY_MAP_PROBE)
+
 $(REGISTRY_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(REGISTRY_PROBE) $(REGISTRY_BOOT) $(REGISTRY_DEMO) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at Home/Registry.HC.Z $(REGISTRY_BOOT) --file $(REGISTRY_PROBE) --file-at $(REGISTRY_DEMO) $(REGISTRY_DEMO)
 
@@ -792,6 +797,12 @@ test-doc-tree: $(DOC_TREE_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --doc-tree-aot "$(QEMU)" $(DOC_TREE_TEST_ISO)
 
 test: test-doc-tree
+
+.PHONY: test-key-map
+test-key-map: $(KEY_MAP_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --key-map "$(QEMU)" $(KEY_MAP_TEST_ISO)
+
+test: test-key-map
 
 .PHONY: test-registry
 test-registry: $(REGISTRY_TEST_ISO) $(BOOT_TEST)

@@ -336,12 +336,6 @@ static uint64_t KbdBuildSC(uint8_t raw_byte, uint8_t &last_raw_byte,
     }
     if ((flags & (SCF_CTRL | SCF_ALT)) == (SCF_CTRL | SCF_ALT)) {
       auto ch = ScanCode2CharCpp(code);
-      if (ch == 'c' && new_key)
-        CtrlAltC(sc | flags);
-      if (ch == 'f')
-        CtrlAltF(sc | flags);
-      if (ch == 'z' && sys_winmgr_task)
-        CtrlAltZ(sc | flags);
       if (code == 1 || code == 0x0F || ('a' <= ch && ch <= 'z'))
         new_key = 0;
     }
@@ -422,6 +416,9 @@ static void KbdHndlr()
     }
   }
   kbd.scan_code = sc;
+  if (!(sc & SCF_KEY_UP) &&
+      (sc & (SCF_CTRL | SCF_ALT)) == (SCF_CTRL | SCF_ALT))
+    KbdCtrlAltKey(sc);
 }
 
 static void KbdMsgsQue()

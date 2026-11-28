@@ -1386,6 +1386,27 @@ constexpr uint8_t SC_ENTER = 0x1C, SC_SHIFT = 0x2A, SC_CTRL = 0x1D,
                   SC_GUI = 0xDB;
 constexpr int64_t GSF_SHIFT_ESC_EXIT = 1, GSF_WITH_NEW_LINE = 2;
 
+constexpr int64_t KDF_HAS_DESCS = 1;
+struct CKeyDevEntry
+{
+  CKeyDevEntry *next, *last;
+  int64_t priority, flags;
+  uintptr_t put_key, put_s;
+};
+struct CKeyDevGlbls
+{
+  CKeyDevEntry put_key_head;
+  uintptr_t *fp_ctrl_alt_cbs;
+  uint64_t ctrl_alt_in_irq_flags;
+  uintptr_t **ctrl_alt_ret_addr;
+  char **ctrl_alt_no_shift_descs, **ctrl_alt_shift_descs;
+  char desc[144];
+  uintptr_t hndlr;
+};
+static_assert(sizeof(CKeyDevEntry) == 48 && offsetof(CKeyDevEntry, put_key) == 32);
+static_assert(sizeof(CKeyDevGlbls) == 240 && offsetof(CKeyDevGlbls, desc) == 88 &&
+              offsetof(CKeyDevGlbls, hndlr) == 232);
+
 constexpr int64_t SUF_REM_CTRL_CHARS = 0x001, SUF_REM_LEADING = 0x002,
                   SUF_REM_TRAILING = 0x004, SUF_REM_SPACES = 0x008,
                   SUF_SINGLE_SPACE = 0x010, SUF_TO_UPPER = 0x020,

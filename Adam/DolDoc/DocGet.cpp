@@ -6,9 +6,17 @@ extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 extern "C" int64_t DocGetKeyCpp(int64_t *sc)
 {
   int64_t ch, scan_code;
+  auto *task = CurrentTask();
+  const bool old_key_desc =
+      __atomic_fetch_and(&task->win_inhibit, ~WIF_SELF_KEY_DESC, __ATOMIC_RELAXED) &
+      WIF_SELF_KEY_DESC;
   do {
     ch = GetKeyCpp(&scan_code, true, false);
   } while (scan_code & SCF_KEY_DESC);
+  if (old_key_desc)
+    __atomic_fetch_or(&task->win_inhibit, WIF_SELF_KEY_DESC, __ATOMIC_RELAXED);
+  else
+    __atomic_fetch_and(&task->win_inhibit, ~WIF_SELF_KEY_DESC, __ATOMIC_RELAXED);
   if (auto *doc = DocPut(); doc && DocRecalc(*doc)) {
     auto *task = doc->win_task;
     if (doc->y < doc->top_line_num)

@@ -6830,7 +6830,8 @@ int main(int argc, char **argv)
        mode == "--popup-menus-reference" || mode == "--ins-reg" ||
        mode == "--ins-reg-reference" || mode == "--startup-exec" ||
        mode == "--startup-exec-reference" || mode == "--training-input-reference" ||
-       mode == "--file-editor-reference")) {
+       mode == "--file-editor-reference" || mode == "--key-map" ||
+       mode == "--key-map-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
     const bool registry = mode.starts_with("--registry");
@@ -6838,6 +6839,7 @@ int main(int argc, char **argv)
     const bool popup = mode.starts_with("--popup-menus");
     const bool ins_reg = mode.starts_with("--ins-reg");
     const bool startup_exec = mode.starts_with("--startup-exec");
+    const bool key_map = mode.starts_with("--key-map");
     char path[] = "/tmp/unholyos-document-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
@@ -6855,6 +6857,9 @@ int main(int argc, char **argv)
       } else if (!reference && startup_exec) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/StartupExecProbe.HC",
                               "StartupExecProbe.HC");
+      } else if (!reference && key_map) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/KeyMapProbe.HC",
+                              "KeyMapProbe.HC");
       } else if (!reference && once) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/OnceProbe.HC",
                               "OnceProbe.HC");
@@ -6889,6 +6894,8 @@ int main(int argc, char **argv)
         probes = training_input_probes;
       else if (mode == "--file-editor-reference")
         probes = file_editor_probes;
+      else if (key_map)
+        probes = key_map_probes;
       else if (aot)
         probes = doc_tree_aot_probes;
       DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
@@ -7801,6 +7808,7 @@ int main(int argc, char **argv)
               << " --startup-exec[-reference] qemu image.iso [capture-dir]\n"
               << " --training-input-reference qemu image.iso [capture-dir]\n"
               << " --file-editor-reference qemu image.iso [capture-dir]\n"
+              << " --key-map[-reference] qemu image.iso [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
