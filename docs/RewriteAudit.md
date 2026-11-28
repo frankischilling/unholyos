@@ -126,8 +126,10 @@ part of the full rewrite.
   clipboard operations and popup/menu integration remain outstanding.
 - `Adam/ARegistry.cpp` initializes the registry before user startup and
   implements the original branch defaults, execution, counts, writes,
-  and appends. The Once queue, installer registration, and one-time
-  popups remain pending.
+  and appends. The Once queue uses the original branch and run-level
+  transitions. The first user terminal runs the home script through
+  `XTalk`. The stock install prompt and tour, installer registration, and
+  one-time popups remain pending.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal
   and system tools in their respective reference subsystems.
 - Include the remaining applications, demos, documentation and assets,

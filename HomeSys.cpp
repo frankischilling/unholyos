@@ -45,5 +45,8 @@ bool StartUpTasks()
   WinToTopCpp(user1, false);
   WinTileVertCpp();
   WinZBufUpdateCpp();
+  if (FileFindCpp("~/Once.HC", nullptr,
+                  FUF_JUST_FILES | FUF_Z_OR_NOT_Z | FUF_SCAN_PARENTS))
+    return XTalk(user1, "Cd;#include \"Once\";\n", 0, nullptr);
   return true;
 }

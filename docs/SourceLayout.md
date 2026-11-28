@@ -1967,8 +1967,26 @@ their HolyC types. The guest stores the two F64 version values as their
 reacquires it to save. A caller waiting for Adam then allows Adam to enter
 the registry. `Kernel/Job.cpp` uses its existing execute job and
 `JobResGet` to wait and reap the result. `RegWrite` and `RegAppend` share
-the DolDoc tree writers. The Once queue, installer registration, and
-one-time popups remain pending.
+the DolDoc tree writers.
+
+## Once startup
+
+`Adam/ARegistry.cpp` follows the `AOnce`, `Once`, drive variants, flush
+functions, and `OnceExe` in `Adam/ARegistry.HC`. The drive variants hold
+the document lock through the temporary drive change and restore the
+original drive after writing. `OnceExe` runs the Adam branch through
+Adam's job queue before running the user branch in the caller. When a
+user entry throws, it clears both branches, sets both run-level bits,
+and propagates the same exception to the caller.
+
+`HomeSys.cpp` queues `Cd;#include "Once";` after tiling the user
+terminals when a Once script exists. As in `HomeSys.HC`, this goes
+through `XTalk` in `Kernel/Job.cpp`. `Kernel/KeyDev.cpp` forwards the
+input filter's output as key messages to the terminal, where HolyC
+compiles and executes the command. Adam posts the input without waiting
+and can service the resulting job as soon as it enters server mode.
+The reference's stock `Once.HC` installer and tour workflow, installer
+registration, and one-time popups remain pending.
 
 ## Original Adam memory inspection
 

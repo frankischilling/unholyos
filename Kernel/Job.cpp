@@ -351,3 +351,28 @@ extern "C" void AdamErrCpp(const char *fmt, int64_t argc, const uint64_t *argv)
   PutTaskS(*adam_task, message);
   Free(message);
 }
+
+bool XTalk(CTask *task, const char *fmt, int64_t argc, const uint64_t *argv)
+{
+  auto *text = StrPrintJoin(nullptr, fmt, argc, argv);
+  if (!text)
+    return false;
+  auto *shared = StrNew(text, adam_task->data_heap);
+  Free(text);
+  if (!shared)
+    return false;
+  const uint64_t addr = reinterpret_cast<uintptr_t>(shared);
+  const uint64_t args[]{addr, addr};
+  auto *source = MStrPrintCpp("\"%%s\",%d;Free(%d);", 2, args);
+  bool posted = source && TaskTextCpp(task, nullptr, source, 0);
+  Free(source);
+  if (!posted)
+    Free(shared);
+  return posted;
+}
+
+extern "C" void XTalkCpp(CTask *task, const char *fmt, int64_t argc,
+                         const uint64_t *argv)
+{
+  XTalk(task, fmt, argc, argv);
+}

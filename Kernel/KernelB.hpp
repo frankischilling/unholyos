@@ -140,6 +140,7 @@ extern "C" void TaskRstAwaitingMsgCpp(CTask *task);
 extern "C" void TaskWaitCpp(CTask *task, uint8_t cmd_line_pmt);
 extern "C" int64_t JobsHndlrCpp(uint64_t run_flags, CTask *task);
 int64_t AdamText(const char *src);
+bool XTalk(CTask *task, const char *fmt, int64_t argc, const uint64_t *argv);
 extern "C" int64_t FlushMsgsCpp(CTask *task);
 extern "C" [[noreturn]] void SrvTaskContCpp();
 extern "C" void InputFilterTaskHC();

@@ -5,7 +5,8 @@ void PutTaskS(CTask &task, const char *text)
   if (!text || (task.display_flags & DISPLAYF_SILENT))
     return;
   if (task.display_flags & DISPLAYF_NOT_RAW) {
-    auto *target = task.task_flags & (1 << 5) ? task.parent_task : &task;
+    auto *target = task.task_flags & TASKF_INPUT_FILTER_TASK ? task.parent_task
+                                                            : &task;
     auto *doc = target ? target->put_doc : nullptr;
     if (doc && doc->doc_signature == DOC_SIGNATURE_VAL) {
       DocPutS(*doc, text, StrLen(text));
@@ -17,7 +18,14 @@ void PutTaskS(CTask &task, const char *text)
 
 extern "C" void PutS(const char *text)
 {
-  PutTaskS(*CurrentTask(), text);
+  auto &task = *CurrentTask();
+  if (text && !(task.display_flags & DISPLAYF_SILENT) &&
+      (task.task_flags & TASKF_INPUT_FILTER_TASK)) {
+    while (*text)
+      MsgCpp(MSG_KEY_DOWN, uint8_t(*text++), 0, 0);
+    return;
+  }
+  PutTaskS(task, text);
 }
 
 extern "C" void PutKeyCpp(int64_t ch, int64_t sc)
@@ -25,6 +33,10 @@ extern "C" void PutKeyCpp(int64_t ch, int64_t sc)
   auto &task = *CurrentTask();
   if (task.display_flags & DISPLAYF_SILENT)
     return;
+  if (task.task_flags & TASKF_INPUT_FILTER_TASK) {
+    MsgCpp(MSG_KEY_DOWN, ch, sc, 0);
+    return;
+  }
   while ((kbd.scan_code & SCF_SCROLL) && sys_focus_task == &task)
     _YIELD();
   if (task.display_flags & DISPLAYF_NOT_RAW) {

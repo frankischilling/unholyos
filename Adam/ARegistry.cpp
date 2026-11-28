@@ -109,3 +109,91 @@ bool RegInit()
   }
   return result.okay && registry_version == sys_os_version;
 }
+
+extern "C" void AOnceFlushCpp()
+{
+  RegWriteCpp("Once/Adam", "", 0, nullptr);
+}
+
+extern "C" void OnceFlushCpp()
+{
+  RegWriteCpp("Once/User", "", 0, nullptr);
+}
+
+static void OnceAppend(const char *path, uint32_t level, uint8_t drv_let,
+                        const char *fmt, int64_t argc, const uint64_t *argv)
+{
+  auto *doc = RegCache();
+  if (!doc)
+    return;
+  auto *text = StrPrintJoin(nullptr, fmt, argc, argv);
+  if (!text)
+    return;
+  {
+    CDocLock lock(*doc);
+    const char old_drv_let = doc->filename.name[0];
+    if (drv_let)
+      doc->filename.name[0] = drv_let;
+    if (!(__atomic_load_n(&SYS_RUN_LEVEL, __ATOMIC_RELAXED) & level))
+      DocTreeWriteCpp(doc, path, true, "", 0, nullptr);
+    const uint64_t arg = reinterpret_cast<uintptr_t>(text);
+    DocTreeAppendCpp(doc, path, true, "%s\n", 1, &arg);
+    doc->filename.name[0] = old_drv_let;
+  }
+  Free(text);
+}
+
+extern "C" void AOnceCpp(const char *fmt, int64_t argc, const uint64_t *argv)
+{
+  OnceAppend("Once/Adam", RLF_ONCE_ADAM, 0, fmt, argc, argv);
+}
+
+extern "C" void OnceCpp(const char *fmt, int64_t argc, const uint64_t *argv)
+{
+  OnceAppend("Once/User", RLF_ONCE_USER, 0, fmt, argc, argv);
+}
+
+extern "C" void AOnceDrvCpp(uint8_t drv_let, const char *fmt,
+                            int64_t argc, const uint64_t *argv)
+{
+  OnceAppend("Once/Adam", RLF_ONCE_ADAM, drv_let, fmt, argc, argv);
+}
+
+extern "C" void OnceDrvCpp(uint8_t drv_let, const char *fmt,
+                           int64_t argc, const uint64_t *argv)
+{
+  OnceAppend("Once/User", RLF_ONCE_USER, drv_let, fmt, argc, argv);
+}
+
+extern "C" void OnceExeTryCpp()
+{
+  RegDftCpp("Once/Adam", "", false);
+  if (RegCntCpp("Once/Adam") > 2) {
+    AdamText("RegExe(\"Once/Adam\");");
+    AOnceFlushCpp();
+  }
+  __atomic_fetch_or(&SYS_RUN_LEVEL, RLF_ONCE_ADAM, __ATOMIC_RELAXED);
+
+  RegDftCpp("Once/User", "", false);
+  if (RegCntCpp("Once/User") > 2) {
+    RegExeCpp("Once/User");
+    OnceFlushCpp();
+  }
+  __atomic_fetch_or(&SYS_RUN_LEVEL, RLF_ONCE_USER, __ATOMIC_RELAXED);
+}
+
+extern "C" void OnceExeTryHC();
+
+extern "C" void OnceExeCpp()
+{
+  uint64_t result;
+  if (!CallHolyC0Checked(reinterpret_cast<const uint8_t *>(OnceExeTryHC),
+                         &result)) {
+    AOnceFlushCpp();
+    __atomic_fetch_or(&SYS_RUN_LEVEL, RLF_ONCE_ADAM, __ATOMIC_RELAXED);
+    OnceFlushCpp();
+    __atomic_fetch_or(&SYS_RUN_LEVEL, RLF_ONCE_USER, __ATOMIC_RELAXED);
+    // The reference catch clears the queues and leaves the exception pending.
+    RethrowHolyC();
+  }
+}

@@ -11,6 +11,8 @@ constexpr uint32_t RLF_DOC = 1 << 13;
 constexpr uint32_t RLF_REGISTRY = 1 << 15;
 constexpr uint32_t RLF_AUTO_COMPLETE = 1 << 17;
 constexpr uint32_t RLF_ADAM_SERVER = 1 << 18;
+constexpr uint32_t RLF_ONCE_ADAM = 1 << 19;
+constexpr uint32_t RLF_ONCE_USER = 1 << 20;
 
 struct CTask;
 struct CTaskDying;
