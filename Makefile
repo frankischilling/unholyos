@@ -25,7 +25,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Kernel/BlkDev/DskATA.cpp Kernel/BlkDev/DskATAId.cpp Kernel/BlkDev/DskAddDev.cpp \
 	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/DskDrv.cpp Kernel/BlkDev/DskBlkDev.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/FileSysFAT.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
 	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskStrB.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/BlkDev/DskClus.cpp Kernel/BlkDev/DskCache.cpp Kernel/BlkDev/DskFmt.cpp Kernel/Compress.cpp \
-	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ARegistry.cpp Adam/InsReg.cpp Adam/Training.cpp Adam/InFile.cpp Adam/ASnd.cpp Adam/TaskSettings.cpp Adam/CPURep.cpp Adam/DevInfo.cpp Adam/AutoComplete/ACTask.cpp Adam/AutoComplete/ACInit.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
+	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ARegistry.cpp Adam/InsReg.cpp Adam/Training.cpp Adam/InFile.cpp Adam/ASnd.cpp Adam/TaskSettings.cpp Adam/CPURep.cpp Adam/DevInfo.cpp Adam/AutoComplete/ACTask.cpp Adam/AutoComplete/ACInit.cpp Adam/AutoComplete/ACFill.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
 	Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
 	Adam/Gr/SpriteNew.cpp Adam/Gr/GrSpritePlot.cpp Adam/Gr/ScrnCast.cpp \
 	Adam/DolDoc/DocNew.cpp Adam/DolDoc/DocDblBuf.cpp Adam/DolDoc/DocRecalc.cpp Adam/DolDoc/DocRecalcLib.cpp \
@@ -171,6 +171,7 @@ STOCK_TOUR := $(wildcard Misc/Tour/*.IN)
 STARTUP_TIPS := Doc/Tips.DD Doc/Customize.DD
 HELP_DOCS := Doc/HelpIndex.DD Doc/AboutTempleOS.DD Doc/Welcome.DD Doc/DemoIndex.DD Doc/CmdLineOverview.DD Doc/Credits.DD
 AC_STANDBY := Doc/StandBy.DD
+AC_INDEX_PROBE := Linux/Fixtures/ACIndex.TXT
 POPUP_PROBE := Linux/Fixtures/PopupProbe.HC
 POPUP_DEMO := Demo/DolDoc/MenuBttn.HC
 POPUP_TEST_ISO := $(BUILD)/popup-test.iso
@@ -573,8 +574,9 @@ $(REGISTRY_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(REGISTRY_
 $(ONCE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ONCE_PROBE) $(ONCE_HOME) $(ONCE_BOOT) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at Home/Registry.HC.Z $(ONCE_BOOT) --file-at Home/Once.HC $(ONCE_HOME) --file $(ONCE_PROBE)
 
-$(STOCK_ONCE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) Once.HC $(STARTUP_TIPS) $(HELP_DOCS) $(AC_STANDBY) $(STOCK_TOUR) $(INPUT_TRAINING_PROBE) $(FILE_EDITOR_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+$(STOCK_ONCE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) Once.HC $(STARTUP_TIPS) $(HELP_DOCS) $(AC_STANDBY) $(STOCK_TOUR) $(INPUT_TRAINING_PROBE) $(FILE_EDITOR_PROBE) $(AC_INDEX_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at $(AC_STANDBY).Z $(AC_STANDBY) --dir Home --file Once.HC --file $(INPUT_TRAINING_PROBE) --file $(FILE_EDITOR_PROBE) \
+		--compress-at ACIndex.TXT.Z $(AC_INDEX_PROBE) \
 		$(foreach asset,$(STARTUP_TIPS) $(HELP_DOCS) $(STOCK_TOUR),--file-at $(asset) $(asset))
 
 $(POPUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(POPUP_PROBE) $(POPUP_DEMO) $(COMPILER_RESOURCE) $(COMPILER_MODULE)

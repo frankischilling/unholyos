@@ -1,0 +1,3 @@
+AcIndexGamma AcIndexBeta AcIndexAlpha AcIndexBeta
+AcIndexGamma AcIndexBeta AcIndexGamma AcIndexGamma
+acIndexWrong AcIndexBeta AcIndexGamma

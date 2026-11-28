@@ -402,6 +402,23 @@ static void DriveCharacterGraphics(
       snapshot("autocomplete-restarted");
       std::cout << "AutoComplete displayed Ctrl-Alt descriptions and restarted\n";
       std::cout << "Completed the first tour chapter and returned to the prompt\n";
+      cmd(R"(ACInit("::/ACIndex.TXT*");)");
+      wait_text("ACIndex.TXT.Z");
+      type("AcIndex");
+      wait([&](const Cells &cells) {
+        const auto screen = visible(cells);
+        return screen.find("Word:AcIndex") != std::string::npos &&
+               screen.find("F01 AcIndexGamma") != std::string::npos &&
+               screen.find("F02 AcIndexBeta") != std::string::npos &&
+               screen.find("F03 AcIndexAlpha") != std::string::npos &&
+               screen.find("acIndexWrong") == std::string::npos;
+      }, "Missing frequency-ordered completion for the active prefix");
+      snapshot("autocomplete-words");
+      key("ctrl-f1");
+      wait_text("T:/Home>AcIndexGamma");
+      key("shift-esc");
+      wait_text("AutoComplete is in StandBy");
+      std::cout << "AutoComplete ranked and inserted a completion from compressed text\n";
     }
     return;
   }

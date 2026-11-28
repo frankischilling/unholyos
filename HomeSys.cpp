@@ -65,7 +65,13 @@ bool StartUpTasks()
   const bool found = dv && FsFileLookup(*dv, path + 2, true, true, entry, prefix);
   Free(path);
   const bool started = !found || XTalk(user1, "Cd;#include \"Once\";\n", 0, nullptr);
-  if (found && FileFindCpp(AC_STANDBY, nullptr, FUF_JUST_FILES))
+  if (found && FileFindCpp(AC_STANDBY, nullptr, FUF_JUST_FILES)) {
+    auto *task = CurrentTask();
+    bool was_silent = task->display_flags & DISPLAYF_SILENT;
+    task->display_flags |= DISPLAYF_SILENT;
     ACInitCpp("/*;!*/Bible.TXT*");
+    if (!was_silent)
+      task->display_flags &= ~DISPLAYF_SILENT;
+  }
   return started;
 }

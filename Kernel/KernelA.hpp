@@ -870,6 +870,15 @@ struct CHashReg
 };
 #pragma pack(pop)
 
+struct CHashAC
+{
+  CHash hash;
+  int32_t num;
+  uint32_t hits;
+};
+
+static_assert(sizeof(CHashAC) == 32 && offsetof(CHashAC, hits) == 28);
+
 struct CInst
 {
   uint8_t ins_entry_num, opcode_cnt, opcode[4];
@@ -1378,7 +1387,7 @@ constexpr uint32_t SCF_E0_PREFIX = 1 << 7, SCF_KEY_UP = 1 << 8,
                    SCF_NO_SHIFT = 1U << 30, SCF_KEY_DESC = 1U << 31;
 constexpr uint8_t SC_ENTER = 0x1C, SC_SHIFT = 0x2A, SC_CTRL = 0x1D,
                   SC_ALT = 0x38, SC_CAPS = 0x3A, SC_NUM = 0x45,
-                  SC_F1 = 0x3B,
+                  SC_F1 = 0x3B, SC_F10 = 0x44,
                   SC_SCROLL = 0x46, SC_HOME = 0x47, SC_CURSOR_UP = 0x48,
                   SC_PAGE_UP = 0x49, SC_CURSOR_LEFT = 0x4B, SC_CURSOR_RIGHT = 0x4D,
                   SC_END = 0x4F, SC_CURSOR_DOWN = 0x50, SC_PAGE_DOWN = 0x51,
@@ -1496,8 +1505,6 @@ struct CMsStateGlbls
   bool lb, rb, show, has_wheel, left_dbl, right_dbl, left_down_sent,
        right_down_sent;
 };
-
-struct CHashAC;
 
 constexpr uint64_t ACF_INIT_IN_PROGRESS = 1;
 constexpr int64_t AC_FILLINS_NUM = 10;
