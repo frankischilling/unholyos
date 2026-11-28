@@ -106,7 +106,7 @@ enum class CStockStartup { None, Decline, Tour };
 enum class CDesktopTest {
   None, Progress, DictionaryInstall, DictionaryGenerator, DictionaryGeneratorHolyC,
   MenuDiagnostic, CompilerDiagnostic, CompilerCmpDiagnostic, CompilerWarning,
-  CompilerForwardWarning,
+  CompilerForwardWarning, CompilerHeaderWarning,
   AOTDataHeap, AOTDataHeapInvalid
 };
 
@@ -577,9 +577,12 @@ static void DriveCharacterGraphics(
   }
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
   const bool forward_warning = desktop == CDesktopTest::CompilerForwardWarning;
+  const bool header_warning = desktop == CDesktopTest::CompilerHeaderWarning;
+  const bool compiler_warning = desktop == CDesktopTest::CompilerWarning ||
+                                forward_warning || header_warning;
   const bool compiler_probe = desktop == CDesktopTest::CompilerDiagnostic ||
                               desktop == CDesktopTest::CompilerCmpDiagnostic ||
-                              desktop == CDesktopTest::CompilerWarning || forward_warning;
+                              compiler_warning;
   if (desktop == CDesktopTest::MenuDiagnostic || compiler_probe ||
       desktop == CDesktopTest::AOTDataHeapInvalid)
     cmd("I64 dsz;U8 *dout;");
@@ -1208,9 +1211,16 @@ static void DriveCharacterGraphics(
     std::cout << "Cmp and Load matched the AOT data-heap records and runtime results\n";
     return;
   }
-  if (desktop == CDesktopTest::CompilerWarning || forward_warning) {
-    const auto *name = forward_warning ? "ForwardTypeWarningProbe.HC"
-                                      : "CompilerWarningProbe.HC";
+  if (compiler_warning) {
+    const auto *name = "CompilerWarningProbe.HC";
+    const auto *call = R"("WJ %X\n",WarnUnused(42);)";
+    if (forward_warning) {
+      name = "ForwardTypeWarningProbe.HC";
+      call = R"("WJ %X\n",ForwardRead;)";
+    } else if (header_warning) {
+      name = "HeaderWarningProbe.HC";
+      call = R"("WJ %X\n",HeaderRead(42);)";
+    }
     if (reference)
       upload(fs::absolute(fs::path("Linux/Fixtures") / name));
     else
@@ -1220,8 +1230,7 @@ static void DriveCharacterGraphics(
     cmd(R"("WC %X\n",Cmp("Warn.PRJ",,"Warn.BIN");)");
     wait_text("WC 0");
     cmd(R"(ExeFile("Warn.PRJ");)");
-    cmd(forward_warning ? R"("WJ %X\n",ForwardRead;)"
-                        : R"("WJ %X\n",WarnUnused(42);)");
+    cmd(call);
     wait_text("WJ 2A");
     const auto doc = save_diagnostic("compiler-warnings.bin");
     auto occurrences = [&](std::string_view str) {
@@ -1231,6 +1240,23 @@ static void DriveCharacterGraphics(
         count++;
       return count;
     };
+    if (header_warning) {
+      Check(occurrences("Fun Header return mismatch '") == 4 &&
+                occurrences("Fun Header return mismatch 'FHReturn'") == 2 &&
+                occurrences("Fun Header return mismatch 'FHOn'") == 2 &&
+                occurrences("Fun header args mismatch '") == 18 &&
+                occurrences("Unused extern 'FHRedecl'") == 4 &&
+                doc.find("Errs:0 Warns:25 ") != std::string::npos,
+            "Function header warnings or AOT count differ");
+      for (const auto *symbol : {"FHName", "FHClass", "FHCount", "FHNum", "FHText",
+                                 "FHAdd", "FHDrop", "FHRedecl", "FHOn"}) {
+        const auto expected = std::string("Fun header args mismatch '") + symbol + "'";
+        if (occurrences(expected) != 2)
+          throw std::runtime_error("Unexpected count for " + expected);
+      }
+      std::cout << "Function header return and argument warnings matched\n";
+      return;
+    }
     if (forward_warning) {
       Check(occurrences("Unused extern 'NoUseClass'") == 2 &&
                 occurrences("Unused extern 'NoUseUnion'") == 2 &&

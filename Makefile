@@ -273,7 +273,8 @@ DOC_BIN_LINK := Linux/Fixtures/DocBinLink.DD
 QUEUE_PROBE := Linux/Fixtures/QueueProbe.HC
 TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInputProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
-COMPILER_WARNING_PROBES := Linux/Fixtures/CompilerWarningProbe.HC Linux/Fixtures/ForwardTypeWarningProbe.HC
+COMPILER_WARNING_PROBES := Linux/Fixtures/CompilerWarningProbe.HC \
+	Linux/Fixtures/ForwardTypeWarningProbe.HC Linux/Fixtures/HeaderWarningProbe.HC
 COMPILER_WARNING_TEST_ISO := $(BUILD)/compiler-warning-test.iso
 AOT_DATA_HEAP_PROBES := Linux/Fixtures/HeapGlobals.PRJ Linux/Fixtures/HeapGlobalsInvalid.PRJ
 AOT_DATA_HEAP_TEST_ISO := $(BUILD)/aot-data-heap-test.iso

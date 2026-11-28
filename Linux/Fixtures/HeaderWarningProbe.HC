@@ -1,0 +1,35 @@
+// Function header comparisons from Terry A. Davis's Compiler/PrsStmt.HC
+// and Compiler/LexLib.HC at c26482bb6ad3f80106d28504ec5db3c6a360732c.
+U8 *header_warning_source =
+  "extern I64i FHReturn(I64i v);\n"
+  "U64i FHReturn(I64i v){return v;}\n"
+  "extern I64i FHName(I64i old);\n"
+  "I64i FHName(I64i v){return v;}\n"
+  "extern I64i FHClass(U64i v);\n"
+  "I64i FHClass(I64i v){return v;}\n"
+  "extern I64i FHCount(I64i v);\n"
+  "I64i FHCount(I64i v,I64i w){return v+w;}\n"
+  "extern I64i FHNum(I64i v=41);\n"
+  "I64i FHNum(I64i v=42){return v;}\n"
+  "extern I64i FHText(U8 *s=\"before\");\n"
+  "I64i FHText(U8 *s=\"after\"){return s[0];}\n"
+  "extern I64i FHSame(U8 *s=\"same\");\n"
+  "I64i FHSame(U8 *s=\"same\"){return s[0];}\n"
+  "extern I64i FHAdd(I64i v);\n"
+  "I64i FHAdd(I64i v=0){return v;}\n"
+  "extern I64i FHDrop(I64i v=0);\n"
+  "I64i FHDrop(I64i v){return v;}\n"
+  "extern I64i FHVar(I64i v,...);\n"
+  "I64i FHVar(I64i v,I64i extra,...){return v+extra+argc+argv[0];}\n"
+  "extern I64i FHRedecl(I64i old);\n"
+  "extern I64i FHRedecl(I64i v);\n"
+  "I64i FHRedecl(I64i v){return v;}\n"
+  "#exe {Option(OPTf_WARN_HEADER_MISMATCH,OFF);};\n"
+  "extern I64i FHOff(I64i old);\n"
+  "U64i FHOff(U64i v){return v;}\n"
+  "#exe {Option(OPTf_WARN_HEADER_MISMATCH,ON);};\n"
+  "extern I64i FHOn(I64i old);\n"
+  "U64i FHOn(U64i v){return v;}\n"
+  "I64i HeaderRead(I64i v){return FHNum+FHName(v)-42;}\n";
+if (FileWrite("Warn.PRJ", header_warning_source, StrLen(header_warning_source)))
+  "WW %X\n", 1;
