@@ -664,6 +664,8 @@ private:
       return coc.LValue(address, *member->member_class, member->dim.next,
                         FunPtrBase(member->fun_ptr));
     }
+    if (token == TK_IDENT && !cc.hash_entry && !(cc.flags & CCF_ASM_EXPRESSIONS))
+      return Error("Invalid lval at ");
     if (token == TK_IDENT && cc.hash_entry) {
       auto *hash = cc.hash_entry;
       if (hash->type & HTT_KEYWORD) {
@@ -707,14 +709,15 @@ private:
   uint32_t Binary(uint32_t left, CBinaryOp op, unsigned depth)
   {
     Lex(cc);
+    const bool assignment = op.code == IC_ASSIGN || ICIsCompoundAssign(op.code);
+    if (assignment && !IsLValue(left))
+      return Error("Invalid lval at ");
     uint32_t right = Expression(op.precedence, depth + 1);
     if (right == NO_IC)
       return NO_IC;
     if (!TypeSize(coc.code[left].type) || !TypeSize(coc.code[right].type))
       return NO_IC;
-    if (op.code == IC_ASSIGN || ICIsCompoundAssign(op.code)) {
-      if (!IsLValue(left))
-        return NO_IC;
+    if (assignment) {
       auto *cls = coc.code[left].cls;
       if ((op.code == IC_ADD_EQU || op.code == IC_SUB_EQU) && cls &&
           cls->ptr_stars_cnt && (cls - 1)->size != 1) {

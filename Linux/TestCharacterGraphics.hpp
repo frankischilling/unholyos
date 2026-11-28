@@ -605,6 +605,17 @@ static void DriveCharacterGraphics(
     report(missing, aot, aot_line);
     report(parse, aot, aot_line);
     report(R"(";" $LK,)", aot, aot_line);
+    cmd("DocClear(,1);");
+    cmd(R"(U8 *ci="public I64i CmpStaleExport;\n";)");
+    cmd(R"(ci=MStrPrint("%sCmpStaleExport=UnboundCmpName;\n",ci);)");
+    cmd(R"(FileWrite("Partial.HC",ci,StrLen(ci));Free(ci);)");
+    cmd(R"("DI %X\n",Cmp("Partial.HC",,"Bad.BIN");)");
+    wait_text("DI 2");
+    const auto rejected = save_diagnostic("compiler-partial.bin");
+    Check(rejected.find(R"(Invalid lval at "UnboundCmpName")") != std::string::npos &&
+              rejected.find("FL:A:/Partial.HC,2") != std::string::npos &&
+              rejected.find("Errs:2 Warns:0 Code:0 Size:0") != std::string::npos,
+          "Failed partial Cmp reported the wrong error, source, or output size");
     std::cout << "HolyC diagnostics matched the prompt, ExeFile, ExeFile2 and Cmp paths\n";
     return;
   }

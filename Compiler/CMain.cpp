@@ -246,7 +246,8 @@ extern "C" int64_t CmpCpp(const char *filename, const char *map_name,
       (!bfh || (map_name && !MapFileWrite(*table, map_name, mapfile_drv_let)) ||
        !FileWriteCpp(out, reinterpret_cast<uint8_t *>(bfh), bfh->file_size, 0, 0)))
     error = 1;
-  uint64_t report[]{error, aot.warning_cnt, aot.size, bfh ? bfh->file_size : 0};
+  uint64_t report[]{error, aot.warning_cnt, bfh ? aot.size : 0,
+                    bfh ? bfh->file_size : 0};
   PrintCpp("Errs:%d Warns:%d Code:%X Size:%X\n", 4, report);
   Free(bfh);
   AOTDel(aot, table);

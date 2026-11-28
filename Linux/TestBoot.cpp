@@ -6391,7 +6391,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
             "The native HolyC compiler runtime probe did not pass all checks");
       auto isolated = output.find("UnholyOS: AOT symbols isolated");
       Check(output.find("cmp compile 0\n") != std::string::npos &&
-                output.find("cmp reject 1\n") != std::string::npos &&
+                output.find("cmp reject 2\n") != std::string::npos &&
                 output.find("cmp print 0\n") != std::string::npos &&
                 isolated != std::string::npos &&
                 output.find("UnholyOS: AOT source map") != std::string::npos &&
