@@ -679,6 +679,73 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
                          reinterpret_cast<void *>(CmpSysExport("sys_os_version")));
 }
 
+static bool CmpProgressData(CHashTable *table)
+{
+  auto *cls = CmpKernelClass(table, "CProgress", sizeof(CProgress));
+  auto *heap = CurrentTask()->data_heap;
+  auto *i64 = FindType("I64", table);
+  auto *f64 = FindType("F64", table);
+  auto *u8 = FindType("U8", table);
+  auto *progress =
+      reinterpret_cast<CProgress *>(CmpSysExport("sys_progresses"));
+  if (!cls || !i64 || !f64 || !u8 || !progress)
+    return false;
+  const struct
+  {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+  } members[]{
+      {"val", i64, offsetof(CProgress, val)},
+      {"max", i64, offsetof(CProgress, max)},
+      {"t0", f64, offsetof(CProgress, t0)},
+      {"tf", f64, offsetof(CProgress, tf)},
+      {"desc", u8, offsetof(CProgress, desc)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    auto *entry =
+        name ? MemberAdd(*cls, name, *member.type, member.offset) : nullptr;
+    if (!entry) {
+      Free(name);
+      return false;
+    }
+    if (member.type == u8) {
+      auto *axis =
+          reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return false;
+      axis->cnt = PROGRESS_DESC_LEN;
+      axis->total_cnt = 1;
+      entry->dim.next = axis;
+      entry->dim.total_cnt = PROGRESS_DESC_LEN;
+      entry->size = PROGRESS_DESC_LEN;
+    }
+  }
+  const char *names[PROGRESS_BARS_NUM][5]{
+      {"progress1", "progress1_max", "progress1_t0", "progress1_tf",
+       "progress1_desc"},
+      {"progress2", "progress2_max", "progress2_t0", "progress2_tf",
+       "progress2_desc"},
+      {"progress3", "progress3_max", "progress3_t0", "progress3_tf",
+       "progress3_desc"},
+      {"progress4", "progress4_max", "progress4_t0", "progress4_tf",
+       "progress4_desc"},
+  };
+  for (int64_t i = 0; i < PROGRESS_BARS_NUM; i++) {
+    auto &p = progress[i];
+    const auto &name = names[i];
+    if (!CmpKernelGlobal(table, name[0], i64, &p.val) ||
+        !CmpKernelGlobal(table, name[1], i64, &p.max) ||
+        !CmpKernelGlobal(table, name[2], f64, &p.t0) ||
+        !CmpKernelGlobal(table, name[3], f64, &p.tf) ||
+        !CmpKernelGlobal(table, name[4], u8, p.desc, PROGRESS_DESC_LEN))
+      return false;
+  }
+  return CmpKernelGlobal(table, "sys_progresses", cls, progress,
+                         PROGRESS_BARS_NUM);
+}
+
 static bool CmpInsRegData(CHashTable *table)
 {
   auto *cls = CmpKernelClass(table, "CInsReg", sizeof(CInsReg));
@@ -2768,6 +2835,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"WinTileVert", U0, FF_RET1, {}},
       {"WinMax", U0, FF_RET1, {{"task", TaskPtr, true}}},
       {"WinBorder", Bool, FF_RET1, {{"val", Bool, true}, {"task", TaskPtr, true}}},
+      {"ProgressBarsRst", U0, FF_RET1, {{"path", U8Ptr, true}}},
       {"WinScrollNull", U0, FF_RET1, {{"task", TaskPtr}, {"s", D3I64Ptr}}},
       {"WinScrollRestore", U0, FF_RET1, {{"task", TaskPtr}, {"s", D3I64Ptr}}},
       {"CtrlFindUnique", CtrlPtr, FF_RET1, {{"task", TaskPtr}, {"type", I64}}},
@@ -3692,6 +3760,7 @@ static bool CmpFillHash(CHashTable *table)
       {"ACD_WORD_FILENAME", "\"/Adam/AutoComplete/ACWords.DATA.Z\""},
       {"ACD_DEF_FILENAME", "\"/Adam/AutoComplete/ACDefs.DATA\""},
       {"ACD_DEF_FILENAME_Z", "\"/Adam/AutoComplete/ACDefs.DATA.Z\""},
+      {"PROGRESS_BARS_NUM", "4"}, {"PROGRESS_DESC_LEN", "48"},
       {"LK_DOC", "12"}, {"LK_DOC_ANCHOR", "13"}, {"LK_DOC_FIND", "14"},
       {"LK_DOC_LINE", "15"},
       {"DOCF_FORM", "0x200"}, {"DOCF_SIZE_MIN", "0x400"},
@@ -3876,6 +3945,7 @@ static bool CmpFillHash(CHashTable *table)
          CmpScrnCastData(table) && CmpMusicData(table) &&
          CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
          CmpCtrlData(table, task) && CmpInsRegData(table) &&
+         CmpProgressData(table) &&
          CmpClassReportData(table, *task) &&
          CmpRuntimeHeaders(table);
 }

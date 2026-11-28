@@ -256,7 +256,7 @@ CMP_PROBES := $(addprefix Linux/Fixtures/,CmpProbeRunner.HC CmpProbe.PRJ CmpProb
 	ScreenProbe.HC FontTextProbe.HC PromptProbe.HC DateOffsetProbe.HC CursorProbe.HC CursorExcept.HC Grid.HC FunctionPtrProbe.HC VariadicProbe.HC VariadicPtrProbe.HC DocFrame.HC DocButton.HC DocCallback.HC TryProbe.HC Exceptions.HC DirectoryProbe.HC DirContextProbe.HC FileStreamProbe.HC FileCopyProbe.HC FileOperationsProbe.HC DocBinLinkProbe.HC SpriteProbe.HC MemberMetaProbe.HC LastClassProbe.HC)
 GRAPHICS_DEMOS := Demo/Graphics/3DPoly.HC Demo/Graphics/Box.HC \
 	Demo/Graphics/Symmetry.HC Demo/Graphics/CommonAncestor.HC Demo/Graphics/Shading.HC Demo/Graphics/ScrnCapture.HC Demo/Graphics/BSpline.HC \
-	Demo/PullDownMenu.HC Demo/ExtChars.HC Demo/Prompt.HC Demo/Graphics/Blot.HC
+	Demo/PullDownMenu.HC Demo/ExtChars.HC Demo/Prompt.HC Demo/Progress.HC Demo/Graphics/Blot.HC
 GAME_DEMOS := Demo/Games/Digits.HC Demo/Games/Maze.HC Demo/Games/CharDemo.HC Demo/Games/TicTacToe.HC
 APP_FILES := Apps/TimeClock/Load.HC Apps/TimeClock/Install.HC Apps/TimeClock/TimeClk.HC
 CLASS_META_DEMO := Demo/ClassMeta.HC Demo/LastClass.HC
@@ -834,6 +834,12 @@ test-popup-menus: $(POPUP_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --popup-menus "$(QEMU)" $(POPUP_TEST_ISO)
 
 test: test-popup-menus
+
+.PHONY: test-progress
+test-progress: $(ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --progress "$(QEMU)" $(ISO)
+
+test: test-progress
 
 .PHONY: test-ins-reg
 test-ins-reg: $(INS_REG_TEST_ISO) $(BOOT_TEST)

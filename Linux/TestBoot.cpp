@@ -1910,6 +1910,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CDocBin",
                                        "CEdFileName",
                                        "CInsReg",
+                                       "CProgress",
                                        "CQue",
                                        "CFifoU8",
                                        "CFifoI64",
@@ -1964,7 +1965,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 94);
+  static_assert(class_count == 95);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -2017,6 +2018,8 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
           Check((hash & 1023) == bucket + i,
                 "Startup class is in the wrong hash bucket");
           const auto block = ReadPhysical<80>(vm, address);
+          if (name == "CProgress")
+            Check(block[8] == 80, "Startup CProgress record has the wrong size");
           Check(((block[10] >> 32) & 255) == 0,
                 "Startup class base has pointer stars");
           for (uint64_t stars = 1; stars <= 4; ++stars) {
@@ -6896,7 +6899,8 @@ int main(int argc, char **argv)
        mode == "--ins-reg-reference" || mode == "--startup-exec" ||
        mode == "--startup-exec-reference" || mode == "--training-input-reference" ||
        mode == "--file-editor-reference" || mode == "--key-map" ||
-       mode == "--key-map-reference" || mode == "--dictionary-reference")) {
+       mode == "--key-map-reference" || mode == "--dictionary-reference" ||
+       mode == "--progress" || mode == "--progress-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
     const bool registry = mode.starts_with("--registry");
@@ -6905,13 +6909,16 @@ int main(int argc, char **argv)
     const bool ins_reg = mode.starts_with("--ins-reg");
     const bool startup_exec = mode.starts_with("--startup-exec");
     const bool key_map = mode.starts_with("--key-map");
+    const bool progress = mode.starts_with("--progress");
     char path[] = "/tmp/unholyos-document-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
     const fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
-      if (!reference && popup) {
+      if (!reference && progress) {
+        VerifyHostModuleMedia(argv[3], "Demo/Progress.HC", "Progress.HC", "Demo");
+      } else if (!reference && popup) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/PopupProbe.HC",
                               "PopupProbe.HC");
         VerifyHostModuleMedia(argv[3], "Demo/DolDoc/MenuBttn.HC",
@@ -6968,7 +6975,8 @@ int main(int argc, char **argv)
       DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
                              reference, false, false, false, false, false,
                              false, false, false, probes, {}, 0x20000000,
-                             once && !reference ? "Once startup 2A 2 2" : "");
+                             once && !reference ? "Once startup 2A 2 2" : "",
+                             CStockStartup::None, progress);
       vm.Quit();
       if (argc == 4)
         fs::remove_all(dir);

@@ -175,6 +175,7 @@ GLOBAL Note2OnaHC,Ona2NoteHC,Ona2OctaveHC,PlayHC,MusicSettingsRstHC
 GLOBAL SpawnHC,TaskValidateHC,SuspendHC,IsSuspendedHC,TaskQueInsHC,TaskQueRemHC
 GLOBAL KillHC
 GLOBAL SingleUserHC,IsSingleUserHC
+GLOBAL ProgressBarsRstHC
 GLOBAL JobDelHC,TaskRstAwaitingMsgHC,TaskExeHC,TaskTextHC
 GLOBAL TaskMsgHC,JobResScanHC,JobResGetHC,TaskWaitHC
 GLOBAL PostMsgHC,PostMsgWaitHC,MsgHC,JobsHndlrHC
@@ -238,6 +239,7 @@ EXTERN CPUStructInitCpp,TaskInitCpp
 EXTERN SpawnCpp,TaskValidateCpp,SuspendCpp,IsSuspendedCpp,TaskQueInsCpp,TaskQueRemCpp
 EXTERN KillCpp
 EXTERN SingleUserCpp,IsSingleUserCpp
+EXTERN ProgressBarsRstCpp
 EXTERN JobDelCpp,TaskRstAwaitingMsgCpp,TaskExeCpp,TaskTextCpp
 EXTERN TaskMsgCpp,JobResScanCpp,JobResGetCpp,TaskWaitCpp
 EXTERN PostMsgCpp,PostMsgWaitCpp,MsgCpp,JobsHndlrCpp
@@ -472,6 +474,7 @@ HOLYC_CPP TaskQueInsHC,TaskQueInsCpp,2
 HOLYC_CPP TaskQueRemHC,TaskQueRemCpp,1
 HOLYC_CPP SingleUserHC,SingleUserCpp,1
 HOLYC_CPP IsSingleUserHC,IsSingleUserCpp,0
+HOLYC_CPP ProgressBarsRstHC,ProgressBarsRstCpp,1
 HOLYC_CPP JobDelHC,JobDelCpp,1
 HOLYC_CPP TaskRstAwaitingMsgHC,TaskRstAwaitingMsgCpp,1
 HOLYC_CPP TaskExeHC,TaskExeCpp,4

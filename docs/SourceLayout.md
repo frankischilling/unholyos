@@ -813,6 +813,22 @@ highlight, and releasing the GUI key sends the highlighted command
 to the focused task. UnholyOS tracks that virtual cursor during
 drawing so the input pump can keep sampling the physical mouse.
 
+## Wallpaper progress bars
+
+`Kernel/KStart32.asm` holds the four contiguous 80-byte `CProgress`
+records declared by `Kernel/KernelA.HH`. The zero-initialized storage is
+in the kernel BSS. The `SYS_PROGRESS*` labels and the typed HolyC
+`progress*` globals address the same fields as `sys_progresses`.
+The C++ view stores `t0` and `tf` as IEEE-754 bits for the freestanding
+floating-point helpers. HolyC sees both fields as `F64`.
+
+`Adam/Win.cpp` follows `DrawProgressBars`, `ProgressBarsRegTf`, and
+`WinFinalUpdate` from `Adam/Win.HC`. The bars draw before the menu and
+mouse. `Kernel/KMisc.cpp` calls the registry writer directly from
+`ProgressBarsRst` and then clears all four records. The reference
+resolves the same writer through `CallExtStr`. Dictionary installation
+still needs `ACProgressTask` to update the first bar.
+
 ## DolDoc windows
 
 `Adam/Gr/GrInitB.cpp` follows `WinZBufFill` and `WinZBufUpdate` to
@@ -848,7 +864,7 @@ task. Entry callbacks run with the document unlocked. Live tags in
 `DocRecalc.cpp` receive the locked document, entry, and owning memory
 task. A tag callback that throws falls back to an empty tag during
 that refresh. `DocRecalcLib.cpp` supplies `DocBottom` and the hold-aware
-`DocClear` pass. Macro dispatch, wrapping, data widgets, and the full
+`DocClear` pass. Complex wrapping, data widgets, and the full
 editor remain pending.
 
 `Adam/DolDoc/DocTerm.cpp` creates the put, display, and border documents

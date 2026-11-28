@@ -284,3 +284,9 @@ extern "C" uint64_t IsSingleUserCpp()
 {
   return __atomic_load_n(&sys_semas[SEMA_SINGLE_USER].flags, __ATOMIC_RELAXED) & 1;
 }
+
+extern "C" void ProgressBarsRstCpp(const char *path)
+{
+  ProgressBarsRegTf(path);
+  MemSet(sys_progresses, 0, sizeof(sys_progresses));
+}

@@ -114,7 +114,7 @@ static void DriveCharacterGraphics(
     std::span<const CModuleFile> module_files = {},
     uint64_t memory_limit = 0x20000000,
     std::string_view startup_output = {},
-    CStockStartup stock = CStockStartup::None)
+    CStockStartup stock = CStockStartup::None, bool progress_demo = false)
 {
   const bool reference_dictionary = reference && !text_probes.empty() &&
       std::string_view(text_probes.front().name) == "dictionary";
@@ -523,6 +523,70 @@ static void DriveCharacterGraphics(
     std::cout << startup_output << '\n';
   }
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
+  if (progress_demo) {
+    cmd(R"("PGM %X %X %X\n",&progress1,&sys_progresses[0].val,&progress1_max;)");
+    const auto progress = addresses("PGM ");
+    Check(progress[0] == progress[1] && progress[2] - progress[0] == 8,
+          "Progress fields do not alias the CProgress record");
+    cmd(R"(ExeFile2("::/Demo/Progress.HC");)");
+    const char *phases[]{
+        "With description.", "With description and elapsed time.",
+        "With description, elapsed time and registry total time.",
+        "No description."};
+    const auto render = dir / "progress-current.ppm";
+    for (size_t i = 0; i < std::size(phases); i++) {
+      wait_text(phases[i]);
+      Check(ReadPhysical<2>(vm, progress[0]) == std::array<uint64_t, 2>{},
+            "The earlier progress bar did not reset");
+      key("spc");
+      bool filled = false;
+      for (unsigned attempt = 0; attempt < 60; attempt++) {
+        vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
+                   render.string() + R"("}})");
+        const auto rgb = ReadVGA(render);
+        auto green = [&](int x) {
+          const auto *pixel = &rgb[(172 * 640 + x) * 3];
+          return pixel[1] > 200 && pixel[0] < 150 && pixel[2] < 150;
+        };
+        if (green(105) && !green(520)) {
+          filled = true;
+          break;
+        }
+        std::this_thread::sleep_for(45ms);
+      }
+      Check(filled, "The Progress demo bar did not partially fill");
+      fs::copy_file(render,
+                    dir / ("progress-" + std::to_string(i + 1) + ".ppm"),
+                    fs::copy_options::overwrite_existing);
+      wait(
+          [&](const Cells &) {
+            return ReadPhysical<2>(vm, progress[0]) ==
+                   std::array<uint64_t, 2>{};
+          },
+          "The Progress demo did not clear the bar", 330);
+    }
+    wait_text("Watch the progress on the wallpaper.");
+    vm.ResetDeadline(300s);
+    key("spc");
+    uint64_t val = 0;
+    wait(
+        [&](const Cells &) {
+          val = ReadPhysical<1>(vm, progress[0])[0];
+          return val > 0 && val < 12000000;
+        },
+        "The Progress demo assembly loop did not update the shared counter");
+    const auto first = val;
+    for (unsigned i = 0; val && i < 1800; i++) {
+      std::this_thread::sleep_for(150ms);
+      val = ReadPhysical<1>(vm, progress[0])[0];
+    }
+    if (val)
+      throw std::runtime_error(
+          "The Progress demo assembly loop did not clear the counter (" +
+          std::to_string(first) + " to " + std::to_string(val) + ")");
+    std::cout << "Progress.HC drew and reset its four display phases and ran its assembly loop\n";
+    return;
+  }
   if (reference_dictionary) {
     cmd("CBlkDev *dictbd=BlkDevNextFreeSlot('A',BDT_RAM);");
     cmd("dictbd->max_blk=131071;BlkDevAdd(dictbd,I64_MIN,FALSE,TRUE);");

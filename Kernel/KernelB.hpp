@@ -442,6 +442,9 @@ extern CTask *adam_task, *sys_focus_task, *sys_winmgr_task,
 extern CCPU *cpu_structs;
 extern int64_t mp_cnt;
 extern CBlkDevGlbls blkdev;
+extern CProgress sys_progresses[PROGRESS_BARS_NUM] asm("SYS_PROGRESSES");
+void ProgressBarsRegTf(const char *path);
+extern "C" void ProgressBarsRstCpp(const char *path);
 extern CDbgGlbls dbg;
 extern CSema sys_semas[SEMA_SEMAS_NUM];
 extern CScrnCastGlbls scrncast;

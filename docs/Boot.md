@@ -1823,6 +1823,23 @@ Playback uses the actual PIT speaker and task sleep. It is tested on
 one CPU; waveform fidelity, exact wall-clock durations, SMP music
 semaphores, and the remaining sound and media APIs are not established.
 
+## Wallpaper progress bars
+
+The boot and startup-test ISOs include Terry A. Davis's original
+`Demo/Progress.HC`. Its pinned source has SHA-256
+`416986ef1bb29e81b5da753ab5fc27b42f01404c10d7eb092fdef02dd93e142e`.
+The test verifies that the first named progress fields address the
+`CProgress` record, presses a key for each of the four display phases,
+and samples the rendered VGA bar. It checks that the counter and its
+maximum clear after each phase. The final assembly loop must update
+the same counter and return it to zero.
+
+```sh
+make -j4 test-progress
+build/Linux/TestBoot --progress-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/progress-reference
+```
+
 ## Screen capture
 
 `Demo/Graphics/ScrnCapture.HC` is the original Terry A. Davis source from
