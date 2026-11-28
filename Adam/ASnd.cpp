@@ -274,3 +274,93 @@ extern "C" void MusicSettingsRstCpp()
   music.last_Beat = 0;
   asm volatile("pushq %0; popfq" : : "r"(flags) : "cc", "memory");
 }
+
+
+extern "C" void SoundEffectEndTaskCBHC();
+extern "C" void SoundEffectTaskHC();
+extern "C" uint64_t ClampCpp(uint64_t d,uint64_t lo,uint64_t hi);
+extern "C" int64_t SoundEffectSweepOna(uint64_t t,int64_t ona1,int64_t ona2);
+
+extern "C" [[noreturn]] void SoundEffectEndTaskCBCpp()
+{
+  Free(reinterpret_cast<void *>(FramePtrCpp("CSoundEffectFrame",nullptr)));
+  music.mute--;
+  SndTaskEndCBCpp();
+}
+
+static void SoundEffectSleep(int64_t ona,uint64_t timeout)
+{
+  uint64_t t=ClampCpp(F64DivBits(F64(3000.0),Ona2FreqCpp(ona)),F64(1.0),F64(50.0));
+  if (F64CompareBits(F64AddBits(t,tSCpp()),timeout)>0)
+    t=F64SubBits(timeout,tSCpp());
+  SleepCpp(ToI64(t));
+}
+
+extern "C" void SoundEffectTaskCpp(CSoundEffectFrame *ns)
+{
+  uint64_t t0=tSCpp(),timeout=F64AddBits(t0,ns->duration);
+  if (!FramePtrAddCpp("CSoundEffectFrame",reinterpret_cast<intptr_t>(ns),nullptr)) {
+    Free(ns);
+    music.mute--;
+    SndTaskEndCBCpp();
+  }
+  CurrentTask()->task_end_cb=&SoundEffectEndTaskCBHC;
+  switch (ns->type) {
+    case SE_NOISE: {
+      int64_t i=int64_t(ns->ona2)-ns->ona1;
+      if (i<1) i=1;
+      while (F64CompareBits(tSCpp(),timeout)<0) {
+        int64_t ona=int64_t(RandU16Cpp())%i+ns->ona1;
+        SndCpp(ona);
+        SoundEffectSleep(ona,timeout);
+      }
+      break;
+    }
+    case SE_SWEEP:
+      while (F64CompareBits(tSCpp(),timeout)<0) {
+        uint64_t t=F64DivBits(F64SubBits(tSCpp(),t0),ns->duration);
+        int64_t ona=SoundEffectSweepOna(t,ns->ona1,ns->ona2);
+        SndCpp(ona);
+        SoundEffectSleep(ona,timeout);
+      }
+      break;
+  }
+}
+
+static CTask *SoundEffectSpawn(int64_t mS,uint64_t ona1,uint64_t ona2,int32_t type)
+{
+  auto *task=CurrentTask();
+  auto *ns=reinterpret_cast<CSoundEffectFrame *>(
+      MAlloc(sizeof(CSoundEffectFrame),task->data_heap));
+  if (!ns)
+    return nullptr;
+  ns->type=type;
+  ns->duration=F64DivBits(F64FromI64(mS),F64(1000.0));
+  ns->ona1=ToI64(ona1);
+  ns->ona2=ToI64(ona2);
+  music.mute++;
+  auto *result=SpawnCpp(reinterpret_cast<uintptr_t>(SoundEffectTaskHC),
+                        reinterpret_cast<uint8_t *>(ns),"Noise",-1,task,0,
+                        JOBF_ADD_TO_QUE);
+  if (!result) {
+    music.mute--;
+    Free(ns);
+  }
+  return result;
+}
+
+extern "C" CTask *NoiseCpp(int64_t mS,uint64_t min_ona,uint64_t max_ona)
+{
+  if (mS>0)
+    return SoundEffectSpawn(mS,min_ona,max_ona,SE_NOISE);
+  else
+    return nullptr;
+}
+
+extern "C" CTask *SweepCpp(int64_t mS,uint64_t ona1,uint64_t ona2)
+{
+  if (mS>0)
+    return SoundEffectSpawn(mS,ona1,ona2,SE_SWEEP);
+  else
+    return nullptr;
+}

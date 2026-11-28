@@ -300,6 +300,7 @@ void SndShiftHC(), AUWriteHC();
 void SawHC(), FullSawHC(), CawHC(), FullCawHC(), TriHC(), FullTriHC();
 void SndTaskEndCBHC(), tMHC(), BeatHC(), MusicSetOctaveHC(), MusicSetMeterHC();
 void MusicSetNoteLenHC(), Note2OnaHC(), Ona2NoteHC(), Ona2OctaveHC();
+void NoiseHC(), SweepHC();
 void PlayHC(), MusicSettingsRstHC();
 }
 
@@ -1493,6 +1494,8 @@ bool LoadKernel(CTask &task)
       {"Ona2Octave", reinterpret_cast<uintptr_t>(Ona2OctaveHC)},
       {"Play", reinterpret_cast<uintptr_t>(PlayHC)},
       {"MusicSettingsRst", reinterpret_cast<uintptr_t>(MusicSettingsRstHC)},
+      {"Noise", reinterpret_cast<uintptr_t>(NoiseHC)},
+      {"Sweep", reinterpret_cast<uintptr_t>(SweepHC)},
       {"Beep", reinterpret_cast<uintptr_t>(BeepHC)},
       {"Mute", reinterpret_cast<uintptr_t>(MuteHC)},
       {"IsMute", reinterpret_cast<uintptr_t>(IsMuteHC)},

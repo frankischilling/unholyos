@@ -1931,6 +1931,32 @@ static bool CmpMusicData(CHashTable *table)
   return CmpKernelGlobal(table, "music", cls, &music);
 }
 
+static bool CmpSoundEffectFrameData(CHashTable *table)
+{
+  auto *cls=CmpKernelClass(table,"CSoundEffectFrame",sizeof(CSoundEffectFrame));
+  if (!cls)
+    return false;
+  auto *heap=CurrentTask()->data_heap;
+  const struct
+  {
+    const char *name,*type;
+    size_t offset;
+  } fields[]{
+      {"type","I32",offsetof(CSoundEffectFrame,type)},
+      {"ona1","I8",offsetof(CSoundEffectFrame,ona1)},
+      {"ona2","I8",offsetof(CSoundEffectFrame,ona2)},
+      {"duration","F64",offsetof(CSoundEffectFrame,duration)},
+  };
+  for (const auto &field:fields) {
+    auto *name=StrNew(field.name,heap);
+    if (!name || !MemberAdd(*cls,name,*FindType(field.type,table),field.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool CmpTaskSettingsData(CHashTable *table)
 {
   auto *cls = CmpKernelClass(table, "CTaskSettings", sizeof(CTaskSettings));
@@ -3428,6 +3454,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Ona2Octave", I8, FF_RET1, {{"ona", I8}}},
       {"Play", U0, FF_RET1, {{"st", U8Ptr}, {"words", U8Ptr, true}}},
       {"MusicSettingsRst", U0, FF_RET1, {}},
+      {"Noise", TaskPtr, FF_RET1,
+       {{"mS", I64}, {"min_ona", F64}, {"max_ona", F64}}},
+      {"Sweep", TaskPtr, FF_RET1, {{"mS", I64}, {"ona1", F64}, {"ona2", F64}}},
       {"SndShift", U0, FF_RET1, {{"head", SndPtr}, {"dt", F64, true}}},
       {"AUWrite", I64, FF_RET1,
        {{"filename", U8Ptr}, {"head", SndPtr}, {"t0_now", DatePtr}, {"t0_tS", F64}}},
@@ -3710,6 +3739,7 @@ static bool CmpFillHash(CHashTable *table)
       {"HTT_CLASS", "0x10"}, {"HTT_INTERNAL_TYPE", "0x20"},
       {"HTT_FUN", "0x40"}, {"HTT_EXPORT_SYS_SYM", "0x01"},
       {"HTT_FRAME_PTR", "0x10000"},
+      {"SE_NOISE", "0"}, {"SE_SWEEP", "1"},
       {"HTT_INVALID", "0"}, {"HTT_GLBL_VAR", "0x08"},
       {"HTT_DEFINE_STR", "0x04"}, {"HTF_PUBLIC", "0x01000000"},
       {"MLMF_IS_STR", "1"},
@@ -3986,6 +4016,7 @@ static bool CmpFillHash(CHashTable *table)
          CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
          CmpScrnCastData(table) && CmpMusicData(table) &&
+         CmpSoundEffectFrameData(table) &&
          CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
          CmpCtrlData(table, task) && CmpInsRegData(table) &&
          CmpProgressData(table) &&
