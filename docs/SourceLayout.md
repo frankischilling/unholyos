@@ -1683,8 +1683,15 @@ hex digits enter most significant bit first. The timer dialog uses
 DolDoc tag callbacks for the live timer and the last input timestamp.
 An empty queue prompts for input and refills from `KbdMsEvtTime`.
 Terry A. Davis's original `Adam/God/HSNotes.DD` is packaged at the
-same path on the DVD. The vocabulary, song generator, and doodle command
-still need translation.
+same path on the DVD.
+
+`Adam/God/GodSong.cpp` follows `InsNote`, `GodSongStr`, and `GodSong`
+from `GodSong.HC`. The settings dialog uses the native metadata for
+`CMakeSongSettings` and the original rhythm list. The generator keeps the
+rhythm tables, octave changes, meter prefix, and progress counter.
+F6 in `Adam/DolDoc/DocPutKey.cpp` calls `GodSong`, which writes
+both phrases twice in a DolDoc song entry. The vocabulary, Bible passage,
+and doodle command still need translation.
 
 ## Speaker sound effects
 

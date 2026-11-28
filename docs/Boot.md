@@ -4581,6 +4581,28 @@ build/gcc/Linux/TestBoot --god-input-reference qemu-system-x86_64 \
   /path/to/pinned/TOS_Distro.ISO build/god-input-reference
 ```
 
+## God song generation
+
+`GodSongProbe.HC` calls the F6 document handler and drives both settings
+dialogs through QEMU. The first uses the default rhythm. The second
+selects Complex, Rests, and Six Eight. A worker feeds the same bit
+sequences into both guests while the timer dialog is open.
+
+The probe checks the resulting score byte for byte, including both
+repeated phrases, the meter change, rests, dotted notes, and triplets.
+It verifies that the DolDoc song task uses the score, that clearing the
+document ends playback, and that the generator resets its progress
+counter. Pinned TempleOS and UnholyOS built with GCC 13.3.0 or Clang 20.1.2
+report `God song checks FF`. The runs use QEMU 8.2.2 with PC,
+`qemu64`, one vCPU, 512 MiB, and optical boot.
+
+```sh
+make -j6 BUILD=build/gcc test-god-song
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-god-song
+build/gcc/Linux/TestBoot --god-song-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/god-song-reference
+```
+
 ## AutoComplete modifier pane
 
 `make test-stock-once` includes the original `Doc/StandBy.DD` by Terry A.
