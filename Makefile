@@ -25,13 +25,13 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Kernel/BlkDev/DskATA.cpp Kernel/BlkDev/DskATAId.cpp Kernel/BlkDev/DskAddDev.cpp \
 	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/DskDrv.cpp Kernel/BlkDev/DskBlkDev.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/FileSysFAT.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
 	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskStrB.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/BlkDev/DskClus.cpp Kernel/BlkDev/DskCache.cpp Kernel/BlkDev/DskFmt.cpp Kernel/Compress.cpp \
-	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ARegistry.cpp Adam/InsReg.cpp Adam/Training.cpp Adam/ASnd.cpp Adam/TaskSettings.cpp Adam/CPURep.cpp Adam/DevInfo.cpp Adam/AutoComplete/ACTask.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
+	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ARegistry.cpp Adam/InsReg.cpp Adam/Training.cpp Adam/InFile.cpp Adam/ASnd.cpp Adam/TaskSettings.cpp Adam/CPURep.cpp Adam/DevInfo.cpp Adam/AutoComplete/ACTask.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
 	Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
 	Adam/Gr/SpriteNew.cpp Adam/Gr/GrSpritePlot.cpp Adam/Gr/ScrnCast.cpp \
 	Adam/DolDoc/DocNew.cpp Adam/DolDoc/DocDblBuf.cpp Adam/DolDoc/DocRecalc.cpp Adam/DolDoc/DocRecalcLib.cpp \
 	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp Adam/DolDoc/DocClipBoard.cpp Adam/DolDoc/DocTree.cpp \
 	Adam/DolDoc/DocChar.cpp Adam/DolDoc/DocPutKey.cpp Adam/DolDoc/DocRun.cpp \
-	Adam/DolDoc/DocGet.cpp Adam/DolDoc/DocForm.cpp Adam/DolDoc/DocEd.cpp Adam/DolDoc/DocTerm.cpp HomeSys.cpp \
+	Adam/DolDoc/DocGet.cpp Adam/DolDoc/DocForm.cpp Adam/DolDoc/DocEd.cpp Adam/DolDoc/DocPopUp.cpp Adam/DolDoc/DocTerm.cpp HomeSys.cpp \
 	Adam/ABlkDev/ADskA.cpp Adam/ABlkDev/Mount.cpp Adam/Opt/Boot/DskISORedSea.cpp Adam/MakeAdam.cpp
 GUEST_TEST_SRC := Linux/BootProbe.cpp
 COMPILER_ASM_SRC := Compiler/CExcept.asm Compiler/CMain.asm Compiler/CMisc.asm Compiler/LexLib.asm Compiler/Templates.asm
@@ -163,6 +163,7 @@ ONCE_HOME := Linux/Fixtures/OnceHome.HC
 ONCE_BOOT := Linux/Fixtures/OnceBoot.DD
 ONCE_TEST_ISO := $(BUILD)/once-test.iso
 STOCK_ONCE_TEST_ISO := $(BUILD)/stock-once-test.iso
+INPUT_TRAINING_PROBE := Linux/Fixtures/InputTrainingProbe.HC
 STOCK_TOUR := $(wildcard Misc/Tour/*.IN)
 STARTUP_TIPS := Doc/Tips.DD Doc/Customize.DD
 POPUP_PROBE := Linux/Fixtures/PopupProbe.HC
@@ -564,8 +565,8 @@ $(REGISTRY_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(REGISTRY_
 $(ONCE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ONCE_PROBE) $(ONCE_HOME) $(ONCE_BOOT) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at Home/Registry.HC.Z $(ONCE_BOOT) --file-at Home/Once.HC $(ONCE_HOME) --file $(ONCE_PROBE)
 
-$(STOCK_ONCE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) Once.HC $(STARTUP_TIPS) $(STOCK_TOUR) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
-	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file Once.HC \
+$(STOCK_ONCE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) Once.HC $(STARTUP_TIPS) $(STOCK_TOUR) $(INPUT_TRAINING_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file Once.HC --file $(INPUT_TRAINING_PROBE) \
 		$(foreach asset,$(STARTUP_TIPS) $(STOCK_TOUR),--file-at $(asset) $(asset))
 
 $(POPUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(POPUP_PROBE) $(POPUP_DEMO) $(COMPILER_RESOURCE) $(COMPILER_MODULE)

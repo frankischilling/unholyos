@@ -174,6 +174,9 @@
 %1:
 	HC_FRAME_ENTER
 	MOV	RDI,[RBP+16]
+%if %3=0
+	LEA	RSI,[RBP+24]
+%else
 	MOV	RSI,[RBP+24]
 %if %3=2
 	MOV	RDX,[RBP+32]
@@ -182,6 +185,7 @@
 	LEA	RDX,[RBP+32]
 %if %4
 	MOV	RCX,RBP
+%endif
 %endif
 %endif
 	HC_FRAME_CALL %2

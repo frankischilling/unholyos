@@ -63,7 +63,7 @@ uint64_t I64MulF64Bits(int64_t value, uint64_t scale);
 void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
                  const uintptr_t *frame);
-void _BEQU(), _CALL(), _CLAMP_I64();
+void _BEQU(), _LBEQU(), _CALL(), _CLAMP_I64();
 void _MEMCPY(), _MEMSET(), _MEMSET_U16(), _MEMSET_U32(), _MEMSET_I64(), _MEMCMP();
 void _MALLOC(), _FREE(), _MHEAP_CTRL(), _MSIZE(), _MSIZE2();
 void CAllocHC(), MAllocIdentHC(), StrNewHC(), AStrNewHC();
@@ -251,6 +251,8 @@ void InsRegHC(), InsReregHC(), InsUnregHC();
 void AOnceFlushHC(), OnceFlushHC(), AOnceHC(), OnceHC(), AOnceDrvHC(),
     OnceDrvHC(), OnceExeHC(), XTalkHC();
 void XTalkWaitHC(), InStrHC(), InFileHC(), InHC(), XTalkStrHC(), XTalkStrWaitHC();
+void InGetStrHC(), InPrintHC(), InGetKeyHC(), InGetCharHC(), InUntilKeyHC(),
+     InUntilCharHC(), InViewHC(), InSetMsHC();
 void DocMenuHC(), PopUpMenuHC(), PopUpFormHC(), PopUpHC(), PopUpPrintHC(),
     SrvCmdLineHC(), OneTimePopUpHC(), RegOneTimePopUpHC();
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
@@ -274,7 +276,7 @@ void MenuDelHC();
 void MenuPushHC();
 void MenuFilePushHC();
 void MenuPopHC();
-void ScanCode2KeyNameHC();
+void Char2KeyNameHC(), ScanCode2KeyNameHC(), PopUp1HC(), PopUpOkHC();
 void WinBorderHC(), SettingsPushHC(), SettingsPopHC();
 void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
 void RawHC(), DbgModeHC(), IsDbgModeHC();
@@ -898,6 +900,8 @@ bool LoadKernel(CTask &task)
       {"dbg", reinterpret_cast<uintptr_t>(&dbg)},
       {"sys_semas", reinterpret_cast<uintptr_t>(sys_semas)},
       {"_BEQU", reinterpret_cast<uintptr_t>(_BEQU)},
+      {"_LBEQU", reinterpret_cast<uintptr_t>(_LBEQU)},
+      {"LBEqu", reinterpret_cast<uintptr_t>(_LBEQU)},
       {"_CALL", reinterpret_cast<uintptr_t>(_CALL)},
       {"Call", reinterpret_cast<uintptr_t>(_CALL)},
       {"_CLAMP_I64", reinterpret_cast<uintptr_t>(_CLAMP_I64)},
@@ -1100,6 +1104,8 @@ bool LoadKernel(CTask &task)
       {"DocForm", reinterpret_cast<uintptr_t>(DocFormHC)},
       {"DocMenu", reinterpret_cast<uintptr_t>(DocMenuHC)},
       {"PopUpMenu", reinterpret_cast<uintptr_t>(PopUpMenuHC)},
+      {"PopUp1", reinterpret_cast<uintptr_t>(PopUp1HC)},
+      {"PopUpOk", reinterpret_cast<uintptr_t>(PopUpOkHC)},
       {"PopUpForm", reinterpret_cast<uintptr_t>(PopUpFormHC)},
       {"DocEd", reinterpret_cast<uintptr_t>(DocEdHC)},
       {"DocFormFwd", reinterpret_cast<uintptr_t>(DocFormFwdHC)},
@@ -1208,6 +1214,14 @@ bool LoadKernel(CTask &task)
       {"XTalkWait", reinterpret_cast<uintptr_t>(XTalkWaitHC)},
       {"InStr", reinterpret_cast<uintptr_t>(InStrHC)},
       {"InFile", reinterpret_cast<uintptr_t>(InFileHC)},
+      {"InGetStr", reinterpret_cast<uintptr_t>(InGetStrHC)},
+      {"InPrint", reinterpret_cast<uintptr_t>(InPrintHC)},
+      {"InGetKey", reinterpret_cast<uintptr_t>(InGetKeyHC)},
+      {"InGetChar", reinterpret_cast<uintptr_t>(InGetCharHC)},
+      {"InUntilKey", reinterpret_cast<uintptr_t>(InUntilKeyHC)},
+      {"InUntilChar", reinterpret_cast<uintptr_t>(InUntilCharHC)},
+      {"InView", reinterpret_cast<uintptr_t>(InViewHC)},
+      {"InSetMs", reinterpret_cast<uintptr_t>(InSetMsHC)},
       {"In", reinterpret_cast<uintptr_t>(InHC)},
       {"XTalkStr", reinterpret_cast<uintptr_t>(XTalkStrHC)},
       {"XTalkStrWait", reinterpret_cast<uintptr_t>(XTalkStrWaitHC)},
@@ -1457,6 +1471,7 @@ bool LoadKernel(CTask &task)
       {"MenuPush", reinterpret_cast<uintptr_t>(MenuPushHC)},
       {"MenuFilePush", reinterpret_cast<uintptr_t>(MenuFilePushHC)},
       {"MenuPop", reinterpret_cast<uintptr_t>(MenuPopHC)},
+      {"Char2KeyName", reinterpret_cast<uintptr_t>(Char2KeyNameHC)},
       {"ScanCode2KeyName", reinterpret_cast<uintptr_t>(ScanCode2KeyNameHC)},
       {"sys_cur_submenu_entry", reinterpret_cast<uintptr_t>(&sys_cur_submenu_entry)},
       {"SettingsPush", reinterpret_cast<uintptr_t>(SettingsPushHC)},
