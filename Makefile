@@ -275,6 +275,8 @@ TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInp
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 BIT_FIELD_PROBE := Linux/Fixtures/BitFieldProbe.HC
 BIT_FIELD_TEST_ISO := $(BUILD)/bit-field-test.iso
+EXTERN_IMPORT_PROBES := Linux/Fixtures/ExternImportOption.PRJ Linux/Fixtures/ExternImportOptionInvalid.HC
+EXTERN_IMPORT_TEST_ISO := $(BUILD)/extern-import-test.iso
 
 # Every bootable test image uses the same Adam source initialization.
 $(ISO) $(foreach target,$(filter %_ISO,$(.VARIABLES)),$($(target))): $(ADAM_STARTUP_SOURCES)
@@ -892,6 +894,15 @@ test-compiler-diagnostic: $(ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --compiler-diagnostic "$(QEMU)" $(ISO)
 
 test: test-compiler-diagnostic
+
+.PHONY: test-extern-import-option
+$(EXTERN_IMPORT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(EXTERN_IMPORT_PROBES)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(foreach file,$(EXTERN_IMPORT_PROBES),--file $(file))
+
+test-extern-import-option: $(EXTERN_IMPORT_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --extern-import-option "$(QEMU)" $(EXTERN_IMPORT_TEST_ISO)
+
+test: test-extern-import-option
 
 .PHONY: test-progress
 test-progress: $(ISO) $(BOOT_TEST)

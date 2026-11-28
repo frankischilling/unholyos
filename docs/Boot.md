@@ -4578,6 +4578,27 @@ build/Linux/TestBoot --menu-diagnostic-reference qemu-system-x86_64 \
   /path/to/pinned/TOS_Distro.ISO build/menu-diagnostic-reference
 ```
 
+## Extern conversion during ahead-of-time compilation
+
+`ExternImportOption.PRJ` enables `OPTf_EXTERNS_TO_IMPORTS` around both
+function and data declarations. It uses both `extern` spellings,
+completes a forward class and union, and turns the option off before
+declaring a function implemented in the same module. The test compiles
+the project before defining its providers, loads it, and gets 42 from
+the exported function. Pinned TempleOS also reports two unused
+forward-type warnings for this fixture.
+
+A second VM executes `ExternImportOptionInvalid.HC` in JIT mode. The
+converted declaration reports `import not needed at` with the `;`
+token and the source link before returning to the prompt. Both VMs use
+QEMU 8.2.2 with `pc`, `qemu64`, one CPU and 512 MiB.
+
+```sh
+make -j4 test-extern-import-option
+build/Linux/TestBoot --extern-import-option-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/extern-import-option-reference
+```
+
 ## HolyC compiler diagnostics
 
 The compiler diagnostic test uses QEMU 8.2.2 with `pc`, `qemu64`, 512 MiB
