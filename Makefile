@@ -280,6 +280,8 @@ STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 COMPILER_WARNING_PROBES := Linux/Fixtures/CompilerWarningProbe.HC \
 	Linux/Fixtures/ForwardTypeWarningProbe.HC Linux/Fixtures/HeaderWarningProbe.HC
 COMPILER_WARNING_TEST_ISO := $(BUILD)/compiler-warning-test.iso
+MEMORY_DUMP_PROBE := Linux/Fixtures/MemoryDumpProbe.HC
+MEMORY_DUMP_TEST_ISO := $(BUILD)/memory-dump-test.iso
 BIT_FIELD_PROBE := Linux/Fixtures/BitFieldProbe.HC
 BIT_FIELD_TEST_ISO := $(BUILD)/bit-field-test.iso
 
@@ -905,6 +907,15 @@ test-compiler-diagnostic: $(ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --compiler-diagnostic "$(QEMU)" $(ISO)
 
 test: test-compiler-diagnostic
+
+.PHONY: test-memory-dump
+$(MEMORY_DUMP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(MEMORY_DUMP_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(MEMORY_DUMP_PROBE)
+
+test-memory-dump: $(MEMORY_DUMP_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --memory-dump "$(QEMU)" $(MEMORY_DUMP_TEST_ISO)
+
+test: test-memory-dump
 
 .PHONY: test-compiler-warning
 $(COMPILER_WARNING_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(COMPILER_WARNING_PROBES)

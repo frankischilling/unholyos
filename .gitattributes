@@ -98,6 +98,7 @@ Linux/Fixtures/CmpProbe.HH text eol=lf
 Linux/Fixtures/CompilerWarningProbe.HC text eol=lf
 Linux/Fixtures/ForwardTypeWarningProbe.HC text eol=lf
 Linux/Fixtures/HeaderWarningProbe.HC text eol=lf
+Linux/Fixtures/MemoryDumpProbe.HC text eol=lf
 Linux/Fixtures/BitFieldProbe.HC text eol=lf
 Linux/Fixtures/CmpInvalid.HC text eol=lf
 Linux/Fixtures/ImportCaller.HC text eol=lf

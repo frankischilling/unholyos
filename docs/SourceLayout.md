@@ -1302,6 +1302,14 @@ do not yield while held. Full drive-lock release, general
 Ctrl-Alt callback registration and preemptive scheduling remain
 pending.
 
+## Kernel memory dumps
+
+`Kernel/KDbg.cpp` translates `D`, `Dm`, and `Da` from `Kernel/KDbg.HC`.
+The dump retains 16 bytes per row, short-row padding, offset and address
+formats, and the character output through `PutChars`. `Da` uses the
+symbolic formatter for the address stored in each pointer slot. The
+HolyC exports use the defaults and argument order from `KernelC.HH`.
+
 ## Kernel math helpers
 
 `Kernel/KMathB.cpp` follows the function order and branches in

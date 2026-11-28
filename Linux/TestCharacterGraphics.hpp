@@ -1310,6 +1310,9 @@ static void DriveCharacterGraphics(
       screen_file.close();
       Check(bool(screen_file), "Could not record reference text screen");
       snapshot(probe.name);
+      if (std::string_view(probe.name) == "memory-dump")
+        Check(screen.find(".. $ABCDEFGHIJKL") != std::string::npos,
+              "Memory dump character column differs");
       const auto first = screen.find(probe.first);
       Check(first != std::string::npos,
             "Missing first reference text probe line");

@@ -1,6 +1,7 @@
 #include "KernelB.hpp"
 
 extern "C" [[noreturn]] void SysHlt();
+extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 
 bool ChkPtr(const void *ptr)
 {
@@ -62,6 +63,52 @@ uint8_t *Caller(const uintptr_t *frame, int64_t depth, const CTask &task)
 extern "C" uint8_t *CallerCpp(const uintptr_t *frame, int64_t depth)
 {
   return Caller(frame, depth, *CurrentTask());
+}
+
+extern "C" void DCpp(const uint8_t *addr, int64_t cnt, uint8_t show_offset)
+{
+  auto *ptr = addr;
+  while (cnt) {
+    const uint64_t address = reinterpret_cast<uintptr_t>(ptr);
+    const uint64_t pos = show_offset ? address-reinterpret_cast<uintptr_t>(addr)
+                                     : address;
+    PrintCpp(show_offset ? "%08X " : "%010X ", 1, &pos);
+    const int64_t n = cnt > 16 ? 16 : cnt;
+    int64_t i = 0;
+    for (; i<n; i++) {
+      const uint64_t byte = ptr[i];
+      PrintCpp("%02X ", 1, &byte);
+    }
+    for (; i<16; i++)
+      PutS("   ");
+    for (i=0; i<n; i++) {
+      auto ch = ptr[i];
+      if (ch < CH_SHIFT_SPACE || ch == CH_BACKSPACE)
+        ch = '.';
+      PutCharsCpp(ch);
+      if (ch == '$')
+        PutCharsCpp(ch);
+    }
+    PutCharsCpp('\n');
+    if (cnt <= 16)
+      break;
+    cnt -= 16;
+    ptr += 16;
+  }
+}
+
+extern "C" void DmCpp(const uint8_t *addr, int64_t cnt)
+{
+  DCpp(addr, cnt, false);
+}
+
+extern "C" void DaCpp(const uint8_t *const *addr, int64_t cnt)
+{
+  for (; cnt>0; cnt--, addr++) {
+    const auto value = reinterpret_cast<uintptr_t>(*addr);
+    const uint64_t args[]{reinterpret_cast<uintptr_t>(addr), value, value};
+    PrintCpp("%08X:%08X,%P\n", 3, args);
+  }
 }
 
 extern "C" [[noreturn]] void BootFault(const CTask *task)
