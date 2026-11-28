@@ -2681,7 +2681,7 @@ static uint64_t VerifyRegistryHeap(CMonitor &vm, uint64_t owner, uint64_t adam)
 }
 
 static uint64_t VerifyKeyDevHeap(CMonitor &vm, uint64_t head, uint64_t owner,
-                                  bool adam_initialized)
+                                  bool compiler_initialized, bool desktop)
 {
   const auto fields = ReadPhysical<11>(vm, head);
   const auto callbacks = fields[6], normal = fields[9], shifted = fields[10];
@@ -2697,13 +2697,13 @@ static uint64_t VerifyKeyDevHeap(CMonitor &vm, uint64_t head, uint64_t owner,
     std::string_view desc, shift_desc;
     switch ('A' + i) {
     case 'B':
-      if (adam_initialized)
+      if (desktop)
         desc = "Cmd /Bible";
       break;
     case 'C': desc = "Cmd /Break Execution"; break;
     case 'F': desc = "Cmd /Toggle Aux Font"; break;
     case 'Z':
-      if (adam_initialized) {
+      if (compiler_initialized) {
         desc = "Cmd /Zoom In";
         shift_desc = "Cmd /Zoom Out";
       }
@@ -2720,7 +2720,7 @@ static uint64_t VerifyKeyDevHeap(CMonitor &vm, uint64_t head, uint64_t owner,
     }
   }
 
-  const size_t count = adam_initialized ? 3 : 2;
+  const size_t count = compiler_initialized ? 3 : 2;
   constexpr uint64_t priorities[]{0x40000000, 0x60000000, 0x80000000};
   uint64_t entry = fields[0], last = head;
   for (size_t i = 0; i < count; ++i) {
@@ -3023,7 +3023,7 @@ static void VerifyFixedArea(CMonitor &vm, const fs::path &dir, uint64_t heap,
       VerifyKernelSymbols(vm, top + 0x28, owner, graphics, winmgr_slot,
                            disk, key_device, god, compiler);
   const uint64_t key_device_used =
-      VerifyKeyDevHeap(vm, key_device, owner, compiler.initialized);
+      VerifyKeyDevHeap(vm, key_device, owner, compiler.initialized, desktop);
   uint64_t winmgr = ReadPhysical<1>(vm, winmgr_slot)[0];
   uint64_t left = 0, right = 0;
   if (desktop) {
