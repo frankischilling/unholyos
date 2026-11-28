@@ -7327,6 +7327,7 @@ int main(int argc, char **argv)
       (mode == "--menu-diagnostic" || mode == "--menu-diagnostic-reference" ||
        mode == "--compiler-diagnostic" || mode == "--compiler-diagnostic-reference" ||
        mode == "--extern-import-option" || mode == "--extern-import-option-reference" ||
+       mode == "--aot-data-heap" || mode == "--aot-data-heap-reference" ||
        mode == "--compiler-warning" || mode == "--compiler-warning-reference")) {
     const bool reference = mode.ends_with("-reference");
     auto diagnostic = CDesktopTest::CompilerDiagnostic;
@@ -7334,6 +7335,8 @@ int main(int argc, char **argv)
       diagnostic = CDesktopTest::MenuDiagnostic;
     else if (mode.starts_with("--extern-import-option"))
       diagnostic = CDesktopTest::ExternImportOption;
+    else if (mode.starts_with("--aot-data-heap"))
+      diagnostic = CDesktopTest::AOTDataHeap;
     else if (mode.starts_with("--compiler-warning"))
       diagnostic = CDesktopTest::CompilerWarning;
     char path[] = "/tmp/unholyos-diagnostic-XXXXXX";
@@ -7343,6 +7346,9 @@ int main(int argc, char **argv)
     try {
       if (diagnostic == CDesktopTest::ExternImportOption && !reference)
         for (const auto *source : {"ExternImportOption.PRJ", "ExternImportOptionInvalid.HC"})
+          VerifyHostModuleMedia(argv[3], fs::path("Linux/Fixtures") / source, source);
+      if (diagnostic == CDesktopTest::AOTDataHeap && !reference)
+        for (const auto *source : {"HeapGlobals.PRJ", "HeapGlobalsInvalid.PRJ"})
           VerifyHostModuleMedia(argv[3], fs::path("Linux/Fixtures") / source, source);
       if (diagnostic == CDesktopTest::CompilerWarning && !reference)
         for (const auto *source : {"CompilerWarningProbe.HC", "ForwardTypeWarningProbe.HC",
@@ -7365,6 +7371,8 @@ int main(int argc, char **argv)
         run(dir / "partial-cmp", CDesktopTest::CompilerCmpDiagnostic);
       else if (diagnostic == CDesktopTest::ExternImportOption)
         run(dir / "jit", CDesktopTest::ExternImportOptionJIT);
+      else if (diagnostic == CDesktopTest::AOTDataHeap)
+        run(dir / "invalid", CDesktopTest::AOTDataHeapInvalid);
       else if (diagnostic == CDesktopTest::CompilerWarning) {
         run(dir / "forward-types", CDesktopTest::CompilerForwardWarning);
         run(dir / "function-headers", CDesktopTest::CompilerHeaderWarning);
@@ -8189,6 +8197,7 @@ int main(int argc, char **argv)
               << " --menu-diagnostic[-reference] qemu image.iso [capture-dir]\n"
               << " --compiler-diagnostic[-reference] qemu image.iso [capture-dir]\n"
               << " --extern-import-option[-reference] qemu image.iso [capture-dir]\n"
+              << " --aot-data-heap[-reference] qemu image.iso [capture-dir]\n"
               << " --compiler-warning[-reference] qemu image.iso [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"

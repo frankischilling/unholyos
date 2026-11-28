@@ -286,6 +286,8 @@ COMPILER_WARNING_PROBES := Linux/Fixtures/CompilerWarningProbe.HC \
 COMPILER_WARNING_TEST_ISO := $(BUILD)/compiler-warning-test.iso
 MEMORY_DUMP_PROBE := Linux/Fixtures/MemoryDumpProbe.HC
 MEMORY_DUMP_TEST_ISO := $(BUILD)/memory-dump-test.iso
+AOT_DATA_HEAP_PROBES := Linux/Fixtures/HeapGlobals.PRJ Linux/Fixtures/HeapGlobalsInvalid.PRJ
+AOT_DATA_HEAP_TEST_ISO := $(BUILD)/aot-data-heap-test.iso
 BIT_FIELD_PROBE := Linux/Fixtures/BitFieldProbe.HC
 BIT_FIELD_TEST_ISO := $(BUILD)/bit-field-test.iso
 EXTERN_IMPORT_PROBES := Linux/Fixtures/ExternImportOption.PRJ Linux/Fixtures/ExternImportOptionInvalid.HC
@@ -937,6 +939,15 @@ test-extern-import-option: $(EXTERN_IMPORT_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --extern-import-option "$(QEMU)" $(EXTERN_IMPORT_TEST_ISO)
 
 test: test-extern-import-option
+
+.PHONY: test-aot-data-heap
+$(AOT_DATA_HEAP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(AOT_DATA_HEAP_PROBES)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(foreach file,$(AOT_DATA_HEAP_PROBES),--file $(file))
+
+test-aot-data-heap: $(AOT_DATA_HEAP_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --aot-data-heap "$(QEMU)" $(AOT_DATA_HEAP_TEST_ISO)
+
+test: test-aot-data-heap
 
 .PHONY: test-compiler-warning
 $(COMPILER_WARNING_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(COMPILER_WARNING_PROBES)

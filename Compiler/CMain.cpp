@@ -86,6 +86,17 @@ bool AOTRelAdd(CAOT &aot, size_t rip, const void *symbol, const char *name,
   return true;
 }
 
+bool AOTHeapGlblRefAdd(CAOTHeapGlbl &glbl, int64_t rip)
+{
+  auto *ref = reinterpret_cast<CAOTHeapGlblRef *>(
+      MAlloc(sizeof(CAOTHeapGlblRef), CurrentTask()->data_heap));
+  if (!ref)
+    return false;
+  *ref = {glbl.references, rip};
+  glbl.references = ref;
+  return true;
+}
+
 void AOTRelResolve(CAOT &aot, const void *before, const void *after)
 {
   for (auto *ie = aot.first_ie; ie; ie = ie->next)
@@ -124,6 +135,17 @@ static void AOTDel(CAOT &aot, CHashTable *table)
     aot.first_ie = ie->next;
     Free(ie->name);
     Free(ie);
+  }
+  while (aot.heap_glbls) {
+    auto *glbl = aot.heap_glbls;
+    aot.heap_glbls = glbl->next;
+    while (glbl->references) {
+      auto *ref = glbl->references;
+      glbl->references = ref->next;
+      Free(ref);
+    }
+    Free(glbl->str);
+    Free(glbl);
   }
   if (table) {
     for (int64_t i = 0; i <= table->mask; i++)
@@ -172,6 +194,13 @@ static CBinFile *AOTBinMake(const CAOT &aot)
       abs_count++;
   if (abs_count)
     patches += 6 + sizeof(uint32_t) * size_t(abs_count);
+  for (auto *glbl = aot.heap_glbls; glbl; glbl = glbl->next) {
+    if (!glbl->references)
+      continue;
+    patches += 6 + StrLen(glbl->str) + sizeof(int64_t);
+    for (auto *ref = glbl->references; ref; ref = ref->next)
+      patches += sizeof(uint32_t);
+  }
 
   size_t patch_offset = sizeof(CBinFile) + aot.size;
   size_t size = (patch_offset + patches + 15) & ~size_t{15};
@@ -184,6 +213,22 @@ static CBinFile *AOTBinMake(const CAOT &aot)
 
   auto *base = reinterpret_cast<uint8_t *>(bfh + 1);
   auto *patch = base + aot.size;
+  for (auto *glbl = aot.heap_glbls; glbl; glbl = glbl->next) {
+    if (!glbl->references)
+      continue;
+    auto *count_pos = patch + 1;
+    patch = PatchRecord(patch, IET_DATA_HEAP, 0, glbl->str);
+    MemCpy(patch, &glbl->size, sizeof(glbl->size));
+    patch += sizeof(glbl->size);
+    uint32_t count = 0;
+    for (auto *ref = glbl->references; ref; ref = ref->next) {
+      uint32_t rip = ref->rip;
+      MemCpy(patch, &rip, sizeof(rip));
+      patch += sizeof(rip);
+      count++;
+    }
+    MemCpy(count_pos, &count, sizeof(count));
+  }
   for (auto *b = aot.first; b; b = b->next) {
     MemCpy(base + b->rip, b + 1, b->size);
     if (b->name)

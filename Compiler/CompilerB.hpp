@@ -123,6 +123,14 @@ public:
     Immediate(0, name ? 8 : 4);
   }
 
+  void HeapGlblAddress(CAOTHeapGlbl &glbl)
+  {
+    Bytes(0x48, 0xB8); // MOV RAX,imm64
+    if (buf && !AOTHeapGlblRefAdd(glbl, aot->size + size))
+      failed = true;
+    Immediate(0, 8);
+  }
+
   bool Asm(CAsm &as)
   {
     if (buf && !AsmEmit(as, buf, size))

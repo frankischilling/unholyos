@@ -96,6 +96,7 @@ struct CMathODE;
 struct CJob;
 struct CCmpCtrl;
 struct CAOT;
+struct CAOTHeapGlbl;
 struct CHashFun;
 struct CHeapCtrl;
 
@@ -973,7 +974,7 @@ struct CHashGlblVar
   uint8_t *data_addr;
   union {
     int64_t data_addr_rip;
-    void *heap_glbl;
+    CAOTHeapGlbl *heap_glbl;
   };
 };
 
@@ -992,7 +993,8 @@ inline bool FunPopsArgs(const CHashFun &fun)
   return (flags & (FF_RET1 | FF_ARGPOP)) && !(flags & FF_NOARGPOP);
 }
 constexpr uint64_t MLMF_IS_STR = 1, GVF_FUN = 1, GVF_IMPORT = 2,
-                   GVF_EXTERN = 4, GVF_ALIAS = 16, GVF_ARRAY = 32;
+                   GVF_EXTERN = 4, GVF_DATA_HEAP = 8, GVF_ALIAS = 16,
+                   GVF_ARRAY = 32;
 
 static_assert(sizeof(CMemberLstMeta) == 32 && offsetof(CMemberLstMeta, user_data) == 24);
 static_assert(sizeof(CMemberLst) == 144 && offsetof(CMemberLst, meta) == 64 &&
@@ -1002,7 +1004,8 @@ static_assert(sizeof(CHashClass) == 128 && offsetof(CHashClass, flags) == 86 &&
               offsetof(CHashClass, member_lst_and_root) == 88);
 static_assert(sizeof(CHashFun) == 168 && offsetof(CHashFun, exe_addr) == 152);
 static_assert(sizeof(CHashGlblVar) == 136 &&
-              offsetof(CHashGlblVar, data_addr) == 120);
+              offsetof(CHashGlblVar, data_addr) == 120 &&
+              offsetof(CHashGlblVar, heap_glbl) == 128);
 
 static_assert(sizeof(CHash) == 24 && sizeof(CHashSrcSym) == 64 &&
               sizeof(CHashExport) == 72 && sizeof(CHashImport) == 80);
@@ -1274,6 +1277,26 @@ struct CStreamBlk
   char *body;
   bool error;
 };
+
+struct CAOTHeapGlblRef
+{
+  CAOTHeapGlblRef *next;
+  int64_t rip;
+};
+
+struct CAOTHeapGlbl
+{
+  CAOTHeapGlbl *next;
+  char *str;
+  int64_t size;
+  CAOTHeapGlblRef *references;
+};
+
+static_assert(sizeof(CAOTHeapGlblRef) == 16 &&
+              offsetof(CAOTHeapGlblRef, rip) == 8);
+static_assert(sizeof(CAOTHeapGlbl) == 32 && offsetof(CAOTHeapGlbl, str) == 8 &&
+              offsetof(CAOTHeapGlbl, size) == 16 &&
+              offsetof(CAOTHeapGlbl, references) == 24);
 
 // The prefix through opts is shared with HolyC code.
 struct CCmpCtrl
