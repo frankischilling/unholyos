@@ -3828,7 +3828,8 @@ constexpr CTextProbe assert_warning_probes[]{
 static void CheckAssertWarning(std::string_view serial)
 {
   constexpr std::string_view warning =
-      ". . . . WARNING: Assert Failed T:/AssertWarningProbe.HC,4\n";
+      ". . . . WARNING: Assert Failed \"I64\" T:/AssertWarningProbe.HC,4 "
+      "I64 AssertWarningValue(I64 value)\n";
   CheckProgramOutput(serial, "/AssertWarningProbe.HC",
                      std::string(warning) + std::string(assert_warning_output),
                      '1');
@@ -3848,7 +3849,8 @@ static void CheckAssertWarning(std::string_view serial)
         "Missing assert warning module execution");
   const auto compiled = serial.substr(begin, end - begin);
   const std::regex expected(
-      R"(\. \. \. \. WARNING: Assert Failed T:/AssertWarningProbe\.HC,4\nErrs:0 Warns:1 Code:[0-9A-F]+ Size:[0-9A-F]+\n)");
+      R"(\. \. \. \. WARNING: Assert Failed "I64" T:/AssertWarningProbe\.HC,4 )"
+      R"(I64 AssertWarningValue\(I64 value\)\nErrs:0 Warns:1 Code:[0-9A-F]+ Size:[0-9A-F]+\n)");
   Check(std::regex_match(compiled.begin(), compiled.end(), expected),
         "Assert warning AOT diagnostic or warning count differs");
 }
@@ -6335,8 +6337,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       Check(output.find("native expressions 0x000000000000002a, "
                         "hash 0x452a7a6d75541fd2, heap 0x0000000000000001, "
                         "rejected 0x0000000000000001") != std::string::npos &&
-                output.find("WARNING: Assert Failed /ExpressionProbe.HC,21") !=
-                    std::string::npos,
+                output.find(R"(WARNING: Assert Failed "INT:1" )"
+                            "/ExpressionProbe.HC,21 1 + 2 * 3;") != std::string::npos,
             "The native expression probe did not match TempleOS");
       Check(output.find("native functions 0x000000000000001b, hash "
                         "0x6ebe7d79f6232350, checks "
@@ -7312,13 +7314,16 @@ int main(int argc, char **argv)
   if ((argc == 4 || argc == 5) &&
       (mode == "--menu-diagnostic" || mode == "--menu-diagnostic-reference" ||
        mode == "--compiler-diagnostic" || mode == "--compiler-diagnostic-reference" ||
-       mode == "--aot-data-heap" || mode == "--aot-data-heap-reference")) {
+       mode == "--aot-data-heap" || mode == "--aot-data-heap-reference" ||
+       mode == "--compiler-warning" || mode == "--compiler-warning-reference")) {
     const bool reference = mode.ends_with("-reference");
     auto diagnostic = CDesktopTest::CompilerDiagnostic;
     if (mode.starts_with("--menu-diagnostic"))
       diagnostic = CDesktopTest::MenuDiagnostic;
     else if (mode.starts_with("--aot-data-heap"))
       diagnostic = CDesktopTest::AOTDataHeap;
+    else if (mode.starts_with("--compiler-warning"))
+      diagnostic = CDesktopTest::CompilerWarning;
     char path[] = "/tmp/unholyos-diagnostic-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
@@ -7327,6 +7332,9 @@ int main(int argc, char **argv)
       if (diagnostic == CDesktopTest::AOTDataHeap && !reference)
         for (const auto *source : {"HeapGlobals.PRJ", "HeapGlobalsInvalid.PRJ"})
           VerifyHostModuleMedia(argv[3], fs::path("Linux/Fixtures") / source, source);
+      if (diagnostic == CDesktopTest::CompilerWarning && !reference)
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/CompilerWarningProbe.HC",
+                              "CompilerWarningProbe.HC");
       auto run = [&](const fs::path &capture, CDesktopTest test) {
         fs::create_directories(capture);
         CMonitor vm(argv[2], argv[3], capture, "pc", "512", false, {}, false,
@@ -8126,6 +8134,7 @@ int main(int argc, char **argv)
               << " --menu-diagnostic[-reference] qemu image.iso [capture-dir]\n"
               << " --compiler-diagnostic[-reference] qemu image.iso [capture-dir]\n"
               << " --aot-data-heap[-reference] qemu image.iso [capture-dir]\n"
+              << " --compiler-warning[-reference] qemu image.iso [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
