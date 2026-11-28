@@ -44,6 +44,7 @@ Demo/ClassMeta.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/LastClass.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/Dsk/DataBase.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/DolDoc/Form.HC -text whitespace=cr-at-eol,-blank-at-eol
+Demo/DolDoc/MenuBttn.HC -text whitespace=cr-at-eol,-blank-at-eol
 Demo/RegistryDemo.HC -text whitespace=cr-at-eol,-blank-at-eol
 Linux/Fixtures/ClassReportProbe.HC text eol=lf
 Linux/Fixtures/LastClassRun.HC text eol=lf

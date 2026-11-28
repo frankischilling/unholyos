@@ -26,6 +26,17 @@ void UserStartUp()
   DirCpp("*", false);
 }
 
+void SrvStartUp()
+{
+  auto *task = CurrentTask();
+  DocTermNewCpp();
+  WinHorzCpp(task->win_left, TEXT_COLS - 2, task);
+  WinVertCpp(task->win_top, TEXT_ROWS - 2, task);
+  task->display_flags |= DISPLAYF_SHOW;
+  WinToTopCpp(task, false);
+  WinZBufUpdateCpp();
+}
+
 bool StartUpTasks()
 {
   auto *user1 = SpawnCpp(reinterpret_cast<uintptr_t>(UserCmdLineHC), nullptr,

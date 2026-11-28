@@ -513,3 +513,83 @@ extern "C" uint64_t DocFormCpp(uint8_t *d, const char *class_name,
   task->border_src = old_border_src;
   return res;
 }
+
+extern "C" void DocMenuEndTaskCBHC();
+extern "C" void DocMenuTryHC();
+
+extern "C" [[noreturn]] void DocMenuEndTaskCBCpp()
+{
+  WinToTopCpp(nullptr, true);
+  CurrentTask()->except_ch = 0;
+  RethrowHolyC();
+}
+
+extern "C" int64_t DocMenuTryCpp(CDoc *doc, int64_t dof_flags)
+{
+  while (DocEdCpp(doc, dof_flags) && doc->cur_entry != &doc->head) {
+    int64_t action;
+    auto res = DocEntryRunCpp(doc, doc->cur_entry, true, &action);
+    DocUnlock(*doc);
+    if (action)
+      return res;
+    dof_flags |= DOF_DONT_HOME;
+  }
+  DocUnlock(*doc);
+  return DOCM_CANCEL;
+}
+
+extern "C" int64_t DocMenuCpp(CDoc *doc, int64_t dof_flags)
+{
+  if (!doc || doc->doc_signature != DOC_SIGNATURE_VAL)
+    return DOCM_CANCEL;
+  auto *task = CurrentTask();
+  auto *old_end = task->task_end_cb;
+  const auto old_border = task->border_src;
+  const auto old_break = __atomic_fetch_or(
+      &task->task_flags, TASKF_BREAK_TO_SHIFT_ESC, __ATOMIC_RELAXED);
+  task->task_end_cb = DocMenuEndTaskCBHC;
+  task->border_src = 0; // BDS_CONST
+  doc->desc = 0x756E654D; // Menu
+  uint64_t res;
+  const bool okay = CallHolyC2Checked(
+      reinterpret_cast<uintptr_t>(DocMenuTryHC),
+      reinterpret_cast<uintptr_t>(doc), dof_flags, &res);
+  if (!okay && !task->except_ch && !(dof_flags & DOF_INTERCEPT_TASK_END))
+    Exit();
+  if (old_break & TASKF_BREAK_TO_SHIFT_ESC)
+    __atomic_fetch_or(&task->task_flags, TASKF_BREAK_TO_SHIFT_ESC,
+                      __ATOMIC_RELAXED);
+  else
+    __atomic_fetch_and(&task->task_flags, ~TASKF_BREAK_TO_SHIFT_ESC,
+                       __ATOMIC_RELAXED);
+  task->border_src = old_border;
+  task->task_end_cb = old_end;
+  if (!okay && task->except_ch)
+    RethrowHolyC();
+  return okay ? int64_t(res) : DOCM_CANCEL;
+}
+
+extern "C" int64_t PopUpMenuCpp(CDoc *doc, int64_t dof_flags)
+{
+  if (!doc || doc->doc_signature != DOC_SIGNATURE_VAL)
+    return DOCM_CANCEL;
+  auto *old_win = doc->win_task;
+  auto *old_parent = doc->parent_doc;
+  doc->flags |= DOCF_SIZE_MIN | DOCF_FORM;
+  const uint64_t args[]{reinterpret_cast<uintptr_t>(doc), uint64_t(dof_flags)};
+  auto res = PopUpPrintCpp("DocMenu(0x%X,0x%X);", 2, args);
+  doc->win_task = old_win;
+  doc->parent_doc = old_parent;
+  return res;
+}
+
+extern "C" uint64_t PopUpFormCpp(uint8_t *d, const char *class_name,
+                                  int64_t dof_flags, const char *header,
+                                  const char *footer)
+{
+  const uint64_t args[]{reinterpret_cast<uintptr_t>(d),
+                       reinterpret_cast<uintptr_t>(class_name),
+                       uint64_t(dof_flags), reinterpret_cast<uintptr_t>(header),
+                       reinterpret_cast<uintptr_t>(footer)};
+  return PopUpPrintCpp("DocForm(0x%X,0x%X,0x%X,0x%X,0x%X);", 5, args);
+}

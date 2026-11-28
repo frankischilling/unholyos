@@ -247,6 +247,8 @@ void DocTreeWriteJoinHC(), DocTreeAppendJoinHC(), ExeDocHC(), DocTreeExeHC(),
 void RegDftHC(), RegExeHC(), RegWriteHC(), RegCntHC(), RegAppendHC(), AdamHC();
 void AOnceFlushHC(), OnceFlushHC(), AOnceHC(), OnceHC(), AOnceDrvHC(),
     OnceDrvHC(), OnceExeHC(), XTalkHC();
+void DocMenuHC(), PopUpMenuHC(), PopUpFormHC(), PopUpHC(), PopUpPrintHC(),
+    SrvCmdLineHC(), OneTimePopUpHC(), RegOneTimePopUpHC();
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
 void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC(), DocPutKeyHC();
 void DocLockHC(), DocUnlockHC(), DocEntryRunHC(), DocBottomHC(), DocClearHC(), NowHC();
@@ -1089,6 +1091,9 @@ bool LoadKernel(CTask &task)
       {"DocDataFmt", reinterpret_cast<uintptr_t>(DocDataFmtHC)},
       {"DocDataScan", reinterpret_cast<uintptr_t>(DocDataScanHC)},
       {"DocForm", reinterpret_cast<uintptr_t>(DocFormHC)},
+      {"DocMenu", reinterpret_cast<uintptr_t>(DocMenuHC)},
+      {"PopUpMenu", reinterpret_cast<uintptr_t>(PopUpMenuHC)},
+      {"PopUpForm", reinterpret_cast<uintptr_t>(PopUpFormHC)},
       {"DocEd", reinterpret_cast<uintptr_t>(DocEdHC)},
       {"DocFormFwd", reinterpret_cast<uintptr_t>(DocFormFwdHC)},
       {"DocFormBwd", reinterpret_cast<uintptr_t>(DocFormBwdHC)},
@@ -1194,6 +1199,9 @@ bool LoadKernel(CTask &task)
       {"Adam", reinterpret_cast<uintptr_t>(AdamHC)},
       {"XTalk", reinterpret_cast<uintptr_t>(XTalkHC)},
       {"SrvTaskCont", reinterpret_cast<uintptr_t>(SrvTaskContHC)},
+      {"SrvCmdLine", reinterpret_cast<uintptr_t>(SrvCmdLineHC)},
+      {"PopUp", reinterpret_cast<uintptr_t>(PopUpHC)},
+      {"PopUpPrint", reinterpret_cast<uintptr_t>(PopUpPrintHC)},
       {"UserCmdLine", reinterpret_cast<uintptr_t>(UserCmdLineHC)},
       {"ScanMsg", reinterpret_cast<uintptr_t>(ScanMsgHC)},
       {"FlushMsgs", reinterpret_cast<uintptr_t>(FlushMsgsHC)},
@@ -1510,6 +1518,8 @@ bool LoadKernel(CTask &task)
       {"AOnceDrv", reinterpret_cast<uintptr_t>(AOnceDrvHC)},
       {"OnceDrv", reinterpret_cast<uintptr_t>(OnceDrvHC)},
       {"OnceExe", reinterpret_cast<uintptr_t>(OnceExeHC)},
+      {"OneTimePopUp", reinterpret_cast<uintptr_t>(OneTimePopUpHC)},
+      {"RegOneTimePopUp", reinterpret_cast<uintptr_t>(RegOneTimePopUpHC)},
       {"DocType", reinterpret_cast<uintptr_t>(DocTypeHC)},
       {"Type", reinterpret_cast<uintptr_t>(TypeHC)},
       {"DocPrint", reinterpret_cast<uintptr_t>(DocPrintHC)},

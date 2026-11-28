@@ -162,6 +162,9 @@ ONCE_PROBE := Linux/Fixtures/OnceProbe.HC
 ONCE_HOME := Linux/Fixtures/OnceHome.HC
 ONCE_BOOT := Linux/Fixtures/OnceBoot.DD
 ONCE_TEST_ISO := $(BUILD)/once-test.iso
+POPUP_PROBE := Linux/Fixtures/PopupProbe.HC
+POPUP_DEMO := Demo/DolDoc/MenuBttn.HC
+POPUP_TEST_ISO := $(BUILD)/popup-test.iso
 UASM_PROBES := $(addprefix Linux/Fixtures/,UAsmProbe.HC UAsmNativeProbe.HC)
 UASM_TEST_ISO := $(BUILD)/uasm-test.iso
 UASM_AOT_PROBE := Linux/Fixtures/UAsmAOTProbe.HC
@@ -239,7 +242,7 @@ GRAPHICS_DEMOS := Demo/Graphics/3DPoly.HC Demo/Graphics/Box.HC \
 GAME_DEMOS := Demo/Games/Digits.HC Demo/Games/Maze.HC Demo/Games/CharDemo.HC Demo/Games/TicTacToe.HC
 APP_FILES := Apps/TimeClock/Load.HC Apps/TimeClock/Install.HC Apps/TimeClock/TimeClk.HC
 CLASS_META_DEMO := Demo/ClassMeta.HC Demo/LastClass.HC
-FORM_DEMOS := Demo/Dsk/DataBase.HC Demo/DolDoc/Form.HC
+FORM_DEMOS := Demo/Dsk/DataBase.HC Demo/DolDoc/Form.HC $(POPUP_DEMO)
 SOUND_DEMOS := Demo/Snd/OhGreat.HC
 DOC_BIN_DEMOS := Demo/Graphics/SpritePut.HC Demo/Graphics/SpritePutExt.HC
 DOC_BIN_LINK := Linux/Fixtures/DocBinLink.DD
@@ -554,6 +557,9 @@ $(REGISTRY_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(REGISTRY_
 $(ONCE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ONCE_PROBE) $(ONCE_HOME) $(ONCE_BOOT) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at Home/Registry.HC.Z $(ONCE_BOOT) --file-at Home/Once.HC $(ONCE_HOME) --file $(ONCE_PROBE)
 
+$(POPUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(POPUP_PROBE) $(POPUP_DEMO) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(POPUP_PROBE) --file-at $(POPUP_DEMO) $(POPUP_DEMO)
+
 $(DEV_INFO_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(PCI_DEV_FILE) $(DEV_INFO_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at $(PCI_DEV_FILE).Z $(PCI_DEV_FILE) --dir Home --file $(DEV_INFO_PROBE)
 
@@ -778,6 +784,12 @@ test-once: $(ONCE_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --once "$(QEMU)" $(ONCE_TEST_ISO)
 
 test: test-once
+
+.PHONY: test-popup-menus
+test-popup-menus: $(POPUP_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --popup-menus "$(QEMU)" $(POPUP_TEST_ISO)
+
+test: test-popup-menus
 
 .PHONY: test-dev-info
 test-dev-info: $(DEV_INFO_TEST_ISO) $(BOOT_TEST)

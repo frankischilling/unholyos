@@ -1987,8 +1987,33 @@ compiles and executes the command. Adam posts the input without waiting
 and can service the resulting job as soon as it enters server mode.
 The startup lookup uses the first terminal's directory and the same
 file search as the compiler, preserving Adam's working directory.
-The reference's stock `Once.HC` installer and tour workflow, installer
-registration, and one-time popups remain pending.
+The reference's stock `Once.HC` installer and tour workflow and installer
+registration remain pending.
+
+## Popup tasks and document menus
+
+`Kernel/Job.cpp` follows `Kernel/Job.HC` for `PopUp` and `PopUpPrint`.
+The servant enters `SrvCmdLine` and runs the standard execute job.
+A modal call records its child in `popup_task` and suspends the caller
+until the servant returns the job result. The asynchronous form exits
+the servant when the job completes. `HomeSys.cpp` establishes the
+servant's viewport before the window manager draws it.
+
+`Adam/DolDoc/DocForm.cpp` runs the document editor, returns the
+selected entry's action result, and restarts the menu when an accepted
+entry has no action. It follows `DocMenu`, `PopUpMenu` and `PopUpForm`
+in `DocForm.HC`. The popup restores the caller's document window
+association after the servant is reaped. `DocEd.cpp` uses a checked
+HolyC call around `View` so it can restore the editor's state when a
+task-end callback unwinds the input loop.
+
+`DocPlain.cpp` keeps literal numeric fields on its direct parser path
+and uses the HolyC compiler for integer expressions in other fields.
+This follows the expression evaluation of `PrsDollarCmd` and lets
+button actions reference the calling task's defines.
+`Adam/ARegistry.cpp` uses the original checkbox and OKAY button text.
+`RegOneTimePopUp` saves the system message flags when the user elects
+to suppress the message.
 
 ## Original Adam memory inspection
 

@@ -437,11 +437,12 @@ static void VerifyHostModuleMedia(const fs::path &iso, const fs::path &module,
   constexpr size_t blk = 512, redsea = 88 * blk;
   const auto disc = FileRead(iso), expected = FileRead(module);
   auto root = ReadLE(disc, redsea + 24, 8);
-  if (directory) {
-    const auto dir = FindRedSeaEntry(disc, root, directory);
-    Check(ReadLE(disc, dir, 2) & 0x10, "Expected media directory");
-    root = ReadLE(disc, dir + 40, 8);
-  }
+  if (directory)
+    for (const auto &part : fs::path(directory)) {
+      const auto dir = FindRedSeaEntry(disc, root, part.string());
+      Check(ReadLE(disc, dir, 2) & 0x10, "Expected media directory");
+      root = ReadLE(disc, dir + 40, 8);
+    }
   const auto entry = FindRedSeaEntry(disc, root, name);
   const auto start = ReadLE(disc, entry + 40, 8);
   const auto size = ReadLE(disc, entry + 48, 8);
@@ -3512,6 +3513,10 @@ constexpr CTextProbe registry_reference_probes[]{
 constexpr CTextProbe once_probes[]{
     {"once", "/OnceProbe.HC", "", "Once probe ", "Once probe ",
      "Once probe FF\n", {}, true}};
+
+constexpr CTextProbe popup_probes[]{
+    {"popup-menus", "/PopupProbe.HC", "", "Popup probe ", "Popup probe ",
+     "Popup probe 1FF\n", {}, true}};
 
 constexpr CTextProbe dev_info_probes[]{
     {"dev-info", "/DevInfoProbe.HC", "", "Device reports ", "Device reports ",
@@ -6719,18 +6724,25 @@ int main(int argc, char **argv)
       (mode == "--doc-tree" || mode == "--doc-tree-reference" ||
        mode == "--doc-tree-aot" || mode == "--registry" ||
        mode == "--registry-reference" || mode == "--once" ||
-       mode == "--once-reference")) {
+       mode == "--once-reference" || mode == "--popup-menus" ||
+       mode == "--popup-menus-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
     const bool registry = mode.starts_with("--registry");
     const bool once = mode.starts_with("--once");
+    const bool popup = mode.starts_with("--popup-menus");
     char path[] = "/tmp/unholyos-document-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
     const fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
-      if (!reference && once) {
+      if (!reference && popup) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/PopupProbe.HC",
+                              "PopupProbe.HC");
+        VerifyHostModuleMedia(argv[3], "Demo/DolDoc/MenuBttn.HC",
+                              "MenuBttn.HC", "Demo/DolDoc");
+      } else if (!reference && once) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/OnceProbe.HC",
                               "OnceProbe.HC");
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/OnceHome.HC",
@@ -6754,6 +6766,8 @@ int main(int argc, char **argv)
         probes = reference ? registry_reference_probes : registry_probes;
       else if (once)
         probes = once_probes;
+      else if (popup)
+        probes = popup_probes;
       else if (aot)
         probes = doc_tree_aot_probes;
       DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
@@ -7661,6 +7675,7 @@ int main(int argc, char **argv)
               << " --cpu-rep[-reference] qemu image.iso [capture-dir]\n"
               << " --registry[-reference] qemu image.iso [capture-dir]\n"
               << " --once[-reference] qemu image.iso [capture-dir]\n"
+              << " --popup-menus[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"

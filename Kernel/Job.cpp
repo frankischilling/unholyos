@@ -312,6 +312,53 @@ extern "C" int64_t JobsHndlrCpp(uint64_t run_flags, CTask *task)
   return count;
 }
 
+extern "C" void SrvCmdLineHC();
+
+extern "C" int64_t PopUpCpp(const char *src, CTask *parent, CTask **popup_task)
+{
+  if (popup_task)
+    *popup_task = nullptr;
+  if (!src)
+    return 0;
+  auto *task = SpawnCpp(reinterpret_cast<uintptr_t>(SrvCmdLineHC), nullptr,
+                       "Servant", -1, parent, 0, JOBF_ADD_TO_QUE);
+  if (!task)
+    return 0;
+  if (!parent) {
+    if (TaskExeCpp(task, nullptr, src,
+                   JOBF_EXIT_ON_COMPLETE | JOBF_FREE_ON_COMPLETE)) {
+      if (popup_task)
+        *popup_task = task;
+    } else
+      KillTask(task);
+    return 0;
+  }
+  auto *caller = CurrentTask();
+  caller->popup_task = task;
+  auto *job = TaskExeCpp(task, parent, src, JOBF_WAKE_MASTER | JOBF_FOCUS_MASTER);
+  if (popup_task)
+    *popup_task = task;
+  int64_t res = 0;
+  if (job)
+    JobResScanCpp(job, &res);
+  caller->popup_task = nullptr;
+  KillTask(task);
+  if (popup_task)
+    *popup_task = nullptr;
+  return res;
+}
+
+extern "C" int64_t PopUpPrintCpp(const char *fmt, int64_t argc,
+                                  const uint64_t *argv)
+{
+  auto *src = StrPrintJoin(nullptr, fmt, argc, argv);
+  if (!src)
+    return 0;
+  auto res = PopUpCpp(src, CurrentTask(), nullptr);
+  Free(src);
+  return res;
+}
+
 int64_t AdamText(const char *src)
 {
   auto *task = CurrentTask();

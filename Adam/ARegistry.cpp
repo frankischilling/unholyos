@@ -92,6 +92,43 @@ extern "C" uint64_t RegAppendCpp(const char *path, const char *fmt,
   return DocTreeAppendCpp(RegCache(), path, true, fmt, argc, argv);
 }
 
+extern "C" uint64_t OneTimePopUpCpp(uint8_t *flags, int64_t flag_num,
+                                     const char *msg)
+{
+  if (!flags)
+    return false;
+  uint8_t set;
+  asm volatile("btq %2,(%1); setc %0"
+               : "=q"(set) : "r"(flags), "r"(flag_num) : "cc", "memory");
+  if (set)
+    return false;
+  auto *doc = DocNewCpp(nullptr, nullptr);
+  if (!doc)
+    return false;
+  if (msg)
+    DocPutS(*doc, msg, StrLen(msg));
+  constexpr char checkbox[] = "\n$CB,\"Do not show this msg again.\",LE=1$";
+  auto *entry = DocPutS(*doc, checkbox, sizeof(checkbox) - 1);
+  constexpr char okay[] = "$CM+CX,0,4$$BT,\"OKAY\",LE=1$\n";
+  DocPutS(*doc, okay, sizeof(okay) - 1);
+  bool res = entry && PopUpMenuCpp(doc, 0) == 1 &&
+             (entry->de_flags & DOCEF_CHECKED_COLLAPSED);
+  if (res)
+    asm volatile("lock btsq %1,(%0)"
+                 : : "r"(flags), "r"(flag_num) : "cc", "memory");
+  DocDelCpp(doc);
+  return res;
+}
+
+extern "C" void RegOneTimePopUpCpp(int64_t flag_num, const char *msg)
+{
+  if (OneTimePopUpCpp(reinterpret_cast<uint8_t *>(sys_msg_flags), flag_num,
+                     msg)) {
+    const uint64_t arg = sys_msg_flags[0];
+    RegWriteCpp("Adam/SysMsgFlags", "sys_msg_flags[0]=0x%X;\n", 1, &arg);
+  }
+}
+
 bool RegInit()
 {
   auto *doc = RegCache();

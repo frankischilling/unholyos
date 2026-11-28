@@ -11,6 +11,7 @@ GLOBAL Str2I64HC,Str2DateHC,StrScanHC
 GLOBAL Str2F64HC,ChkPtrHC,ClassRep2HC,ClassRepHC,ClassRepDHC
 GLOBAL DocMaxHC,DocDataFmtHC,DocDataScanHC
 GLOBAL DocFormHC,DocEdHC,DocFormFwdHC,DocFormBwdHC,ViewHC,HomeSetHC,ToUpperHC
+GLOBAL DocMenuHC,PopUpMenuHC,PopUpFormHC,DocMenuTryHC,DocMenuEndTaskCBHC
 GLOBAL GetI64HC,GetF64HC,GetDateHC
 GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
@@ -117,6 +118,7 @@ GLOBAL DocCutHC,DocCopyHC,DocTreeFindHC,DocTreeFFindHC,DocTreeMakeHC
 GLOBAL DocTreeWriteHC,DocTreeAppendHC,DocTreeFWriteHC,DocTreeFAppendHC
 GLOBAL DocTreeWriteJoinHC,DocTreeAppendJoinHC,ExeDocHC,DocTreeExeHC,DocTreeFExeHC
 GLOBAL RegDftHC,RegExeHC,RegWriteHC,RegCntHC,RegAppendHC,AdamHC
+GLOBAL OneTimePopUpHC,RegOneTimePopUpHC,PopUpHC,PopUpPrintHC,SrvCmdLineHC
 GLOBAL AOnceFlushHC,OnceFlushHC,AOnceHC,OnceHC,AOnceDrvHC,OnceDrvHC,OnceExeHC
 GLOBAL OnceExeTryHC,XTalkHC
 GLOBAL DocCompileHC
@@ -225,6 +227,7 @@ EXTERN JobDelCpp,TaskRstAwaitingMsgCpp,TaskExeCpp,TaskTextCpp
 EXTERN TaskMsgCpp,JobResScanCpp,JobResGetCpp,TaskWaitCpp
 EXTERN PostMsgCpp,PostMsgWaitCpp,MsgCpp,JobsHndlrCpp
 EXTERN SrvTaskContCpp,ScanMsgCpp,FlushMsgsCpp,GetMsgCpp
+EXTERN PopUpCpp,PopUpPrintCpp,SrvCmdLineCpp,OneTimePopUpCpp,RegOneTimePopUpCpp
 EXTERN InputFilterTaskCpp
 EXTERN Char2ScanCodeCpp,ScanCode2CharCpp,KbdTypeMaticCpp,PutKeyCpp
 EXTERN GridInitCpp,MsSetCpp
@@ -367,6 +370,7 @@ EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp,Str2DateCpp,StrScanCpp
 EXTERN Str2F64Cpp,ChkPtrCpp,ClassRep2Cpp,ClassRepCpp,ClassRepDCpp
 EXTERN DocMaxCpp,DocDataFmtCpp,DocDataScanCpp
 EXTERN DocFormCpp,DocEdCpp,DocFormFwdCpp,DocFormBwdCpp,ViewCpp,HomeSetCpp,ToUpperCpp
+EXTERN DocMenuCpp,PopUpMenuCpp,PopUpFormCpp,DocMenuTryCpp,DocMenuEndTaskCBCpp
 EXTERN GetI64Cpp,GetF64Cpp,GetDateCpp
 EXTERN FileWriteCpp,BlkDevNextFreeSlotCpp,BlkDevAddCpp,Let2DrvCpp,BlkReadCpp,BlkWriteCpp
 EXTERN FmtCpp
@@ -452,6 +456,7 @@ HOLYC_CPP PostMsgWaitHC,PostMsgWaitCpp,5
 HOLYC_CPP MsgHC,MsgCpp,4
 HOLYC_CPP JobsHndlrHC,JobsHndlrCpp,2
 HOLYC_CPP SrvTaskContHC,SrvTaskContCpp,0
+HOLYC_CPP SrvCmdLineHC,SrvCmdLineCpp,1
 HOLYC_CPP UserCmdLineHC,UserCmdLineCpp,1
 HOLYC_CPP ScanMsgHC,ScanMsgCpp,4
 HOLYC_CPP FlushMsgsHC,FlushMsgsCpp,1
@@ -800,6 +805,11 @@ HOLYC_CPP DocMaxHC,DocMaxCpp,1
 HOLYC_CPP DocDataFmtHC,DocDataFmtCpp,3
 HOLYC_CPP DocDataScanHC,DocDataScanCpp,2
 HOLYC_CPP DocFormHC,DocFormCpp,5
+HOLYC_CPP DocMenuHC,DocMenuCpp,2
+HOLYC_CPP PopUpMenuHC,PopUpMenuCpp,2
+HOLYC_CPP PopUpFormHC,PopUpFormCpp,5
+HOLYC_CPP DocMenuTryHC,DocMenuTryCpp,2
+HOLYC_CPP DocMenuEndTaskCBHC,DocMenuEndTaskCBCpp,0
 HOLYC_CPP DocEdHC,DocEdCpp,2
 HOLYC_CPP DocFormFwdHC,DocFormFwdCpp,2
 HOLYC_CPP DocFormBwdHC,DocFormBwdCpp,2
@@ -1032,6 +1042,10 @@ HOLYC_CPP PutFileLinkHC,PutFileLinkCpp,4
 HOLYC_CPP PutSrcLinkHC,PutSrcLinkCpp,3
 HOLYC_CPP FixSetHC,FixSetCpp,2
 HOLYC_PRINT AdamHC,AdamCpp,1
+HOLYC_CPP PopUpHC,PopUpCpp,3
+HOLYC_PRINT PopUpPrintHC,PopUpPrintCpp,1
+HOLYC_CPP OneTimePopUpHC,OneTimePopUpCpp,3
+HOLYC_CPP RegOneTimePopUpHC,RegOneTimePopUpCpp,2
 HOLYC_PRINT AdamErrHC,AdamErrCpp,1
 HOLYC_PRINT XTalkHC,XTalkCpp,2
 
