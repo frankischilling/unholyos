@@ -1,4 +1,5 @@
 #include "../Kernel/KernelB.hpp"
+#include "../Adam/God/GodExt.hpp"
 #include "../Adam/Gr/GrExt.hpp"
 #include "../Adam/Gr/GrGlbls.hpp"
 #include "../Adam/Menu.hpp"
@@ -1957,6 +1958,41 @@ static bool CmpSoundEffectFrameData(CHashTable *table)
   return true;
 }
 
+static bool CmpGodData(CHashTable *table)
+{
+  auto *cls = CmpKernelClass(table, "CGodGlbls", sizeof(CGodGlbls));
+  if (!cls)
+    return false;
+  auto *heap = CurrentTask()->data_heap;
+  auto *u8 = FindType("U8", table);
+  auto *i64 = FindType("I64", table);
+  auto *fifo = FindType("CFifoU8", table) + 1;
+  const struct
+  {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+  } fields[]{
+      {"words", u8 + 2, offsetof(CGodGlbls, words)},
+      {"word_file_mask", u8 + 1, offsetof(CGodGlbls, word_file_mask)},
+      {"word_fuf_flags", i64, offsetof(CGodGlbls, word_fuf_flags)},
+      {"num_words", i64, offsetof(CGodGlbls, num_words)},
+      {"fifo", fifo, offsetof(CGodGlbls, fifo)},
+      {"doodle_dc", FindType("CDC", table) + 1, offsetof(CGodGlbls, doodle_dc)},
+      {"doodle_ch", i64, offsetof(CGodGlbls, doodle_ch)},
+      {"doodle_fifo", fifo, offsetof(CGodGlbls, doodle_fifo)},
+      {"doodle_done", FindType("Bool", table), offsetof(CGodGlbls, doodle_done)},
+  };
+  for (const auto &field : fields) {
+    auto *name = StrNew(field.name, heap);
+    if (!name || !MemberAdd(*cls, name, *field.type, field.offset)) {
+      Free(name);
+      return false;
+    }
+  }
+  return CmpKernelGlobal(table, "god", cls, &god);
+}
+
 static bool CmpTaskSettingsData(CHashTable *table)
 {
   auto *cls = CmpKernelClass(table, "CTaskSettings", sizeof(CTaskSettings));
@@ -2977,6 +3013,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"RegWrite", Bool, FF_DOT_DOT_DOT, {{"path", U8Ptr}, {"fmt", U8Ptr}}},
       {"RegCnt", I64, FF_RET1, {{"path", U8Ptr}}},
       {"RegAppend", Bool, FF_DOT_DOT_DOT, {{"path", U8Ptr}, {"fmt", U8Ptr}}},
+      {"GodBitsIns", U0, FF_RET1, {{"num_bits", I64}, {"n", I64}}},
+      {"GodHexIns", U0, FF_RET1, {{"st", U8Ptr}}},
+      {"GodBits", I64, FF_RET1, {{"num_bits", I64}, {"msg", U8Ptr, true}}},
       {"AOnceFlush", U0, FF_RET1, {}},
       {"OnceFlush", U0, FF_RET1, {}},
       {"AOnce", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
@@ -3865,6 +3904,7 @@ static bool CmpFillHash(CHashTable *table)
       {"DOCF_BWD_MOVEMENT", "0x40000"},
       {"DOCF_DO_FULL_REFRESH", "0x200000"}, {"TASKf_IDLE", "3"},
       {"RECALCt_FIND_CURSOR", "1"},
+      {"GOD_BAD_BITS", "4"}, {"GOD_GOOD_BITS", "24"},
       {"BOOT_SRC_NULL", "0"}, {"BOOT_SRC_ROM", "1"}, {"BOOT_SRC_RAM", "2"},
       {"BOOT_SRC_HARDDRV", "3"}, {"BOOT_SRC_DVD", "4"},
       {"DOCT_BTTN", "29"}, {"DOCEF_LINK", "(1<<36)"},
@@ -4021,7 +4061,7 @@ static bool CmpFillHash(CHashTable *table)
          CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
          CmpScrnCastData(table) && CmpMusicData(table) &&
-         CmpSoundEffectFrameData(table) &&
+         CmpSoundEffectFrameData(table) && CmpGodData(table) &&
          CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
          CmpCtrlData(table, task) && CmpInsRegData(table) &&
          CmpProgressData(table) &&

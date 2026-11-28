@@ -114,6 +114,9 @@ constexpr CTextProbe file_editor_probes[]{
 constexpr CTextProbe key_map_probes[]{
     {"key-map", "/KeyMapProbe.HC", "", "Key map probe ", "Key map probe FF",
      "Key map probe FF\n", {}, true}};
+constexpr CTextProbe god_input_probes[]{
+    {"god-input", "/GodInputProbe.HC", "", "God input ", "God input ",
+     "God input 7F\n", {}, true}};
 constexpr CTextProbe dictionary_probes[]{
     {"dictionary", "/DictionaryProbe.HC", "", "Dictionary probe ",
      "Dictionary probe 3F", "Dictionary probe 3F\n", {}, true}};
@@ -395,35 +398,36 @@ static void DriveCharacterGraphics(
     }
     return result;
   };
+  auto click_cell = [&](size_t index, const std::array<uint64_t, 3> &mouse) {
+    const int64_t x = (index % 81) * 8 + 4, y = (index / 81) * 8 + 4;
+    bool reached = false;
+    for (unsigned i = 0; i < 90; i++) {
+      const auto coords = ReadPhysical<2>(vm, mouse[0]);
+      auto dx = x - int64_t(coords[0]), dy = y - int64_t(coords[1]);
+      if (std::abs(dx) <= 1 && std::abs(dy) <= 1) {
+        reached = true;
+        break;
+      }
+      MouseMove(vm, std::clamp(dx, int64_t(-40), int64_t(40)) * 2,
+                std::clamp(dy, int64_t(-40), int64_t(40)) * 2);
+      std::this_thread::sleep_for(55ms);
+    }
+    Check(reached, "Mouse did not reach the DolDoc entry");
+    std::this_thread::sleep_for(100ms);
+    for (bool down : {true, false}) {
+      MouseButton(vm, "left", down);
+      unsigned i = 0;
+      while (bool(ReadPhysical<1>(vm, mouse[1], 'b')[0]) != down && ++i < 100)
+        std::this_thread::sleep_for(25ms);
+      Check(i < 100, "Mouse button state did not change");
+      std::this_thread::sleep_for(down ? 180ms : 400ms);
+    }
+  };
   auto pane_links = [&] {
     cmd(R"("ACM %X %X %X\n",&ms.pos.x,&ms.lb,&ms.rb;)");
     const auto mouse = addresses("ACM ", {16, 1, 1});
     auto click = [&](std::string_view label) {
-      const auto screen = visible(wait_text(label));
-      const auto index = screen.find(label);
-      const int64_t x = (index % 81) * 8 + 4, y = (index / 81) * 8 + 4;
-      bool reached = false;
-      for (unsigned i = 0; i < 90; i++) {
-        const auto coords = ReadPhysical<2>(vm, mouse[0]);
-        auto dx = x - int64_t(coords[0]), dy = y - int64_t(coords[1]);
-        if (std::abs(dx) <= 1 && std::abs(dy) <= 1) {
-          reached = true;
-          break;
-        }
-        MouseMove(vm, std::clamp(dx, int64_t(-40), int64_t(40)) * 2,
-                  std::clamp(dy, int64_t(-40), int64_t(40)) * 2);
-        std::this_thread::sleep_for(55ms);
-      }
-      Check(reached, "Mouse did not reach the DolDoc entry");
-      std::this_thread::sleep_for(100ms);
-      for (bool down : {true, false}) {
-        MouseButton(vm, "left", down);
-        unsigned i = 0;
-        while (bool(ReadPhysical<1>(vm, mouse[1], 'b')[0]) != down && ++i < 100)
-          std::this_thread::sleep_for(25ms);
-        Check(i < 100, "Mouse button state did not change");
-        std::this_thread::sleep_for(down ? 180ms : 400ms);
-      }
+      click_cell(visible(wait_text(label)).find(label), mouse);
     };
     wait_text("AutoComplete is in StandBy");
     click("System Keys Quick Guide");
@@ -1394,10 +1398,18 @@ static void DriveCharacterGraphics(
     for (const auto &probe : text_probes) {
       vm.ResetDeadline(150s);
       cmd("DocClear(,1);");
+      const bool god_input = std::string_view(probe.name) == "god-input";
+      std::array<uint64_t, 3> mouse{};
+      if (god_input) {
+        cmd(R"("GIM %X %X %X\n",&ms.pos.x,&ms.lb,&ms.rb;)");
+        mouse = addresses("GIM ", {16, 1, 1});
+      }
       if (reference && probe.reference_file)
         cmd(std::string("DocClear(,1);ExeFile2(\"") + probe.reference_file + "\");");
       else if (reference)
         upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
+      else if (god_input)
+        cmd(std::string("ExeFile2(\"::") + probe.source + "\");0;");
       else
         cmd(std::string("ExeFile(\"::") + probe.source + "\");0;");
       if (std::string_view(probe.name) == "popup-menus") {
@@ -1425,6 +1437,14 @@ static void DriveCharacterGraphics(
         training_input();
       if (std::string_view(probe.name) == "file-editor")
         file_editor();
+      if (god_input) {
+        wait_text("a random num from a timer.");
+        const auto screen = visible(wait_text("Latch:"));
+        const auto button = screen.rfind("OKAY");
+        Check(button != screen.find("OKAY"), "Missing timer OKAY button");
+        snapshot("god-input-timer");
+        click_cell(button, mouse);
+      }
       if (std::string_view(probe.name) == "key-map") {
         wait_text("Press the key map probe chord");
         key("ctrl-alt-q");

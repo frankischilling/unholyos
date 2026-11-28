@@ -1,3 +1,4 @@
+#include "../Adam/God/GodExt.hpp"
 #include "../Linux/BootProbe.hpp"
 #include "KernelB.hpp"
 
@@ -212,6 +213,10 @@ extern "C" void KMainCpp()
   if (!MakeAdam()) {
     BootPutS("Could not load Adam sources");
     SerialPutS("UnholyOS: Could not load Adam sources\r\n");
+    return;
+  }
+  if (!GodExtInit()) {
+    SerialPutS("UnholyOS: Could not allocate God input FIFOs\r\n");
     return;
   }
   if (!InsRegInit()) {
