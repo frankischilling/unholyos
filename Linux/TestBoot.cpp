@@ -1910,6 +1910,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CDocBin",
                                        "CEdFileName",
                                        "CInsReg",
+                                       "CProgress",
                                        "CQue",
                                        "CFifoU8",
                                        "CFifoI64",
@@ -1964,7 +1965,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 94);
+  static_assert(class_count == 95);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -2017,6 +2018,8 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
           Check((hash & 1023) == bucket + i,
                 "Startup class is in the wrong hash bucket");
           const auto block = ReadPhysical<80>(vm, address);
+          if (name == "CProgress")
+            Check(block[8] == 80, "Startup CProgress record has the wrong size");
           Check(((block[10] >> 32) & 255) == 0,
                 "Startup class base has pointer stars");
           for (uint64_t stars = 1; stars <= 4; ++stars) {
