@@ -341,7 +341,9 @@ static bool CmpRuntimeData(CHashTable *table)
     }
   }
 
-  return CmpKernelGlobal(table, "cnts", cls, &cnts);
+  return CmpKernelGlobal(table, "cnts", cls, &cnts) &&
+         CmpKernelGlobal(table, "sys_run_level", FindType("U32", table),
+                         reinterpret_cast<void *>(CmpSysExport("sys_run_level")));
 }
 
 static CHashClass *CmpKernelClass(CHashTable *table, const char *name, size_t size)
@@ -2534,6 +2536,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Msg", U0, FF_RET1, {{"msg_code", I64}, {"arg1", I64}, {"arg2", I64}, {"flags", I64, true}}},
       {"JobsHndlr", I64, FF_RET1, {{"run_flags", I64}, {"task", TaskPtr, true}}},
       {"Adam", I64, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
+      {"XTalk", U0, FF_DOT_DOT_DOT, {{"task", TaskPtr}, {"fmt", U8Ptr}}},
       {"SrvTaskCont", U0, FF_RET1, {}},
       {"FlushMsgs", I64, FF_RET1, {{"task", TaskPtr, true}}},
       {"Char2ScanCode", I64, FF_RET1, {{"ch", I64}, {"sc_flags", I64, true}}},
@@ -2635,6 +2638,13 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"RegWrite", Bool, FF_DOT_DOT_DOT, {{"path", U8Ptr}, {"fmt", U8Ptr}}},
       {"RegCnt", I64, FF_RET1, {{"path", U8Ptr}}},
       {"RegAppend", Bool, FF_DOT_DOT_DOT, {{"path", U8Ptr}, {"fmt", U8Ptr}}},
+      {"AOnceFlush", U0, FF_RET1, {}},
+      {"OnceFlush", U0, FF_RET1, {}},
+      {"AOnce", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
+      {"Once", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
+      {"AOnceDrv", U0, FF_DOT_DOT_DOT, {{"drv_let", U8, true}, {"fmt", U8Ptr}}},
+      {"OnceDrv", U0, FF_DOT_DOT_DOT, {{"drv_let", U8, true}, {"fmt", U8Ptr}}},
+      {"OnceExe", U0, FF_RET1, {}},
       {"DocSave", U8Ptr, FF_RET1, {{"doc", DocPtr}, {"_size", I64Ptr, true}}},
       {"DocType", Bool, FF_RET1,
        {{"doc", DocPtr, true}, {"filename", U8Ptr}, {"trailing_new_lines", I64, true, 1}}},
@@ -3430,6 +3440,8 @@ static bool CmpFillHash(CHashTable *table)
       {"CTRLT_VIEWING_ANGLES", "3"},
       {"VIEWANGLES_SPACING", "22"}, {"VIEWANGLES_RANGE", "48"},
       {"VIEWANGLES_BORDER", "2"}, {"VIEWANGLES_SNAP", "2"},
+      {"RLf_ONCE_ADAM", "19"},
+      {"RLf_ONCE_USER", "20"},
       {"CTRLF_SHOW", "1"},
       {"CTRLF_BORDER", "2"},
       {"CTRLF_CAPTURE_LEFT_MS", "4"},

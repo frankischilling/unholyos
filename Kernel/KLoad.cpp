@@ -245,6 +245,8 @@ void DocTreeWriteHC(), DocTreeAppendHC(), DocTreeFWriteHC(), DocTreeFAppendHC();
 void DocTreeWriteJoinHC(), DocTreeAppendJoinHC(), ExeDocHC(), DocTreeExeHC(),
     DocTreeFExeHC();
 void RegDftHC(), RegExeHC(), RegWriteHC(), RegCntHC(), RegAppendHC(), AdamHC();
+void AOnceFlushHC(), OnceFlushHC(), AOnceHC(), OnceHC(), AOnceDrvHC(),
+    OnceDrvHC(), OnceExeHC(), XTalkHC();
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
 void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC(), DocPutKeyHC();
 void DocLockHC(), DocUnlockHC(), DocEntryRunHC(), DocBottomHC(), DocClearHC(), NowHC();
@@ -870,6 +872,7 @@ bool LoadKernel(CTask &task)
       {"music", reinterpret_cast<uintptr_t>(&music)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
       {"SYS_RUN_LEVEL", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
+      {"sys_run_level", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
       {"SYS_MEM_INIT_FLAG", reinterpret_cast<uintptr_t>(&sys_mem_init_flag)},
       {"SYS_MEM_INIT_VAL", reinterpret_cast<uintptr_t>(&sys_mem_init_val)},
       {"SYS_HEAP_INIT_FLAG", reinterpret_cast<uintptr_t>(&sys_heap_init_flag)},
@@ -1189,6 +1192,7 @@ bool LoadKernel(CTask &task)
       {"Msg", reinterpret_cast<uintptr_t>(MsgHC)},
       {"JobsHndlr", reinterpret_cast<uintptr_t>(JobsHndlrHC)},
       {"Adam", reinterpret_cast<uintptr_t>(AdamHC)},
+      {"XTalk", reinterpret_cast<uintptr_t>(XTalkHC)},
       {"SrvTaskCont", reinterpret_cast<uintptr_t>(SrvTaskContHC)},
       {"UserCmdLine", reinterpret_cast<uintptr_t>(UserCmdLineHC)},
       {"ScanMsg", reinterpret_cast<uintptr_t>(ScanMsgHC)},
@@ -1499,6 +1503,13 @@ bool LoadKernel(CTask &task)
       {"RegWrite", reinterpret_cast<uintptr_t>(RegWriteHC)},
       {"RegCnt", reinterpret_cast<uintptr_t>(RegCntHC)},
       {"RegAppend", reinterpret_cast<uintptr_t>(RegAppendHC)},
+      {"AOnceFlush", reinterpret_cast<uintptr_t>(AOnceFlushHC)},
+      {"OnceFlush", reinterpret_cast<uintptr_t>(OnceFlushHC)},
+      {"AOnce", reinterpret_cast<uintptr_t>(AOnceHC)},
+      {"Once", reinterpret_cast<uintptr_t>(OnceHC)},
+      {"AOnceDrv", reinterpret_cast<uintptr_t>(AOnceDrvHC)},
+      {"OnceDrv", reinterpret_cast<uintptr_t>(OnceDrvHC)},
+      {"OnceExe", reinterpret_cast<uintptr_t>(OnceExeHC)},
       {"DocType", reinterpret_cast<uintptr_t>(DocTypeHC)},
       {"Type", reinterpret_cast<uintptr_t>(TypeHC)},
       {"DocPrint", reinterpret_cast<uintptr_t>(DocPrintHC)},

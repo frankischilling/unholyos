@@ -45,5 +45,14 @@ bool StartUpTasks()
   WinToTopCpp(user1, false);
   WinTileVertCpp();
   WinZBufUpdateCpp();
+  auto *path = FileNameAbs("Once.HC.Z", *user1);
+  auto *dv = path && *path && path[1] == ':' ? PathDrive(*user1, path[0])
+                                             : nullptr;
+  CRedSeaDirEntry entry;
+  size_t prefix;
+  const bool found = dv && FsFileLookup(*dv, path + 2, true, true, entry, prefix);
+  Free(path);
+  if (found)
+    return XTalk(user1, "Cd;#include \"Once\";\n", 0, nullptr);
   return true;
 }

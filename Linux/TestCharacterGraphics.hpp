@@ -98,7 +98,8 @@ static void DriveCharacterGraphics(
     bool sprite_flood = false, bool music_demo = false,
     std::span<const CTextProbe> text_probes = {},
     std::span<const CModuleFile> module_files = {},
-    uint64_t memory_limit = 0x20000000)
+    uint64_t memory_limit = 0x20000000,
+    std::string_view startup_output = {})
 {
   auto in_memory = [memory_limit](uint64_t addr, uint64_t size) {
     return addr && size <= memory_limit && addr <= memory_limit - size;
@@ -232,6 +233,13 @@ static void DriveCharacterGraphics(
     return result;
   };
   wait_text("T:/Home>");
+  if (!startup_output.empty()) {
+    auto screen = visible(wait_text(startup_output));
+    Check(screen.find(startup_output) == screen.rfind(startup_output),
+          "Startup command ran in multiple terminals");
+    snapshot("once-startup");
+    std::cout << startup_output << '\n';
+  }
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
   if (music_demo) {
     vm.ResetDeadline(180s);

@@ -3509,6 +3509,10 @@ constexpr CTextProbe registry_reference_probes[]{
     {"registry","/RegistryProbe.HC","","High Score:","Registry probe ",
      "High Score:1.23000\nVal:1234\nRegistry probe 7F flags 0\n",{},true}};
 
+constexpr CTextProbe once_probes[]{
+    {"once", "/OnceProbe.HC", "", "Once probe ", "Once probe ",
+     "Once probe FF\n", {}, true}};
+
 constexpr CTextProbe dev_info_probes[]{
     {"dev-info", "/DevInfoProbe.HC", "", "Device reports ", "Device reports ",
      "Device reports 3FF\n", {}, true}};
@@ -6714,17 +6718,24 @@ int main(int argc, char **argv)
   if ((argc == 4 || argc == 5) &&
       (mode == "--doc-tree" || mode == "--doc-tree-reference" ||
        mode == "--doc-tree-aot" || mode == "--registry" ||
-       mode == "--registry-reference")) {
+       mode == "--registry-reference" || mode == "--once" ||
+       mode == "--once-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
     const bool registry = mode.starts_with("--registry");
+    const bool once = mode.starts_with("--once");
     char path[] = "/tmp/unholyos-document-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
     const fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
-      if (!reference && registry) {
+      if (!reference && once) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/OnceProbe.HC",
+                              "OnceProbe.HC");
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/OnceHome.HC",
+                              "Once.HC", "Home");
+      } else if (!reference && registry) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/RegistryProbe.HC",
                               "RegistryProbe.HC");
         VerifyHostModuleMedia(argv[3], "Demo/RegistryDemo.HC",
@@ -6741,11 +6752,14 @@ int main(int argc, char **argv)
       std::span<const CTextProbe> probes = doc_tree_probes;
       if (registry)
         probes = reference ? registry_reference_probes : registry_probes;
+      else if (once)
+        probes = once_probes;
       else if (aot)
         probes = doc_tree_aot_probes;
       DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
                              reference, false, false, false, false, false,
-                             false, false, false, probes);
+                             false, false, false, probes, {}, 0x20000000,
+                             once && !reference ? "Once startup 2A 2 2" : "");
       vm.Quit();
       if (argc == 4)
         fs::remove_all(dir);
@@ -7646,6 +7660,7 @@ int main(int argc, char **argv)
               << " --dev-info[-reference] qemu image.iso [capture-dir]\n"
               << " --cpu-rep[-reference] qemu image.iso [capture-dir]\n"
               << " --registry[-reference] qemu image.iso [capture-dir]\n"
+              << " --once[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"

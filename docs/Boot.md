@@ -4142,8 +4142,37 @@ The harness boots `build/registry-test.iso` or the pinned DVD with QEMU
 8.2.2 using `-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>` and
 the default single CPU. It runs the source through the guest terminal.
 The builds use GCC 13.3.0 or Clang 20.1.2 and NASM 2.16.01.
-The Once queue and installer
-registration are outside these checks.
+Installer registration is outside these checks.
+
+## Once queues and first terminal startup
+
+The native test DVD contains a prepared `Home/Once.HC` and a compressed
+registry with two queued entries. The first terminal executes that
+script through `XTalk`. The Adam entry sets a flag to 21 in the Adam
+task. The user entry sees that value and changes it to 42 in its own
+task. The terminal reports `Once startup 2A 2 2`. The two counts show
+the emptied branches. On a normal boot, the first terminal looks for
+the script in the home directory and its parents.
+
+The shared `OnceProbe.HC` creates a temporary registry on a writable
+RedSea RAM drive. It checks replacement before the run-level bits
+are set, subsequent append, drive override and restoration, Adam and
+user task identity, repeat execution after a flush, and propagation of
+a thrown exception after both branches are cleared. The native GCC
+and Clang builds and the pinned TempleOS guest report `Once probe FF`.
+
+```sh
+make -j4 test-once
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-once
+build/Linux/TestBoot --once-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/once-reference
+```
+
+The harness boots `build/once-test.iso` or the pinned DVD with QEMU
+8.2.2 using `-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`
+and the default single CPU. The configured home-script boot check
+runs on the native test DVD. The pinned run checks the shared queue
+operations. The stock install and tour script remains pending.
 
 ## Adam device reports
 
