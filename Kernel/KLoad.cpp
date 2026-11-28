@@ -92,6 +92,7 @@ void CdHC(), IsDirHC(), DirHC(), PutDirLinkHC(), FilesFindHC(), FileFindHC(),
 void DirContextNewHC(), DirContextDelHC(), Str2I64HC(), StrScanHC();
 void Str2DateHC(), GetI64HC(), GetF64HC(), GetDateHC();
 void Str2F64HC(), ChkPtrHC(), ClassRep2HC(), ClassRepHC(), ClassRepDHC();
+void DHC(), DmHC(), DaHC();
 void DocMaxHC(), DocDataFmtHC(), DocDataScanHC();
 void DocFormHC(), DocEdHC(), DocFormFwdHC(), DocFormBwdHC(), ViewHC(),
     HomeSetHC(), ToUpperHC();
@@ -1135,6 +1136,9 @@ bool LoadKernel(CTask &task)
       {"Str2F64", reinterpret_cast<uintptr_t>(Str2F64HC)},
       {"StrScan", reinterpret_cast<uintptr_t>(StrScanHC)},
       {"ChkPtr", reinterpret_cast<uintptr_t>(ChkPtrHC)},
+      {"D", reinterpret_cast<uintptr_t>(DHC)},
+      {"Dm", reinterpret_cast<uintptr_t>(DmHC)},
+      {"Da", reinterpret_cast<uintptr_t>(DaHC)},
       {"ClassRep2", reinterpret_cast<uintptr_t>(ClassRep2HC)},
       {"ClassRep", reinterpret_cast<uintptr_t>(ClassRepHC)},
       {"ClassRepD", reinterpret_cast<uintptr_t>(ClassRepDHC)},

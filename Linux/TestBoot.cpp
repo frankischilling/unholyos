@@ -3568,6 +3568,10 @@ constexpr CTextProbe class_records_probes[]{
     {"class-records", "/ClassRecordsProbe.HC", "", "CR heaps ", "CR DONE",
      class_records_output}};
 
+constexpr CTextProbe memory_dump_probes[]{
+    {"memory-dump", "/MemoryDumpProbe.HC", "", "Memory dump probe ",
+     "Memory dump probe ", "Memory dump probe F\n", {}, true}};
+
 constexpr std::string_view function_records_common_output =
     "FR heaps 1\n"
     "FR named F pointers FFFF\n"
@@ -7600,6 +7604,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--internal-types-reference" ||
        std::string_view(argv[1]) == "--class-records" ||
        std::string_view(argv[1]) == "--class-records-reference" ||
+       std::string_view(argv[1]) == "--memory-dump" ||
+       std::string_view(argv[1]) == "--memory-dump-reference" ||
        std::string_view(argv[1]) == "--function-records" ||
        std::string_view(argv[1]) == "--function-records-reference" ||
        std::string_view(argv[1]) == "--function-records-layout" ||
@@ -7692,6 +7698,7 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--internal-types");
     bool class_records_probe =
         std::string_view(argv[1]).starts_with("--class-records");
+    bool memory_dump_probe = std::string_view(argv[1]).starts_with("--memory-dump");
     bool function_records_probe =
         std::string_view(argv[1]) == "--function-records" ||
         std::string_view(argv[1]) == "--function-records-reference";
@@ -7760,6 +7767,8 @@ int main(int argc, char **argv)
       text_probes = internal_types_probes;
     else if (class_records_probe)
       text_probes = class_records_probes;
+    else if (memory_dump_probe)
+      text_probes = memory_dump_probes;
     else if (function_records_probe)
       text_probes = function_records_probes;
     else if (function_records_layout_probe)
@@ -7830,7 +7839,7 @@ int main(int argc, char **argv)
       if (character && !reference)
         VerifyHostModuleMedia(argv[3],"Linux/Fixtures/CharPanObserver.HC",
                               "CharPanObserver.HC");
-      if ((source_probe || internal_types_probe || function_records_probe ||
+      if ((source_probe || internal_types_probe || memory_dump_probe || function_records_probe ||
            function_records_layout_probe) &&
           !reference) {
         const auto sources = function_records_probe ? text_probes.first(1) : text_probes;
@@ -7878,7 +7887,8 @@ int main(int argc, char **argv)
       CMonitor vm(argv[2], argv[3], dir, "pc", memory, false, {}, false,
                   reference);
       vm.Connect();
-      if (!text_probes.empty() && !reference && !function_records_layout_probe) {
+      if (!text_probes.empty() && !reference && !function_records_layout_probe &&
+          !memory_dump_probe) {
         auto output = assert_warning
                           ? vm.WaitSerial(dir / "serial.log",
                                           "UnholyOS: finished "
@@ -8069,6 +8079,7 @@ int main(int argc, char **argv)
               << " --internal-types[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --class-records[-reference] qemu image.iso [capture-dir]\n"
+              << " --memory-dump[-reference] qemu image.iso [capture-dir]\n"
               << " --function-records[-reference] qemu image.iso [capture-dir]\n"
               << " --function-records-layout[-reference] qemu image.iso [capture-dir]\n"
               << " --list-utilities[-reference] qemu image.iso [capture-dir]\n"

@@ -10,6 +10,7 @@ GLOBAL Spaces2TabsHC,StrUtilHC,StrFirstOccHC,StrFirstRemHC,StrLastOccHC,StrLastR
 GLOBAL StrFindHC,Tabs2SpacesHC,ScaleIndentHC,MStrUtilHC
 GLOBAL Str2I64HC,Str2DateHC,StrScanHC
 GLOBAL Str2F64HC,ChkPtrHC,ClassRep2HC,ClassRepHC,ClassRepDHC
+GLOBAL DHC,DmHC,DaHC
 GLOBAL DocMaxHC,DocDataFmtHC,DocDataScanHC
 GLOBAL DocFormHC,DocEdHC,DocFormFwdHC,DocFormBwdHC,ViewHC,HomeSetHC,ToUpperHC
 GLOBAL DocMenuHC,PopUpMenuHC,PopUpFormHC,DocMenuTryHC,DocMenuEndTaskCBHC
@@ -392,6 +393,7 @@ EXTERN RedSeaDirNewCpp
 EXTERN DirNewCpp
 EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp,Str2DateCpp,StrScanCpp
 EXTERN Str2F64Cpp,ChkPtrCpp,ClassRep2Cpp,ClassRepCpp,ClassRepDCpp
+EXTERN DCpp,DmCpp,DaCpp
 EXTERN DocMaxCpp,DocDataFmtCpp,DocDataScanCpp
 EXTERN DocFormCpp,DocEdCpp,DocFormFwdCpp,DocFormBwdCpp,ViewCpp,HomeSetCpp,ToUpperCpp
 EXTERN DocMenuCpp,PopUpMenuCpp,PopUpFormCpp,DocMenuTryCpp,DocMenuEndTaskCBCpp
@@ -848,6 +850,9 @@ HOLYC_CPP Str2DateHC,Str2DateCpp,1
 HOLYC_CPP Str2F64HC,Str2F64Cpp,2
 HOLYC_PRINT StrScanHC,StrScanCpp,2
 HOLYC_CPP ChkPtrHC,ChkPtrCpp,1
+HOLYC_CPP DHC,DCpp,3
+HOLYC_CPP DmHC,DmCpp,2
+HOLYC_CPP DaHC,DaCpp,2
 HOLYC_CPP ClassRep2HC,ClassRep2Cpp,8
 HOLYC_CPP ClassRepHC,ClassRepCpp,5
 HOLYC_CPP ClassRepDHC,ClassRepDCpp,5
