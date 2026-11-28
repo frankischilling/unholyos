@@ -1960,6 +1960,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CSndData",
                                        "CScrnCastGlbls",
                                        "CMusicGlbls",
+                                       "CSoundEffectFrame",
                                        "CTaskSettings",
                                        "CMenuEntry",
                                        "CMenu",
@@ -1972,7 +1973,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 96);
+  static_assert(class_count == 97);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -2029,6 +2030,9 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
             Check(block[8] == 80, "Startup CProgress record has the wrong size");
           if (name == "CDocEntryBase")
             Check(block[8] == 88, "Startup CDocEntryBase record has the wrong size");
+          if (name == "CSoundEffectFrame")
+            Check(block[8] == 14,
+                  "Startup CSoundEffectFrame record has the wrong size");
           Check(((block[10] >> 32) & 255) == 0,
                 "Startup class base has pointer stars");
           for (uint64_t stars = 1; stars <= 4; ++stars) {
@@ -7322,11 +7326,14 @@ int main(int argc, char **argv)
   if ((argc == 4 || argc == 5) &&
       (mode == "--menu-diagnostic" || mode == "--menu-diagnostic-reference" ||
        mode == "--compiler-diagnostic" || mode == "--compiler-diagnostic-reference" ||
+       mode == "--extern-import-option" || mode == "--extern-import-option-reference" ||
        mode == "--compiler-warning" || mode == "--compiler-warning-reference")) {
     const bool reference = mode.ends_with("-reference");
     auto diagnostic = CDesktopTest::CompilerDiagnostic;
     if (mode.starts_with("--menu-diagnostic"))
       diagnostic = CDesktopTest::MenuDiagnostic;
+    else if (mode.starts_with("--extern-import-option"))
+      diagnostic = CDesktopTest::ExternImportOption;
     else if (mode.starts_with("--compiler-warning"))
       diagnostic = CDesktopTest::CompilerWarning;
     char path[] = "/tmp/unholyos-diagnostic-XXXXXX";
@@ -7334,6 +7341,9 @@ int main(int argc, char **argv)
       return 1;
     const auto dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
+      if (diagnostic == CDesktopTest::ExternImportOption && !reference)
+        for (const auto *source : {"ExternImportOption.PRJ", "ExternImportOptionInvalid.HC"})
+          VerifyHostModuleMedia(argv[3], fs::path("Linux/Fixtures") / source, source);
       if (diagnostic == CDesktopTest::CompilerWarning && !reference)
         for (const auto *source : {"CompilerWarningProbe.HC", "ForwardTypeWarningProbe.HC",
                                    "HeaderWarningProbe.HC"})
@@ -7353,6 +7363,8 @@ int main(int argc, char **argv)
       run(dir, diagnostic);
       if (diagnostic == CDesktopTest::CompilerDiagnostic)
         run(dir / "partial-cmp", CDesktopTest::CompilerCmpDiagnostic);
+      else if (diagnostic == CDesktopTest::ExternImportOption)
+        run(dir / "jit", CDesktopTest::ExternImportOptionJIT);
       else if (diagnostic == CDesktopTest::CompilerWarning) {
         run(dir / "forward-types", CDesktopTest::CompilerForwardWarning);
         run(dir / "function-headers", CDesktopTest::CompilerHeaderWarning);
@@ -7613,6 +7625,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--music-precision-reference" ||
        std::string_view(argv[1]) == "--waveform" ||
        std::string_view(argv[1]) == "--waveform-reference" ||
+       std::string_view(argv[1]) == "--sound-effects" ||
+       std::string_view(argv[1]) == "--sound-effects-reference" ||
        std::string_view(argv[1]) == "--strings" ||
        std::string_view(argv[1]) == "--strings-reference" ||
        std::string_view(argv[1]) == "--compiler-defines" ||
@@ -7704,6 +7718,7 @@ int main(int argc, char **argv)
     bool music_precision = std::string_view(argv[1]).starts_with("--music-precision");
     bool doc_song = std::string_view(argv[1]).starts_with("--doc-song");
     bool waveform = std::string_view(argv[1]).starts_with("--waveform");
+    bool sound_effects = std::string_view(argv[1]).starts_with("--sound-effects");
     bool music_demo = std::string_view(argv[1]).starts_with("--music") && !music_precision;
     bool tic = std::string_view(argv[1]).starts_with("--tic-tac-toe");
     bool breaks = std::string_view(argv[1]).starts_with("--break");
@@ -7786,6 +7801,8 @@ int main(int argc, char **argv)
       text_probes = doc_song_probes;
     else if (waveform)
       text_probes = waveform_probes;
+    else if (sound_effects)
+      text_probes = sound_effects_probes;
     else if (std::string_view(argv[1]).starts_with("--strings"))
       text_probes = string_probes;
     else if (assert_warning)
@@ -7886,6 +7903,9 @@ int main(int argc, char **argv)
       if (frame_ptr && !reference)
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/FramePtrProbe.HC",
                               "FramePtrProbe.HC");
+      if (sound_effects && !reference)
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/SoundEffectsProbe.HC",
+                              "SoundEffectsProbe.HC");
       if (waveform && !reference)
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/WaveformProbe.HC",
                               "WaveformProbe.HC");
@@ -8168,6 +8188,7 @@ int main(int argc, char **argv)
               << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"
               << " --menu-diagnostic[-reference] qemu image.iso [capture-dir]\n"
               << " --compiler-diagnostic[-reference] qemu image.iso [capture-dir]\n"
+              << " --extern-import-option[-reference] qemu image.iso [capture-dir]\n"
               << " --compiler-warning[-reference] qemu image.iso [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
@@ -8205,6 +8226,7 @@ int main(int argc, char **argv)
               << " --music-precision[-reference] qemu image.iso [capture-dir]\n"
               << " --doc-song[-reference] qemu image.iso [capture-dir]\n"
               << " --waveform[-reference] qemu image.iso [capture-dir]\n"
+              << " --sound-effects[-reference] qemu image.iso [capture-dir]\n"
               << " --frame-ptr[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --tic-tac-toe[-reference] qemu image.iso [capture-dir]\n"

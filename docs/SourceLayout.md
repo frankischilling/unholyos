@@ -70,6 +70,12 @@ reads the function address from its declaration, and the later
 definition updates that slot. `Compiler/CExcept.cpp` and its assembly
 adapter implement the reference's `UndefinedExtern` path.
 
+`PrsTopLevel` follows the `sm_import` and `sm_underscore_import` paths
+in `Compiler/PrsStmt.HC` when `OPTf_EXTERNS_TO_IMPORTS` is enabled.
+Typed `extern` and `_extern` declarations use the existing import paths.
+Forward class and union declarations still use the type parser. During
+JIT compilation, the converted declaration reports `import not needed at`.
+
 ## Public HolyC module loading
 
 `Kernel/KLoad.cpp::LoadCpp` follows `Kernel/KLoad.HC::Load`, sharing the
@@ -1617,9 +1623,9 @@ The single-CPU implementation protects beat updates with interrupts
 disabled. `Play` also checks the lower bound of the note index before
 accessing `music.note_map`; the reference only checks the upper bound.
 Characters below `A` outside the notation modifiers therefore become
-rests instead of reading outside that array. SMP synchronization,
-`Noise`, and `Sweep` remain pending. Terry A. Davis's original song
-stays in `Demo/Snd/OhGreat.HC`.
+rests instead of reading outside that array. SMP synchronization
+remains pending. Terry A. Davis's original song stays in
+`Demo/Snd/OhGreat.HC`.
 
 `DocRecalc` in `Adam/DolDoc/DocRecalc.cpp` follows the `DOCT_SONG`
 case in `Adam/DolDoc/DocRecalc.HC`. A full screen refresh clears
@@ -1649,6 +1655,24 @@ operations on the x87 stack through the reference's next binary64
 store. The triangle routines store the scaled phase before comparing
 it to their bounds. The public functions use the HolyC stack
 convention and return the binary64 word in RAX.
+
+## Speaker sound effects
+
+`Noise` and `Sweep` follow `Adam/ASnd.HC`. Both start a child
+task named `Noise`, keep their input in the packed 14-byte
+`CSoundEffectFrame`, and install the reference task-end callback
+after adding the frame. Playback makes the reference `Sleep(t)`
+call after clipping its interval against the seconds-based deadline.
+The sweep interpolates the note on the x87 stack, then truncates
+it to an integer.
+
+`CMusicGlbls.mute` keeps HolyC's one-byte `Bool` field. The
+C++ representation uses a byte so overlapping effects can increment
+and decrement the stored count. The task-end callback stops the
+speaker after freeing the frame, including when a started task is
+killed. UnholyOS frees the frame and reverses the counter increment
+if `SpawnCpp` fails. A failed frame-table allocation stops the
+task before playback.
 
 ## Task frame pointers
 

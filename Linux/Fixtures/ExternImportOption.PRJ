@@ -1,0 +1,30 @@
+// Declaration modes from Terry A. Davis's Compiler/PrsStmt.HC,
+// TempleOS c26482bb6ad3f80106d28504ec5db3c6a360732c.
+#exe {Option(0x20,1);};
+extern class ETORecord;
+extern union ETOOverlay;
+extern I64i ETOProvider(I64i value);
+_extern _MEMSET U8 *ETOFill(U8 *dst,I64i val,I64i cnt);
+extern I64i ETOData;
+_extern _ETOData I64i ETOAlias;
+#exe {Option(0x20,0);};
+
+class ETORecord {I64i value;};
+union ETOOverlay {I64i value;};
+extern I64i ETOLocal(I64i value);
+
+public I64i _ETORun(I64i value)
+{
+  ETORecord record;
+  ETOOverlay overlay;
+  U8 bytes[2];
+  record.value=ETOProvider(value);
+  overlay.value=ETOData+ETOAlias;
+  ETOFill(bytes,9,2);
+  return record.value+overlay.value+bytes[1]+ETOLocal(4);
+}
+
+I64i ETOLocal(I64i value)
+{
+  return value+1;
+}

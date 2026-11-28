@@ -227,6 +227,8 @@ WAVEFORM_PROBE := Linux/Fixtures/WaveformProbe.HC
 DOC_SONG_PROBE := Linux/Fixtures/DocSongProbe.HC
 DOC_SONG_TEST_ISO := $(BUILD)/doc-song-test.iso
 WAVEFORM_TEST_ISO := $(BUILD)/waveform-test.iso
+SOUND_EFFECTS_PROBE := Linux/Fixtures/SoundEffectsProbe.HC
+SOUND_EFFECTS_TEST_ISO := $(BUILD)/sound-effects-test.iso
 FRAME_PTR_PROBE := Linux/Fixtures/FramePtrProbe.HC
 FRAME_PTR_TEST_ISO := $(BUILD)/frame-ptr-test.iso
 STRINGS_TEST_ISO := $(BUILD)/strings-test.iso
@@ -286,6 +288,8 @@ MEMORY_DUMP_PROBE := Linux/Fixtures/MemoryDumpProbe.HC
 MEMORY_DUMP_TEST_ISO := $(BUILD)/memory-dump-test.iso
 BIT_FIELD_PROBE := Linux/Fixtures/BitFieldProbe.HC
 BIT_FIELD_TEST_ISO := $(BUILD)/bit-field-test.iso
+EXTERN_IMPORT_PROBES := Linux/Fixtures/ExternImportOption.PRJ Linux/Fixtures/ExternImportOptionInvalid.HC
+EXTERN_IMPORT_TEST_ISO := $(BUILD)/extern-import-test.iso
 
 # Every bootable test image uses the same Adam source initialization.
 $(ISO) $(foreach target,$(filter %_ISO,$(.VARIABLES)),$($(target))): $(ADAM_STARTUP_SOURCES)
@@ -484,7 +488,7 @@ $(AC_GEN_DISK): $(FAT_TOOL) $(AC_GEN_INPUT) Linux/Fixtures/ACDictGen.HC
 
 $(ISO) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(ATA_TEST_ISO) $(FAT_WRITE_ISO) \
 $(FAT_FORMAT_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(BREAK_TEST_ISO) \
-$(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(WAVEFORM_TEST_ISO) $(FRAME_PTR_TEST_ISO) $(STRINGS_TEST_ISO) \
+$(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(WAVEFORM_TEST_ISO) $(SOUND_EFFECTS_TEST_ISO) $(FRAME_PTR_TEST_ISO) $(STRINGS_TEST_ISO) \
 $(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO) $(LATE_IMPORT_TEST_ISO) $(LOAD_API_TEST_ISO) $(LOAD_PASS2_TEST_ISO) $(COMPILER_DEFINES_TEST_ISO) $(STRING_DEFINES_TEST_ISO) $(SYSTEM_DEFINES_TEST_ISO) $(COLOR_CONVERSIONS_TEST_ISO) $(FORMAT_MISSING_ARGS_TEST_ISO) $(INTERNAL_TYPES_TEST_ISO) $(CLASS_RECORDS_TEST_ISO): $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 
 $(HOST_MODULE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(HOST_MODULE)
@@ -671,6 +675,9 @@ $(FRAME_PTR_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(FRAME_PTR_PROBE) $(FILE
 
 $(DOC_SONG_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(DOC_SONG_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(DOC_SONG_PROBE)
+
+$(SOUND_EFFECTS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(SOUND_EFFECTS_PROBE) $(FILE_WRITE_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --dir Home --file $(SOUND_EFFECTS_PROBE) --file $(FILE_WRITE_PROBE)
 
 $(WAVEFORM_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(WAVEFORM_PROBE) $(FILE_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --dir Home --file $(WAVEFORM_PROBE) --file $(FILE_WRITE_PROBE)
@@ -922,6 +929,15 @@ test-memory-dump: $(MEMORY_DUMP_TEST_ISO) $(BOOT_TEST)
 
 test: test-memory-dump
 
+.PHONY: test-extern-import-option
+$(EXTERN_IMPORT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(EXTERN_IMPORT_PROBES)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(foreach file,$(EXTERN_IMPORT_PROBES),--file $(file))
+
+test-extern-import-option: $(EXTERN_IMPORT_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --extern-import-option "$(QEMU)" $(EXTERN_IMPORT_TEST_ISO)
+
+test: test-extern-import-option
+
 .PHONY: test-compiler-warning
 $(COMPILER_WARNING_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(COMPILER_WARNING_PROBES)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(foreach file,$(COMPILER_WARNING_PROBES),--file $(file))
@@ -997,6 +1013,12 @@ test-doc-song: $(DOC_SONG_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --doc-song "$(QEMU)" $(DOC_SONG_TEST_ISO)
 
 test: test-doc-song
+
+.PHONY: test-sound-effects
+test-sound-effects: $(SOUND_EFFECTS_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --sound-effects "$(QEMU)" $(SOUND_EFFECTS_TEST_ISO)
+
+test: test-sound-effects
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
