@@ -1,5 +1,6 @@
 #include "DolDoc.hpp"
 #include "../AutoComplete/AutoComplete.hpp"
+#include "../God/GodExt.hpp"
 
 static bool DocACKey(int64_t ch, int64_t sc)
 {
@@ -41,6 +42,10 @@ static void DocKeyDescription(int64_t ch, int64_t sc)
     case SC_F1:
       if (!ctrl)
         desc = shift ? "Cmd /About" : "Cmd /Help";
+      break;
+    case SC_F7:
+      if (!ctrl && !shift)
+        desc = "Cmd /God Word";
       break;
     case SC_CURSOR_LEFT:
       if (!shift)
@@ -94,6 +99,13 @@ extern "C" void DocPutKeyCpp(CDoc *doc, int64_t ch, int64_t sc)
   if (!ch && uint8_t(sc) == SC_F1 &&
       !(sc & (SCF_CTRL | SCF_ALT | SCF_KEY_DESC))) {
     EdCpp(sc & SCF_SHIFT ? "::/Doc/AboutTempleOS.DD.Z" : "::/Doc/HelpIndex.DD.Z", 0);
+    return;
+  }
+  if (!ch && uint8_t(sc) == SC_F7 &&
+      !(sc & (SCF_CTRL | SCF_ALT | SCF_SHIFT | SCF_KEY_UP))) {
+    FifoFlush(*god.fifo);
+    GodBitsInsCpp(GOD_GOOD_BITS, KbdMsEvtTimeCpp() >> GOD_BAD_BITS);
+    GodWordCpp(17);
     return;
   }
   CDocLock lock(*doc);

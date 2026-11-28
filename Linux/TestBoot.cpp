@@ -1641,7 +1641,7 @@ static bool GuestBytesEqual(CMonitor &vm, uint64_t address,
 static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
                                     uint64_t owner, uint64_t &graphics,
                                     uint64_t &winmgr_slot, uint64_t &disk,
-                                    uint64_t &key_device,
+                                    uint64_t &key_device, uint64_t &god,
                                     const CCompilerState &compiler)
 {
   uint64_t used = 0, count = 0;
@@ -1791,6 +1791,8 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           winmgr_slot = ReadPhysical<1>(vm, addr + 64)[0];
         if (type == 0x08000001 && str == "keydev")
           key_device = ReadPhysical<1>(vm, addr + 64)[0];
+        if (type == 0x08000001 && str == "god")
+          god = ReadPhysical<1>(vm, addr + 64)[0];
         if (type == 0x08000001 && str == "blkdev") {
           Check(!disk, "Duplicate boot block device symbol");
           disk = ReadPhysical<1>(vm, addr + 64)[0];
@@ -1801,7 +1803,7 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
     }
   }
   Check(kernel && hash_del && hash_src && put_str && graphics && winmgr_slot &&
-            disk && key_device,
+            disk && key_device && god,
         "Missing boot symbols");
   Check(std::all_of(system_seen.begin(), system_seen.end(),
                     [](bool seen) { return seen; }) &&
@@ -2719,13 +2721,52 @@ static uint64_t VerifyKeyDevHeap(CMonitor &vm, uint64_t head, uint64_t owner,
   return used;
 }
 
+static uint64_t VerifyGodVocabulary(CMonitor &vm, uint64_t god,
+                                    uint64_t owner, bool desktop)
+{
+  const auto state = ReadPhysical<4>(vm, god);
+  if (!desktop) {
+    Check(state == std::array<uint64_t, 4>{},
+          "God vocabulary initialized before Adam startup");
+    return 0;
+  }
+  constexpr char mask[] = "/Adam/God/Vocab.DD*";
+  Check(state[2] == 0x281801 && GuestBytesEqual(vm, state[1], {mask, sizeof(mask)}),
+        "Invalid startup God vocabulary mask or flags");
+  uint64_t used = VerifyCompilerAllocation(vm, state[1], owner, sizeof(mask));
+  used += VerifyCompilerAllocation(vm, state[0], owner, state[3] * 8);
+  if (!state[3])
+    return used;
+
+  const auto bytes = FileRead("Adam/God/Vocab.DD");
+  uint64_t count = 0;
+  size_t length = 0;
+  for (uint8_t ch : bytes) {
+    if (ch >= 128 || ch == '\'' || ch == '_' ||
+        ('0' <= ch && ch <= '9') || ('A' <= ch && ch <= 'Z') ||
+        ('a' <= ch && ch <= 'z')) {
+      length++;
+    } else if (length) {
+      used += CompilerAllocationSize(length + 1);
+      count++;
+      length = 0;
+    }
+  }
+  if (length) {
+    used += CompilerAllocationSize(length + 1);
+    count++;
+  }
+  Check(state[3] == count, "Invalid startup God vocabulary word count");
+  return used;
+}
+
 static void VerifyPools(CMonitor &vm, const fs::path &dir,
                         uint64_t heap, uint64_t ram_end,
                         const std::string &output, uint64_t range_bytes,
                         uint64_t symbol_used, uint64_t key_device_used,
                         const std::vector<CTestE820> &e820, uint64_t idle,
                         uint64_t graphics, uint64_t disk, uint64_t winmgr, uint64_t left,
-                        uint64_t right, bool desktop,
+                        uint64_t right, uint64_t god, bool desktop,
                         const CCompilerState &compiler)
 {
   constexpr uint64_t adam = 0x100300, adam_hc = 0x101188, code_pool = 0x1007A8;
@@ -2837,16 +2878,26 @@ static void VerifyPools(CMonitor &vm, const fs::path &dir,
       desktop ? VerifyRegistryHeap(vm, expected_data_hc, adam) : 0;
   // The two God FIFOs each use a 32-byte record and a 16 KiB buffer.
   const uint64_t god_fifo_used = desktop ? 2 * (32 + 16 + 33 * page - 24) : 0;
+  const uint64_t god_vocab_used =
+      VerifyGodVocabulary(vm, god, expected_data_hc, desktop);
+  // Changing directories during vocabulary loading can move the boot
+  // directory string from Adam's code heap to its separate data heap.
+  const auto directory = ReadPhysical<1>(vm, adam + 0x70)[0];
+  const auto directory_header = ReadPhysical<2>(vm, directory - 16);
+  const uint64_t directory_data_used =
+      pool && directory_header[0] == expected_data_hc ? directory_header[1] : 0;
   const uint64_t boot_used = range_bytes + late_used + symbol_used +
                              drive_used + initial_message_used + graphics_used +
                              asm_hash_used + raw_used + fifo_used + key_device_used +
                              compiler.data_used + cache_used + sector_cache_used +
-                             source_used[1] + registry_used + god_fifo_used;
+                             source_used[1] + registry_used + god_fifo_used +
+                             god_vocab_used + directory_data_used;
   // Default registration executes four statements with inline string data.
   // The compiler retains the StrCpy, two HashPublic, and Print allocations.
   const uint64_t registry_code_used = desktop ? 64 + 88 + 88 + 96 : 0;
   uint64_t code_used = 0x42840 + fault_used + compiler.code_used + source_used[0] +
-                       registry_code_used + (pool ? 0x5E8 : boot_used);
+                       registry_code_used + (pool ? 0x5E8 : boot_used) -
+                       directory_data_used;
   uint64_t data_used = boot_used, data_alloced = 0;
   BlockRanges data_used_ranges;
   for (auto task : {idle, winmgr, left, right}) {
@@ -2950,10 +3001,10 @@ static void VerifyFixedArea(CMonitor &vm, const fs::path &dir, uint64_t heap,
   const auto e820 = ReadE820(vm);
   uint64_t range_bytes = VerifyDeviceRanges(vm, output, e820);
   uint64_t owner = ReadPhysical<1>(vm, adam + 0x28)[0];
-  uint64_t graphics = 0, winmgr_slot = 0, disk = 0, key_device = 0;
+  uint64_t graphics = 0, winmgr_slot = 0, disk = 0, key_device = 0, god = 0;
   uint64_t symbol_used =
       VerifyKernelSymbols(vm, top + 0x28, owner, graphics, winmgr_slot,
-                           disk, key_device, compiler);
+                           disk, key_device, god, compiler);
   const uint64_t key_device_used =
       VerifyKeyDevHeap(vm, key_device, owner, compiler.initialized);
   uint64_t winmgr = ReadPhysical<1>(vm, winmgr_slot)[0];
@@ -3003,7 +3054,7 @@ static void VerifyFixedArea(CMonitor &vm, const fs::path &dir, uint64_t heap,
         "Invalid idle task record");
   VerifyPools(vm, dir, heap, ram_end, output, range_bytes, symbol_used,
               key_device_used, e820, idle, graphics, disk, winmgr, left, right,
-              desktop, compiler);
+              god, desktop, compiler);
 
   constexpr uint64_t task_alloced = 0x44800;
   uint64_t used_block = ram_end - task_alloced;
@@ -3036,11 +3087,13 @@ static void VerifyFixedArea(CMonitor &vm, const fs::path &dir, uint64_t heap,
   } else
     Check(rsp > stk + 24 && rsp <= top, "Kernel is not running on Adam's stack");
 
-  uint64_t cur_dir = ram_end - 0x260, fpu = ram_end - 0x210;
-  uint64_t hash = ram_end - 0x248;
-  Check(ReadPhysical<1>(vm, adam + 0x70)[0] == cur_dir &&
+  const auto cur_dir = ReadPhysical<1>(vm, adam + 0x70)[0];
+  uint64_t fpu = ram_end - 0x210, hash = ram_end - 0x248;
+  Check(cur_dir && (desktop || cur_dir == ram_end - 0x260) &&
             (ReadPhysical<1>(vm, cur_dir)[0] & 0xFFFFFFFFFFFF) == 0x656D6F482F,
         "Invalid Adam working directory");
+  const auto dir_owner = cur_dir == ram_end - 0x260 ? fixed + 0x1188 : owner;
+  VerifyCompilerAllocation(vm, cur_dir, dir_owner, sizeof("/Home"));
   Check(ReadPhysical<1>(vm, adam + 0x1B0)[0] == fpu &&
             ReadPhysical<1>(vm, fpu, 'h')[0] == 0x37F,
         "Invalid Adam FPU image");
@@ -6979,6 +7032,7 @@ int main(int argc, char **argv)
        mode == "--file-editor-reference" || mode == "--key-map" ||
        mode == "--key-map-reference" || mode == "--dictionary-reference" ||
        mode == "--god-input" || mode == "--god-input-reference" ||
+       mode == "--god-vocabulary" || mode == "--god-vocabulary-reference" ||
        mode == "--progress" || mode == "--progress-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
@@ -6989,6 +7043,7 @@ int main(int argc, char **argv)
     const bool startup_exec = mode.starts_with("--startup-exec");
     const bool key_map = mode.starts_with("--key-map");
     const bool god_input = mode.starts_with("--god-input");
+    const bool god_vocabulary = mode.starts_with("--god-vocabulary");
     const bool progress = mode.starts_with("--progress");
     char path[] = "/tmp/unholyos-document-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -7009,6 +7064,9 @@ int main(int argc, char **argv)
       } else if (!reference && startup_exec) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/StartupExecProbe.HC",
                               "StartupExecProbe.HC");
+      } else if (!reference && god_vocabulary) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/GodVocabularyProbe.HC",
+                              "GodVocabularyProbe.HC");
       } else if (!reference && god_input) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/GodInputProbe.HC",
                               "GodInputProbe.HC");
@@ -7055,6 +7113,8 @@ int main(int argc, char **argv)
         probes = key_map_probes;
       else if (god_input)
         probes = god_input_probes;
+      else if (god_vocabulary)
+        probes = god_vocabulary_probes;
       else if (mode == "--dictionary-reference")
         probes = dictionary_probes;
       else if (aot)
@@ -8207,6 +8267,7 @@ int main(int argc, char **argv)
               << " --file-editor-reference qemu image.iso [capture-dir]\n"
               << " --key-map[-reference] qemu image.iso [capture-dir]\n"
               << " --god-input[-reference] qemu image.iso [capture-dir]\n"
+              << " --god-vocabulary[-reference] qemu image.iso [capture-dir]\n"
               << " --dictionary-reference qemu image.iso [capture-dir]\n"
               << " --dictionary-install[-reference] qemu image.iso disk.img [capture-dir]\n"
               << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"
