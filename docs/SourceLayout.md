@@ -2387,9 +2387,11 @@ task's symbol table and relocates nonzero entries against the loaded
 module's payload. It preserves an existing line table when another map
 updates the symbol's source link. It rejects binary records whose line
 range would extend beyond the allocated data. `Kernel/FunSeg.cpp`
-exports `SrcLineNum`, `SrcFileName`, and `SrcEdLink`. Kernel and compiler
-maps for the host-built binaries and debugger searches across tasks are
-still pending.
+exports `SrcLineNum`, `SrcFileName`, and `SrcEdLink`. `FunSegFind`
+searches the current task's symbol tables in normal mode. In debugger
+mode it searches each active CPU's task list, as in `Kernel/FunSeg.HC`.
+UnholyOS currently starts one CPU. Kernel and compiler maps for the
+host-built binaries are still pending.
 
 `Kernel/Job.cpp` follows `Kernel/Job.HC` for `PopUp` and `PopUpPrint`.
 The servant enters `SrvCmdLine` and runs the standard execute job.

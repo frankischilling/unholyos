@@ -140,7 +140,7 @@ constexpr CTextProbe help_idx_probes[]{
      "Help index checks 3FF\nHelp index editor 1\n", {}, true}};
 constexpr CTextProbe source_map_probes[]{
     {"source-map", "/SourceMapProbe.HC", "", "Source map checks ",
-     "Address map editor ", "Source map checks 3FF\nAddress map editor 1\n", {}, true}};
+     "Address map editor ", "Source map checks 7FF\nAddress map editor 1\n", {}, true}};
 constexpr CTextProbe dictionary_probes[]{
     {"dictionary", "/DictionaryProbe.HC", "", "Dictionary probe ",
      "Dictionary probe 3F", "Dictionary probe 3F\n", {}, true}};

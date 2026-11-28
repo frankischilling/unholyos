@@ -8,6 +8,35 @@ static bool HasLower(const char *name)
   return false;
 }
 
+static void HashFunSegFind(const CHashTable &table, uintptr_t addr,
+                           uint64_t &offset, const CHash *&symbol)
+{
+  for (int64_t i = 0; i <= table.mask; i++)
+    for (auto *entry = table.body[i]; entry; entry = entry->next) {
+      const bool is_fun = entry->type & HTT_FUN;
+      uint64_t addr0;
+      if (is_fun) {
+        auto *fun = reinterpret_cast<const CHashFun *>(entry);
+        if (fun->cls.flags & (CF_EXTERN | FF_INTERNAL))
+          continue;
+        addr0 = reinterpret_cast<uintptr_t>(fun->exe_addr);
+      } else if (entry->type & HTT_EXPORT_SYS_SYM)
+        addr0 = reinterpret_cast<const CHashExport *>(entry)->val;
+      else
+        continue;
+      if (!addr0 || addr0 > addr)
+        continue;
+      auto delta = addr - addr0;
+      if (delta < offset ||
+          (delta == offset &&
+           (!symbol || !HasLower(symbol->str) ||
+            (is_fun && (symbol->type & HTT_EXPORT_SYS_SYM))))) {
+        symbol = entry;
+        offset = delta;
+      }
+    }
+}
+
 const CHash *FunSegFind(uintptr_t addr, uint64_t &offset)
 {
   offset = 0xFFFF;
@@ -17,39 +46,35 @@ const CHash *FunSegFind(uintptr_t addr, uint64_t &offset)
     auto *page = MemPageTable(addr);
     if (!page || !(*page & 1))
       return nullptr;
-  } else if (addr < MEM_BOOT_BASE || addr >= 0xA0000) {
+  } else if (addr < MEM_BOOT_BASE || addr >= 0xA0000)
     return nullptr;
-  }
+
   const CHash *symbol = nullptr;
-  for (auto *table = CurrentTask()->hash_table; table; table = table->next) {
-    for (int64_t i = 0; i <= table->mask; i++) {
-      for (auto *entry = table->body[i]; entry; entry = entry->next) {
-        bool is_fun = entry->type & HTT_FUN;
-        uint64_t addr0;
-        if (is_fun) {
-          auto *fun = reinterpret_cast<const CHashFun *>(entry);
-          if (fun->cls.flags & (CF_EXTERN | FF_INTERNAL))
-            continue;
-          addr0 = reinterpret_cast<uintptr_t>(fun->exe_addr);
-        } else if (entry->type & HTT_EXPORT_SYS_SYM) {
-          addr0 = reinterpret_cast<const CHashExport *>(entry)->val;
-        } else {
-          continue;
-        }
-        if (!addr0 || addr0 > addr)
-          continue;
-        auto delta = addr - addr0;
-        if (delta < offset ||
-            (delta == offset &&
-             (!symbol || !HasLower(symbol->str) ||
-              (is_fun && (symbol->type & HTT_EXPORT_SYS_SYM))))) {
-          symbol = entry;
-          offset = delta;
+  auto find_in_task = [&](const CTask &task) {
+    for (auto *table = task.hash_table; table; table = table->next)
+      HashFunSegFind(*table, addr, offset, symbol);
+  };
+  if (IsDbgModeCpp()) {
+    if (cpu_structs)
+      for (int64_t i = 0; i < mp_cnt; i++) {
+        auto *first = cpu_structs[i].seth_task;
+        for (auto *task = first;
+             ChkPtrRange(task, sizeof(*task)) && TaskValidateCpp(task);) {
+          find_in_task(*task);
+          task = task->next_task;
+          if (task == first)
+            break;
         }
       }
-    }
-  }
+  } else if (auto *task = CurrentTask())
+    find_in_task(*task);
   return symbol;
+}
+
+extern "C" const CHash *FunSegFindCpp(uintptr_t addr, uint64_t *offset)
+{
+  uint64_t unused;
+  return FunSegFind(addr, offset ? *offset : unused);
 }
 
 static int64_t LineFromMap(const CDbgInfo &dbg_info, uintptr_t addr,

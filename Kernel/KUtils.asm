@@ -133,7 +133,7 @@ GLOBAL GodBiblePassageHC,BibleLine2VerseHC,BookLinesHC,BibleVerseHC
 GLOBAL BibleDocHC,BibleViewHC,CtrlAltBHC
 GLOBAL GodDoodleSpriteHC,GodDoodleHC,GodDoodleDrawHC,GodDoodleRunHC
 GLOBAL WhoHC,HashDepthRepHC,DocHelpIdxHC,PopUpHelpIndexHC,MapFileLoadHC
-GLOBAL SrcLineNumHC,SrcFileNameHC,SrcEdLinkHC
+GLOBAL FunSegFindHC,SrcLineNumHC,SrcFileNameHC,SrcEdLinkHC
 GLOBAL RegDftHC,RegExeHC,RegWriteHC,RegCntHC,RegAppendHC,AdamHC
 GLOBAL OneTimePopUpHC,RegOneTimePopUpHC,PopUpHC,PopUpPrintHC,SrvCmdLineHC
 GLOBAL InsRegHC,InsReregHC,InsUnregHC
@@ -439,7 +439,7 @@ EXTERN GodBiblePassageCpp,BibleLine2VerseCpp,BookLinesCpp,BibleVerseCpp
 EXTERN BibleDocCpp,BibleViewCpp,CtrlAltBCpp
 EXTERN GodDoodleSpriteCpp,GodDoodleCpp,GodDoodleDrawCpp,GodDoodleRunCpp
 EXTERN WhoCpp,HashDepthRepCpp,DocHelpIdxCpp,PopUpHelpIndexCpp,MapFileLoadCpp
-EXTERN SrcLineNumCpp,SrcFileNameCpp,SrcEdLink
+EXTERN FunSegFindCpp,SrcLineNumCpp,SrcFileNameCpp,SrcEdLink
 EXTERN RegDftCpp,RegExeCpp,RegWriteCpp,RegCntCpp,RegAppendCpp,AdamCpp
 EXTERN InsRegCpp,InsReregCpp,InsUnregCpp
 EXTERN AOnceFlushCpp,OnceFlushCpp,AOnceCpp,OnceCpp,AOnceDrvCpp,OnceDrvCpp,OnceExeCpp
@@ -1190,6 +1190,7 @@ HOLYC_CPP BeepHC,BeepCpp,2
 HOLYC_CPP MuteHC,MuteCpp,1
 HOLYC_CPP IsMuteHC,IsMuteCpp,0
 HOLYC_CPP PutFileLinkHC,PutFileLinkCpp,4
+HOLYC_CPP FunSegFindHC,FunSegFindCpp,2
 HOLYC_CPP SrcLineNumHC,SrcLineNumCpp,2
 HOLYC_CPP SrcFileNameHC,SrcFileNameCpp,3
 HOLYC_CPP SrcEdLinkHC,SrcEdLink,3
