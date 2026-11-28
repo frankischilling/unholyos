@@ -78,6 +78,7 @@ void StrLastOccHC(), StrLastRemHC(), StrFindHC(), Tabs2SpacesHC(), ScaleIndentHC
 void MStrUtilHC();
 void _HASH_ADD(), _HASH_ADD_AFTER(), _HASH_FIND(), _HASH_SINGLE_TABLE_FIND();
 void HashTableNewHC(), HashTypeNumHC(), CeilU64HC(), Pow10I64HC();
+void HashGenericAddHC(), FramePtrHC(), FramePtrAddHC(), FramePtrSetHC(), FramePtrDelHC();
 void ClampHC(), MinHC(), MaxHC(), FloorU64HC(), RoundI64HC(), FloorI64HC(), CeilI64HC();
 void LinkedLstDelHC(), LinkedLstCopyHC(), LinkedLstCntHC(), LinkedLstSizeHC();
 void QueDelHC(), QueCopyHC(), QueCntHC(), QueSizeHC();
@@ -1021,6 +1022,11 @@ bool LoadKernel(CTask &task)
       {"HashSingleTableFind", reinterpret_cast<uintptr_t>(_HASH_SINGLE_TABLE_FIND)},
       {"HashSrcFileSet", reinterpret_cast<uintptr_t>(HashSrcFileSetHC)},
       {"HashPublic", reinterpret_cast<uintptr_t>(HashPublicHC)},
+      {"HashGenericAdd", reinterpret_cast<uintptr_t>(HashGenericAddHC)},
+      {"FramePtr", reinterpret_cast<uintptr_t>(FramePtrHC)},
+      {"FramePtrAdd", reinterpret_cast<uintptr_t>(FramePtrAddHC)},
+      {"FramePtrSet", reinterpret_cast<uintptr_t>(FramePtrSetHC)},
+      {"FramePtrDel", reinterpret_cast<uintptr_t>(FramePtrDelHC)},
       {"_HASH_REM_DEL", reinterpret_cast<uintptr_t>(_HASH_REM_DEL)},
       {"SysSymImportsResolve",
        reinterpret_cast<uintptr_t>(SysSymImportsResolveHC)},

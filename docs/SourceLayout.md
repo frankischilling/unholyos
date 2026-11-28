@@ -1625,6 +1625,17 @@ store. The triangle routines store the scaled phase before comparing
 it to their bounds. The public functions use the HolyC stack
 convention and return the binary64 word in RAX.
 
+## Task frame pointers
+
+`FramePtr`, `FramePtrAdd`, `FramePtrSet`, `FramePtrDel`, and
+`HashGenericAdd` in `Kernel/KHashB.cpp` follow Terry A. Davis's
+`Kernel/KHashB.HC`. A frame entry owns a copy of its name and lives in
+the target task's hash table. A lookup follows the table chain.
+`FramePtrSet` exchanges `user_data0` and returns its previous value.
+`FramePtrDel` returns the found value and attempts removal only in the
+requested task's table, so deleting an inherited entry leaves it
+available from the parent.
+
 ## Linked lists and queues
 
 `Kernel/KDataTypes.cpp` follows the order of Terry A. Davis's

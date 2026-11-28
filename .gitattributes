@@ -27,6 +27,7 @@ Linux/Fixtures/AdamTaskAOTProbe.HC text eol=lf
 Linux/Fixtures/AdamMemProbe.HC text eol=lf
 Linux/Fixtures/AdamMemAOTProbe.HC text eol=lf
 Linux/Fixtures/WaveformProbe.HC text eol=lf
+Linux/Fixtures/FramePtrProbe.HC text eol=lf
 Linux/Fixtures/AdamMathProbe.HC text eol=lf
 Linux/Fixtures/AdamMathAOTProbe.HC text eol=lf
 Demo/Graphics/SpritePut.HC -text whitespace=cr-at-eol,-blank-at-eol
