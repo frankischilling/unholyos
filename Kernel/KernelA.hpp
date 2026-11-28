@@ -1301,7 +1301,7 @@ struct CCmpCtrl
   int64_t jit_exception;
   char *pmt_buf;
   const char *parse_error;
-  unsigned parse_error_count;
+  unsigned parse_error_count, warning_cnt;
   bool expression_error;
 };
 

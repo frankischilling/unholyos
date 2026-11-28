@@ -132,7 +132,9 @@ bool LexAttachDoc(CCmpCtrl &cc, CDoc &doc, CLexFile *root = nullptr,
 int64_t LexGetChar(CCmpCtrl &cc);
 const char *LexPutLine(const CLexFile &file, const char *start);
 void LexPutPos(const CCmpCtrl &cc);
+void LexWarn(CCmpCtrl &cc, const char *message = nullptr);
 void LexExceptReport(const CCmpCtrl &cc, const char *message);
+void UnusedExternWarning(CCmpCtrl &cc, const CHashClass &cls);
 int64_t LexRaw(CCmpCtrl &cc);
 int64_t Lex(CCmpCtrl &cc);
 char *LexExtStr(CCmpCtrl &cc, size_t &size);

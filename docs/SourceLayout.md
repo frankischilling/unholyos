@@ -418,6 +418,14 @@ popped include cannot leave a stale line pointer. `LexPutLine` in
 for DolDoc. Listing output uses provisional instruction bytes from
 `AsmStoreNum` before symbols are fixed up.
 
+`Compiler/CExcept.cpp::LexWarn` follows `Compiler/CExcept.HC` for the
+current lexer location and the function's source link. `Compiler/Lex.cpp`
+uses it for false `#assert` directives. `Compiler/PrsStmt.cpp` uses the
+reference return-value warnings and reports an unused explicit extern
+when its definition joins the current namespace. `Cmp` includes these
+warnings in its summary. Header mismatch and unused local variable
+diagnostics still need their reference parser bookkeeping.
+
 The compiler also registers the 65-byte `CCntsGlbls` guest class
 from `Kernel/KernelA.HH`. Its typed `cnts` symbol aliases the
 kernel storage defined in `Kernel/KGlbls.cpp` and uses the export

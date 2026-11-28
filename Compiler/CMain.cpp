@@ -107,6 +107,7 @@ static bool CmpJoin(CCmpCtrl &cc, CAOT &aot)
   }
   if (!okay && cc.parse_error_count)
     LexPutPos(cc);
+  aot.warning_cnt = cc.warning_cnt;
   QueRem(cc);
   return okay;
 }
