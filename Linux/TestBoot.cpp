@@ -6288,8 +6288,8 @@ static void TestBoot(const char *qemu, const fs::path &iso,
       Check(output.find("native expressions 0x000000000000002a, "
                         "hash 0x452a7a6d75541fd2, heap 0x0000000000000001, "
                         "rejected 0x0000000000000001") != std::string::npos &&
-                output.find("WARNING: Assert Failed /ExpressionProbe.HC,21") !=
-                    std::string::npos,
+                output.find(R"(WARNING: Assert Failed "INT:1" )"
+                            "/ExpressionProbe.HC,21 1 + 2 * 3;") != std::string::npos,
             "The native expression probe did not match TempleOS");
       Check(output.find("native functions 0x000000000000001b, hash "
                         "0x6ebe7d79f6232350, checks "
