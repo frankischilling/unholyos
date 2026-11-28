@@ -273,6 +273,8 @@ DOC_BIN_LINK := Linux/Fixtures/DocBinLink.DD
 QUEUE_PROBE := Linux/Fixtures/QueueProbe.HC
 TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInputProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
+BIT_FIELD_PROBE := Linux/Fixtures/BitFieldProbe.HC
+BIT_FIELD_TEST_ISO := $(BUILD)/bit-field-test.iso
 
 # Every bootable test image uses the same Adam source initialization.
 $(ISO) $(foreach target,$(filter %_ISO,$(.VARIABLES)),$($(target))): $(ADAM_STARTUP_SOURCES)
@@ -715,6 +717,15 @@ test-internal-types: $(INTERNAL_TYPES_TEST_ISO) $(BOOT_TEST)
 
 test-class-records: $(CLASS_RECORDS_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --class-records "$(QEMU)" $(CLASS_RECORDS_TEST_ISO)
+
+.PHONY: test-bit-field
+$(BIT_FIELD_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(BIT_FIELD_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(BIT_FIELD_PROBE)
+
+test-bit-field: $(BIT_FIELD_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --bit-field "$(QEMU)" $(BIT_FIELD_TEST_ISO)
+
+test: test-bit-field
 
 test-function-records: $(FUNCTION_RECORDS_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --function-records "$(QEMU)" $(FUNCTION_RECORDS_TEST_ISO)
