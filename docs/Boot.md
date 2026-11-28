@@ -5051,6 +5051,28 @@ UnholyOS-specific stage-one marker. See [Source layout](SourceLayout.md)
 for failure-path limits; the matching masks do not establish full storage
 parity.
 
+## HolyC source maps and address links
+
+`Linux/Fixtures/SourceMapProbe.HC` loads a DolDoc binary map from the RAM
+drive, checks relocation and source-link replacement, and resolves HolyC
+address expressions through `EdLinkCvt`. The same probe compiles a small
+HolyC module with `Cmp`, loads the module and its generated map, and
+checks the source lines for the entry point and two statements. It opens
+the source through `Ed("AD:...")` and returns to the prompt on Shift-Esc.
+The TempleOS AOT project includes its kernel type declarations before
+the shared module source.
+
+```sh
+make -j8 BUILD=build/gcc test-source-map
+make -j8 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-source-map
+build/gcc/Linux/TestBoot --source-map-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO /tmp/source-map-reference
+```
+
+The native media are `build/gcc/source-map-test.iso` and
+`build/clang/source-map-test.iso`. Both builds and the pinned reference
+run use QEMU 8.2.2 with `pc`, `qemu64`, one vCPU, and 512 MiB.
+
 ## Subsystem map
 
 | Area | Pinned TempleOS entry points | UnholyOS scope |

@@ -113,6 +113,12 @@ CCodeCtrl::~CCodeCtrl()
   Free(code);
 }
 
+static uint32_t ICLine(const CCmpCtrl *cc)
+{
+  return cc && cc->last_line_num > 0 && uint64_t(cc->last_line_num) <= UINT32_MAX
+      ? cc->last_line_num : 0;
+}
+
 uint32_t CCodeCtrl::Add(const CIntermediateCode &entry)
 {
   if (failed)
@@ -133,6 +139,7 @@ uint32_t CCodeCtrl::Add(const CIntermediateCode &entry)
     capacity = count;
   }
   code[used] = entry;
+  code[used].line_num = ICLine(cmp);
   return used++;
 }
 
@@ -140,6 +147,8 @@ void CCodeCtrl::Append(uint32_t index)
 {
   if (index == NO_IC)
     return;
+  if (code[index].code == IC_LABEL)
+    code[index].line_num = ICLine(cmp);
   if (last == NO_IC)
     first = index;
   else

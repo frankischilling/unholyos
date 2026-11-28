@@ -83,6 +83,7 @@ import native _Z12HashTableNewmP9CHeapCtrl __unholyos_sysv.HashTableNew
 import native _Z12RethrowHolyCv __unholyos_sysv.RethrowHolyC
 import native _Z19HashSingleTableFindPKcP10CHashTablejm __unholyos_sysv.HashSingleTableFind
 import native _Z4FreePv __unholyos_sysv.Free
+import native _Z5MSizePKv __unholyos_sysv.MSize
 import native _Z6CAllocmP9CHeapCtrl __unholyos_sysv.CAlloc
 import native _Z6MAllocmP9CHeapCtrl __unholyos_sysv.MAlloc
 import native _Z6StrNewPKcP9CHeapCtrl __unholyos_sysv.StrNew

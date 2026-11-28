@@ -28,9 +28,41 @@ bool MapFileWrite(const CHashTable &table, const char *name, uint8_t drv_let)
       }
       if (drv_let && StrLen(link) >= 4)
         link[3] = drv_let;
-      uint64_t args[]{reinterpret_cast<uintptr_t>(entry->str),
-                      reinterpret_cast<uintptr_t>(link)};
-      auto *line = MStrPrintCpp("$LK,\"%s\",A=\"%s\"$\n", 2, args);
+      const auto *dbg_info = static_cast<const CDbgInfo *>(sym->dbg_info);
+      auto *heap = CurrentTask()->data_heap;
+      CDocBin *bin = nullptr;
+      if (dbg_info) {
+        const auto alloc_size = MSize(dbg_info);
+        const auto size =
+            alloc_size >= offsetof(CDbgInfo, body) ? dbg_info->Size() : 0;
+        if (alloc_size < offsetof(CDbgInfo, body) || size > alloc_size ||
+            size > UINT32_MAX)
+          PutS("Corrupt Map Entry\n");
+        else if (size) {
+          bin = reinterpret_cast<CDocBin *>(CAlloc(sizeof(CDocBin), heap));
+          if (bin)
+            bin->data = MAlloc(size, heap);
+          if (!bin || !bin->data) {
+            Free(bin);
+            Free(link);
+            okay = false;
+            break;
+          }
+          MemCpy(bin->data, dbg_info, size);
+          bin->size = size;
+          bin->num = doc->cur_bin_num++;
+          bin->use_cnt = 1;
+          bin->last = doc->bin_head.last;
+          bin->next = &doc->bin_head;
+          bin->last->next = bin;
+          doc->bin_head.last = bin;
+        }
+      }
+      const uint64_t args[]{reinterpret_cast<uintptr_t>(entry->str),
+                            reinterpret_cast<uintptr_t>(link),
+                            bin ? bin->num : 0};
+      auto *line = bin ? MStrPrintCpp("$LK,\"%s\",A=\"%s\",BI=%d$\n", 3, args)
+                       : MStrPrintCpp("$LK,\"%s\",A=\"%s\"$\n", 2, args);
       okay = line && DocPutS(*doc, line, StrLen(line));
       Free(line);
       Free(link);

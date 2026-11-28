@@ -542,6 +542,7 @@ struct CIntermediateCode
   bool stack_reg=false; // The left result can remain in R9 during RHS evaluation.
   uint32_t branch_end=0;
   bool short_branch=false;
+  uint32_t line_num = 0;
 };
 
 struct COptReg
@@ -596,6 +597,8 @@ struct CCodeCtrl
 
   CIntermediateCode *code = nullptr;
   CAsm *asm_first = nullptr;
+  const CCmpCtrl *cmp = nullptr;
+  uint32_t min_line = 0, max_line = 0;
   uint32_t first = NO_IC, last = NO_IC;
   bool failed = false, has_misc_data = false;
 

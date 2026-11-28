@@ -410,12 +410,13 @@ static Bytes VerifyCompilerMedia(const Bytes &disc, uint64_t root,
       Check(record.type == 16 && export_names.insert(record.name).second,
             "Compiler exports must be unique and relative");
     }
-  Check(native_imports == 48 && data_imports == 34 &&
+  Check(native_imports == 49 && data_imports == 34 &&
             import_names.contains("god") &&
             import_names.contains("__unholyos_sysv.AdamErrCpp") &&
             import_names.contains("__unholyos_sysv.DefineLstLoadCpp") &&
             import_names.contains("__unholyos_sysv.FixSetCpp") &&
             import_names.contains("__unholyos_sysv.IsRawCpp") &&
+            import_names.contains("__unholyos_sysv.MSize") &&
             import_names.contains("__unholyos_sysv.PutFileLinkCpp") &&
             import_names.contains("char_bmp_displayable") &&
             !import_names.contains("__unholyos_sysv.F64PowerBits"),
@@ -7054,6 +7055,7 @@ int main(int argc, char **argv)
        mode == "--god-bible" || mode == "--god-bible-reference" ||
        mode == "--god-doodle" || mode == "--god-doodle-reference" ||
        mode == "--help-idx" || mode == "--help-idx-reference" ||
+       mode == "--source-map" || mode == "--source-map-reference" ||
        mode == "--progress" || mode == "--progress-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
@@ -7069,6 +7071,7 @@ int main(int argc, char **argv)
     const bool god_bible = mode.starts_with("--god-bible");
     const bool god_doodle = mode.starts_with("--god-doodle");
     const bool help_idx = mode.starts_with("--help-idx");
+    const bool source_map = mode.starts_with("--source-map");
     const bool progress = mode.starts_with("--progress");
     char path[] = "/tmp/unholyos-document-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -7092,6 +7095,9 @@ int main(int argc, char **argv)
       } else if (!reference && god_vocabulary) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/GodVocabularyProbe.HC",
                               "GodVocabularyProbe.HC");
+      } else if (!reference && source_map) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/SourceMapProbe.HC",
+                              "SourceMapProbe.HC");
       } else if (!reference && help_idx) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/HelpIdxProbe.HC",
                               "HelpIdxProbe.HC");
@@ -7161,6 +7167,8 @@ int main(int argc, char **argv)
         probes = god_doodle_probes;
       else if (help_idx)
         probes = help_idx_probes;
+      else if (source_map)
+        probes = source_map_probes;
       else if (mode == "--dictionary-reference")
         probes = dictionary_probes;
       else if (aot)
@@ -8318,6 +8326,7 @@ int main(int argc, char **argv)
               << " --god-bible[-reference] qemu image.iso [capture-dir]\n"
               << " --god-doodle[-reference] qemu image.iso [capture-dir]\n"
               << " --help-idx[-reference] qemu image.iso [capture-dir]\n"
+              << " --source-map[-reference] qemu image.iso [capture-dir]\n"
               << " --dictionary-reference qemu image.iso [capture-dir]\n"
               << " --dictionary-install[-reference] qemu image.iso disk.img [capture-dir]\n"
               << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"

@@ -172,6 +172,8 @@ GOD_DOODLE_PROBE := Linux/Fixtures/GodDoodleProbe.HC
 GOD_DOODLE_TEST_ISO := $(BUILD)/god-doodle-test.iso
 HELP_IDX_PROBE := Linux/Fixtures/HelpIdxProbe.HC
 HELP_IDX_TEST_ISO := $(BUILD)/help-idx-test.iso
+SOURCE_MAP_PROBE := Linux/Fixtures/SourceMapProbe.HC
+SOURCE_MAP_TEST_ISO := $(BUILD)/source-map-test.iso
 DOC_TREE_AOT_PROBE := Linux/Fixtures/DocTreeAOTProbe.HC
 DOC_TREE_TEST_ISO := $(BUILD)/doc-tree-test.iso
 REGISTRY_DEMO := Demo/RegistryDemo.HC
@@ -632,6 +634,9 @@ $(GOD_VOCAB_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_VOCA
 $(GOD_DOODLE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_DOODLE_PROBE) $(GOD_HELP) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --file-at $(GOD_HELP) $(GOD_HELP) --dir Home --file $(GOD_DOODLE_PROBE)
 
+$(SOURCE_MAP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(SOURCE_MAP_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(SOURCE_MAP_PROBE)
+
 $(HELP_IDX_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(HELP_IDX_PROBE) Doc/HelpSystem.DD $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --file-at Doc/HelpSystem.DD Doc/HelpSystem.DD --dir Home --file $(HELP_IDX_PROBE)
 
@@ -942,6 +947,12 @@ test-help-idx: $(HELP_IDX_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --help-idx "$(QEMU)" $(HELP_IDX_TEST_ISO)
 
 test: test-help-idx
+
+.PHONY: test-source-map
+test-source-map: $(SOURCE_MAP_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --source-map "$(QEMU)" $(SOURCE_MAP_TEST_ISO)
+
+test: test-source-map
 
 .PHONY: test-registry
 test-registry: $(REGISTRY_TEST_ISO) $(BOOT_TEST)
