@@ -1960,6 +1960,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CSndData",
                                        "CScrnCastGlbls",
                                        "CMusicGlbls",
+                                       "CSoundEffectFrame",
                                        "CTaskSettings",
                                        "CMenuEntry",
                                        "CMenu",
@@ -1972,7 +1973,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 96);
+  static_assert(class_count == 97);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -2029,6 +2030,9 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
             Check(block[8] == 80, "Startup CProgress record has the wrong size");
           if (name == "CDocEntryBase")
             Check(block[8] == 88, "Startup CDocEntryBase record has the wrong size");
+          if (name == "CSoundEffectFrame")
+            Check(block[8] == 14,
+                  "Startup CSoundEffectFrame record has the wrong size");
           Check(((block[10] >> 32) & 255) == 0,
                 "Startup class base has pointer stars");
           for (uint64_t stars = 1; stars <= 4; ++stars) {
@@ -3567,6 +3571,10 @@ constexpr std::string_view class_records_output = "CR heaps 1\n"
 constexpr CTextProbe class_records_probes[]{
     {"class-records", "/ClassRecordsProbe.HC", "", "CR heaps ", "CR DONE",
      class_records_output}};
+
+constexpr CTextProbe memory_dump_probes[]{
+    {"memory-dump", "/MemoryDumpProbe.HC", "", "Memory dump probe ",
+     "Memory dump probe ", "Memory dump probe F\n", {}, true}};
 
 constexpr CTextProbe bit_field_probes[]{
     {"bit-field", "/BitFieldProbe.HC", "", "Bit field checks ", "Bit field checks 3F",
@@ -7331,7 +7339,8 @@ int main(int argc, char **argv)
     const auto dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       if (diagnostic == CDesktopTest::CompilerWarning && !reference)
-        for (const auto *source : {"CompilerWarningProbe.HC", "ForwardTypeWarningProbe.HC"})
+        for (const auto *source : {"CompilerWarningProbe.HC", "ForwardTypeWarningProbe.HC",
+                                   "HeaderWarningProbe.HC"})
           VerifyHostModuleMedia(argv[3], fs::path("Linux/Fixtures") / source, source);
       auto run = [&](const fs::path &capture, CDesktopTest test) {
         fs::create_directories(capture);
@@ -7348,8 +7357,10 @@ int main(int argc, char **argv)
       run(dir, diagnostic);
       if (diagnostic == CDesktopTest::CompilerDiagnostic)
         run(dir / "partial-cmp", CDesktopTest::CompilerCmpDiagnostic);
-      else if (diagnostic == CDesktopTest::CompilerWarning)
+      else if (diagnostic == CDesktopTest::CompilerWarning) {
         run(dir / "forward-types", CDesktopTest::CompilerForwardWarning);
+        run(dir / "function-headers", CDesktopTest::CompilerHeaderWarning);
+      }
       if (argc == 4)
         fs::remove_all(dir);
       return 0;
@@ -7622,6 +7633,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--internal-types-reference" ||
        std::string_view(argv[1]) == "--class-records" ||
        std::string_view(argv[1]) == "--class-records-reference" ||
+       std::string_view(argv[1]) == "--memory-dump" ||
+       std::string_view(argv[1]) == "--memory-dump-reference" ||
        std::string_view(argv[1]) == "--bit-field" ||
        std::string_view(argv[1]) == "--bit-field-reference" ||
        std::string_view(argv[1]) == "--function-records" ||
@@ -7720,6 +7733,7 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--internal-types");
     bool class_records_probe =
         std::string_view(argv[1]).starts_with("--class-records");
+    bool memory_dump_probe = std::string_view(argv[1]).starts_with("--memory-dump");
     bool bit_field_probe = std::string_view(argv[1]).starts_with("--bit-field");
     bool function_records_probe =
         std::string_view(argv[1]) == "--function-records" ||
@@ -7794,6 +7808,8 @@ int main(int argc, char **argv)
       text_probes = internal_types_probes;
     else if (class_records_probe)
       text_probes = class_records_probes;
+    else if (memory_dump_probe)
+      text_probes = memory_dump_probes;
     else if (bit_field_probe)
       text_probes = bit_field_probes;
     else if (function_records_probe)
@@ -7880,8 +7896,8 @@ int main(int argc, char **argv)
       if (bit_field_probe && !reference)
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/BitFieldProbe.HC",
                               "BitFieldProbe.HC");
-      if ((source_probe || internal_types_probe || function_records_probe ||
-           function_records_layout_probe) &&
+      if ((source_probe || internal_types_probe || memory_dump_probe ||
+           function_records_probe || function_records_layout_probe) &&
           !reference) {
         const auto sources = function_records_probe ? text_probes.first(1) : text_probes;
         for (const auto &probe:sources)
@@ -7929,7 +7945,7 @@ int main(int argc, char **argv)
                   reference);
       vm.Connect();
       if (!text_probes.empty() && !reference && !bit_field_probe &&
-          !function_records_layout_probe) {
+          !function_records_layout_probe && !memory_dump_probe) {
         auto output = assert_warning
                           ? vm.WaitSerial(dir / "serial.log",
                                           "UnholyOS: finished "
@@ -8120,6 +8136,7 @@ int main(int argc, char **argv)
               << " --internal-types[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --class-records[-reference] qemu image.iso [capture-dir]\n"
+              << " --memory-dump[-reference] qemu image.iso [capture-dir]\n"
               << " --bit-field[-reference] qemu image.iso [capture-dir]\n"
               << " --function-records[-reference] qemu image.iso [capture-dir]\n"
               << " --function-records-layout[-reference] qemu image.iso [capture-dir]\n"

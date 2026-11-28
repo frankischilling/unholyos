@@ -244,6 +244,7 @@ const CHash *AsmHashFind(const char *name, uint32_t mask);
 bool CmpAsmHashLoad(CHashTable *table);
 CHashTable *CmpAsmHashNew();
 CMemberLst *MemberFind(const char *name, CHashClass *cls);
+bool MemberLstCmp(const CMemberLst *left, const CMemberLst *right, int64_t count);
 extern "C" CMemberLstMeta *MemberMetaFindCpp(const char *name, CMemberLst *member);
 extern "C" uint64_t MemberMetaDataCpp(const char *name, CMemberLst *member);
 extern "C" CMemberLst *MemberFindCpp(const char *name, CHashClass *cls);

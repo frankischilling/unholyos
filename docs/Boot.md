@@ -2005,6 +2005,21 @@ This evidence covers the listed values and default x87 environment;
 zero-divisor faults, signed division overflow, and unmasked floating-point
 exceptions are not part of the comparison.
 
+## Kernel memory dumps
+
+`MemoryDumpProbe.HC` checks both rows of an 18-byte dump, the absolute
+address printed by `Dm`, and the pointer address and symbol printed by
+`Da`. The keyboard-driven test also reads the rendered character column
+and verifies the control-byte substitution and the single dollar glyph.
+GCC, Clang, and pinned TempleOS report `Memory dump probe F` in QEMU
+8.2.2 with `pc`, `qemu64`, one CPU and 512 MiB.
+
+```sh
+make -j4 test-memory-dump
+build/Linux/TestBoot --memory-dump-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/memory-dump-reference
+```
+
 ## String scanning and transformations
 
 Five separate HolyC fixtures exercise the translated routines in
@@ -4686,6 +4701,13 @@ Both `Cmp` and `ExeFile` warn when the compiler completes an unused
 forward class or union declaration. A type used in a pointer declaration
 before its definition does not warn. `Cmp` reports two warnings and no
 errors, and the source probe reads back 42 through the completed types.
+
+`HeaderWarningProbe.HC` checks return-class warnings and changes to
+parameter names, classes, counts and defaults. It covers repeated
+forward headers, equal string defaults, the variadic comparison limit
+and disabling the mismatch warnings through `OPTf_WARN_HEADER_MISMATCH`.
+`Cmp` reports 25 warnings and no errors. `ExeFile` emits the same
+warnings, and the latest definition and default values produce 42.
 
 ```sh
 make -j4 test-compiler-warning

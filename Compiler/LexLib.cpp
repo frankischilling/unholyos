@@ -37,6 +37,30 @@ extern "C" CMemberLst *MemberFindCpp(const char *name, CHashClass *cls)
   return name ? MemberFind(name, cls) : nullptr;
 }
 
+bool MemberLstCmp(const CMemberLst *left, const CMemberLst *right, int64_t count)
+{
+  constexpr uint16_t defaults = MLF_DFT_AVAILABLE | MLF_STR_DFT_AVAILABLE;
+  while (left && right && count--) {
+    if (StrCmpCpp(reinterpret_cast<const uint8_t *>(left->str),
+                 reinterpret_cast<const uint8_t *>(right->str)) ||
+        left->member_class != right->member_class ||
+        left->member_class_base != right->member_class_base)
+      return false;
+    if ((left->flags & defaults) != (right->flags & defaults))
+      return false;
+    if (left->flags & MLF_STR_DFT_AVAILABLE) {
+      if (StrCmpCpp(reinterpret_cast<const uint8_t *>(left->dft_val),
+                   reinterpret_cast<const uint8_t *>(right->dft_val)))
+        return false;
+    } else if ((left->flags & MLF_DFT_AVAILABLE) && left->dft_val != right->dft_val) {
+      return false;
+    }
+    left = left->next;
+    right = right->next;
+  }
+  return count < 0 || (!left && !right);
+}
+
 static void MemberLstDel(CMemberLst *member)
 {
   while (member) {
