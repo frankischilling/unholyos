@@ -543,18 +543,20 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
   auto *doc = CmpKernelClass(table, "CDoc", sizeof(CDoc));
   auto *entry = CmpKernelClass(table, "CDocEntry", sizeof(CDocEntry));
   auto *bin = CmpKernelClass(table, "CDocBin", sizeof(CDocBin));
-  if (!doc || !entry || !bin)
+  auto *filename = CmpKernelClass(table, "CEdFileName", sizeof(CEdFileName));
+  if (!doc || !entry || !bin || !filename)
     return false;
   auto *i32 = FindType("I32", table);
   auto *i64 = FindType("I64", table);
   auto *u64 = FindType("U64", table);
-  auto *u8ptr = FindType("U8", table) + 1;
+  auto *u8 = FindType("U8", table);
+  auto *u8ptr = u8 + 1;
   auto *heap = CurrentTask()->data_heap;
   const struct
   {
     const char *name;
     CHashClass *record, *type;
-    size_t offset;
+    size_t offset, count = 0;
   } members[]{
       {"flags", doc, u64, offsetof(CDoc, flags)},
       {"locked_flags", doc, u64, offsetof(CDoc, locked_flags)},
@@ -568,6 +570,7 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
       {"cmd_U8", doc, i64, offsetof(CDoc, cmd_U8)},
       {"updates_cnt", doc, i64, offsetof(CDoc, updates_cnt)},
       {"max_entries", doc, i64, offsetof(CDoc, max_entries)},
+      {"filename", doc, filename, offsetof(CDoc, filename)},
       {"doc_signature", doc, FindType("U32", table),
        offsetof(CDoc, doc_signature)},
       {"user_put_data", doc, u8ptr, offsetof(CDoc, user_put_data)},
@@ -606,13 +609,28 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
       {"use_cnt", bin, FindType("U32", table), offsetof(CDocBin, use_cnt)},
       {"end", bin, FindType("U0", table), offsetof(CDocBin, data)},
       {"data", bin, u8ptr, offsetof(CDocBin, data)},
+      {"dirc", filename, FindType("CDirContext", table) + 1,
+       offsetof(CEdFileName, dirc)},
+      {"name", filename, u8, offsetof(CEdFileName, name),
+       sizeof(CEdFileName::name)},
   };
   for (const auto &member : members) {
     auto *name = StrNew(member.name, heap);
-    if (!name ||
-        !MemberAdd(*member.record, name, *member.type, member.offset)) {
+    auto *m = name ? MemberAdd(*member.record, name, *member.type, member.offset)
+                   : nullptr;
+    if (!m) {
       Free(name);
       return false;
+    }
+    if (member.count) {
+      auto *axis = reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return false;
+      axis->cnt = member.count;
+      axis->total_cnt = 1;
+      m->dim.next = axis;
+      m->dim.total_cnt = member.count;
+      m->size = member.count * member.type->size;
     }
   }
 
@@ -620,6 +638,7 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
   CHashClass *types[]{doc + 1, entry + 1, &task + 1};
   const char *key_args[]{"doc", "data", "ch", "sc"};
   CHashClass *key_types[]{doc + 1, u8ptr, i64, i64};
+  auto *f64 = FindType("F64", table);
   return CmpKernelCallback(table, *entry, "left_cb",
                            offsetof(CDocEntry, left_cb), *i64, 2, args,
                            types) &&
@@ -636,7 +655,15 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
                            types) &&
          CmpKernelCallback(table, *doc, "user_put_key",
                            offsetof(CDoc, user_put_key),
-                           *FindType("Bool", table), 4, key_args, key_types);
+                           *FindType("Bool", table), 4, key_args, key_types) &&
+         CmpKernelGlobal(table, "sys_registry_doc", doc + 1,
+                         reinterpret_cast<void *>(CmpSysExport("sys_registry_doc"))) &&
+         CmpKernelGlobal(table, "sys_msg_flags", i64,
+                         reinterpret_cast<void *>(CmpSysExport("sys_msg_flags")), 1) &&
+         CmpKernelGlobal(table, "registry_version", f64,
+                         reinterpret_cast<void *>(CmpSysExport("registry_version"))) &&
+         CmpKernelGlobal(table, "sys_os_version", f64,
+                         reinterpret_cast<void *>(CmpSysExport("sys_os_version")));
 }
 
 static bool CmpQueData(CHashTable *table)
@@ -2506,6 +2533,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"PostMsgWait", U0, FF_RET1, {{"task", TaskPtr}, {"msg_code", I64}, {"arg1", I64}, {"arg2", I64}, {"flags", I64, true}}},
       {"Msg", U0, FF_RET1, {{"msg_code", I64}, {"arg1", I64}, {"arg2", I64}, {"flags", I64, true}}},
       {"JobsHndlr", I64, FF_RET1, {{"run_flags", I64}, {"task", TaskPtr, true}}},
+      {"Adam", I64, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
       {"SrvTaskCont", U0, FF_RET1, {}},
       {"FlushMsgs", I64, FF_RET1, {{"task", TaskPtr, true}}},
       {"Char2ScanCode", I64, FF_RET1, {{"ch", I64}, {"sc_flags", I64, true}}},
@@ -2602,6 +2630,11 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"ExeDoc", I64, FF_RET1, {{"doc", DocPtr}, {"ccf_flags", I64, true}}},
       {"DocTreeExe", I64, FF_RET1, {{"doc", DocPtr}, {"path", U8Ptr}}},
       {"DocTreeFExe", I64, FF_RET1, {{"name", U8Ptr}, {"path", U8Ptr}}},
+      {"RegDft", Bool, FF_RET1, {{"path", U8Ptr}, {"val", U8Ptr}, {"is_adam_entry", Bool, true}}},
+      {"RegExe", I64, FF_RET1, {{"path", U8Ptr}}},
+      {"RegWrite", Bool, FF_DOT_DOT_DOT, {{"path", U8Ptr}, {"fmt", U8Ptr}}},
+      {"RegCnt", I64, FF_RET1, {{"path", U8Ptr}}},
+      {"RegAppend", Bool, FF_DOT_DOT_DOT, {{"path", U8Ptr}, {"fmt", U8Ptr}}},
       {"DocSave", U8Ptr, FF_RET1, {{"doc", DocPtr}, {"_size", I64Ptr, true}}},
       {"DocType", Bool, FF_RET1,
        {{"doc", DocPtr, true}, {"filename", U8Ptr}, {"trailing_new_lines", I64, true, 1}}},

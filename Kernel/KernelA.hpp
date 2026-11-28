@@ -8,6 +8,7 @@ constexpr uint32_t RLF_FULL_HEAPS = 1 << 7;
 constexpr uint32_t RLF_INTERRUPTS = 1 << 9;
 constexpr uint32_t RLF_COMPILER = 1 << 12;
 constexpr uint32_t RLF_DOC = 1 << 13;
+constexpr uint32_t RLF_REGISTRY = 1 << 15;
 constexpr uint32_t RLF_AUTO_COMPLETE = 1 << 17;
 constexpr uint32_t RLF_ADAM_SERVER = 1 << 18;
 
@@ -1202,6 +1203,7 @@ struct CDoc
 };
 
 static_assert(sizeof(CDocSettings) == 24 && sizeof(CEdFindText) == 304);
+static_assert(sizeof(CEdFileName) == 264 && offsetof(CEdFileName, name) == 8);
 static_assert(sizeof(CDocBin) == 56 && offsetof(CDocBin, num) == 32 &&
               offsetof(CDocBin, data) == 48);
 static_assert(sizeof(CDocEntryBase) == 88 &&

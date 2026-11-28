@@ -37,8 +37,10 @@ extern "C" CDoc *DocNewCpp(const char *filename, CTask *task);
 extern "C" void DocDelCpp(CDoc *doc);
 extern "C" void DocLoadCpp(CDoc *doc, const uint8_t *src, int64_t size);
 extern "C" CDoc *DocReadCpp(const char *name, int64_t flags);
-CDoc *DocRead(const char *name, int64_t flags, const CDocReadContext *parent);
+CDoc *DocRead(const char *name, int64_t flags, const CDocReadContext *parent,
+              CTask *task = nullptr);
 extern "C" uint8_t *DocSaveCpp(CDoc *doc, size_t *size);
+extern "C" uint64_t DocWriteCpp(CDoc *doc, uint8_t prompt);
 extern "C" uint64_t DocTypeCpp(CDoc *doc, const char *name,
                                int64_t trailing_new_lines);
 extern "C" uint64_t TypeCpp(const char *name, int64_t trailing_new_lines);
@@ -61,6 +63,7 @@ extern "C" uint64_t DocTreeWriteCpp(CDoc *doc, const char *path, uint8_t write,
 extern "C" uint64_t DocTreeAppendCpp(CDoc *doc, const char *path, uint8_t write,
                                       const char *fmt, int64_t argc,
                                       const uint64_t *argv);
+extern "C" uint64_t DocTreeExeCpp(CDoc *doc, const char *path);
 bool DocRecalc(CDoc &doc, uint64_t recalc_flags = RECALCt_NORMAL);
 void DocUpdateTaskDocs(CTask *task);
 extern "C" void DocPutKeyCpp(CDoc *doc, int64_t ch, int64_t sc);

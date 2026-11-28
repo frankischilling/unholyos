@@ -1,4 +1,5 @@
 #include "BootMedia.hpp"
+#include "../Kernel/KernelA.hpp"
 
 #include <algorithm>
 #include <array>
@@ -984,7 +985,7 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
   const auto level = symbols.exports.find("SYS_RUN_LEVEL");
   Check(level != symbols.exports.end(), "Missing live compiler run level");
   Check(ReadPhysical<1>(vm, level->second, 'w')[0] ==
-            (phase == CBootPhase::Desktop ? 0x432FFu
+            (phase == CBootPhase::Desktop ? 0x4B2FFu
              : CompilerInitialized(phase) ? 0x12FFu : 0x2FFu),
         "Compiler run level was published before successful initialization");
   std::smatch match;
@@ -2526,6 +2527,50 @@ static uint64_t VerifyDriveSectorCaches(CMonitor &vm, uint64_t disk,
   return used;
 }
 
+static uint64_t VerifyRegistryHeap(CMonitor &vm, uint64_t owner, uint64_t adam)
+{
+  const auto symbols = ReadBootSymbols(vm);
+  const auto doc = ReadPhysical<1>(vm, symbols.exports.at("sys_registry_doc"))[0];
+  Check(ReadPhysical<1>(vm, doc + offsetof(CDoc, doc_signature), 'w')[0] ==
+            DOC_SIGNATURE_VAL &&
+        ReadPhysical<1>(vm, doc + offsetof(CDoc, mem_task))[0] == adam,
+        "Missing Adam registry document");
+  auto used = VerifyCompilerAllocation(vm, doc, owner, sizeof(CDoc));
+  used += VerifyCompilerAllocation(
+      vm, ReadPhysical<1>(vm, doc + offsetof(CDoc, find_replace))[0], owner,
+      sizeof(CEdFindText));
+  used += VerifyCompilerAllocation(
+      vm, ReadPhysical<1>(vm, doc + offsetof(CDoc, dollar_buf))[0], owner, 84);
+
+  const auto head = doc + offsetof(CDoc, head);
+  auto last = head;
+  auto entry = ReadPhysical<1>(vm, head)[0];
+  unsigned trees = 0;
+  for (unsigned count = 0; entry != head; count++) {
+    Check(count < 64 && entry >= 16, "Invalid registry entry list");
+    auto links = ReadPhysical<4>(vm, entry);
+    Check(links[1] == last, "Invalid registry back link");
+    const auto type = uint8_t(links[3]);
+    const auto flags = ReadPhysical<1>(vm, entry + offsetof(CDocEntryBase, de_flags))[0];
+    const bool extended = type == DOCT_TREE || type == DOCT_INDENT;
+    used += VerifyCompilerAllocation(vm, entry, owner,
+        extended ? sizeof(CDocEntry) : sizeof(CDocEntryBase));
+    if (links[2]) {
+      Check(flags & DOCEF_TAG, "Unexpected registry tag");
+      const auto allocation = ReadPhysical<2>(vm, links[2] - 16);
+      Check(allocation[0] == owner && allocation[1] >= 24 && allocation[1] <= 80,
+            "Invalid registry tag allocation");
+      used += allocation[1];
+    }
+    trees += type == DOCT_TREE;
+    last = entry;
+    entry = links[0];
+  }
+  Check(trees == 3 && ReadPhysical<2>(vm, head)[1] == last,
+        "Missing default registry branches");
+  return used;
+}
+
 static void VerifyPools(CMonitor &vm, const fs::path &dir,
                         uint64_t heap, uint64_t ram_end,
                         const std::string &output, uint64_t range_bytes,
@@ -2640,11 +2685,13 @@ static void VerifyPools(CMonitor &vm, const fs::path &dir,
   const uint64_t sector_cache_used =
       VerifyDriveSectorCaches(vm, disk, expected_data_hc,
                               pool ? data.ranges : code.ranges);
+  const uint64_t registry_used =
+      desktop ? VerifyRegistryHeap(vm, expected_data_hc, adam) : 0;
   const uint64_t boot_used = range_bytes + late_used + symbol_used +
                              drive_used + initial_message_used + graphics_used +
                              asm_hash_used + raw_used + fifo_used +
                              compiler.data_used + cache_used + sector_cache_used +
-                             source_used[1];
+                             source_used[1] + registry_used;
   uint64_t code_used = 0x42840 + fault_used + compiler.code_used + source_used[0] +
                        (pool ? 0x5E8 : boot_used);
   uint64_t data_used = boot_used, data_alloced = 0;
@@ -3453,6 +3500,13 @@ constexpr CTextProbe doc_tree_probes[]{
 constexpr CTextProbe doc_tree_aot_probes[]{
     {"doc-tree-aot","/DocTreeAOTProbe.HC","","Tree disk ","Tree AOT done",
      "Tree disk 0 1 61 1 73\nDoc tree 3FF\nTree AOT done\n",{},true}};
+
+constexpr CTextProbe registry_probes[]{
+    {"registry","/RegistryProbe.HC","","High Score:","Registry probe ",
+     "High Score:1.23000\nVal:1234\nRegistry probe 7F flags 123\n",{},true}};
+constexpr CTextProbe registry_reference_probes[]{
+    {"registry","/RegistryProbe.HC","","High Score:","Registry probe ",
+     "High Score:1.23000\nVal:1234\nRegistry probe 7F flags 0\n",{},true}};
 
 constexpr CTextProbe dev_info_probes[]{
     {"dev-info", "/DevInfoProbe.HC", "", "Device reports ", "Device reports ",
@@ -6658,16 +6712,23 @@ int main(int argc, char **argv)
   std::string_view mode = argc > 1 ? argv[1] : "";
   if ((argc == 4 || argc == 5) &&
       (mode == "--doc-tree" || mode == "--doc-tree-reference" ||
-       mode == "--doc-tree-aot")) {
+       mode == "--doc-tree-aot" || mode == "--registry" ||
+       mode == "--registry-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
-    char path[] = "/tmp/unholyos-doc-tree-XXXXXX";
+    const bool registry = mode.starts_with("--registry");
+    char path[] = "/tmp/unholyos-document-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
     const fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
-      if (!reference) {
+      if (!reference && registry) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/RegistryProbe.HC",
+                              "RegistryProbe.HC");
+        VerifyHostModuleMedia(argv[3], "Demo/RegistryDemo.HC",
+                              "RegistryDemo.HC", "Demo");
+      } else if (!reference) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/DocTreeProbe.HC",
                               "DocTreeProbe.HC");
         if (aot)
@@ -6676,10 +6737,14 @@ int main(int argc, char **argv)
       }
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
+      std::span<const CTextProbe> probes = doc_tree_probes;
+      if (registry)
+        probes = reference ? registry_reference_probes : registry_probes;
+      else if (aot)
+        probes = doc_tree_aot_probes;
       DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
                              reference, false, false, false, false, false,
-                             false, false, false, aot ? doc_tree_aot_probes
-                                                       : doc_tree_probes);
+                             false, false, false, probes);
       vm.Quit();
       if (argc == 4)
         fs::remove_all(dir);
@@ -7579,6 +7644,7 @@ int main(int argc, char **argv)
               << " --adam-task[-reference|-aot] qemu image.iso [capture-dir]\n"
               << " --dev-info[-reference] qemu image.iso [capture-dir]\n"
               << " --cpu-rep[-reference] qemu image.iso [capture-dir]\n"
+              << " --registry[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"

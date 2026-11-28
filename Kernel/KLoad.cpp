@@ -244,6 +244,7 @@ void DocCutHC(), DocCopyHC(), DocTreeFindHC(), DocTreeFFindHC(), DocTreeMakeHC()
 void DocTreeWriteHC(), DocTreeAppendHC(), DocTreeFWriteHC(), DocTreeFAppendHC();
 void DocTreeWriteJoinHC(), DocTreeAppendJoinHC(), ExeDocHC(), DocTreeExeHC(),
     DocTreeFExeHC();
+void RegDftHC(), RegExeHC(), RegWriteHC(), RegCntHC(), RegAppendHC(), AdamHC();
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
 void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC(), DocPutKeyHC();
 void DocLockHC(), DocUnlockHC(), DocEntryRunHC(), DocBottomHC(), DocClearHC(), NowHC();
@@ -876,6 +877,10 @@ bool LoadKernel(CTask &task)
       {"SYS_VAR_INIT_FLAG", reinterpret_cast<uintptr_t>(&sys_var_init_flag)},
       {"SYS_VAR_INIT_VAL", reinterpret_cast<uintptr_t>(&sys_var_init_val)},
       {"adam_task", reinterpret_cast<uintptr_t>(&adam_task)},
+      {"sys_os_version", reinterpret_cast<uintptr_t>(&sys_os_version)},
+      {"sys_registry_doc", reinterpret_cast<uintptr_t>(&sys_registry_doc)},
+      {"sys_msg_flags", reinterpret_cast<uintptr_t>(sys_msg_flags)},
+      {"registry_version", reinterpret_cast<uintptr_t>(&registry_version)},
       {"blkdev", reinterpret_cast<uintptr_t>(&blkdev)},
       {"blkdev_text_attr", reinterpret_cast<uintptr_t>(blkdev_text_attr)},
       {"drv_text_attr", reinterpret_cast<uintptr_t>(drv_text_attr)},
@@ -1183,6 +1188,7 @@ bool LoadKernel(CTask &task)
       {"PostMsgWait", reinterpret_cast<uintptr_t>(PostMsgWaitHC)},
       {"Msg", reinterpret_cast<uintptr_t>(MsgHC)},
       {"JobsHndlr", reinterpret_cast<uintptr_t>(JobsHndlrHC)},
+      {"Adam", reinterpret_cast<uintptr_t>(AdamHC)},
       {"SrvTaskCont", reinterpret_cast<uintptr_t>(SrvTaskContHC)},
       {"UserCmdLine", reinterpret_cast<uintptr_t>(UserCmdLineHC)},
       {"ScanMsg", reinterpret_cast<uintptr_t>(ScanMsgHC)},
@@ -1488,6 +1494,11 @@ bool LoadKernel(CTask &task)
       {"ExeDoc", reinterpret_cast<uintptr_t>(ExeDocHC)},
       {"DocTreeExe", reinterpret_cast<uintptr_t>(DocTreeExeHC)},
       {"DocTreeFExe", reinterpret_cast<uintptr_t>(DocTreeFExeHC)},
+      {"RegDft", reinterpret_cast<uintptr_t>(RegDftHC)},
+      {"RegExe", reinterpret_cast<uintptr_t>(RegExeHC)},
+      {"RegWrite", reinterpret_cast<uintptr_t>(RegWriteHC)},
+      {"RegCnt", reinterpret_cast<uintptr_t>(RegCntHC)},
+      {"RegAppend", reinterpret_cast<uintptr_t>(RegAppendHC)},
       {"DocType", reinterpret_cast<uintptr_t>(DocTypeHC)},
       {"Type", reinterpret_cast<uintptr_t>(TypeHC)},
       {"DocPrint", reinterpret_cast<uintptr_t>(DocPrintHC)},

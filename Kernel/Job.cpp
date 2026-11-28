@@ -312,6 +312,31 @@ extern "C" int64_t JobsHndlrCpp(uint64_t run_flags, CTask *task)
   return count;
 }
 
+int64_t AdamText(const char *src)
+{
+  auto *task = CurrentTask();
+  auto *job = TaskExeCpp(adam_task, task, src, 0);
+  if (!job)
+    return 0;
+  if (task == adam_task) {
+    JobsHndlrCpp(GetRFlags(), task);
+    int64_t res;
+    JobResScanCpp(job, &res);
+    return res;
+  }
+  return JobResGetCpp(job);
+}
+
+extern "C" int64_t AdamCpp(const char *fmt, int64_t argc, const uint64_t *argv)
+{
+  auto *src = StrPrintJoin(nullptr, fmt, argc, argv);
+  if (!src)
+    return 0;
+  auto res = AdamText(src);
+  Free(src);
+  return res;
+}
+
 extern "C" void AdamErrCpp(const char *fmt, int64_t argc, const uint64_t *argv)
 {
   auto *task = CurrentTask();

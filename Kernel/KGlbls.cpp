@@ -20,6 +20,7 @@ CTask *sys_macro_task;
 CDevGlbls dev;
 CCntsGlbls cnts{1, 0, 2676302000, 2676302, 2676302000, 0, 0, 0, false};
 uint64_t sys_cache_line_width;
+uint64_t sys_os_version = __builtin_bit_cast(uint64_t, 5.030);
 uint8_t *rev_bits_table, *set_bits_table;
 uint64_t *pow10_I64;
 CExt *ext;
