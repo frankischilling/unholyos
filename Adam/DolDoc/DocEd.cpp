@@ -1,4 +1,5 @@
 #include "DolDoc.hpp"
+#include "../AHash.hpp"
 #include "../AutoComplete/AutoComplete.hpp"
 
 extern "C" void ViewHC();
@@ -113,13 +114,18 @@ extern "C" bool EdCpp(const char *link_st, int64_t edf_dof_flags)
   const int64_t type = EdLinkCvtCpp(link_st, &filename, &needle_str, &num,
                                     edf_dof_flags);
   bool res = false;
-  if (type == LK_DEF && filename) {
+  if ((type == LK_DEF || type == LK_HELP_INDEX) && filename) {
     res = !(edf_dof_flags & EDF_WAS_WRITE);
     if (!(edf_dof_flags & EDF_BAIL)) {
       auto *doc = DocNewCpp(nullptr, nullptr);
       if (doc) {
-        doc->desc = 0x0066654474636944; // DictDef
-        ACDDefsPutCpp(doc, filename, num);
+        if (type == LK_DEF) {
+          doc->desc = 0x0066654474636944; // DictDef
+          ACDDefsPutCpp(doc, filename, num);
+        } else {
+          doc->desc = 0x78646E49706C6548; // HelpIndx
+          DocHelpIdxCpp(doc, filename);
+        }
         DocEdCpp(doc, 0);
         DocDelCpp(doc);
       } else {

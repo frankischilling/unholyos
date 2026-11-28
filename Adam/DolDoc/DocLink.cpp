@@ -140,7 +140,7 @@ extern "C" int64_t EdLinkCvtCpp(const char *link_st, char **_filename,
                                  edf_dof_flags)
                   : -1;
         filename2 = nullptr;
-      } else if (res == LK_HELP_INDEX || res == LK_ADDR)
+      } else if (res == LK_ADDR)
         res = -1;
       switch (res) {
       case LK_BIBLE_FIND: {
@@ -165,6 +165,10 @@ extern "C" int64_t EdLinkCvtCpp(const char *link_st, char **_filename,
         filename2 = nullptr;
         break;
       }
+      case LK_HELP_INDEX:
+        filename = StrNew(filename2, task->data_heap);
+        filename2 = nullptr;
+        break;
       case LK_DEF:
         num = -1;
         if (auto *ptr = StrLastOccCpp(filename2,

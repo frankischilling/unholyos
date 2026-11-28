@@ -296,7 +296,8 @@ constexpr uint16_t RS_ATTR_DIR = 0x10, RS_ATTR_DELETED = 0x100,
 constexpr size_t CDIR_FILENAME_LEN = 38;
 constexpr uint64_t INVALID_CLUS = UINT64_MAX;
 constexpr char BOOT_DVD_LET = 'T', HOME_DIR[] = "/Home";
-constexpr uint64_t FUF_RECURSE = 1, FUF_SINGLE = 0x200, FUF_JUST_DIRS = 0x400,
+constexpr uint64_t FUF_RECURSE = 1, FUF_PUBLIC = 0x40, FUF_MAP = 0x80,
+                   FUF_SINGLE = 0x200, FUF_JUST_DIRS = 0x400,
                    FUF_JUST_FILES = 0x800, FUF_JUST_TXT = 0x1000,
                    FUF_JUST_DD = 0x2000, FUF_JUST_SRC = 0x4000,
                    FUF_JUST_AOT = 0x8000, FUF_JUST_JIT = 0x10000,
