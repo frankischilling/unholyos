@@ -228,5 +228,7 @@ extern "C" void KMainCpp()
   DbgModeCpp(false);
   if (!StartUpTasks())
     SerialPutS("UnholyOS: Could not start the user task\r\n");
+  SYS_RUN_LEVEL |= RLF_ADAM_SERVER;
   SerialPutS("UnholyOS: kernel entered in 64-bit mode\r\n");
+  SrvTaskContCpp();
 }

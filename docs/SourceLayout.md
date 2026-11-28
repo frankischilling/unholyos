@@ -1950,6 +1950,31 @@ and locked bit operations preserve interrupt state and caller-held
 locks. `test-adam-mem` runs JIT and AOT probes at 512 and 3072 MiB.
 The debug heap layout and concurrent SMP behavior remain unimplemented.
 
+## Adam CPU report and server loop
+
+`Adam/CPURep.cpp` follows `CCPURep`, `MPCPURep` and `CPURep` in
+Terry A. Davis's `Adam/CPURep.HC`. The short report reads the calibrated
+TSC frequency. The detailed report starts a worker for each initialized
+CPU, samples yields and TSC cycles while the caller sleeps for two
+seconds, and calculates rates and averages from those samples.
+`Kernel/KUtils.asm` adapts the public Boolean argument and the worker
+entry to the HolyC stack ABI.
+
+The report uses the reference's packed completion record. It explicitly
+parents the workers to the reporting task so task teardown stops the
+workers before their caller's stack and heap are reclaimed. The reference
+uses the scheduler's default parent. The completion word holds 64 worker
+bits. UnholyOS initializes only CPU 0, and multicore reporting remains
+unverified.
+
+`Kernel/KMain.cpp` enters `SrvTaskContCpp` after starting the terminals
+and sets `RLF_ADAM_SERVER` at the point corresponding to `KMain` in
+`Kernel/KMain.HC`. Adam can now accept execution jobs and lets
+`Kernel/Sched.asm` decide when no runnable task needs the CPU. Earlier
+boot exits still use the fallback halt loop.
+The compiler publishes the typed `adam_task` pointer as declared in
+`Kernel/KernelC.HH`, using the existing kernel address.
+
 ## Adam device reports
 
 `Adam/DevInfo.cpp` follows the active `PCILookUpSingle`,

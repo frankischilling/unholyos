@@ -4110,6 +4110,34 @@ for the harness. The run used the distribution with SHA-256
 The probe covers the report fields above on that VM configuration.
 [Pinned device report source and database](https://github.com/cia-foundation/TempleOS/tree/c26482bb6ad3f80106d28504ec5db3c6a360732c)
 
+## Adam server and CPU report
+
+The pre-desktop boot report still shows run level `0x12ff`. After
+terminal startup, the live kernel reaches `0x432ff` with `RLF_DOC`
+and `RLF_ADAM_SERVER` set. Adam waits in the job server loop.
+`CPURepProbe.HC` submits `17*23;` to `adam_task` and requires the
+completed job to return `391`.
+
+The probe also compares `CPURep;` and `CPURep(FALSE);` to the live CPU
+count and clock frequency. It runs `CPURep(TRUE);`, checks the two-second
+sample, and compares the single CPU's rates with the total and average.
+It checks the cycles per swap and nanoseconds per swap fields for positive
+values. The GCC, Clang, and pinned TempleOS runs all reported
+`CPU reports FF`.
+
+```sh
+make -j2 test-cpu-rep
+make -j2 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-cpu-rep
+build/Linux/TestBoot --cpu-rep-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/cpu-rep-reference
+```
+
+In QEMU 8.2.2 with `pc`, `qemu64`, 512 MiB and one vCPU,
+the report sampled 907 yields per second before the server handoff and
+587,454 in a later UnholyOS run after the change. A pinned TempleOS run
+sampled 929,489 yields per second. These are individual samples. The
+regression checks the job result and the report fields on one CPU.
+
 ## Nested images, FAT32 backing, and mounted ISO generation
 
 The shared `NestedRedSeaProbe.HC`, `RedSeaFreeListProbe.HC`, and `Fat32ImageProbe.HC` fixtures run on

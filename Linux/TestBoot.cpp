@@ -978,7 +978,7 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
   const auto level = symbols.exports.find("SYS_RUN_LEVEL");
   Check(level != symbols.exports.end(), "Missing live compiler run level");
   Check(ReadPhysical<1>(vm, level->second, 'w')[0] ==
-            (phase == CBootPhase::Desktop ? 0x32FFu
+            (phase == CBootPhase::Desktop ? 0x432FFu
              : CompilerInitialized(phase) ? 0x12FFu : 0x2FFu),
         "Compiler run level was published before successful initialization");
   std::smatch match;
@@ -3421,6 +3421,10 @@ constexpr CTextProbe adam_startup_probes[]{
 constexpr CTextProbe dev_info_probes[]{
     {"dev-info", "/DevInfoProbe.HC", "", "Device reports ", "Device reports ",
      "Device reports 3FF\n", {}, true}};
+
+constexpr CTextProbe cpu_rep_probes[]{
+    {"cpu-rep", "/CPURepProbe.HC", "", "CPU reports ", "CPU reports ",
+     "CPU reports FF\n", {}, true}};
 
 constexpr CTextProbe uasm_probes[]{
     {"uasm","/UAsmProbe.HC","","UAsm probe ","UAsm probe ",
@@ -6618,11 +6622,14 @@ int main(int argc, char **argv)
   std::string_view mode = argc > 1 ? argv[1] : "";
   if ((argc == 4 || argc == 5) &&
       (mode == "--adam-startup" || mode == "--adam-startup-reference" ||
-       mode == "--dev-info" || mode == "--dev-info-reference")) {
+       mode == "--dev-info" || mode == "--dev-info-reference" ||
+       mode == "--cpu-rep" || mode == "--cpu-rep-reference")) {
     const bool reference = mode.ends_with("-reference");
-    std::span<const CTextProbe> probes = mode.starts_with("--dev-info")
-                                           ? dev_info_probes
-                                           : adam_startup_probes;
+    std::span<const CTextProbe> probes = adam_startup_probes;
+    if (mode.starts_with("--dev-info"))
+      probes = dev_info_probes;
+    else if (mode.starts_with("--cpu-rep"))
+      probes = cpu_rep_probes;
     const auto &probe = probes.front();
     char path[] = "/tmp/unholyos-adam-startup-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -7502,6 +7509,7 @@ int main(int argc, char **argv)
               << " --adam-mem-large[-reference|-aot] qemu image.iso [capture-dir]\n"
               << " --adam-task[-reference|-aot] qemu image.iso [capture-dir]\n"
               << " --dev-info[-reference] qemu image.iso [capture-dir]\n"
+              << " --cpu-rep[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"
