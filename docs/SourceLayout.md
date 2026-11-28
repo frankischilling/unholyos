@@ -1985,6 +1985,8 @@ through `XTalk` in `Kernel/Job.cpp`. `Kernel/KeyDev.cpp` forwards the
 input filter's output as key messages to the terminal, where HolyC
 compiles and executes the command. Adam posts the input without waiting
 and can service the resulting job as soon as it enters server mode.
+The startup lookup uses the first terminal's directory and the same
+file search as the compiler, preserving Adam's working directory.
 The reference's stock `Once.HC` installer and tour workflow, installer
 registration, and one-time popups remain pending.
 
