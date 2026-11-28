@@ -1,7 +1,5 @@
 #include "../KernelB.hpp"
 
-constexpr uint64_t SYS_16MEG_AREA_LIMIT = 0x1000000;
-
 static void BlkPoolMemInit(uintptr_t base,uint64_t bytes)
 {
   if (!sys_mem_init_flag || !bytes || bytes>UINTPTR_MAX-base)

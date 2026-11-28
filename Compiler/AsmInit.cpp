@@ -1165,7 +1165,8 @@ static bool CmpTaskData(CHashTable *table, CHashClass *cls)
       entry->size = member.count * member.type->size;
     }
   }
-  return CmpKernelGlobal(table, "sys_winmgr_task", cls + 1, &sys_winmgr_task) &&
+  return CmpKernelGlobal(table, "adam_task", cls + 1, &adam_task) &&
+         CmpKernelGlobal(table, "sys_winmgr_task", cls + 1, &sys_winmgr_task) &&
          CmpKernelGlobal(table, "sys_focus_task", cls + 1, &sys_focus_task) &&
          CmpKernelGlobal(table, "sys_task_being_scrn_updated", cls + 1,
                          &sys_task_being_scrn_updated) &&
@@ -2511,6 +2512,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"ScanCode2Char", U8, FF_RET1, {{"sc", I64}}},
       {"KbdTypeMatic", U0, FF_RET1, {{"delay", U8}}},
       {"GridInit", U0, FF_RET1, {}},
+      {"CPURep", U0, FF_RET1, {{"full", Bool, true}}},
+      {"PCIRep", U0, FF_RET1, {}},
+      {"MemBIOSRep", U0, FF_RET1, {}},
+      {"MemPageRep", U0, FF_RET1, {}},
       {"MsSet", U0, FF_RET1,
        {{"x", I64, true, INT64_MAX}, {"y", I64, true, INT64_MAX},
         {"z", I64, true, INT64_MAX}, {"l", I64, true, INT64_MAX},

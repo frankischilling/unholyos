@@ -1,8 +1,11 @@
 Doc/Start.DD -text
+Misc/PCIDevices.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Adam/AMath.HC -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Adam/AMem.HC -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Adam/TaskRep.HC -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Linux/Fixtures/AdamTaskProbe.HC text eol=lf
+Linux/Fixtures/DevInfoProbe.HC text eol=lf
+Linux/Fixtures/CPURepProbe.HC text eol=lf
 Linux/Fixtures/AdamTaskAOTProbe.HC text eol=lf
 Linux/Fixtures/AdamMemProbe.HC text eol=lf
 Linux/Fixtures/AdamMemAOTProbe.HC text eol=lf

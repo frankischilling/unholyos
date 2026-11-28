@@ -140,6 +140,7 @@ extern "C" void TaskRstAwaitingMsgCpp(CTask *task);
 extern "C" void TaskWaitCpp(CTask *task, uint8_t cmd_line_pmt);
 extern "C" int64_t JobsHndlrCpp(uint64_t run_flags, CTask *task);
 extern "C" int64_t FlushMsgsCpp(CTask *task);
+extern "C" [[noreturn]] void SrvTaskContCpp();
 extern "C" void InputFilterTaskHC();
 extern "C" uint64_t SingleUserCpp(uint8_t val);
 extern "C" [[noreturn]] void Exit();
@@ -464,6 +465,7 @@ extern "C" int64_t AUWriteCpp(const char *filename, CSndData *head,
 extern "C" void BeepCpp(int8_t ona, uint8_t busy);
 extern "C" uint64_t MuteCpp(uint8_t val);
 extern "C" uint64_t IsMuteCpp();
+uint8_t PCIReadU8(uint8_t bus, uint8_t device, uint8_t function, uint8_t reg);
 uint16_t PCIReadU16(uint8_t bus, uint8_t device, uint8_t function, uint8_t reg);
 uint32_t PCIReadU32(uint8_t bus, uint8_t device, uint8_t function, uint8_t reg);
 int32_t PCIClassFind(uint32_t class_code, uint16_t index);

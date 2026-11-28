@@ -269,6 +269,7 @@ void ScanCode2KeyNameHC();
 void WinBorderHC(), SettingsPushHC(), SettingsPopHC();
 void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
 void RawHC(), DbgModeHC(), IsDbgModeHC();
+void CPURepHC(), PCIRepHC(), MemBIOSRepHC(), MemPageRepHC();
 void tSHC(), BusyHC(), SleepUntilHC(), SleepHC(), Ona2FreqHC(), Freq2OnaHC();
 void SndHC(), ScrnCastHC(), SndRstHC(), BeepHC(), MuteHC(), IsMuteHC();
 void SndShiftHC(), AUWriteHC();
@@ -1381,6 +1382,10 @@ bool LoadKernel(CTask &task)
       {"Raw", reinterpret_cast<uintptr_t>(RawHC)},
       {"DbgMode", reinterpret_cast<uintptr_t>(DbgModeHC)},
       {"IsDbgMode", reinterpret_cast<uintptr_t>(IsDbgModeHC)},
+      {"CPURep", reinterpret_cast<uintptr_t>(CPURepHC)},
+      {"PCIRep", reinterpret_cast<uintptr_t>(PCIRepHC)},
+      {"MemBIOSRep", reinterpret_cast<uintptr_t>(MemBIOSRepHC)},
+      {"MemPageRep", reinterpret_cast<uintptr_t>(MemPageRepHC)},
       {"PutFileLink", reinterpret_cast<uintptr_t>(PutFileLinkHC)},
       {"PutSrcLink", reinterpret_cast<uintptr_t>(PutSrcLinkHC)},
       {"FixSet", reinterpret_cast<uintptr_t>(FixSetHC)},
