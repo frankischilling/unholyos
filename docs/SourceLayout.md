@@ -1700,8 +1700,16 @@ from `GodSong.HC`. The settings dialog uses the native metadata for
 `CMakeSongSettings` and the original rhythm list. The generator keeps the
 rhythm tables, octave changes, meter prefix, and progress counter.
 F6 in `Adam/DolDoc/DocPutKey.cpp` calls `GodSong`, which writes
-both phrases twice in a DolDoc song entry. The doodle command still needs
-translation.
+both phrases twice in a DolDoc song entry.
+
+`Adam/God/GodDoodle.cpp` follows Terry A. Davis's `GodDoodle.HC`.
+It keeps the separate drawing FIFO, the original order of bit reads
+for shapes, palette colors, and the neighborhood filter's preference
+for the lower color index on a tie. `GodDoodleSprite` returns a native
+bitmap sprite, and `GodDoodle` inserts it into the current DolDoc.
+Shift-F6 runs it with the document unlocked so the desktop can draw
+the canvas. The drawing callback and exception handler use HolyC
+stack adapters. Task settings are restored before the canvas is freed.
 
 `Adam/God/GodBible.cpp` follows Terry A. Davis's `GodBible.HC`. It
 registers the book names, one-based line offsets, and final passage line.

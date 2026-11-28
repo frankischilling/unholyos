@@ -25,7 +25,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Kernel/BlkDev/DskATA.cpp Kernel/BlkDev/DskATAId.cpp Kernel/BlkDev/DskAddDev.cpp \
 	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/DskDrv.cpp Kernel/BlkDev/DskBlkDev.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/FileSysFAT.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
 	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskStrB.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/BlkDev/DskClus.cpp Kernel/BlkDev/DskCache.cpp Kernel/BlkDev/DskFmt.cpp Kernel/Compress.cpp \
-	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ARegistry.cpp Adam/InsReg.cpp Adam/Training.cpp Adam/InFile.cpp Adam/ASnd.cpp Adam/God/GodExt.cpp Adam/God/GodBible.cpp Adam/God/HolySpirit.cpp Adam/God/GodSong.cpp Adam/TaskSettings.cpp Adam/CPURep.cpp Adam/DevInfo.cpp Adam/AutoComplete/ACTask.cpp Adam/AutoComplete/ACInit.cpp Adam/AutoComplete/ACFill.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
+	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ARegistry.cpp Adam/InsReg.cpp Adam/Training.cpp Adam/InFile.cpp Adam/ASnd.cpp Adam/God/GodExt.cpp Adam/God/GodBible.cpp Adam/God/HolySpirit.cpp Adam/God/GodSong.cpp Adam/God/GodDoodle.cpp Adam/TaskSettings.cpp Adam/CPURep.cpp Adam/DevInfo.cpp Adam/AutoComplete/ACTask.cpp Adam/AutoComplete/ACInit.cpp Adam/AutoComplete/ACFill.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
 	Adam/AutoComplete/ACDictGen.cpp Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
 	Adam/Gr/SpriteNew.cpp Adam/Gr/GrSpritePlot.cpp Adam/Gr/ScrnCast.cpp \
 	Adam/DolDoc/DocNew.cpp Adam/DolDoc/DocDblBuf.cpp Adam/DolDoc/DocRecalc.cpp Adam/DolDoc/DocRecalcLib.cpp \
@@ -168,6 +168,8 @@ GOD_SONG_PROBE := Linux/Fixtures/GodSongProbe.HC
 GOD_SONG_TEST_ISO := $(BUILD)/god-song-test.iso
 GOD_BIBLE_PROBE := Linux/Fixtures/GodBibleProbe.HC
 GOD_BIBLE_TEST_ISO := $(BUILD)/god-bible-test.iso
+GOD_DOODLE_PROBE := Linux/Fixtures/GodDoodleProbe.HC
+GOD_DOODLE_TEST_ISO := $(BUILD)/god-doodle-test.iso
 DOC_TREE_AOT_PROBE := Linux/Fixtures/DocTreeAOTProbe.HC
 DOC_TREE_TEST_ISO := $(BUILD)/doc-tree-test.iso
 REGISTRY_DEMO := Demo/RegistryDemo.HC
@@ -625,6 +627,9 @@ $(GOD_INPUT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_INPU
 $(GOD_VOCAB_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_VOCAB_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(GOD_VOCAB_PROBE)
 
+$(GOD_DOODLE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_DOODLE_PROBE) $(GOD_HELP) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --file-at $(GOD_HELP) $(GOD_HELP) --dir Home --file $(GOD_DOODLE_PROBE)
+
 $(GOD_BIBLE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_BIBLE_PROBE) $(BIBLE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at $(BIBLE).Z $(BIBLE) --dir Home --file $(GOD_BIBLE_PROBE)
 
@@ -920,6 +925,12 @@ test-god-bible: $(GOD_BIBLE_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --god-bible "$(QEMU)" $(GOD_BIBLE_TEST_ISO)
 
 test: test-god-bible
+
+.PHONY: test-god-doodle
+test-god-doodle: $(GOD_DOODLE_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --god-doodle "$(QEMU)" $(GOD_DOODLE_TEST_ISO)
+
+test: test-god-doodle
 
 .PHONY: test-registry
 test-registry: $(REGISTRY_TEST_ISO) $(BOOT_TEST)

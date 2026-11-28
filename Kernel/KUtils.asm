@@ -131,6 +131,7 @@ GLOBAL GodInitHC,GodWordStrHC,GodWordHC
 GLOBAL GodSongStrHC,GodSongHC
 GLOBAL GodBiblePassageHC,BibleLine2VerseHC,BookLinesHC,BibleVerseHC
 GLOBAL BibleDocHC,BibleViewHC,CtrlAltBHC
+GLOBAL GodDoodleSpriteHC,GodDoodleHC,GodDoodleDrawHC,GodDoodleRunHC
 GLOBAL RegDftHC,RegExeHC,RegWriteHC,RegCntHC,RegAppendHC,AdamHC
 GLOBAL OneTimePopUpHC,RegOneTimePopUpHC,PopUpHC,PopUpPrintHC,SrvCmdLineHC
 GLOBAL InsRegHC,InsReregHC,InsUnregHC
@@ -434,6 +435,7 @@ EXTERN GodInitCpp,GodWordStrCpp,GodWordCpp
 EXTERN GodSongStrCpp,GodSongCpp
 EXTERN GodBiblePassageCpp,BibleLine2VerseCpp,BookLinesCpp,BibleVerseCpp
 EXTERN BibleDocCpp,BibleViewCpp,CtrlAltBCpp
+EXTERN GodDoodleSpriteCpp,GodDoodleCpp,GodDoodleDrawCpp,GodDoodleRunCpp
 EXTERN RegDftCpp,RegExeCpp,RegWriteCpp,RegCntCpp,RegAppendCpp,AdamCpp
 EXTERN InsRegCpp,InsReregCpp,InsUnregCpp
 EXTERN AOnceFlushCpp,OnceFlushCpp,AOnceCpp,OnceCpp,AOnceDrvCpp,OnceDrvCpp,OnceExeCpp
@@ -1091,6 +1093,10 @@ HOLYC_CPP BibleVerseHC,BibleVerseCpp,3
 HOLYC_CPP BibleDocHC,BibleDocCpp,0
 HOLYC_CPP BibleViewHC,BibleViewCpp,0
 HOLYC_CPP CtrlAltBHC,CtrlAltBCpp,1
+HOLYC_CPP GodDoodleSpriteHC,GodDoodleSpriteCpp,1
+HOLYC_CPP GodDoodleHC,GodDoodleCpp,1
+HOLYC_CPP GodDoodleDrawHC,GodDoodleDrawCpp,2
+HOLYC_CPP GodDoodleRunHC,GodDoodleRunCpp,2
 HOLYC_CPP TimeStampCBHC,TimeStampCBCpp,3
 HOLYC_CPP KbdMsTimeCBHC,KbdMsTimeCBCpp,3
 HOLYC_CPP AOnceFlushHC,AOnceFlushCpp,0

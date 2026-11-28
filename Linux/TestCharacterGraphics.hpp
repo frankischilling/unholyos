@@ -132,6 +132,9 @@ constexpr CTextProbe god_song_probes[]{
 constexpr CTextProbe god_bible_probes[]{
     {"god-bible", "/GodBibleProbe.HC", "", "Bible probe ", "Bible probe ",
      "Bible probe FFF 1252\n", {}, true}};
+constexpr CTextProbe god_doodle_probes[]{
+    {"god-doodle", "/GodDoodleProbe.HC", "", "Doodle bitmap ", "Doodle checks ",
+     "Doodle bitmap 640 472 302098 C702EBD576E52EC0\nDoodle checks F 646\n", {}, true}};
 constexpr CTextProbe dictionary_probes[]{
     {"dictionary", "/DictionaryProbe.HC", "", "Dictionary probe ",
      "Dictionary probe 3F", "Dictionary probe 3F\n", {}, true}};
@@ -1416,6 +1419,7 @@ static void DriveCharacterGraphics(
       const bool god_input = std::string_view(probe.name) == "god-input";
       const bool god_song = std::string_view(probe.name) == "god-song";
       const bool god_bible = std::string_view(probe.name) == "god-bible";
+      const bool god_doodle = std::string_view(probe.name) == "god-doodle";
       std::array<uint64_t, 3> mouse{};
       if (god_input || god_song) {
         cmd(R"("GIM %X %X %X\n",&ms.pos.x,&ms.lb,&ms.rb;)");
@@ -1425,7 +1429,7 @@ static void DriveCharacterGraphics(
         cmd(std::string("DocClear(,1);ExeFile2(\"") + probe.reference_file + "\");");
       else if (reference)
         upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
-      else if (god_input || god_song || god_bible ||
+      else if (god_input || god_song || god_bible || god_doodle ||
                std::string_view(probe.name) == "doc-song" ||
                std::string_view(probe.name) == "god-vocabulary")
         cmd(std::string("ExeFile2(\"::") + probe.source + "\");0;");
@@ -1502,7 +1506,8 @@ static void DriveCharacterGraphics(
             return finish != std::string::npos &&
                    screen.find(prompt, finish) != std::string::npos;
           },
-          "Missing completed reference text probe", god_bible ? 3000 : 180);
+          "Missing completed reference text probe",
+          god_bible || god_doodle ? 3000 : 180);
       const auto screen = visible(cells);
       std::ofstream screen_file(
           dir / (std::string(probe.name) + "-reference-screen.txt"));
@@ -1575,6 +1580,57 @@ static void DriveCharacterGraphics(
       if (output != probe.expected)
         failures +=
             std::string("Reference output differs: ") + probe.source + "\n";
+      if (god_doodle && output == probe.expected) {
+        vm.ResetDeadline(150s);
+        cmd(R"hc("GDDC %X %X %X\n",&god.doodle_dc,&god.doodle_ch,&god.doodle_done;)hc");
+        const auto state = addresses("GDDC ", {8, 8, 1});
+        cmd(R"hc("GDDM %X %X %X\n",&ms.pos.x,&ms.lb,&ms.rb;)hc");
+        const auto mouse = addresses("GDDM ", {16, 1, 1});
+        key("shift-f6");
+        wait_text("can puppet you.");
+        const auto intro = visible(wait_text("OKAY"));
+        snapshot("god-doodle-intro");
+        click_cell(intro.rfind("OKAY"), mouse);
+        wait([&](const Cells &) {
+          return ReadPhysical<1>(vm, state[0])[0] != 0;
+        }, "Shift-F6 did not start the doodle");
+        wait([&](const Cells &) {
+          snapshot("god-doodle-canvas");
+          const auto rgb = ReadVGA(dir / "god-doodle-canvas.ppm");
+          for (size_t y = 231; y < 248; y++)
+            for (size_t x = 220; x < 421; x++) {
+              const auto p = (y * 640 + x) * 3;
+              if (rgb[p + 1] > rgb[p] + 64 && rgb[p + 1] > rgb[p + 2] + 64)
+                return true;
+            }
+          return false;
+        }, "Doodle canvas did not draw the green keyboard instructions", 100);
+        auto expect_key = [&](const char *name, uint64_t ch) {
+          key(name);
+          const std::string failure = "Doodle did not receive " + std::string(name);
+          uint64_t observed = 0;
+          try {
+            wait([&](const Cells &) {
+              observed = ReadPhysical<1>(vm, state[1])[0];
+              return observed == ch;
+            }, failure.c_str());
+          } catch (const std::runtime_error &error) {
+            throw std::runtime_error("Doodle key was " + std::to_string(observed) +
+                                     "\n" + error.what());
+          }
+        };
+        expect_key("ret", '\n');
+        expect_key("1", '1');
+        expect_key("spc", ' ');
+        key("shift-esc");
+        wait([&](const Cells &cells) {
+          return visible(cells).find(prompt) != std::string::npos &&
+                 ReadPhysical<1>(vm, state[0])[0] == 0 &&
+                 ReadPhysical<1>(vm, state[1])[0] == CH_SHIFT_ESC &&
+                 ReadPhysical<1>(vm, state[2], 'b')[0] == 0;
+        }, "Doodle cancellation did not restore the prompt", 600);
+        std::cout << "Shift-F6 accepted clear, smoothing, and drawing keys, then cancelled\n";
+      }
       if (god_bible && output == probe.expected) {
         vm.ResetDeadline(150s);
         cmd("DocClear(,1);");

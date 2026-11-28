@@ -3079,6 +3079,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"doc_out", DocPtr, true}, {"verse", U8Ptr}, {"lines", I64}}},
       {"BibleDoc", DocPtr, FF_RET1, {}},
       {"BibleView", U0, FF_RET1, {}},
+      {"GodDoodleSprite", U8Ptr, FF_RET1, {{"hex", U8Ptr, true}}},
+      {"GodDoodle", U0, FF_RET1, {{"hex", U8Ptr, true}}},
       {"AOnceFlush", U0, FF_RET1, {}},
       {"OnceFlush", U0, FF_RET1, {}},
       {"AOnce", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},

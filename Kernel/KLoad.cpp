@@ -261,6 +261,7 @@ void GodInitHC(), GodWordStrHC(), GodWordHC();
 void GodSongStrHC(), GodSongHC();
 void GodBiblePassageHC(), BibleLine2VerseHC(), BookLinesHC(), BibleVerseHC();
 void BibleDocHC(), BibleViewHC();
+void GodDoodleSpriteHC(), GodDoodleHC();
 void RegDftHC(), RegExeHC(), RegWriteHC(), RegCntHC(), RegAppendHC(), AdamHC();
 void InsRegHC(), InsReregHC(), InsUnregHC();
 void AOnceFlushHC(), OnceFlushHC(), AOnceHC(), OnceHC(), AOnceDrvHC(),
@@ -1652,6 +1653,8 @@ bool LoadKernel(CTask &task)
       {"BibleVerse", reinterpret_cast<uintptr_t>(BibleVerseHC)},
       {"BibleDoc", reinterpret_cast<uintptr_t>(BibleDocHC)},
       {"BibleView", reinterpret_cast<uintptr_t>(BibleViewHC)},
+      {"GodDoodleSprite", reinterpret_cast<uintptr_t>(GodDoodleSpriteHC)},
+      {"GodDoodle", reinterpret_cast<uintptr_t>(GodDoodleHC)},
       {"AOnceFlush", reinterpret_cast<uintptr_t>(AOnceFlushHC)},
       {"OnceFlush", reinterpret_cast<uintptr_t>(OnceFlushHC)},
       {"AOnce", reinterpret_cast<uintptr_t>(AOnceHC)},

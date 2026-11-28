@@ -4646,6 +4646,27 @@ build/Linux/TestBoot --god-bible-reference qemu-system-x86_64 \
 These commands use QEMU 8.2.2 with PC, `qemu64`, one vCPU, and
 512 MiB. The standard DVD is `build/unholyos.iso` after `make -j6`.
 
+## God doodles
+
+`GodDoodleProbe.HC` feeds the same hex string to `GodDoodleSprite`
+and `GodDoodle`. It checks sprite layout, the bitmap stored in
+DolDoc, leftover bits, restored task settings, and the Shift-F6
+description. On pinned TempleOS and on UnholyOS built with GCC 13.3.0
+or Clang 20.1.2, the probe reports a 640 by 472 sprite of 302098 bytes
+with FNV-1a hash `C702EBD576E52EC0` and `Doodle checks F 646`.
+The QEMU driver sends Shift-F6, clicks OKAY, and checks for the
+green prompt in the canvas. It sends Enter, 1, and Space before
+cancelling with Shift-Esc and checking that the terminal resumes.
+
+```sh
+make -j6 test-god-doodle
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-god-doodle
+build/Linux/TestBoot --god-doodle-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/god-doodle-reference
+```
+
+The runs use QEMU 8.2.2 with PC, `qemu64`, one vCPU, and 512 MiB.
+
 ## AutoComplete modifier pane
 
 `make test-stock-once` includes the original `Doc/StandBy.DD` by Terry A.
