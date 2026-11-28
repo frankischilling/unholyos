@@ -2120,7 +2120,18 @@ on writable drives other than RAM. It measures the change in
 `blkdev.write_cnt` against the archive's expanded block count.
 `ACInit` reads the header on the caller's drive before starting the task
 and joins the task after `Move` so the bar clears if the write ends early.
-Dictionary generation remains pending.
+
+`ACDictGen.cpp` follows the standalone `Adam/AutoComplete/ACDictGen.HC`
+program. The HolyC command `ACDictGen` runs in the current directory so it
+can use `DICTIONARY.DD` on a writable drive. The original script changes to
+its own source directory first. Both stages retain the original tag lists,
+case-insensitive duplicate handling, definition markers and little-endian
+16 KiB block indexes. The port bounds each parsed entry before writing it.
+It reports a failed output write before printing that file's size.
+The compiler exposes `CDoc.head`, `CDocEntryBase` queue fields, `LstMatch`
+with its default flags, and `QSortI64` with its HolyC callback signature.
+The unchanged script also runs in UnholyOS. See the paired small-fixture
+and full-corpus results in [Boot.md](Boot.md#generating-the-webster-dictionary).
 
 `ACTask.cpp` follows the link activation in `Adam/AutoComplete/ACTask.HC`.
 After the 333 ms sleep and the Escape check, the task sends a space to

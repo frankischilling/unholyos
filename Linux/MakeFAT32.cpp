@@ -87,10 +87,7 @@ static void Data(std::ofstream &out,std::initializer_list<uint32_t> chain,
   }
 }
 
-static void DictionaryFile(std::ofstream &out, std::vector<uint8_t> &fat,
-                           uint8_t *dir, std::string_view name,
-                           std::string_view alias, uint32_t &next,
-                           const char *path)
+static std::vector<uint8_t> ReadFile(const char *path)
 {
   std::ifstream file(path, std::ios::binary | std::ios::ate);
   const auto size = file.tellg();
@@ -99,25 +96,41 @@ static void DictionaryFile(std::ofstream &out, std::vector<uint8_t> &fat,
   std::vector<uint8_t> data(static_cast<size_t>(size));
   if (!file.seekg(0).read(reinterpret_cast<char *>(data.data()), data.size()))
     throw std::runtime_error("Cannot read dictionary fixture input");
+  return data;
+}
+
+static std::vector<uint8_t> CompressFile(const char *path)
+{
+  const auto data = ReadFile(path);
   std::vector<uint8_t> packed(data.size() + ARC_WRITE_OVERHEAD);
   CArcEncodeCtrl ctrl;
   const auto written = ArcCompressBuf(data.data(), data.size(), packed.data(),
                                       packed.size(), ctrl);
-  const auto count = (written + sizeof(Cluster) - 1) / sizeof(Cluster);
-  if (!written || next + count > clusters + 2)
-    throw std::runtime_error("Cannot fit compressed dictionary on the fixture");
+  if (!written)
+    throw std::runtime_error("Cannot compress dictionary fixture input");
   packed.resize(written);
+  return packed;
+}
+
+static void FixtureFile(std::ofstream &out, std::vector<uint8_t> &fat,
+                        uint8_t *dir, std::string_view name,
+                        std::string_view alias, uint32_t &next,
+                        const std::vector<uint8_t> &data)
+{
+  const auto count = (data.size() + sizeof(Cluster) - 1) / sizeof(Cluster);
+  if (!count || next + count > clusters + 2)
+    throw std::runtime_error("Cannot fit dictionary input on the fixture");
 
   constexpr uint32_t end = 0x0FFFFFFF;
   const auto start = next;
   next += count;
   for (auto c = start; c < next; c++)
     Put32(fat.data() + 4 * c, c + 1 < next ? c + 1 : end);
-  Write(out, ClusSector(start), packed);
+  Write(out, ClusSector(start), data);
   const auto entries = (name.size() + 12) / 13;
   for (auto n = entries; n; --n, dir += 32)
     LongEntry(dir, name, alias, n, n == entries);
-  DirEntry(dir, alias, 0x20, start, written);
+  DirEntry(dir, alias, 0x20, start, data.size());
 }
 
 int main(int argc,char **argv)
@@ -125,9 +138,12 @@ int main(int argc,char **argv)
   try {
     std::string_view mode=argc>2?argv[2]:"";
     const bool dictionary = argc == 5 && mode == "dictionary";
-    const bool writable = mode == "writable" || dictionary;
-    if (argc!=2 && !dictionary && (argc!=3 || (mode!="invalid" && mode!="writable"))) {
-      std::cerr<<"Usage: MakeFAT32 disk.img [invalid|writable|dictionary defs words]\n";
+    const bool generator = argc == 5 && mode == "generator";
+    const bool writable = mode == "writable" || dictionary || generator;
+    if (argc!=2 && !dictionary && !generator &&
+        (argc!=3 || (mode!="invalid" && mode!="writable"))) {
+      std::cerr<<"Usage: MakeFAT32 disk.img "
+                 "[invalid|writable|dictionary defs words|generator input source]\n";
       return 2;
     }
     std::ofstream out(argv[1],std::ios::binary|std::ios::trunc);
@@ -203,12 +219,19 @@ int main(int argc,char **argv)
       DirEntry(autocomplete_dir.data(), ".          ", 0x10, autocomplete, 0);
       DirEntry(autocomplete_dir.data() + 32, "..         ", 0x10, adam, 0);
       uint32_t next = autocomplete + 1;
-      DictionaryFile(out, fat, autocomplete_dir.data() + 64, "ACDefs.DATA.Z",
-                     "ACDEFS~1Z  ", next, argv[3]);
-      DictionaryFile(out, fat, autocomplete_dir.data() + 128, "ACWords.DATA.Z",
-                     "ACWORD~1Z  ", next, argv[4]);
+      FixtureFile(out, fat, autocomplete_dir.data() + 64, "ACDefs.DATA.Z",
+                  "ACDEFS~1Z  ", next, CompressFile(argv[3]));
+      FixtureFile(out, fat, autocomplete_dir.data() + 128, "ACWords.DATA.Z",
+                  "ACWORD~1Z  ", next, CompressFile(argv[4]));
       Write(out, ClusSector(adam), adam_dir);
       Write(out, ClusSector(autocomplete), autocomplete_dir);
+    }
+    if (generator) {
+      uint32_t next = 19;
+      FixtureFile(out, fat, root2.data() + 128, "DICTIONARY.DD", "DICTIO~1DD ",
+                  next, ReadFile(argv[3]));
+      FixtureFile(out, fat, root2.data() + 192, "ACDictGen.HC", "ACDICT~1HC ",
+                  next, ReadFile(argv[4]));
     }
     Write(out, part + reserved, fat);
     Write(out, part + reserved + fat_sects, fat);

@@ -4,6 +4,8 @@ Adam/AutoComplete/ACWords.DATA binary
 Adam/AutoComplete/ACDefs.DATA binary
 Linux/Fixtures/ACIndex.TXT text eol=lf
 Linux/Fixtures/DictionaryProbe.HC text eol=lf
+Linux/Fixtures/ACDictGen.HC -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+Linux/Fixtures/DictionaryGenInput.DD text eol=lf
 Once.HC -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Doc/Tips.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Doc/Customize.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof

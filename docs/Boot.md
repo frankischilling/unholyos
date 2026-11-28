@@ -4331,6 +4331,50 @@ build/Linux/TestBoot --dictionary-install-reference qemu-system-x86_64 \
   build/dictionary-install-reference
 ```
 
+### Generating the Webster dictionary
+
+`ACDictGen` reads `DICTIONARY.DD` in the current directory and writes
+`DICTIONARY2.DD` there. It writes `ACDefs.DATA` and `ACWords.DATA.Z` to
+`/Adam/AutoComplete` on that drive. Create that directory before running it.
+
+The comparison booted both guests with QEMU 8.2.2, `pc`, `qemu64`, 1536 MiB,
+and one CPU. The test gives each guest a snapshot of the same raw FAT32
+input disk and stages the input on a 128 MiB RedSea RAM drive. It compares
+the intermediate text, the definition stream, and the expanded word index.
+The small fixture covers hex escapes, dollar escaping, inline tags, empty
+heads, and case-insensitive sorting and duplicate handling. The comparison
+uses Terry A. Davis's unmodified `Adam/AutoComplete/ACDictGen.HC` from
+TempleOS revision `c26482bb6ad3f80106d28504ec5db3c6a360732c`. The regression
+checks both the C++ command and the unmodified HolyC program in UnholyOS
+against the captured TempleOS result.
+
+```sh
+make -j4 test-dictionary-generator
+build/Linux/TestBoot --dictionary-generator-reference-check qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/dictionary-generator.img \
+  build/dictionary-generator-reference
+```
+
+The full run used the archived 44,893,843-byte `DICTIONARY.TXT` as
+`DICTIONARY.DD`. Its SHA-256 is
+`0af00cba7414a5aa38cdc2186f958c82ea79decda1b48d8ba313d7ace42af74e`.
+The C++ generator and the unmodified HolyC script in UnholyOS both matched
+the TempleOS run byte for byte for the 44,785,771-byte intermediate, the
+26,381,073-byte definition stream, and the 1,253,930-byte expanded word index.
+Each reported 95,293 words and a largest entry of 12,031 bytes.
+[Archived dictionary input](https://archive.org/download/TerryADavis_TempleOS_Archive/docs/DICTIONARY.TXT)
+
+```sh
+make -j4 all build/Linux/TestBoot build/webster.img AC_GEN_DISK=build/webster.img \
+  AC_GEN_INPUT=/path/to/archived/DICTIONARY.DD
+build/Linux/TestBoot --dictionary-generator-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/webster.img build/webster-reference
+build/Linux/TestBoot --dictionary-generator qemu-system-x86_64 \
+  build/unholyos.iso build/webster.img build/webster-cpp
+build/Linux/TestBoot --dictionary-generator-holyc qemu-system-x86_64 \
+  build/unholyos.iso build/webster.img build/webster-holyc
+```
+
 ## Popup menus and one-time notices
 
 `PopupProbe.HC` checks results from synchronous and asynchronous

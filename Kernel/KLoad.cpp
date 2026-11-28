@@ -52,6 +52,7 @@ static_assert(offsetof(CLoadedModule, image) == 0 &&
 
 extern "C" {
 void CallModuleMain(const uint8_t *entry);
+void ACDictGenHC();
 char *DirFileCpp(const char *dirname, const char *name, const char *extension);
 CDocEntryBase *DocPutLineCpp(CDoc *doc, CDocEntryBase *entry);
 char *ExtChgCpp(const char *name, const char *ext);
@@ -1514,6 +1515,7 @@ bool LoadKernel(CTask &task)
       {"ViewAnglesDel", reinterpret_cast<uintptr_t>(ViewAnglesDelHC)},
       {"AutoComplete", reinterpret_cast<uintptr_t>(AutoCompleteHC)},
       {"ACInit", reinterpret_cast<uintptr_t>(ACInitHC)},
+      {"ACDictGen", reinterpret_cast<uintptr_t>(ACDictGenHC)},
       {"ACDWordsLoad", reinterpret_cast<uintptr_t>(ACDWordsLoadHC)},
       {"ACDWordPtAt", reinterpret_cast<uintptr_t>(ACDWordPtAtHC)},
       {"ACDDefGet", reinterpret_cast<uintptr_t>(ACDDefGetHC)},

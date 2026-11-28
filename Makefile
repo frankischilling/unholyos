@@ -26,7 +26,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/DskDrv.cpp Kernel/BlkDev/DskBlkDev.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/FileSysFAT.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
 	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskStrB.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/BlkDev/DskClus.cpp Kernel/BlkDev/DskCache.cpp Kernel/BlkDev/DskFmt.cpp Kernel/Compress.cpp \
 	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ARegistry.cpp Adam/InsReg.cpp Adam/Training.cpp Adam/InFile.cpp Adam/ASnd.cpp Adam/TaskSettings.cpp Adam/CPURep.cpp Adam/DevInfo.cpp Adam/AutoComplete/ACTask.cpp Adam/AutoComplete/ACInit.cpp Adam/AutoComplete/ACFill.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
-	Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
+	Adam/AutoComplete/ACDictGen.cpp Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
 	Adam/Gr/SpriteNew.cpp Adam/Gr/GrSpritePlot.cpp Adam/Gr/ScrnCast.cpp \
 	Adam/DolDoc/DocNew.cpp Adam/DolDoc/DocDblBuf.cpp Adam/DolDoc/DocRecalc.cpp Adam/DolDoc/DocRecalcLib.cpp \
 	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp Adam/DolDoc/DocClipBoard.cpp Adam/DolDoc/DocTree.cpp \
@@ -166,6 +166,8 @@ ONCE_BOOT := Linux/Fixtures/OnceBoot.DD
 ONCE_TEST_ISO := $(BUILD)/once-test.iso
 STOCK_ONCE_TEST_ISO := $(BUILD)/stock-once-test.iso
 AC_INSTALL_DISK := $(BUILD)/dictionary-install.img
+AC_GEN_INPUT ?= Linux/Fixtures/DictionaryGenInput.DD
+AC_GEN_DISK ?= $(BUILD)/dictionary-generator.img
 INPUT_TRAINING_PROBE := Linux/Fixtures/InputTrainingProbe.HC
 FILE_EDITOR_PROBE := Linux/Fixtures/FileEditorProbe.HC
 STOCK_TOUR := $(wildcard Misc/Tour/*.IN)
@@ -459,6 +461,9 @@ $(FAT_WRITE_DISK): $(FAT_TOOL)
 
 $(AC_INSTALL_DISK): $(FAT_TOOL) $(AC_DEFS) $(AC_WORDS)
 	$(FAT_TOOL) $@ dictionary $(AC_DEFS) $(AC_WORDS)
+
+$(AC_GEN_DISK): $(FAT_TOOL) $(AC_GEN_INPUT) Linux/Fixtures/ACDictGen.HC
+	$(FAT_TOOL) $@ generator $(AC_GEN_INPUT) Linux/Fixtures/ACDictGen.HC
 
 $(ISO) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(ATA_TEST_ISO) $(FAT_WRITE_ISO) \
 $(FAT_FORMAT_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(BREAK_TEST_ISO) \
@@ -838,6 +843,13 @@ test-dictionary-install: $(ISO) $(AC_INSTALL_DISK) $(BOOT_TEST)
 	$(BOOT_TEST) --dictionary-install "$(QEMU)" $(ISO) $(AC_INSTALL_DISK)
 
 test: test-dictionary-install
+
+.PHONY: test-dictionary-generator
+test-dictionary-generator: $(ISO) $(AC_GEN_DISK) $(BOOT_TEST)
+	$(BOOT_TEST) --dictionary-generator-check "$(QEMU)" $(ISO) $(AC_GEN_DISK)
+	$(BOOT_TEST) --dictionary-generator-holyc-check "$(QEMU)" $(ISO) $(AC_GEN_DISK)
+
+test: test-dictionary-generator
 
 .PHONY: test-popup-menus
 test-popup-menus: $(POPUP_TEST_ISO) $(BOOT_TEST)
