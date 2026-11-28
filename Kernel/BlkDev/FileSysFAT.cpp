@@ -248,6 +248,48 @@ static bool FAT32SetLink(CDrv &dv,uint32_t c,uint32_t next)
   return true;
 }
 
+// Commit the links that share a FAT sector while the drive is locked.
+static uint64_t FAT32SetLinkBatch(CDrv &dv, const uint32_t *chain,
+                                  uint64_t first, uint64_t count, bool clear)
+{
+  constexpr auto slots = BLK_SIZE / sizeof(uint32_t);
+  auto block = chain[first] / slots;
+  auto end = first + 1;
+  while (end < count && chain[end] / slots == block)
+    end++;
+  if (end == first + 1) {
+    auto link = clear ? 0 : end < count ? chain[end] : 0x0FFFFFFF;
+    return FAT32SetLink(dv, chain[first], link) ? end : first;
+  }
+
+  uint64_t p1 = (uint64_t(dv.fat1) + block) * BLK_SIZE,
+           p2 = (uint64_t(dv.fat2) + block) * BLK_SIZE;
+  uint32_t old[slots], primary[slots], mirror[slots];
+  if (!DrvFATRead(dv, block, old, 0, BLK_SIZE) ||
+      (p1 != p2 &&
+       !DrvReadBytes(dv, reinterpret_cast<uint8_t *>(mirror), p2, BLK_SIZE)))
+    return first;
+  MemCpy(primary, old, BLK_SIZE);
+  for (auto i = first; i < end; i++) {
+    auto slot = chain[i] % slots;
+    auto link = clear ? 0 : i + 1 < count ? chain[i + 1] : 0x0FFFFFFF;
+    primary[slot] = (primary[slot] & 0xF0000000) | link;
+    if (p1 != p2)
+      mirror[slot] = (mirror[slot] & 0xF0000000) | link;
+  }
+  if (!BlkDevWriteBytes(*dv.bd, reinterpret_cast<const uint8_t *>(primary), p1,
+                        BLK_SIZE))
+    return first;
+  if (p1 != p2 &&
+      !BlkDevWriteBytes(*dv.bd, reinterpret_cast<const uint8_t *>(mirror), p2,
+                        BLK_SIZE)) {
+    BlkDevWriteBytes(*dv.bd, reinterpret_cast<const uint8_t *>(old), p1,
+                     BLK_SIZE);
+    return first;
+  }
+  return end;
+}
+
 static bool FAT32InfoRead(CDrv &dv,CFAT32FileInfoSect &fis)
 {
   return dv.file_system_info_sect>dv.drv_offset &&
@@ -313,9 +355,12 @@ static uint32_t FAT32AllocClus(CDrv &dv,uint32_t tail,uint64_t count,bool contig
   }
   uint64_t linked=0;
   if (found==count) {
-    for (;linked<count;linked++)
-      if (!FAT32SetLink(dv,chosen[linked],linked+1<count?chosen[linked+1]:0x0FFFFFFF))
+    while (linked<count) {
+      auto next=FAT32SetLinkBatch(dv,chosen,linked,count,false);
+      if (next==linked)
         break;
+      linked=next;
+    }
   }
   bool okay=linked==count;
   bool attached=false;
@@ -363,8 +408,12 @@ static bool FAT32FreeClus(CDrv &dv,uint32_t c)
       return false;
     }
   uint64_t freed=0;
-  while (freed<count && FAT32SetLink(dv,chain[freed],0))
-    freed++;
+  while (freed<count) {
+    auto next=FAT32SetLinkBatch(dv,chain,freed,count,true);
+    if (next==freed)
+      break;
+    freed=next;
+  }
   bool okay=freed==count;
   if (!okay) {
     while (freed) {
@@ -445,22 +494,39 @@ static bool FAT32WriteChain(CDrv &dv,uint32_t c,uint64_t pos,const uint8_t *buf,
       return false;
   pos%=clus_size;
   uint8_t zero[BLK_SIZE]{};
+  size_t written=0;
   while (bytes) {
     size_t n=clus_size-pos;
     if (n>bytes)
       n=bytes;
-    if (!buf && n>sizeof(zero))
+    uint32_t last=c;
+    if (buf) {
+      while (n<bytes && n+clus_size<=128*BLK_SIZE) {
+        uint32_t next;
+        if (!FAT32Next(dv,last,next))
+          return false;
+        if (next!=last+1)
+          break;
+        last=next;
+        size_t more=bytes-n;
+        n+=more<clus_size?more:clus_size;
+      }
+    } else if (n>sizeof(zero))
       n=sizeof(zero);
     if (!BlkDevWriteBytes(*dv.bd,buf?buf:zero,FAT32ClusPos(dv,c)+pos,n))
       return false;
     if (buf)
       buf+=n;
     bytes-=n;
-    pos+=n;
-    if (pos==clus_size) {
-      pos=0;
-      if (bytes && !FAT32Next(dv,c,c))
-        return false;
+    c=last;
+    pos=(pos+n)%clus_size;
+    if (!pos && bytes && !FAT32Next(dv,c,c))
+      return false;
+    // Yield between PIO transfers with the filesystem lock still held.
+    written+=n;
+    if (bytes && written>=128*BLK_SIZE) {
+      written=0;
+      _YIELD();
     }
   }
   return true;

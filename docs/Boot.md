@@ -4318,6 +4318,19 @@ build/Linux/TestBoot --dictionary-reference qemu-system-x86_64 \
   /path/to/pinned/TOS_Distro.ISO build/dictionary-reference
 ```
 
+The writable dictionary test gives both guests a private copy of the
+same FAT32 disk containing the compressed dictionary. It runs `ACInit`
+on that drive, tracks the `Uncompressing Dictionary` bar, and checks
+that `ACDefs.DATA.Z` is removed. It reads back the 26,124,337 definition
+bytes and checks the 95,293-word load.
+
+```sh
+make -j4 test-dictionary-install
+build/Linux/TestBoot --dictionary-install-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/dictionary-install.img \
+  build/dictionary-install-reference
+```
+
 ## Popup menus and one-time notices
 
 `PopupProbe.HC` checks results from synchronous and asynchronous

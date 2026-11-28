@@ -827,7 +827,7 @@ floating-point helpers. HolyC sees both fields as `F64`.
 mouse. `Kernel/KMisc.cpp` calls the registry writer directly from
 `ProgressBarsRst` and then clears all four records. The reference
 resolves the same writer through `CallExtStr`. Dictionary installation
-still needs `ACProgressTask` to update the first bar.
+uses the first bar through `ACProgressTask`.
 
 ## DolDoc windows
 
@@ -988,10 +988,16 @@ selection other than FAT 0, and complete error diagnostics remain pending.
 `FAT32MkDir`, `FAT32FilesDel`, and `FAT32FileWrite` follow the corresponding
 reference allocation, directory, and whole-file operations. Allocation
 checks the available chain before changing either FAT, retains the
-reserved high bits and updates both copies. Noncontiguous allocation
+reserved high bits and groups link updates by FAT sector. Each group
+updates both copies and restores the primary sector if the mirror fails.
+This follows the sector granularity of `DrvFATBlkClean` in TempleOS.
+Noncontiguous allocation
 starts after the FSInfo recent-allocation hint. Whole-file replacement
 writes a new chain before replacing the directory entry and reclaiming
-the old chain. Directory growth allocates and zeroes a cluster before
+the old chain. Large file writes group contiguous clusters and yield
+between PIO batches while the drive stays locked, so the desktop can
+display write progress. Directory
+growth allocates and zeroes a cluster before
 linking it; deletion tracks the short entry and its validated long-name
 records, including names that cross a cluster boundary.
 
@@ -2109,8 +2115,12 @@ to a scratch RAM drive and sets that drive as the popup tasks' home.
 insert the dictionary suffixes and Ctrl-Shift with those keys opens
 definitions. `EdLinkCvt` and `Ed` handle `DN:` links with an optional
 definition number. Writable-media preparation moves to the uncompressed
-name as in TempleOS. `ACProgressTask` and dictionary generation remain
-pending.
+name as in TempleOS. `ACProgressTask` shows `Uncompressing Dictionary`
+on writable drives other than RAM. It measures the change in
+`blkdev.write_cnt` against the archive's expanded block count.
+`ACInit` reads the header on the caller's drive before starting the task
+and joins the task after `Move` so the bar clears if the write ends early.
+Dictionary generation remains pending.
 
 `ACTask.cpp` follows the link activation in `Adam/AutoComplete/ACTask.HC`.
 After the 333 ms sleep and the Escape check, the task sends a space to

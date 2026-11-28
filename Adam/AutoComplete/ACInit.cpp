@@ -1,8 +1,10 @@
 #include "../../Kernel/KernelB.hpp"
+#include "../../Kernel/Compress.hpp"
 #include "AutoComplete.hpp"
 
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 extern "C" int64_t ToUpperCpp(uint8_t ch);
+extern "C" void ACProgressTaskHC(), MoveHC();
 
 uint8_t *ACDWordNext(uint8_t *record)
 {
@@ -221,6 +223,39 @@ static void ACMainFileLstTraverse(const char *mask)
   DirTreeDelCpp(files);
 }
 
+// ACInit serializes the worker handshake.
+static bool ac_progress_started, ac_progress_stop;
+
+extern "C" void ACProgressTaskCpp(int64_t blocks)
+{
+  auto &progress = sys_progresses[0];
+  progress.val = 0;
+  progress.max = blocks;
+  StrCpyCpp(progress.desc, "Uncompressing Dictionary");
+  auto start = __atomic_load_n(&blkdev.write_cnt, __ATOMIC_RELAXED);
+  __atomic_store_n(&ac_progress_started, true, __ATOMIC_RELEASE);
+  while (progress.val < progress.max &&
+         !__atomic_load_n(&ac_progress_stop, __ATOMIC_ACQUIRE)) {
+    progress.val = __atomic_load_n(&blkdev.write_cnt, __ATOMIC_RELAXED) - start;
+    SleepCpp(10);
+  }
+  progress.max = progress.val = 0;
+  progress.desc[0] = 0;
+}
+
+static int64_t ACDDefBlocks()
+{
+  auto *file = FOpenCpp(ACD_DEF_FILENAME_Z, "r", 0);
+  if (!file)
+    return 0;
+  uint8_t buf[BLK_SIZE];
+  CArcCompress arc{};
+  if (FSizeCpp(file) >= int64_t(sizeof(arc)) && FBlkReadCpp(file, buf, 0, 1))
+    MemCpy(&arc, buf, sizeof(arc));
+  FCloseCpp(file);
+  return arc.expanded_size / BLK_SIZE + (arc.expanded_size % BLK_SIZE != 0);
+}
+
 extern "C" void ACInitCpp(const char *mask)
 {
   SYS_RUN_LEVEL &= ~RLF_AUTO_COMPLETE;
@@ -228,10 +263,42 @@ extern "C" void ACInitCpp(const char *mask)
   while (__atomic_fetch_or(&ac.flags, ACF_INIT_IN_PROGRESS, __ATOMIC_ACQUIRE) &
          ACF_INIT_IN_PROGRESS)
     _YIELD();
-  if (DrvIsWritableCpp(0, false) &&
-      FileFindCpp(ACD_DEF_FILENAME_Z, nullptr, FUF_JUST_FILES) &&
-      !FileFindCpp(ACD_DEF_FILENAME, nullptr, FUF_JUST_FILES))
-    MoveCpp(ACD_DEF_FILENAME_Z, ACD_DEF_FILENAME);
+  if (auto *bd = DrvIsWritableCpp(0, false);
+      bd && FileFindCpp(ACD_DEF_FILENAME_Z, nullptr, FUF_JUST_FILES) &&
+      !FileFindCpp(ACD_DEF_FILENAME, nullptr, FUF_JUST_FILES)) {
+    CTask *task = nullptr;
+    int64_t task_num = 0;
+    if (bd->type != BDT_RAM) {
+      auto blocks = ACDDefBlocks();
+      if (blocks) {
+        __atomic_store_n(&ac_progress_started, false, __ATOMIC_RELAXED);
+        __atomic_store_n(&ac_progress_stop, false, __ATOMIC_RELAXED);
+        task = SpawnCpp(reinterpret_cast<uintptr_t>(ACProgressTaskHC),
+                        reinterpret_cast<uint8_t *>(blocks), nullptr, -1,
+                        nullptr, 0, JOBF_ADD_TO_QUE);
+        if (task) {
+          task_num = task->task_num;
+          while (!__atomic_load_n(&ac_progress_started, __ATOMIC_ACQUIRE) &&
+                 TaskValidateCpp(task) && task->task_num == task_num)
+            _YIELD();
+        }
+      }
+    }
+    uint64_t moved;
+    auto returned = CallHolyC2Checked(
+        reinterpret_cast<uintptr_t>(MoveHC),
+        reinterpret_cast<uintptr_t>(ACD_DEF_FILENAME_Z),
+        reinterpret_cast<uintptr_t>(ACD_DEF_FILENAME), &moved);
+    if (task) {
+      __atomic_store_n(&ac_progress_stop, true, __ATOMIC_RELEASE);
+      while (TaskValidateCpp(task) && task->task_num == task_num)
+        _YIELD();
+    }
+    if (!returned) {
+      __atomic_fetch_and(&ac.flags, ~ACF_INIT_IN_PROGRESS, __ATOMIC_RELEASE);
+      RethrowHolyC();
+    }
+  }
   HashTableDelCpp(ac.hash_table);
   ACDWordsClear();
   ac.hash_table = HashTableNew(2048, adam_task->data_heap);
