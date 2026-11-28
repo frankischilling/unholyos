@@ -3603,6 +3603,10 @@ constexpr CTextProbe function_records_layout_probes[]{
      "FR layout 840", "FR layout DONE",
      "FR layout 840 856 1 F\nFR layout 840 856 1 F\nFR layout DONE\n", {}, true}};
 
+constexpr CTextProbe frame_ptr_probes[]{
+    {"frame-ptr", "/FramePtrProbe.HC", "/FramePtrProbe.BIN.Z",
+     "Frame pointers ", "Frame pointers 3FF", "Frame pointers 3FF\n"}};
+
 constexpr CTextProbe list_utilities_probes[]{
     {"list-utilities", "/ListUtilitiesProbe.HC", "", "LU linked ", "LU DONE",
      "LU linked 7F\nLU queue 7F\nLU DONE\n"}};
@@ -7627,6 +7631,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--function-records-layout-reference" ||
        std::string_view(argv[1]) == "--list-utilities" ||
        std::string_view(argv[1]) == "--list-utilities-reference" ||
+       std::string_view(argv[1]) == "--frame-ptr" ||
+       std::string_view(argv[1]) == "--frame-ptr-reference" ||
        std::string_view(argv[1]) == "--optimizer" ||
        std::string_view(argv[1]) == "--optimizer-reference" ||
        std::string_view(argv[1]) == "--optimizer-aot" ||
@@ -7722,6 +7728,7 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--function-records-layout");
     bool list_utilities_probe =
         std::string_view(argv[1]).starts_with("--list-utilities");
+    bool frame_ptr = std::string_view(argv[1]).starts_with("--frame-ptr");
     bool optimizer_probe = std::string_view(argv[1]).starts_with("--optimizer");
     bool optimizer_aot = std::string_view(argv[1]) == "--optimizer-aot";
     bool register_allocation_probe =
@@ -7793,6 +7800,8 @@ int main(int argc, char **argv)
       text_probes = function_records_layout_probes;
     else if (list_utilities_probe)
       text_probes = list_utilities_probes;
+    else if (frame_ptr)
+      text_probes = frame_ptr_probes;
     else if (optimizer_probe)
       text_probes = optimizer_aot ? std::span<const CTextProbe>(optimizer_aot_probes)
                                  : std::span<const CTextProbe>(optimizer_probes);
@@ -7857,6 +7866,9 @@ int main(int argc, char **argv)
       if (character && !reference)
         VerifyHostModuleMedia(argv[3],"Linux/Fixtures/CharPanObserver.HC",
                               "CharPanObserver.HC");
+      if (frame_ptr && !reference)
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/FramePtrProbe.HC",
+                              "FramePtrProbe.HC");
       if (waveform && !reference)
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/WaveformProbe.HC",
                               "WaveformProbe.HC");
@@ -8174,6 +8186,7 @@ int main(int argc, char **argv)
               << "       " << argv[0]
               << " --music-precision[-reference] qemu image.iso [capture-dir]\n"
               << " --waveform[-reference] qemu image.iso [capture-dir]\n"
+              << " --frame-ptr[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --tic-tac-toe[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]

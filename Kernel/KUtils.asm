@@ -23,6 +23,7 @@ GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymI
 GLOBAL HashPublicHC
 GLOBAL HashTablePurgeHC
 GLOBAL HashTableNewHC,HashTypeNumHC,CeilU64HC,Pow10I64HC
+GLOBAL HashGenericAddHC,FramePtrHC,FramePtrAddHC,FramePtrSetHC,FramePtrDelHC
 GLOBAL ClampHC,MinHC,MaxHC,FloorU64HC,RoundI64HC,FloorI64HC,CeilI64HC
 GLOBAL LinkedLstDelHC,LinkedLstCopyHC,LinkedLstCntHC,LinkedLstSizeHC
 GLOBAL QueDelHC,QueCopyHC,QueCntHC,QueSizeHC
@@ -310,6 +311,7 @@ EXTERN StrFindCpp,Tabs2SpacesCpp,ScaleIndentCpp,MStrUtilCpp
 EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
 EXTERN HashRemDelCpp,HashValCpp,HashDelCpp,HashTableDelCpp,HashSrcFileSetCpp,SysSymImportsResolveCpp
 EXTERN HashPublicCpp
+EXTERN HashGenericAddCpp,FramePtrCpp,FramePtrAddCpp,FramePtrSetCpp,FramePtrDelCpp
 EXTERN HashTablePurgeCpp
 EXTERN HashTableNewCpp,HashTypeNumCpp,CeilU64Cpp,Pow10I64Cpp
 EXTERN ClampCpp,MinCpp,MaxCpp,FloorU64Cpp,RoundI64Cpp,FloorI64Cpp,CeilI64Cpp
@@ -713,6 +715,11 @@ HOLYC_CPP HashTableDelHC,HashTableDelCpp,1
 HOLYC_CPP HashTablePurgeHC,HashTablePurgeCpp,1
 HOLYC_CPP HashSrcFileSetHC,HashSrcFileSetCpp,3
 HOLYC_CPP HashPublicHC,HashPublicCpp,3
+HOLYC_CPP HashGenericAddHC,HashGenericAddCpp,6
+HOLYC_CPP FramePtrHC,FramePtrCpp,2
+HOLYC_CPP FramePtrAddHC,FramePtrAddCpp,3
+HOLYC_CPP FramePtrSetHC,FramePtrSetCpp,3
+HOLYC_CPP FramePtrDelHC,FramePtrDelCpp,2
 HOLYC_CPP SysSymImportsResolveHC,SysSymImportsResolveCpp,2
 HOLYC_CPP HashTableNewHC,HashTableNewCpp,2
 HOLYC_CPP HashTypeNumHC,HashTypeNumCpp,1

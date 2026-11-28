@@ -836,6 +836,8 @@ CHash *HashFind(const char *name, CHashTable *table, uint32_t mask,
                 uint64_t instance = 1);
 void HashAdd(CHash *entry, CHashTable *table);
 void HashRemove(CHash *entry, CHashTable *table);
+extern "C" uint64_t HashRemDelCpp(CHash *entry,CHashTable *table,
+                                  uint64_t instance);
 void HashDel(CHash *entry);
 CHashTable *HashTableNew(size_t size, CHeapCtrl *hc);
 extern "C" void HashTableDelCpp(CHashTable *table);

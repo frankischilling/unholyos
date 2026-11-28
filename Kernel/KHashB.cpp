@@ -160,6 +160,28 @@ extern "C" int64_t HashTablePurgeCpp(CHashTable *table)
   return count;
 }
 
+extern "C" CHashGeneric *HashGenericAddCpp(const char *name,int64_t type,
+                                           int64_t u0,int64_t u1,int64_t u2,
+                                           CTask *task)
+{
+  if (!task) task=CurrentTask();
+  auto *res=reinterpret_cast<CHashGeneric *>(
+      CAlloc(sizeof(CHashGeneric),task->data_heap));
+  if (!res)
+    return nullptr;
+  res->hash.str=StrNew(name,task->data_heap);
+  if (!res->hash.str) {
+    Free(res);
+    return nullptr;
+  }
+  res->hash.type=type;
+  res->user_data0=u0;
+  res->user_data1=u1;
+  res->user_data2=u2;
+  HashAdd(&res->hash,task->hash_table);
+  return res;
+}
+
 extern "C" void HashSrcFileSetCpp(const CCmpCtrl *cc, CHashSrcSym *sym,
                                   int64_t line_offset)
 {
@@ -203,4 +225,45 @@ extern "C" CHashGeneric *HashPublicCpp(const char *st, uint64_t mask,
       cc != reinterpret_cast<CCmpCtrl *>(&task->next_cc) && cc->lex_include_stk)
     HashSrcFileSetCpp(cc, reinterpret_cast<CHashSrcSym *>(entry), 0);
   return reinterpret_cast<CHashGeneric *>(entry);
+}
+
+
+extern "C" int64_t FramePtrCpp(const char *name,CTask *task)
+{
+  if (!task) task=CurrentTask();
+  auto *tmph=reinterpret_cast<CHashGeneric *>(
+      HashFind(name,task->hash_table,HTT_FRAME_PTR));
+  if (tmph)
+    return __atomic_load_n(&tmph->user_data0,__ATOMIC_RELAXED);
+  else
+    return 0;
+}
+
+extern "C" CHashGeneric *FramePtrAddCpp(const char *name,int64_t val,CTask *task)
+{
+  return HashGenericAddCpp(name,HTT_FRAME_PTR,val,0,0,task);
+}
+
+extern "C" int64_t FramePtrSetCpp(const char *name,int64_t val,CTask *task)
+{
+  if (!task) task=CurrentTask();
+  auto *tmph=reinterpret_cast<CHashGeneric *>(
+      HashFind(name,task->hash_table,HTT_FRAME_PTR));
+  if (tmph)
+    return __atomic_exchange_n(&tmph->user_data0,val,__ATOMIC_SEQ_CST);
+  else
+    return 0;
+}
+
+extern "C" int64_t FramePtrDelCpp(const char *name,CTask *task)
+{
+  int64_t res=0;
+  if (!task) task=CurrentTask();
+  auto *tmph=reinterpret_cast<CHashGeneric *>(
+      HashFind(name,task->hash_table,HTT_FRAME_PTR));
+  if (tmph) {
+    res=__atomic_load_n(&tmph->user_data0,__ATOMIC_RELAXED);
+    HashRemDelCpp(&tmph->hash,task->hash_table,1);
+  }
+  return res;
 }
