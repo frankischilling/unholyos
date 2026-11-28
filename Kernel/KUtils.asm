@@ -129,6 +129,8 @@ GLOBAL DocTreeWriteJoinHC,DocTreeAppendJoinHC,ExeDocHC,DocTreeExeHC,DocTreeFExeH
 GLOBAL GodBitsInsHC,GodHexInsHC,GodBitsHC,TimeStampCBHC,KbdMsTimeCBHC
 GLOBAL GodInitHC,GodWordStrHC,GodWordHC
 GLOBAL GodSongStrHC,GodSongHC
+GLOBAL GodBiblePassageHC,BibleLine2VerseHC,BookLinesHC,BibleVerseHC
+GLOBAL BibleDocHC,BibleViewHC,CtrlAltBHC
 GLOBAL RegDftHC,RegExeHC,RegWriteHC,RegCntHC,RegAppendHC,AdamHC
 GLOBAL OneTimePopUpHC,RegOneTimePopUpHC,PopUpHC,PopUpPrintHC,SrvCmdLineHC
 GLOBAL InsRegHC,InsReregHC,InsUnregHC
@@ -430,6 +432,8 @@ EXTERN ExeDocCpp,DocTreeExeCpp,DocTreeFExeCpp
 EXTERN GodBitsInsCpp,GodHexInsCpp,GodBitsCpp,TimeStampCBCpp,KbdMsTimeCBCpp
 EXTERN GodInitCpp,GodWordStrCpp,GodWordCpp
 EXTERN GodSongStrCpp,GodSongCpp
+EXTERN GodBiblePassageCpp,BibleLine2VerseCpp,BookLinesCpp,BibleVerseCpp
+EXTERN BibleDocCpp,BibleViewCpp,CtrlAltBCpp
 EXTERN RegDftCpp,RegExeCpp,RegWriteCpp,RegCntCpp,RegAppendCpp,AdamCpp
 EXTERN InsRegCpp,InsReregCpp,InsUnregCpp
 EXTERN AOnceFlushCpp,OnceFlushCpp,AOnceCpp,OnceCpp,AOnceDrvCpp,OnceDrvCpp,OnceExeCpp
@@ -1080,6 +1084,13 @@ HOLYC_CPP GodWordStrHC,GodWordStrCpp,1
 HOLYC_CPP GodWordHC,GodWordCpp,1
 HOLYC_CPP GodSongStrHC,GodSongStrCpp,0
 HOLYC_CPP GodSongHC,GodSongCpp,0
+HOLYC_CPP GodBiblePassageHC,GodBiblePassageCpp,1
+HOLYC_CPP BibleLine2VerseHC,BibleLine2VerseCpp,2
+HOLYC_CPP BookLinesHC,BookLinesCpp,4
+HOLYC_CPP BibleVerseHC,BibleVerseCpp,3
+HOLYC_CPP BibleDocHC,BibleDocCpp,0
+HOLYC_CPP BibleViewHC,BibleViewCpp,0
+HOLYC_CPP CtrlAltBHC,CtrlAltBCpp,1
 HOLYC_CPP TimeStampCBHC,TimeStampCBCpp,3
 HOLYC_CPP KbdMsTimeCBHC,KbdMsTimeCBCpp,3
 HOLYC_CPP AOnceFlushHC,AOnceFlushCpp,0

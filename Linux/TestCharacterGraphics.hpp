@@ -129,6 +129,9 @@ constexpr CTextProbe god_vocabulary_probes[]{
 constexpr CTextProbe god_song_probes[]{
     {"god-song", "/GodSongProbe.HC", "", "God song checks ",
      "God song checks ", "God song checks FF\n", {}, true}};
+constexpr CTextProbe god_bible_probes[]{
+    {"god-bible", "/GodBibleProbe.HC", "", "Bible probe ", "Bible probe ",
+     "Bible probe FFF 1252\n", {}, true}};
 constexpr CTextProbe dictionary_probes[]{
     {"dictionary", "/DictionaryProbe.HC", "", "Dictionary probe ",
      "Dictionary probe 3F", "Dictionary probe 3F\n", {}, true}};
@@ -1412,6 +1415,7 @@ static void DriveCharacterGraphics(
       cmd("DocClear(,1);");
       const bool god_input = std::string_view(probe.name) == "god-input";
       const bool god_song = std::string_view(probe.name) == "god-song";
+      const bool god_bible = std::string_view(probe.name) == "god-bible";
       std::array<uint64_t, 3> mouse{};
       if (god_input || god_song) {
         cmd(R"("GIM %X %X %X\n",&ms.pos.x,&ms.lb,&ms.rb;)");
@@ -1421,7 +1425,8 @@ static void DriveCharacterGraphics(
         cmd(std::string("DocClear(,1);ExeFile2(\"") + probe.reference_file + "\");");
       else if (reference)
         upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
-      else if (god_input || god_song || std::string_view(probe.name) == "doc-song" ||
+      else if (god_input || god_song || god_bible ||
+               std::string_view(probe.name) == "doc-song" ||
                std::string_view(probe.name) == "god-vocabulary")
         cmd(std::string("ExeFile2(\"::") + probe.source + "\");0;");
       else
@@ -1497,7 +1502,7 @@ static void DriveCharacterGraphics(
             return finish != std::string::npos &&
                    screen.find(prompt, finish) != std::string::npos;
           },
-          "Missing completed reference text probe");
+          "Missing completed reference text probe", god_bible ? 3000 : 180);
       const auto screen = visible(cells);
       std::ofstream screen_file(
           dir / (std::string(probe.name) + "-reference-screen.txt"));
@@ -1570,6 +1575,23 @@ static void DriveCharacterGraphics(
       if (output != probe.expected)
         failures +=
             std::string("Reference output differs: ") + probe.source + "\n";
+      if (god_bible && output == probe.expected) {
+        vm.ResetDeadline(150s);
+        cmd("DocClear(,1);");
+        key("ctrl-alt-b");
+        wait([&](const Cells &cells) {
+          const auto screen = visible(cells);
+          return screen.find("Genesis") != std::string::npos;
+        }, "Ctrl-Alt-B did not open the Bible book trees", 3000);
+        snapshot("bible-viewer");
+        key("shift-esc");
+        wait([&](const Cells &cells) {
+          const auto screen = visible(cells);
+          return screen.find(prompt) != std::string::npos &&
+                 screen.find("Genesis") == std::string::npos;
+        }, "Bible viewer did not return to the prompt", 600);
+        std::cout << "Ctrl-Alt-B opened the Bible viewer and returned to the prompt\n";
+      }
       if (std::string_view(probe.name) == "dictionary" && output == probe.expected) {
         cmd("AutoComplete(1);");
         dictionary_keys();

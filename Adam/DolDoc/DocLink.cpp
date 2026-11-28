@@ -1,4 +1,5 @@
 #include "DolDoc.hpp"
+#include "../God/GodBible.hpp"
 
 extern "C" void DocEdHC(), DocEntryRunHC(), DocWriteHC();
 
@@ -27,6 +28,7 @@ bool DocFileEd(int64_t type, const char *filename, const char *needle,
   case LK_DOC_FIND:   type = LK_FILE_FIND; break;
   case LK_PLAIN_LINE: flags = DOCF_PLAIN_TEXT | DOCF_NO_CURSOR; [[fallthrough]];
   case LK_DOC_LINE:   type = LK_FILE_LINE; break;
+  case LK_BIBLE_FIND: flags = DOCF_PLAIN_TEXT | DOCF_NO_CURSOR; break;
   }
   auto *task = CurrentTask();
   const auto old_border_src = task->border_src;
@@ -66,6 +68,7 @@ bool DocFileEd(int64_t type, const char *filename, const char *needle,
     case LK_FILE_LINE:   res = DocGoToLineCpp(doc, *num); break;
     case LK_FILE_ANCHOR: res = DocAnchorFindCpp(doc, needle); break;
     case LK_FILE_FIND:   res = DocFindCpp(doc, INT64_MIN, needle, *num); break;
+    case LK_BIBLE_FIND:  res = DocFindCpp(doc, *num, needle, 1); break;
     default:             DocCenterCpp(doc, RECALCt_NORMAL); break;
     }
   *num = doc->cur_entry->y + 1;
@@ -137,9 +140,31 @@ extern "C" int64_t EdLinkCvtCpp(const char *link_st, char **_filename,
                                  edf_dof_flags)
                   : -1;
         filename2 = nullptr;
-      } else if (res == LK_BIBLE_FIND || res == LK_HELP_INDEX || res == LK_ADDR)
+      } else if (res == LK_HELP_INDEX || res == LK_ADDR)
         res = -1;
       switch (res) {
+      case LK_BIBLE_FIND: {
+        if (auto *ptr = StrLastOccCpp(filename2,
+                                      reinterpret_cast<const uint8_t *>(","))) {
+          *ptr++ = 0;
+          for (auto *end = ptr; *end; end++)
+            if (*end == '-') {
+              *end = 0;
+              break;
+            }
+          needle_str = StrNew(ptr, task->data_heap);
+        }
+        const auto book = DefineMatchCpp(reinterpret_cast<const uint8_t *>(filename2),
+                                         "ST_BIBLE_BOOKS", 1); // LMF_IGNORE_CASE
+        if (book < 0)
+          res = -1;
+        else {
+          num = Str2I64Cpp(DefineSubCpp(book, "ST_BIBLE_BOOK_LINES"), 10, nullptr);
+          filename = FileNameAbs(BIBLE_FILENAME, *task, FUF_Z_OR_NOT_Z);
+        }
+        filename2 = nullptr;
+        break;
+      }
       case LK_DEF:
         num = -1;
         if (auto *ptr = StrLastOccCpp(filename2,

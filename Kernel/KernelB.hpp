@@ -274,6 +274,7 @@ extern "C" void PaletteSetStdCpp();
 extern "C" CHashDefineStr *DefineLoadCpp(const char *name, const char *text,
                                          const uintptr_t *frame);
 extern "C" const char *DefineCpp(const char *name);
+extern "C" const char *DefineSubCpp(int64_t index, const char *name);
 extern "C" int64_t DefineCntCpp(const char *name);
 extern "C" void DefinePrintCpp(const char *name, const char *src, int64_t argc,
                                const uint64_t *argv);

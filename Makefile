@@ -25,7 +25,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Kernel/BlkDev/DskATA.cpp Kernel/BlkDev/DskATAId.cpp Kernel/BlkDev/DskAddDev.cpp \
 	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/DskDrv.cpp Kernel/BlkDev/DskBlkDev.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/FileSysFAT.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
 	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskStrB.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/BlkDev/DskClus.cpp Kernel/BlkDev/DskCache.cpp Kernel/BlkDev/DskFmt.cpp Kernel/Compress.cpp \
-	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ARegistry.cpp Adam/InsReg.cpp Adam/Training.cpp Adam/InFile.cpp Adam/ASnd.cpp Adam/God/GodExt.cpp Adam/God/HolySpirit.cpp Adam/God/GodSong.cpp Adam/TaskSettings.cpp Adam/CPURep.cpp Adam/DevInfo.cpp Adam/AutoComplete/ACTask.cpp Adam/AutoComplete/ACInit.cpp Adam/AutoComplete/ACFill.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
+	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ARegistry.cpp Adam/InsReg.cpp Adam/Training.cpp Adam/InFile.cpp Adam/ASnd.cpp Adam/God/GodExt.cpp Adam/God/GodBible.cpp Adam/God/HolySpirit.cpp Adam/God/GodSong.cpp Adam/TaskSettings.cpp Adam/CPURep.cpp Adam/DevInfo.cpp Adam/AutoComplete/ACTask.cpp Adam/AutoComplete/ACInit.cpp Adam/AutoComplete/ACFill.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
 	Adam/AutoComplete/ACDictGen.cpp Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
 	Adam/Gr/SpriteNew.cpp Adam/Gr/GrSpritePlot.cpp Adam/Gr/ScrnCast.cpp \
 	Adam/DolDoc/DocNew.cpp Adam/DolDoc/DocDblBuf.cpp Adam/DolDoc/DocRecalc.cpp Adam/DolDoc/DocRecalcLib.cpp \
@@ -159,12 +159,15 @@ KEY_MAP_PROBE := Linux/Fixtures/KeyMapProbe.HC
 KEY_MAP_TEST_ISO := $(BUILD)/key-map-test.iso
 GOD_INPUT_PROBE := Linux/Fixtures/GodInputProbe.HC
 GOD_HELP := Adam/God/HSNotes.DD
+BIBLE := Misc/Bible.TXT
 GOD_VOCAB := Adam/God/Vocab.DD
 GOD_INPUT_TEST_ISO := $(BUILD)/god-input-test.iso
 GOD_VOCAB_PROBE := Linux/Fixtures/GodVocabularyProbe.HC
 GOD_VOCAB_TEST_ISO := $(BUILD)/god-vocab-test.iso
 GOD_SONG_PROBE := Linux/Fixtures/GodSongProbe.HC
 GOD_SONG_TEST_ISO := $(BUILD)/god-song-test.iso
+GOD_BIBLE_PROBE := Linux/Fixtures/GodBibleProbe.HC
+GOD_BIBLE_TEST_ISO := $(BUILD)/god-bible-test.iso
 DOC_TREE_AOT_PROBE := Linux/Fixtures/DocTreeAOTProbe.HC
 DOC_TREE_TEST_ISO := $(BUILD)/doc-tree-test.iso
 REGISTRY_DEMO := Demo/RegistryDemo.HC
@@ -375,7 +378,7 @@ $(ISO_TOOL): Linux/MakeISO.cpp Adam/Opt/Boot/DskISORedSea.cpp Kernel/Compress.cp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
 
-$(BOOT_TEST): Linux/TestBoot.cpp Linux/BootMedia.hpp Linux/TestCharacterGraphics.hpp Linux/TestStrings.hpp Linux/TestFileBackedRedSea.hpp Kernel/KernelA.hpp
+$(BOOT_TEST): Linux/TestBoot.cpp Adam/God/GodBible.hpp Linux/BootMedia.hpp Linux/TestCharacterGraphics.hpp Linux/TestStrings.hpp Linux/TestFileBackedRedSea.hpp Kernel/KernelA.hpp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
 
@@ -622,6 +625,9 @@ $(GOD_INPUT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_INPU
 $(GOD_VOCAB_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_VOCAB_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(GOD_VOCAB_PROBE)
 
+$(GOD_BIBLE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_BIBLE_PROBE) $(BIBLE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at $(BIBLE).Z $(BIBLE) --dir Home --file $(GOD_BIBLE_PROBE)
+
 $(GOD_SONG_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_SONG_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(GOD_SONG_PROBE)
 
@@ -708,8 +714,8 @@ $(MUSIC_PRECISION_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(MUSIC_P
 $(STRINGS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STRINGS_PROBES) $(FILE_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(STRINGS_PROBES) $(FILE_WRITE_PROBE))
 
-$(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STARTUP_TIPS) $(HELP_DOCS) $(AC_STANDBY) $(AC_WORDS) $(AC_DEFS) $(PCI_DEV_FILE) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS) $(REGISTRY_DEMO) $(GOD_HELP)
-	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at $(AC_STANDBY).Z $(AC_STANDBY) $(AC_DICT_ARGS) --compress-at $(PCI_DEV_FILE).Z $(PCI_DEV_FILE) --dir Home \
+$(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STARTUP_TIPS) $(HELP_DOCS) $(AC_STANDBY) $(AC_WORDS) $(AC_DEFS) $(PCI_DEV_FILE) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS) $(REGISTRY_DEMO) $(GOD_HELP) $(BIBLE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at $(AC_STANDBY).Z $(AC_STANDBY) $(AC_DICT_ARGS) --compress-at $(PCI_DEV_FILE).Z $(PCI_DEV_FILE) --compress-at $(BIBLE).Z $(BIBLE) --dir Home \
 		$(foreach asset,$(STARTUP_TIPS) $(HELP_DOCS) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS) $(REGISTRY_DEMO) $(GOD_HELP),--file-at $(asset) $(asset))
 
 $(CHARACTER_GRAPHICS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(GAME_DEMOS) $(CHARACTER_GRAPHICS_PROBE)
@@ -908,6 +914,12 @@ test-god-song: $(GOD_SONG_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --god-song "$(QEMU)" $(GOD_SONG_TEST_ISO)
 
 test: test-god-song
+
+.PHONY: test-god-bible
+test-god-bible: $(GOD_BIBLE_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --god-bible "$(QEMU)" $(GOD_BIBLE_TEST_ISO)
+
+test: test-god-bible
 
 .PHONY: test-registry
 test-registry: $(REGISTRY_TEST_ISO) $(BOOT_TEST)

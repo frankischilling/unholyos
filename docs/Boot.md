@@ -4624,6 +4624,28 @@ build/gcc/Linux/TestBoot --god-song-reference qemu-system-x86_64 \
   /path/to/pinned/TOS_Distro.ISO build/god-song-reference
 ```
 
+## Bible passages and viewer
+
+The standard DVD packages the pinned `Misc/Bible.TXT` under
+`Misc/Bible.TXT.Z`. `GodBibleProbe.HC` checks the book offsets, the
+last passage line, verse names across continuation and blank lines,
+a verse link with a range, and line copying from the DVD and a RAM file.
+It counts the book and chapter trees and checks both the direct passage
+call and Shift-F7 with a fixed FIFO seed. The QEMU driver sends Ctrl-Alt-B
+and Shift-Esc to open and close the viewer. Pinned TempleOS and UnholyOS
+built with GCC 13.3.0 or Clang 20.1.2 report `Bible probe FFF 1252`
+and return to the prompt after closing the viewer.
+
+```sh
+make -j6 test-god-bible
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-god-bible
+build/Linux/TestBoot --god-bible-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/bible-reference
+```
+
+These commands use QEMU 8.2.2 with PC, `qemu64`, one vCPU, and
+512 MiB. The standard DVD is `build/unholyos.iso` after `make -j6`.
+
 ## AutoComplete modifier pane
 
 `make test-stock-once` includes the original `Doc/StandBy.DD` by Terry A.
