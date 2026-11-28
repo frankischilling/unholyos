@@ -4578,7 +4578,7 @@ terminal documents link to the source line. Ahead-of-time `Cmp` reports
 both errors, repeats the source location, returns two, and leaves no
 BIN file. A valid expression then executes at the prompt.
 
-The failed-output check first declares a global with the internal type
+In a fresh VM, the failed-output check declares a global with the internal type
 `I64i`, then assigns an unknown identifier. Both systems report two
 errors and zero output bytes. The native startup fixture keeps its
 `I64` spelling. TempleOS requires its type header for that spelling
