@@ -1,6 +1,9 @@
 #include "../Kernel/KernelB.hpp"
 #include "CompilerA.hpp"
 
+extern "C" void PrintWarnCpp(const char *fmt, int64_t argc, const uint64_t *argv,
+                             const uintptr_t *frame);
+
 static int64_t Keyword(const CCmpCtrl &cc)
 {
   if (cc.token != TK_IDENT || !cc.hash_entry ||
@@ -746,8 +749,6 @@ static bool PrsFunDecl(CCmpCtrl &cc, CHashFun &fun, const CPrsDecl &decl,
 {
   auto &sym = fun.cls.sym;
   auto *table = cc.htc.glbl_hash_table;
-  if (cc.token != ';')
-    return false;
   if (decl.mode == KW__INTERN) {
     if (PrsInternalArgCount(decl.internal_op) != int(fun.arg_cnt) ||
         (fun.cls.flags & FF_DOT_DOT_DOT))
@@ -816,6 +817,25 @@ static void PrsFunResolve(CHashFun &fun, CHashTable *table, CAOT *aot)
   }
 }
 
+static void PrsFunHeader(CCmpCtrl &cc, const CHashFun &fun, const CHashFun &header)
+{
+  if (header.cls.sym.hash.use_cnt < 3)
+    UnusedExternWarning(cc, header.cls);
+  if (!(cc.opts & OPTF_WARN_HEADER_MISMATCH))
+    return;
+
+  const uint64_t name = reinterpret_cast<uintptr_t>(fun.cls.sym.hash.str);
+  if (fun.return_class != header.return_class) {
+    PrintWarnCpp("Fun Header return mismatch '%s'\n", 1, &name, nullptr);
+    cc.warning_cnt++;
+  }
+  if (!MemberLstCmp(fun.cls.member_lst_and_root, header.cls.member_lst_and_root,
+                    header.arg_cnt)) {
+    PrintWarnCpp("Fun header args mismatch '%s'\n", 1, &name, nullptr);
+    cc.warning_cnt++;
+  }
+}
+
 static bool PrsFun(CCmpCtrl &cc, CHashClass &type, char *name,
                    uint32_t visibility, uint16_t flags, CAOT *aot,
                    const CPrsDecl &decl)
@@ -840,22 +860,24 @@ static bool PrsFun(CCmpCtrl &cc, CHashClass &type, char *name,
   if (fun->arg_cnt && 8 * fun->arg_cnt <= INT16_MAX &&
       !(fun->cls.flags & FF_DOT_DOT_DOT))
     fun->cls.flags |= FF_RET1;
+  if (cc.token != (decl.mode >= 0 ? ';' : '{')) {
+    HashDel(&symbol.hash);
+    return false;
+  }
+  auto *table = cc.htc.glbl_hash_table;
+  if (auto *prior = aot ? HashFind(name, table, HTT_FUN)
+                       : HashSingleTableFind(name, table, HTT_FUN)) {
+    const auto *header = reinterpret_cast<const CHashFun *>(prior);
+    // Cmp seeds its table with native runtime bindings without source links.
+    if (aot ? !(prior->type & HTF_IMPORT) && header->cls.sym.src_link
+            : header->cls.flags & CF_EXTERN)
+      PrsFunHeader(cc, *fun, *header);
+  }
   if (decl.mode >= 0) {
     if (PrsFunDecl(cc, *fun, decl, aot))
       return true;
     HashDel(&symbol.hash);
     return false;
-  }
-  if (cc.token != '{') {
-    HashDel(&symbol.hash);
-    return false;
-  }
-  auto *table = cc.htc.glbl_hash_table;
-  if (auto *prior = HashSingleTableFind(name, table, HTT_FUN)) {
-    auto *header = reinterpret_cast<const CHashFun *>(prior);
-    if ((header->cls.flags & CF_EXTERN) && !(prior->type & HTF_IMPORT) &&
-        prior->use_cnt < 3)
-      UnusedExternWarning(cc, header->cls);
   }
   HashAdd(&symbol.hash, table);
   auto *old_local = cc.htc.local_var_lst, *old_fun = cc.htc.fun;
