@@ -435,7 +435,7 @@ extern "C" void XTalkWaitCpp(CTask *task, const char *fmt, int64_t argc,
   TaskWaitCpp(task, false);
 }
 
-static void InStr(char *src)
+void InStr(char *src)
 {
   if (!src)
     return;
@@ -471,9 +471,8 @@ extern "C" void InFileCpp(const char *filename)
   InStr(src);
 }
 
-extern "C" void InCpp(const char *fmt, int64_t argc, const uint64_t *argv)
+void In(char *text)
 {
-  auto *text = StrPrintJoin(nullptr, fmt, argc, argv);
   if (!text)
     return;
   auto *task = CurrentTask();
@@ -482,6 +481,11 @@ extern "C" void InCpp(const char *fmt, int64_t argc, const uint64_t *argv)
     Free(text);
   } else
     TaskInputText(task, text, JOBF_HIGHEST_PRIORITY);
+}
+
+extern "C" void InCpp(const char *fmt, int64_t argc, const uint64_t *argv)
+{
+  In(StrPrintJoin(nullptr, fmt, argc, argv));
 }
 
 extern "C" void XTalkStrCpp(CTask *task, const char *fmt, int64_t argc,

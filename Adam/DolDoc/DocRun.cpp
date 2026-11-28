@@ -1,5 +1,7 @@
 #include "DolDoc.hpp"
 
+extern "C" int64_t PopUpCpp(const char *src, CTask *parent, CTask **popup);
+
 extern "C" int64_t DocEntryRunCpp(CDoc *doc, CDocEntryBase *entry,
                                   uint8_t exited, int64_t *has_action)
 {
@@ -33,12 +35,19 @@ extern "C" int64_t DocEntryRunCpp(CDoc *doc, CDocEntryBase *entry,
     auto entry_addr = reinterpret_cast<uintptr_t>(entry);
     const auto exp = left ? DOCEF_LEFT_EXP : DOCEF_RIGHT_EXP;
     const auto cb = left ? DOCEF_LEFT_CB : DOCEF_RIGHT_CB;
+    const auto macro = left ? DOCEF_LEFT_MACRO : DOCEF_RIGHT_MACRO;
+    const auto in_str = left ? DOCEF_LEFT_IN_STR : DOCEF_RIGHT_IN_STR;
+    const auto *macro_src =
+        flags & macro ? (left ? full.left_macro : full.right_macro) : nullptr;
+    auto *text =
+        macro_src ? StrNew(macro_src, CurrentTask()->data_heap) : nullptr;
     const auto value =
         flags & (exp | cb) ? (left ? full.attr : full.right_exp) : 0;
     const auto link = left ? doc->left_click_link : doc->right_click_link;
     if ((flags & DOCEF_LINK) && link) {
       uint64_t returned;
       if (!CallHolyC2Checked(link, doc_addr, entry_addr, &returned)) {
+        Free(text);
         DocBottomCpp(doc);
         RethrowHolyC();
       }
@@ -54,12 +63,25 @@ extern "C" int64_t DocEntryRunCpp(CDoc *doc, CDocEntryBase *entry,
       DocUnlock(*doc);
       uint64_t returned;
       if (!CallHolyC2Checked(value, doc_addr, entry_addr, &returned)) {
+        Free(text);
         DocBottomCpp(doc);
         RethrowHolyC();
       }
       result = returned;
       action = true;
       MsgCpp(MSG_CMD, result, 0, JOBF_DONT_FILTER);
+    }
+    if (text) {
+      if (flags & DOCEF_POPUP) {
+        DocUnlock(*doc);
+        PopUpCpp(text, CurrentTask(), nullptr);
+        Free(text);
+      } else if (flags & in_str) {
+        InStr(text);
+      } else {
+        In(text);
+      }
+      action = true;
     }
   }
   doc->cmd_U8 = ' ';

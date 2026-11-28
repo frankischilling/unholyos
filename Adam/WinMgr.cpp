@@ -381,14 +381,17 @@ struct CWinDocMouse
   CDoc *pressed_doc;
   CDocEntryBase *pressed_entry;
   bool was_down;
+  bool retry_press;
 };
 
 static void WinDocMouse(bool left, CWinDocMouse &button)
 {
-  auto &[pressed_task, pressed_doc, pressed_entry, was_down] = button;
+  auto &[pressed_task, pressed_doc, pressed_entry, was_down, retry_press] =
+      button;
   bool down = left ? ms.lb : ms.rb;
-  bool press = down && !was_down;
+  bool press = down && (!was_down || retry_press);
   was_down = down;
+  retry_press = false;
   auto x = ms.pos.x, y = ms.pos.y;
 
   if (pressed_task && !down && !(left ? ms.left_dbl_time : ms.right_dbl_time)) {
@@ -410,8 +413,8 @@ static void WinDocMouse(bool left, CWinDocMouse &button)
         entry->de_flags &= ~DOCEF_SOLID_BORDER;
       if (!(doc->flags & DOCF_DONT_SHOW) && WinTaskAt(x, y) == task &&
           WinInside(*task, x, y) && doc->cur_entry == entry) {
-        auto actions = left ? DOCEF_LEFT_EXP | DOCEF_LEFT_CB
-                            : DOCEF_RIGHT_EXP | DOCEF_RIGHT_CB;
+        auto actions = left ? DOCEF_LEFT_EXP | DOCEF_LEFT_CB | DOCEF_LEFT_MACRO
+                            : DOCEF_RIGHT_EXP | DOCEF_RIGHT_CB | DOCEF_RIGHT_MACRO;
         if (left ? ms.left_dbl : ms.right_dbl)
           TaskMsgCpp(task, nullptr, MSG_KEY_DOWN, left ? CH_ESC : CH_SHIFT_ESC,
                      0, 0);
@@ -428,13 +431,15 @@ static void WinDocMouse(bool left, CWinDocMouse &button)
   auto *task = WinTaskAt(x, y);
   auto inhibit = left ? WIF_SELF_MS_L : WIF_SELF_MS_R;
   auto focus_inhibit = left ? WIF_FOCUS_TASK_MS_L : WIF_FOCUS_TASK_MS_R;
-  if (!task || (task->win_inhibit & inhibit) ||
+  if (!task || !WinInside(*task, x, y) || (task->win_inhibit & inhibit) ||
       (TaskValidateCpp(sys_focus_task) &&
        (sys_focus_task->win_inhibit & focus_inhibit)))
     return;
   auto *doc = WinCursorPosSet(*task, x, y);
-  if (!doc)
+  if (!doc) {
+    retry_press = true;
     return;
+  }
   CDocLock lock(*doc);
   auto *entry = doc->cur_entry;
   if (entry == &doc->head)
@@ -622,6 +627,8 @@ static uint64_t WinMgrSleep(uint64_t ideal)
   static CWinDocMouse left, right;
   WinRefocusCpp(sys_focus_task);
   WinMsUpdate();
+  left.retry_press &= ms.lb;
+  right.retry_press &= ms.rb;
   bool was_down = left.was_down;
   if (win_border.task) {
     left.was_down = ms.lb;
