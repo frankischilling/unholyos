@@ -98,6 +98,10 @@ constexpr std::string_view waveform_output =
     "EFullTri 9DB225FA29725D4F D7E4FCFA299D713D E90225FA29725D4F 9DB225FA29725D4F\n"
     "Wave direct 3FD0000000000000\n"
     "Waveforms done\n";
+constexpr CTextProbe sound_effects_probes[]{
+    {"sound-effects", "/SoundEffectsProbe.HC", "/SoundEffectsProbe.BIN.Z",
+     "Sound effects ", "Sound effects 3F", "Sound effects 3F\n"}};
+
 constexpr CTextProbe waveform_probes[]{
     {"waveform", "/WaveformProbe.HC", "/WaveformProbe.BIN.Z", "WSaw ",
      "Waveforms done", waveform_output}};

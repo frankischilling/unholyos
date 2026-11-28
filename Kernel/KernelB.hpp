@@ -838,6 +838,8 @@ void HashAdd(CHash *entry, CHashTable *table);
 void HashRemove(CHash *entry, CHashTable *table);
 extern "C" uint64_t HashRemDelCpp(CHash *entry,CHashTable *table,
                                   uint64_t instance);
+extern "C" int64_t FramePtrCpp(const char *name,CTask *task);
+extern "C" CHashGeneric *FramePtrAddCpp(const char *name,int64_t val,CTask *task);
 void HashDel(CHash *entry);
 CHashTable *HashTableNew(size_t size, CHeapCtrl *hc);
 extern "C" void HashTableDelCpp(CHashTable *table);

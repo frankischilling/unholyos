@@ -56,4 +56,30 @@ SndScaleRem:
   POP RAX
   RET
 
+; (1-t)*ona1+t*ona2, truncated to an I64 like the HolyC assignment.
+GLOBAL SoundEffectSweepOna
+SoundEffectSweepOna:
+  SUB RSP,32
+  MOV [RSP],RDI
+  MOV [RSP+8],RSI
+  MOV [RSP+16],RDX
+  FLD1
+  FSUB QWORD [RSP]
+  FILD QWORD [RSP+8]
+  FMULP ST1,ST0
+  FLD QWORD [RSP]
+  FILD QWORD [RSP+16]
+  FMULP ST1,ST0
+  FADDP ST1,ST0
+  FNSTCW WORD [RSP+24]
+  MOV AX,[RSP+24]
+  OR AX,0x0C00
+  MOV [RSP+26],AX
+  FLDCW WORD [RSP+26]
+  FISTP QWORD [RSP]
+  FLDCW WORD [RSP+24]
+  MOV RAX,[RSP]
+  ADD RSP,32
+  RET
+
 SECTION .note.GNU-stack noalloc noexec nowrite progbits

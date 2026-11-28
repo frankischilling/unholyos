@@ -9,7 +9,7 @@ struct [[gnu::packed]] CMusicGlbls
   int64_t octave;
   uint64_t note_len;
   uint8_t note_map[7];
-  bool mute;
+  uint8_t mute;
   int64_t meter_top, meter_bottom;
   uint64_t tempo, stacatto_factor;
   int64_t play_note_num;
@@ -34,3 +34,17 @@ extern "C" int64_t Ona2NoteCpp(int8_t ona);
 extern "C" int64_t Ona2OctaveCpp(int8_t ona);
 extern "C" void PlayCpp(const char *st, const char *words);
 extern "C" void MusicSettingsRstCpp();
+
+enum : int32_t { SE_NOISE, SE_SWEEP };
+
+struct [[gnu::packed]] CSoundEffectFrame
+{
+  int32_t type;
+  int8_t ona1,ona2;
+  uint64_t duration;
+};
+
+static_assert(sizeof(CSoundEffectFrame)==14 &&
+              offsetof(CSoundEffectFrame,ona1)==4 &&
+              offsetof(CSoundEffectFrame,ona2)==5 &&
+              offsetof(CSoundEffectFrame,duration)==6);

@@ -1870,6 +1870,30 @@ The native test images are `build/gcc/waveform-test.iso` and
 `build/clang/waveform-test.iso`. For the exact arithmetic boundaries,
 see [Source layout](SourceLayout.md#music-waveform-functions).
 
+## Speaker sound effects
+
+`SoundEffectsProbe.HC` checks that `Noise` and `Sweep` start
+named child tasks for positive durations, hold a count of active
+effects, and turn the speaker off when the tasks finish. It exercises
+both a kill after the effect starts and a natural timeout. The
+probe observes the note in the speaker driver and the task's frame.
+
+GCC 13.3.0, Clang 20.1.2, and pinned TempleOS reported
+`Sound effects 3F` in QEMU 8.2.2 with PC, `qemu64`, one vCPU,
+and 512 MiB. The UnholyOS tests also run the fixture as a
+guest-compiled TOSB module. NASM 2.16.01 assembled both images.
+
+```sh
+make -j6 BUILD=build/gcc test-sound-effects
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-sound-effects
+build/gcc/Linux/TestBoot --sound-effects-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/sound-effects-reference
+```
+
+The probe covers a single CPU and observes the programmed notes.
+Audio output and timing over a range of VM and host configurations
+remain unverified.
+
 ## Wallpaper progress bars
 
 The boot and startup-test ISOs include Terry A. Davis's original

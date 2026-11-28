@@ -1960,6 +1960,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CSndData",
                                        "CScrnCastGlbls",
                                        "CMusicGlbls",
+                                       "CSoundEffectFrame",
                                        "CTaskSettings",
                                        "CMenuEntry",
                                        "CMenu",
@@ -1972,7 +1973,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 96);
+  static_assert(class_count == 97);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -2029,6 +2030,9 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
             Check(block[8] == 80, "Startup CProgress record has the wrong size");
           if (name == "CDocEntryBase")
             Check(block[8] == 88, "Startup CDocEntryBase record has the wrong size");
+          if (name == "CSoundEffectFrame")
+            Check(block[8] == 14,
+                  "Startup CSoundEffectFrame record has the wrong size");
           Check(((block[10] >> 32) & 255) == 0,
                 "Startup class base has pointer stars");
           for (uint64_t stars = 1; stars <= 4; ++stars) {
@@ -7611,6 +7615,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--music-precision-reference" ||
        std::string_view(argv[1]) == "--waveform" ||
        std::string_view(argv[1]) == "--waveform-reference" ||
+       std::string_view(argv[1]) == "--sound-effects" ||
+       std::string_view(argv[1]) == "--sound-effects-reference" ||
        std::string_view(argv[1]) == "--strings" ||
        std::string_view(argv[1]) == "--strings-reference" ||
        std::string_view(argv[1]) == "--compiler-defines" ||
@@ -7701,6 +7707,7 @@ int main(int argc, char **argv)
     bool character = std::string_view(argv[1]).starts_with("--character-graphics");
     bool music_precision = std::string_view(argv[1]).starts_with("--music-precision");
     bool waveform = std::string_view(argv[1]).starts_with("--waveform");
+    bool sound_effects = std::string_view(argv[1]).starts_with("--sound-effects");
     bool music_demo = std::string_view(argv[1]).starts_with("--music") && !music_precision;
     bool tic = std::string_view(argv[1]).starts_with("--tic-tac-toe");
     bool breaks = std::string_view(argv[1]).starts_with("--break");
@@ -7781,6 +7788,8 @@ int main(int argc, char **argv)
       text_probes = music_precision_probes;
     else if (waveform)
       text_probes = waveform_probes;
+    else if (sound_effects)
+      text_probes = sound_effects_probes;
     else if (std::string_view(argv[1]).starts_with("--strings"))
       text_probes = string_probes;
     else if (assert_warning)
@@ -7878,6 +7887,9 @@ int main(int argc, char **argv)
       if (frame_ptr && !reference)
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/FramePtrProbe.HC",
                               "FramePtrProbe.HC");
+      if (sound_effects && !reference)
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/SoundEffectsProbe.HC",
+                              "SoundEffectsProbe.HC");
       if (waveform && !reference)
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/WaveformProbe.HC",
                               "WaveformProbe.HC");
@@ -8196,6 +8208,7 @@ int main(int argc, char **argv)
               << "       " << argv[0]
               << " --music-precision[-reference] qemu image.iso [capture-dir]\n"
               << " --waveform[-reference] qemu image.iso [capture-dir]\n"
+              << " --sound-effects[-reference] qemu image.iso [capture-dir]\n"
               << " --frame-ptr[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --tic-tac-toe[-reference] qemu image.iso [capture-dir]\n"
