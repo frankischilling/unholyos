@@ -2,6 +2,7 @@
 #include "../DolDoc/DolDoc.hpp"
 
 extern "C" void TimeStampCBHC(), KbdMsTimeCBHC();
+extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 
 extern "C" char *TimeStampCBCpp(CDoc *, CDocEntry *, CTask *mem_task)
 {
@@ -84,4 +85,95 @@ extern "C" int64_t GodBitsCpp(int64_t num_bits, const char *msg)
       GodBitsInsCpp(GOD_GOOD_BITS, GodPick(msg));
   }
   return int64_t(res);
+}
+
+static bool GodWordChar(uint8_t ch)
+{
+  return char_bmp_word[ch >> 5] & (1U << (ch & 31));
+}
+
+static int64_t GodVocabularyRead(CDirEntry *entry, uint8_t **words,
+                                 int64_t capacity, CHeapCtrl *heap)
+{
+  int64_t i = 0;
+  for (; entry; entry = entry->next) {
+    auto *buf = FileReadCpp(entry->full_name, nullptr, nullptr);
+    if (!buf)
+      continue;
+    for (auto *ptr = buf; *ptr;) {
+      while (*ptr && !GodWordChar(*ptr))
+        ptr++;
+      if (!*ptr)
+        break;
+      auto *start = ptr;
+      while (GodWordChar(*ptr))
+        ptr++;
+      if (words) {
+        if (i == capacity || !(words[i] = MAlloc(ptr - start + 1, heap))) {
+          Free(buf);
+          return -1;
+        }
+        MemCpy(words[i], start, ptr - start);
+        words[i][ptr - start] = 0;
+      }
+      i++;
+    }
+    Free(buf);
+  }
+  return i;
+}
+
+extern "C" int64_t GodInitCpp(const char *files_find_mask, const char *fu_flags)
+{
+  uint64_t fuf_flags = 0;
+  auto *flag_names =
+      reinterpret_cast<const uint8_t *>(DefineCpp("ST_FILE_UTIL_FLAGS"));
+  ScanFlagsCpp(reinterpret_cast<uint8_t *>(&fuf_flags), flag_names,
+               "+r+f+F+T+O");
+  ScanFlagsCpp(reinterpret_cast<uint8_t *>(&fuf_flags), flag_names, fu_flags);
+  if (fuf_flags & ~FUG_FILES_FIND)
+    RaiseHolyC('F' | uint64_t('U') << 8 | uint64_t('F') << 16);
+
+  auto *heap = adam_task->data_heap;
+  auto *mask = StrNew(files_find_mask, heap);
+  if (!mask)
+    return god.num_words;
+  auto *entries = FilesFindCpp(mask, fuf_flags);
+  const auto count = GodVocabularyRead(entries, nullptr, 0, heap);
+  auto **words =
+      reinterpret_cast<uint8_t **>(CAlloc(count * sizeof(*god.words), heap));
+  const auto read = words ? GodVocabularyRead(entries, words, count, heap) : -1;
+  DirTreeDelCpp(entries);
+  if (read != count) {
+    if (words)
+      for (int64_t i = 0; i < count; i++)
+        Free(words[i]);
+    Free(words);
+    Free(mask);
+    return god.num_words;
+  }
+
+  Free(god.word_file_mask);
+  Free(god.words);
+  god.word_file_mask = reinterpret_cast<uint8_t *>(mask);
+  god.word_fuf_flags = fuf_flags;
+  god.num_words = count;
+  god.words = words;
+  return count;
+}
+
+extern "C" uint8_t *GodWordStrCpp(int64_t bits)
+{
+  if (!god.num_words)
+    return nullptr;
+  const auto value = GodBitsCpp(bits, nullptr);
+  return god.num_words ? god.words[value % god.num_words] : nullptr;
+}
+
+extern "C" void GodWordCpp(int64_t bits)
+{
+  if (auto *word = GodWordStrCpp(bits)) {
+    const uint64_t arg = reinterpret_cast<uintptr_t>(word);
+    PrintCpp("%s ", 1, &arg);
+  }
 }

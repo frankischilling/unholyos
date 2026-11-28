@@ -4581,6 +4581,27 @@ build/gcc/Linux/TestBoot --god-input-reference qemu-system-x86_64 \
   /path/to/pinned/TOS_Distro.ISO build/god-input-reference
 ```
 
+## God vocabulary
+
+`make test-god-vocabulary` boots `god-vocab-test.iso` and runs the
+same HolyC source on both guests. It hashes all 7,569 words from Terry A.
+Davis's pinned `Adam/God/Vocab.DD`, including their terminators, in
+the order returned at startup. GCC 13.3.0, Clang 20.1.2, and pinned
+TempleOS report `8FAEDDDD52AF79FD` and `God vocabulary checks FF`.
+
+The probe also checks a custom vocabulary on a RAM drive, cluster order,
+alphabetical order with `-O`, the `FUF` error, and empty-list
+behavior. It calls the F7 DolDoc handler with a controlled keyboard
+timestamp and checks the inserted word. The runs use QEMU 8.2.2 with
+PC, `qemu64`, one vCPU, 512 MiB, and optical boot.
+
+```sh
+make -j6 BUILD=build/gcc test-god-vocabulary
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-god-vocabulary
+build/gcc/Linux/TestBoot --god-vocabulary-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/god-vocabulary-reference
+```
+
 ## God song generation
 
 `GodSongProbe.HC` calls the F6 document handler and drives both settings

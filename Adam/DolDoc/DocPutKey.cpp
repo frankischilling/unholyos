@@ -47,6 +47,10 @@ static void DocKeyDescription(int64_t ch, int64_t sc)
       if (!ctrl && !shift)
         desc = "Cmd /God Song";
       break;
+    case SC_F7:
+      if (!ctrl && !shift)
+        desc = "Cmd /God Word";
+      break;
     case SC_CURSOR_LEFT:
       if (!shift)
         desc = ctrl ? "Edit/GoTo Start of Line" : "Edit/Cursor Left";
@@ -104,6 +108,13 @@ extern "C" void DocPutKeyCpp(CDoc *doc, int64_t ch, int64_t sc)
   if (!ch && uint8_t(sc) == SC_F6 &&
       !(sc & (SCF_CTRL | SCF_ALT | SCF_SHIFT | SCF_KEY_UP))) {
     GodSongCpp();
+    return;
+  }
+  if (!ch && uint8_t(sc) == SC_F7 &&
+      !(sc & (SCF_CTRL | SCF_ALT | SCF_SHIFT | SCF_KEY_UP))) {
+    FifoFlush(*god.fifo);
+    GodBitsInsCpp(GOD_GOOD_BITS, KbdMsEvtTimeCpp() >> GOD_BAD_BITS);
+    GodWordCpp(17);
     return;
   }
   CDocLock lock(*doc);

@@ -159,7 +159,10 @@ KEY_MAP_PROBE := Linux/Fixtures/KeyMapProbe.HC
 KEY_MAP_TEST_ISO := $(BUILD)/key-map-test.iso
 GOD_INPUT_PROBE := Linux/Fixtures/GodInputProbe.HC
 GOD_HELP := Adam/God/HSNotes.DD
+GOD_VOCAB := Adam/God/Vocab.DD
 GOD_INPUT_TEST_ISO := $(BUILD)/god-input-test.iso
+GOD_VOCAB_PROBE := Linux/Fixtures/GodVocabularyProbe.HC
+GOD_VOCAB_TEST_ISO := $(BUILD)/god-vocab-test.iso
 GOD_SONG_PROBE := Linux/Fixtures/GodSongProbe.HC
 GOD_SONG_TEST_ISO := $(BUILD)/god-song-test.iso
 DOC_TREE_AOT_PROBE := Linux/Fixtures/DocTreeAOTProbe.HC
@@ -246,7 +249,8 @@ COMPILER_RESOURCE := Compiler/OpCodes.DD
 ADAM_STARTUP_SOURCES := Adam/AMath.HC Adam/AMem.HC Adam/TaskRep.HC
 COMPILER_ISO_ARGS := --file-at $(COMPILER_RESOURCE) $(COMPILER_RESOURCE) \
 	--file-at Compiler/Compiler.BIN $(COMPILER_MODULE) \
-	$(foreach source,$(ADAM_STARTUP_SOURCES),--file-at $(source) $(source))
+	$(foreach source,$(ADAM_STARTUP_SOURCES),--file-at $(source) $(source)) \
+	--compress-at $(GOD_VOCAB).Z $(GOD_VOCAB)
 MODULE_PROBE := Linux/Fixtures/LoadProbe.BIN
 MODULE_CALLER := Linux/Fixtures/LoadCaller.BIN
 RUNTIME_PROBE := Linux/Fixtures/RuntimeProbe.BIN
@@ -299,7 +303,7 @@ EXTERN_IMPORT_PROBES := Linux/Fixtures/ExternImportOption.PRJ Linux/Fixtures/Ext
 EXTERN_IMPORT_TEST_ISO := $(BUILD)/extern-import-test.iso
 
 # Every bootable test image uses the same Adam source initialization.
-$(ISO) $(foreach target,$(filter %_ISO,$(.VARIABLES)),$($(target))): $(ADAM_STARTUP_SOURCES)
+$(ISO) $(foreach target,$(filter %_ISO,$(.VARIABLES)),$($(target))): $(ADAM_STARTUP_SOURCES) $(GOD_VOCAB)
 
 .PHONY: all run test test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args test-internal-types test-class-records
 .PHONY: test-function-records
@@ -615,6 +619,9 @@ $(KEY_MAP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(KEY_MAP_PR
 $(GOD_INPUT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_INPUT_PROBE) $(GOD_HELP) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --file-at $(GOD_HELP) $(GOD_HELP) --dir Home --file $(GOD_INPUT_PROBE)
 
+$(GOD_VOCAB_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_VOCAB_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(GOD_VOCAB_PROBE)
+
 $(GOD_SONG_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_SONG_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(GOD_SONG_PROBE)
 
@@ -889,6 +896,12 @@ test-god-input: $(GOD_INPUT_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --god-input "$(QEMU)" $(GOD_INPUT_TEST_ISO)
 
 test: test-god-input
+
+.PHONY: test-god-vocabulary
+test-god-vocabulary: $(GOD_VOCAB_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --god-vocabulary "$(QEMU)" $(GOD_VOCAB_TEST_ISO)
+
+test: test-god-vocabulary
 
 .PHONY: test-god-song
 test-god-song: $(GOD_SONG_TEST_ISO) $(BOOT_TEST)

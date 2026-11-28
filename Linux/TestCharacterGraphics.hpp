@@ -121,6 +121,11 @@ constexpr CTextProbe key_map_probes[]{
 constexpr CTextProbe god_input_probes[]{
     {"god-input", "/GodInputProbe.HC", "", "God input ", "God input ",
      "God input 7F\n", {}, true}};
+constexpr CTextProbe god_vocabulary_probes[]{
+    {"god-vocabulary", "/GodVocabularyProbe.HC", "", "God vocabulary ",
+     "God vocabulary checks ",
+     "God vocabulary 7569 8FAEDDDD52AF79FD\nGod vocabulary checks FF\n",
+     {}, true}};
 constexpr CTextProbe god_song_probes[]{
     {"god-song", "/GodSongProbe.HC", "", "God song checks ",
      "God song checks ", "God song checks FF\n", {}, true}};
@@ -1416,7 +1421,8 @@ static void DriveCharacterGraphics(
         cmd(std::string("DocClear(,1);ExeFile2(\"") + probe.reference_file + "\");");
       else if (reference)
         upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
-      else if (god_input || god_song || std::string_view(probe.name) == "doc-song")
+      else if (god_input || god_song || std::string_view(probe.name) == "doc-song" ||
+               std::string_view(probe.name) == "god-vocabulary")
         cmd(std::string("ExeFile2(\"::") + probe.source + "\");0;");
       else
         cmd(std::string("ExeFile(\"::") + probe.source + "\");0;");

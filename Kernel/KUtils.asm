@@ -127,6 +127,7 @@ GLOBAL DocCutHC,DocCopyHC,DocTreeFindHC,DocTreeFFindHC,DocTreeMakeHC
 GLOBAL DocTreeWriteHC,DocTreeAppendHC,DocTreeFWriteHC,DocTreeFAppendHC
 GLOBAL DocTreeWriteJoinHC,DocTreeAppendJoinHC,ExeDocHC,DocTreeExeHC,DocTreeFExeHC
 GLOBAL GodBitsInsHC,GodHexInsHC,GodBitsHC,TimeStampCBHC,KbdMsTimeCBHC
+GLOBAL GodInitHC,GodWordStrHC,GodWordHC
 GLOBAL GodSongStrHC,GodSongHC
 GLOBAL RegDftHC,RegExeHC,RegWriteHC,RegCntHC,RegAppendHC,AdamHC
 GLOBAL OneTimePopUpHC,RegOneTimePopUpHC,PopUpHC,PopUpPrintHC,SrvCmdLineHC
@@ -427,6 +428,7 @@ EXTERN DocCutCpp,DocCopyCpp,DocTreeFindCpp,DocTreeFFindCpp,DocTreeMakeCpp
 EXTERN DocTreeWriteCpp,DocTreeAppendCpp,DocTreeFWriteCpp,DocTreeFAppendCpp
 EXTERN ExeDocCpp,DocTreeExeCpp,DocTreeFExeCpp
 EXTERN GodBitsInsCpp,GodHexInsCpp,GodBitsCpp,TimeStampCBCpp,KbdMsTimeCBCpp
+EXTERN GodInitCpp,GodWordStrCpp,GodWordCpp
 EXTERN GodSongStrCpp,GodSongCpp
 EXTERN RegDftCpp,RegExeCpp,RegWriteCpp,RegCntCpp,RegAppendCpp,AdamCpp
 EXTERN InsRegCpp,InsReregCpp,InsUnregCpp
@@ -1073,6 +1075,9 @@ HOLYC_PRINT RegAppendHC,RegAppendCpp,2
 HOLYC_CPP GodBitsInsHC,GodBitsInsCpp,2
 HOLYC_CPP GodHexInsHC,GodHexInsCpp,1
 HOLYC_CPP GodBitsHC,GodBitsCpp,2
+HOLYC_CPP GodInitHC,GodInitCpp,2
+HOLYC_CPP GodWordStrHC,GodWordStrCpp,1
+HOLYC_CPP GodWordHC,GodWordCpp,1
 HOLYC_CPP GodSongStrHC,GodSongStrCpp,0
 HOLYC_CPP GodSongHC,GodSongCpp,0
 HOLYC_CPP TimeStampCBHC,TimeStampCBCpp,3

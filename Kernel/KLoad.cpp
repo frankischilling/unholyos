@@ -257,6 +257,7 @@ void DocTreeWriteHC(), DocTreeAppendHC(), DocTreeFWriteHC(), DocTreeFAppendHC();
 void DocTreeWriteJoinHC(), DocTreeAppendJoinHC(), ExeDocHC(), DocTreeExeHC(),
     DocTreeFExeHC();
 void GodBitsInsHC(), GodHexInsHC(), GodBitsHC();
+void GodInitHC(), GodWordStrHC(), GodWordHC();
 void GodSongStrHC(), GodSongHC();
 void RegDftHC(), RegExeHC(), RegWriteHC(), RegCntHC(), RegAppendHC(), AdamHC();
 void InsRegHC(), InsReregHC(), InsUnregHC();
@@ -1638,6 +1639,9 @@ bool LoadKernel(CTask &task)
       {"GodBitsIns", reinterpret_cast<uintptr_t>(GodBitsInsHC)},
       {"GodHexIns", reinterpret_cast<uintptr_t>(GodHexInsHC)},
       {"GodBits", reinterpret_cast<uintptr_t>(GodBitsHC)},
+      {"GodInit", reinterpret_cast<uintptr_t>(GodInitHC)},
+      {"GodWordStr", reinterpret_cast<uintptr_t>(GodWordStrHC)},
+      {"GodWord", reinterpret_cast<uintptr_t>(GodWordHC)},
       {"GodSongStr", reinterpret_cast<uintptr_t>(GodSongStrHC)},
       {"GodSong", reinterpret_cast<uintptr_t>(GodSongHC)},
       {"AOnceFlush", reinterpret_cast<uintptr_t>(AOnceFlushHC)},

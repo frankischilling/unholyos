@@ -1683,15 +1683,25 @@ hex digits enter most significant bit first. The timer dialog uses
 DolDoc tag callbacks for the live timer and the last input timestamp.
 An empty queue prompts for input and refills from `KbdMsEvtTime`.
 Terry A. Davis's original `Adam/God/HSNotes.DD` is packaged at the
-same path on the DVD.
+same path on the DVD. `GodInit` loads the pinned `Vocab.DD` at startup
+and retains TempleOS's two scans, character bitmap, and cluster order.
+`GodWordStr` picks an entry with `GodBits`. `GodWord` prints the word and
+a space. F7 in `Adam/DolDoc/DocPutKey.cpp` seeds the FIFO with
+`KbdMsEvtTime` before inserting a word. The corresponding caller is
+`DocPutKey` in `Adam/DolDoc/DocPutKey.HC`.
+
+UnholyOS keeps the vocabulary in Adam's heap so it survives the task
+that reloads it. The old strings stay valid after replacing the pointer
+table, as in the reference. A failed second scan leaves the previous
+vocabulary available.
 
 `Adam/God/GodSong.cpp` follows `InsNote`, `GodSongStr`, and `GodSong`
 from `GodSong.HC`. The settings dialog uses the native metadata for
 `CMakeSongSettings` and the original rhythm list. The generator keeps the
 rhythm tables, octave changes, meter prefix, and progress counter.
 F6 in `Adam/DolDoc/DocPutKey.cpp` calls `GodSong`, which writes
-both phrases twice in a DolDoc song entry. The vocabulary, Bible passage,
-and doodle command still need translation.
+both phrases twice in a DolDoc song entry. The Bible passage and doodle command
+still need translation.
 
 ## Speaker sound effects
 
