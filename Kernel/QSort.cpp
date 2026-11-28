@@ -63,8 +63,9 @@ void QSortI64Native(int64_t *base, int64_t count,
   QSortI64(base, count, compare);
 }
 
-extern "C" void QSortCpp(uint8_t *base, int64_t count, size_t width,
-                         uintptr_t compare)
+template <typename Compare>
+static void QSort(uint8_t *base, int64_t count, size_t width,
+                  const Compare &compare)
 {
   if (count <= 1 || !width || width > SIZE_MAX / 2)
     return;
@@ -81,9 +82,7 @@ extern "C" void QSortCpp(uint8_t *base, int64_t count, size_t width,
     return QSortSplit(
         first, length,
         [&](int64_t index) {
-          return CallHolyC2(compare,
-                            reinterpret_cast<uintptr_t>(base + index * width),
-                            reinterpret_cast<uintptr_t>(pivot));
+          return compare(base + index * width, pivot);
         },
         [&](int64_t left, int64_t right) {
           if (left != right) {
@@ -95,4 +94,20 @@ extern "C" void QSortCpp(uint8_t *base, int64_t count, size_t width,
   });
   if (width != sizeof(uint64_t))
     Free(tmp);
+}
+
+
+void QSortNative(void *base, int64_t count, size_t width,
+                 int64_t (*compare)(const void *, const void *))
+{
+  QSort(static_cast<uint8_t *>(base), count, width, compare);
+}
+
+extern "C" void QSortCpp(uint8_t *base, int64_t count, size_t width,
+                         uintptr_t compare)
+{
+  QSort(base, count, width, [=](const void *a, const void *b) {
+    return CallHolyC2(compare, reinterpret_cast<uintptr_t>(a),
+                      reinterpret_cast<uintptr_t>(b));
+  });
 }

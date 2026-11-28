@@ -135,6 +135,9 @@ constexpr CTextProbe god_bible_probes[]{
 constexpr CTextProbe god_doodle_probes[]{
     {"god-doodle", "/GodDoodleProbe.HC", "", "Doodle bitmap ", "Doodle checks ",
      "Doodle bitmap 640 472 302098 C702EBD576E52EC0\nDoodle checks F 646\n", {}, true}};
+constexpr CTextProbe help_idx_probes[]{
+    {"help-idx", "/HelpIdxProbe.HC", "", "Help index checks ", "Help index editor ",
+     "Help index checks 3FF\nHelp index editor 1\n", {}, true}};
 constexpr CTextProbe dictionary_probes[]{
     {"dictionary", "/DictionaryProbe.HC", "", "Dictionary probe ",
      "Dictionary probe 3F", "Dictionary probe 3F\n", {}, true}};
@@ -1420,6 +1423,7 @@ static void DriveCharacterGraphics(
       const bool god_song = std::string_view(probe.name) == "god-song";
       const bool god_bible = std::string_view(probe.name) == "god-bible";
       const bool god_doodle = std::string_view(probe.name) == "god-doodle";
+      const bool help_idx = std::string_view(probe.name) == "help-idx";
       std::array<uint64_t, 3> mouse{};
       if (god_input || god_song) {
         cmd(R"("GIM %X %X %X\n",&ms.pos.x,&ms.lb,&ms.rb;)");
@@ -1427,7 +1431,34 @@ static void DriveCharacterGraphics(
       }
       if (reference && probe.reference_file)
         cmd(std::string("DocClear(,1);ExeFile2(\"") + probe.reference_file + "\");");
-      else if (reference)
+      else if (help_idx) {
+        if (reference) {
+          const auto source = fs::absolute(std::string("Linux/Fixtures") + probe.source);
+          upload(source, false, false);
+          cmd("FileWrite(\"B:/HelpIdxProbe.HC\",cgprobe," +
+              std::to_string(fs::file_size(source)) + ");");
+        }
+        cmd(reference
+                ? R"hc(ExeFile2("B:/HelpIdxProbe.HC");"Help fixture ready\n";0;)hc"
+                : R"hc(ExeFile2("::/HelpIdxProbe.HC");"Help fixture ready\n";0;)hc");
+        wait_text("\n Help fixture ready");
+        if (!reference) {
+          cmd(R"(PopUpHelpIndex("PopupGuide",Fs);)");
+          wait([&](const Cells &cells) {
+            const auto screen = visible(cells);
+            return screen.find("PopupGuide") != std::string::npos &&
+                   screen.find("The help index preprocessor") != std::string::npos;
+          }, "Generated help popup did not show its category", 3000);
+          snapshot("help-idx-popup");
+          key("shift-esc");
+          wait([&](const Cells &cells) {
+            const auto screen = visible(cells);
+            return screen.find(prompt) != std::string::npos &&
+                   screen.find("The help index preprocessor") == std::string::npos;
+          }, "Generated help popup did not return to the prompt");
+        }
+        cmd("DocClear(,1);HelpIdxOpen;0;");
+      } else if (reference)
         upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
       else if (god_input || god_song || god_bible || god_doodle ||
                std::string_view(probe.name) == "doc-song" ||
@@ -1455,6 +1486,13 @@ static void DriveCharacterGraphics(
         key("spc");
         key("tab");
         key("spc");
+      }
+      if (help_idx) {
+        wait([&](const Cells &cells) {
+          return visible(cells).find("Alpha comment from source") != std::string::npos;
+        }, "Generated help editor did not show the source comment", 3000);
+        snapshot("help-idx-editor");
+        key("shift-esc");
       }
       if (std::string_view(probe.name) == "training-input")
         training_input();
@@ -1507,7 +1545,7 @@ static void DriveCharacterGraphics(
                    screen.find(prompt, finish) != std::string::npos;
           },
           "Missing completed reference text probe",
-          god_bible || god_doodle ? 3000 : 180);
+          god_bible || god_doodle || help_idx ? 3000 : 180);
       const auto screen = visible(cells);
       std::ofstream screen_file(
           dir / (std::string(probe.name) + "-reference-screen.txt"));
@@ -1561,7 +1599,8 @@ static void DriveCharacterGraphics(
                 terminal_line(prompt_pos / 81) == prompt,
             "Reference probe did not return to an empty command prompt");
       bool timed = false;
-      const bool answer = !reference || std::string_view(probe.name) == "startup-exec";
+      const bool answer = !reference || help_idx ||
+                          std::string_view(probe.name) == "startup-exec";
       const std::regex timing(answer ? R"([0-9]+\.[0-9]{6}s ans=0x00000000=0)"
                                      : R"([0-9]+\.[0-9]{6}s)");
       for (size_t row = finish / 81 + 1; row < prompt_pos / 81; row++) {
@@ -1580,6 +1619,9 @@ static void DriveCharacterGraphics(
       if (output != probe.expected)
         failures +=
             std::string("Reference output differs: ") + probe.source + "\n";
+      if (help_idx && output == probe.expected)
+        std::cout << (reference ? "Generated help editor returned to the prompt\n"
+                                : "Generated help editor and popup returned to the prompt\n");
       if (god_doodle && output == probe.expected) {
         vm.ResetDeadline(150s);
         cmd(R"hc("GDDC %X %X %X\n",&god.doodle_dc,&god.doodle_ch,&god.doodle_done;)hc");

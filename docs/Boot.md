@@ -4667,6 +4667,29 @@ build/Linux/TestBoot --god-doodle-reference qemu-system-x86_64 \
 
 The runs use QEMU 8.2.2 with PC, `qemu64`, one vCPU, and 512 MiB.
 
+## Generated help indexes
+
+`HelpIdxProbe.HC` defines HolyC symbols and a help file in two
+categories. It checks sorted headings, repeated index membership,
+source links and comments, private-symbol filtering, and the
+missing-topic message. It also checks `Who` ordering and
+`HashDepthRep` on small hash tables. Both guests produce
+`Help index checks 3FF` and return to the prompt after closing the
+`HI:` report. The native run also opens and closes the
+`PopUpHelpIndex` report. The pinned guest showed a blank window in
+the popup comparison, so the popup result covers UnholyOS.
+
+```sh
+make -j6 test-help-idx
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-help-idx
+build/Linux/TestBoot --help-idx-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/help-idx-reference
+```
+
+The native image is `build/help-idx-test.iso`. The reference driver
+writes the same source to the RAM disk so help can read its comments.
+Both run on QEMU 8.2.2 with PC, `qemu64`, one vCPU, and 512 MiB.
+
 ## AutoComplete modifier pane
 
 `make test-stock-once` includes the original `Doc/StandBy.DD` by Terry A.

@@ -823,6 +823,8 @@ inline bool FsMkDir(CDrv &dv,const char *path,int64_t entry_cnt)
 }
 int64_t RedSeaFilesDel(CDrv &dv, const char *cur_dir, const char *mask,
                       uint64_t flags, bool del_dir, bool print_msg);
+void QSortNative(void *base, int64_t count, size_t width,
+                 int64_t (*compare)(const void *, const void *));
 void QSortI64Native(int64_t *base, int64_t count,
                     int64_t (*compare)(int64_t, int64_t));
 char *ToggleZorNotZ(const char *name, CHeapCtrl *hc);

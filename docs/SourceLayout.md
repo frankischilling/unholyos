@@ -2365,8 +2365,16 @@ file, plain-text, Bible verse, in-memory, and symbol-source links. It
 restores the caller's working directory when the editor returns. `DocFind.cpp`
 supplies the one-based line, tag search, and named-anchor operations.
 `DocTerm.cpp` opens file links through the reference left-click
-callback. Raw-mode editing, the right-click terminal file menu,
-undo, generated help indexes, and code-address links remain pending.
+callback. Raw-mode editing, the right-click terminal file menu, undo,
+and code-address links remain pending.
+
+`Adam/AHash.cpp` follows `Who`, `HashDepthRep`, `DocHelpIdx`, and
+`PopUpHelpIndex` from `Adam/AHash.HC`. Help reports use topics and help
+files from the active symbol tables. They place the help file before the
+symbols in each topic and link symbols to their source. `HelpComment`
+reads the plain DolDoc source at the cursor position used by TempleOS's
+hidden editor task. Native header metadata and `MapFileLoad` remain
+incomplete. `HI:` links open these reports through `DocEd.cpp`.
 
 `Kernel/Job.cpp` follows `Kernel/Job.HC` for `PopUp` and `PopUpPrint`.
 The servant enters `SrvCmdLine` and runs the standard execute job.

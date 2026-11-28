@@ -7053,6 +7053,7 @@ int main(int argc, char **argv)
        mode == "--god-song" || mode == "--god-song-reference" ||
        mode == "--god-bible" || mode == "--god-bible-reference" ||
        mode == "--god-doodle" || mode == "--god-doodle-reference" ||
+       mode == "--help-idx" || mode == "--help-idx-reference" ||
        mode == "--progress" || mode == "--progress-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
@@ -7067,6 +7068,7 @@ int main(int argc, char **argv)
     const bool god_song = mode.starts_with("--god-song");
     const bool god_bible = mode.starts_with("--god-bible");
     const bool god_doodle = mode.starts_with("--god-doodle");
+    const bool help_idx = mode.starts_with("--help-idx");
     const bool progress = mode.starts_with("--progress");
     char path[] = "/tmp/unholyos-document-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -7090,6 +7092,10 @@ int main(int argc, char **argv)
       } else if (!reference && god_vocabulary) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/GodVocabularyProbe.HC",
                               "GodVocabularyProbe.HC");
+      } else if (!reference && help_idx) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/HelpIdxProbe.HC",
+                              "HelpIdxProbe.HC");
+        VerifyHostModuleMedia(argv[3], "Doc/HelpSystem.DD", "HelpSystem.DD", "Doc");
       } else if (!reference && god_doodle) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/GodDoodleProbe.HC",
                               "GodDoodleProbe.HC");
@@ -7153,6 +7159,8 @@ int main(int argc, char **argv)
         probes = god_bible_probes;
       else if (god_doodle)
         probes = god_doodle_probes;
+      else if (help_idx)
+        probes = help_idx_probes;
       else if (mode == "--dictionary-reference")
         probes = dictionary_probes;
       else if (aot)
@@ -8309,6 +8317,7 @@ int main(int argc, char **argv)
               << " --god-song[-reference] qemu image.iso [capture-dir]\n"
               << " --god-bible[-reference] qemu image.iso [capture-dir]\n"
               << " --god-doodle[-reference] qemu image.iso [capture-dir]\n"
+              << " --help-idx[-reference] qemu image.iso [capture-dir]\n"
               << " --dictionary-reference qemu image.iso [capture-dir]\n"
               << " --dictionary-install[-reference] qemu image.iso disk.img [capture-dir]\n"
               << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"
