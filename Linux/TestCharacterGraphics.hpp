@@ -106,6 +106,7 @@ enum class CStockStartup { None, Decline, Tour };
 enum class CDesktopTest {
   None, Progress, DictionaryInstall, DictionaryGenerator, DictionaryGeneratorHolyC,
   MenuDiagnostic, CompilerDiagnostic, CompilerCmpDiagnostic, CompilerWarning,
+  CompilerForwardWarning,
   ExternImportOption, ExternImportOptionJIT
 };
 
@@ -530,9 +531,10 @@ static void DriveCharacterGraphics(
     std::cout << startup_output << '\n';
   }
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
+  const bool forward_warning = desktop == CDesktopTest::CompilerForwardWarning;
   const bool compiler_probe = desktop == CDesktopTest::CompilerDiagnostic ||
                               desktop == CDesktopTest::CompilerCmpDiagnostic ||
-                              desktop == CDesktopTest::CompilerWarning;
+                              desktop == CDesktopTest::CompilerWarning || forward_warning;
   const bool extern_import = desktop == CDesktopTest::ExternImportOption ||
                              desktop == CDesktopTest::ExternImportOptionJIT;
   if (desktop == CDesktopTest::MenuDiagnostic || compiler_probe ||
@@ -1153,17 +1155,20 @@ static void DriveCharacterGraphics(
     std::cout << "Cmp and Load matched extern conversion and local forward declarations\n";
     return;
   }
-  if (desktop == CDesktopTest::CompilerWarning) {
+  if (desktop == CDesktopTest::CompilerWarning || forward_warning) {
+    const auto *name = forward_warning ? "ForwardTypeWarningProbe.HC"
+                                      : "CompilerWarningProbe.HC";
     if (reference)
-      upload(fs::absolute("Linux/Fixtures/CompilerWarningProbe.HC"));
+      upload(fs::absolute(fs::path("Linux/Fixtures") / name));
     else
-      cmd(R"(ExeFile2("::/CompilerWarningProbe.HC");)");
+      cmd(std::string("ExeFile2(\"::/") + name + "\");");
     wait_text("WW 1");
     cmd("DocClear(,1);");
     cmd(R"("WC %X\n",Cmp("Warn.PRJ",,"Warn.BIN");)");
     wait_text("WC 0");
     cmd(R"(ExeFile("Warn.PRJ");)");
-    cmd(R"("WJ %X\n",WarnUnused(42);)");
+    cmd(forward_warning ? R"("WJ %X\n",ForwardRead;)"
+                        : R"("WJ %X\n",WarnUnused(42);)");
     wait_text("WJ 2A");
     const auto doc = save_diagnostic("compiler-warnings.bin");
     auto occurrences = [&](std::string_view str) {
@@ -1173,6 +1178,16 @@ static void DriveCharacterGraphics(
         count++;
       return count;
     };
+    if (forward_warning) {
+      Check(occurrences("Unused extern 'NoUseClass'") == 2 &&
+                occurrences("Unused extern 'NoUseUnion'") == 2 &&
+                !occurrences("Unused extern 'UsedClass'") &&
+                !occurrences("Unused extern 'UsedUnion'") &&
+                doc.find("Errs:0 Warns:2 ") != std::string::npos,
+            "Forward type warnings or AOT count differ");
+      std::cout << "Unused forward class and union warnings matched\n";
+      return;
+    }
     Check(occurrences(R"(Assert Failed "I64i")") == 2 &&
               occurrences("Function should return val in fun 'NoValue'.") == 4 &&
               occurrences("Function should NOT return val in fun 'VoidValue'.") == 2 &&

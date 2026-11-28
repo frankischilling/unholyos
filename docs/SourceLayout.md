@@ -422,8 +422,10 @@ for DolDoc. Listing output uses provisional instruction bytes from
 current lexer location and the function's source link. `Compiler/Lex.cpp`
 uses it for false `#assert` directives. `Compiler/PrsStmt.cpp` uses the
 reference return-value warnings and reports an unused explicit extern
-when its definition joins the current namespace. `Cmp` includes these
-warnings in its summary. Header mismatch and unused local variable
+when its definition joins the current namespace. Class and union
+definitions use the same warning when completing an unused forward
+declaration, following `PrsClass` in `Compiler/PrsStmt.HC`. `Cmp` includes
+these warnings in its summary. Header mismatch and unused local variable
 diagnostics still need their reference parser bookkeeping.
 
 The compiler also registers the 65-byte `CCntsGlbls` guest class

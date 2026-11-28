@@ -7333,8 +7333,8 @@ int main(int argc, char **argv)
         for (const auto *source : {"ExternImportOption.PRJ", "ExternImportOptionInvalid.HC"})
           VerifyHostModuleMedia(argv[3], fs::path("Linux/Fixtures") / source, source);
       if (diagnostic == CDesktopTest::CompilerWarning && !reference)
-        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/CompilerWarningProbe.HC",
-                              "CompilerWarningProbe.HC");
+        for (const auto *source : {"CompilerWarningProbe.HC", "ForwardTypeWarningProbe.HC"})
+          VerifyHostModuleMedia(argv[3], fs::path("Linux/Fixtures") / source, source);
       auto run = [&](const fs::path &capture, CDesktopTest test) {
         fs::create_directories(capture);
         CMonitor vm(argv[2], argv[3], capture, "pc", "512", false, {}, false,
@@ -7352,6 +7352,8 @@ int main(int argc, char **argv)
         run(dir / "partial-cmp", CDesktopTest::CompilerCmpDiagnostic);
       else if (diagnostic == CDesktopTest::ExternImportOption)
         run(dir / "jit", CDesktopTest::ExternImportOptionJIT);
+      else if (diagnostic == CDesktopTest::CompilerWarning)
+        run(dir / "forward-types", CDesktopTest::CompilerForwardWarning);
       if (argc == 4)
         fs::remove_all(dir);
       return 0;
