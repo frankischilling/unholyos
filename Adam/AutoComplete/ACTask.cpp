@@ -251,6 +251,13 @@ extern "C" void ACTaskCpp()
     if (ScanMsgCpp(&ch, nullptr, 1 << MSG_KEY_DOWN, task) &&
         (ch == CH_ESC || ch == CH_SHIFT_ESC))
       break;
+    if (auto *doc = DocPut()) {
+      CDocLock lock(*doc);
+      if (doc->cur_entry->de_flags & DOCEF_LINK) {
+        DocPutKeyCpp(doc, ' ', 0);
+        doc->cur_entry = &doc->head;
+      }
+    }
   }
 }
 

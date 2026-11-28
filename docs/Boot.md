@@ -4290,8 +4290,10 @@ live command line.
 The stock test also runs the HolyC dictionary probe, searches for
 `Albatros`, opens the first definition with Ctrl-Shift-0, and inserts
 the final `s` with Ctrl-0. It opens the numbered definition through
-`Ed("DN:Albatross,1")`. The reference mode runs the same probe and
-keyboard actions on the pinned TempleOS DVD.
+`Ed("DN:Albatross,1")`. It then clicks System Keys Quick Guide in the
+StandBy pane with the PS/2 mouse, opens HelpIndex, and clicks Key Map.
+The test waits for `KeyMap Completed.` and closes both popups. The
+reference mode repeats these checks on the pinned TempleOS DVD.
 
 ```sh
 make -j4 test-stock-once

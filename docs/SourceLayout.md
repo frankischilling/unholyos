@@ -2092,9 +2092,17 @@ to a scratch RAM drive and sets that drive as the popup tasks' home.
 `acd` global exposes the original packed 114-byte record. Ctrl-0 through Ctrl-9
 insert the dictionary suffixes and Ctrl-Shift with those keys opens
 definitions. `EdLinkCvt` and `Ed` handle `DN:` links with an optional
-definition number. Pane link selection and dictionary generation remain
-pending. Writable-media preparation uses the original move to the
-uncompressed name and currently omits `ACProgressTask`.
+definition number. Writable-media preparation moves to the uncompressed
+name as in TempleOS. `ACProgressTask` and dictionary generation remain
+pending.
+
+`ACTask.cpp` follows the link activation in `Adam/AutoComplete/ACTask.HC`.
+After the 333 ms sleep and the Escape check, the task sends a space to
+the selected link and resets the document cursor to the entry-list head.
+`Adam/WinMgr.cpp` retries cursor placement for a press held inside the
+document while preserving the button transitions used by window controls.
+`Adam/DolDoc/DocRun.cpp` dispatches the left and right macros through
+`PopUp`, `InStr`, or `In`, following `Adam/DolDoc/DocRun.HC`.
 
 The pane clears its document with `DocClear` and fits the content when shown.
 TempleOS calls `DocRst` and handles minimum-window sizing during

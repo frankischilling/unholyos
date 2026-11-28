@@ -319,6 +319,68 @@ static void DriveCharacterGraphics(
     }
     return result;
   };
+  auto pane_links = [&] {
+    cmd(R"("ACM %X %X %X\n",&ms.pos.x,&ms.lb,&ms.rb;)");
+    const auto mouse = addresses("ACM ", {16, 1, 1});
+    auto click = [&](std::string_view label) {
+      const auto screen = visible(wait_text(label));
+      const auto index = screen.find(label);
+      const int64_t x = (index % 81) * 8 + 4, y = (index / 81) * 8 + 4;
+      bool reached = false;
+      for (unsigned i = 0; i < 90; i++) {
+        const auto coords = ReadPhysical<2>(vm, mouse[0]);
+        auto dx = x - int64_t(coords[0]), dy = y - int64_t(coords[1]);
+        if (std::abs(dx) <= 1 && std::abs(dy) <= 1) {
+          reached = true;
+          break;
+        }
+        MouseMove(vm, std::clamp(dx, int64_t(-40), int64_t(40)) * 2,
+                  std::clamp(dy, int64_t(-40), int64_t(40)) * 2);
+        std::this_thread::sleep_for(55ms);
+      }
+      Check(reached, "Mouse did not reach the DolDoc entry");
+      std::this_thread::sleep_for(100ms);
+      for (bool down : {true, false}) {
+        MouseButton(vm, "left", down);
+        unsigned i = 0;
+        while (bool(ReadPhysical<1>(vm, mouse[1], 'b')[0]) != down && ++i < 100)
+          std::this_thread::sleep_for(25ms);
+        Check(i < 100, "Mouse button state did not change");
+        std::this_thread::sleep_for(down ? 180ms : 400ms);
+      }
+    };
+    wait_text("AutoComplete is in StandBy");
+    click("System Keys Quick Guide");
+    wait_text("Keyboard Ctrls");
+    snapshot("pane-help");
+    vm.ResetDeadline(120s);
+    click("Key Map");
+    wait(
+        [&](const Cells &cells) {
+          return visible(cells).find("KeyMap Completed.") != std::string::npos;
+        },
+        "The Key Map macro did not finish", 2900);
+    snapshot("pane-key-map");
+    key("shift-esc");
+    wait(
+        [&](const Cells &cells) {
+          const auto screen = visible(cells);
+          return screen.find("Keyboard Ctrls") != std::string::npos &&
+                 screen.find("KeyMap Completed.") == std::string::npos;
+        },
+        "Closing Key Map did not return to HelpIndex");
+    key("shift-esc");
+    wait(
+        [&](const Cells &cells) {
+          const auto screen = visible(cells);
+          return screen.find("AutoComplete is in StandBy") !=
+                     std::string::npos &&
+                 screen.find("Keyboard Ctrls") == std::string::npos;
+        },
+        "Closing HelpIndex did not return to StandBy");
+    std::cout
+        << "The StandBy link opened HelpIndex and its Key Map macro ran\n";
+  };
   wait_text("T:/Home>");
   if (stock != CStockStartup::None) {
     const auto prompt = visible(wait_text("Install onto hard drive (y or n)?"));
@@ -449,6 +511,7 @@ static void DriveCharacterGraphics(
       wait_text("Dictionary probe 3F");
       dictionary_keys();
       std::cout << "Dictionary probe 3F and keyboard actions passed\n";
+      pane_links();
     }
     return;
   }
@@ -865,6 +928,7 @@ static void DriveCharacterGraphics(
         cmd("AutoComplete(1);");
         dictionary_keys();
         std::cout << "Dictionary keyboard actions passed\n";
+        pane_links();
       }
     }
     if (!failures.empty())

@@ -143,7 +143,9 @@ bool EdCharIns(CDoc &doc, int64_t ch, int64_t sc)
     return false;
   auto *entry = doc.cur_entry;
   constexpr auto actions = DOCEF_LEFT_EXP | DOCEF_RIGHT_EXP | DOCEF_LEFT_CB |
-                           DOCEF_RIGHT_CB | DOCEF_LINK | DOCEF_CHECK_COLLAPSABLE;
+                           DOCEF_RIGHT_CB | DOCEF_LEFT_MACRO | DOCEF_RIGHT_MACRO |
+                           DOCEF_LEFT_IN_STR | DOCEF_RIGHT_IN_STR | DOCEF_LINK |
+                           DOCEF_CHECK_COLLAPSABLE;
   if (entry == &doc.head || !(entry->de_flags & actions))
     return false;
   doc.cmd_U8 = ch;

@@ -285,6 +285,9 @@ bool MakeDoc();
 extern "C" void PutS(const char *text);
 extern "C" void StrCpyCpp(char *dst, const char *src);
 void PutTaskS(CTask &task, const char *text);
+// Both functions take ownership of their input.
+void In(char *text);
+void InStr(char *src);
 
 CFifoU8 *FifoU8New(int64_t size, CTask *mem_task = nullptr);
 void FifoU8Del(CFifoU8 *f);
