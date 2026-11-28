@@ -7607,6 +7607,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--character-graphics-reference" ||
        std::string_view(argv[1]) == "--music" ||
        std::string_view(argv[1]) == "--music-reference" ||
+       std::string_view(argv[1]) == "--doc-song" ||
+       std::string_view(argv[1]) == "--doc-song-reference" ||
        std::string_view(argv[1]) == "--music-precision" ||
        std::string_view(argv[1]) == "--music-precision-reference" ||
        std::string_view(argv[1]) == "--waveform" ||
@@ -7700,6 +7702,7 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--form")) {
     bool character = std::string_view(argv[1]).starts_with("--character-graphics");
     bool music_precision = std::string_view(argv[1]).starts_with("--music-precision");
+    bool doc_song = std::string_view(argv[1]).starts_with("--doc-song");
     bool waveform = std::string_view(argv[1]).starts_with("--waveform");
     bool music_demo = std::string_view(argv[1]).starts_with("--music") && !music_precision;
     bool tic = std::string_view(argv[1]).starts_with("--tic-tac-toe");
@@ -7779,6 +7782,8 @@ int main(int argc, char **argv)
       text_probes = math_probes;
     else if (music_precision)
       text_probes = music_precision_probes;
+    else if (doc_song)
+      text_probes = doc_song_probes;
     else if (waveform)
       text_probes = waveform_probes;
     else if (std::string_view(argv[1]).starts_with("--strings"))
@@ -7875,6 +7880,9 @@ int main(int argc, char **argv)
       if (character && !reference)
         VerifyHostModuleMedia(argv[3],"Linux/Fixtures/CharPanObserver.HC",
                               "CharPanObserver.HC");
+      if (doc_song && !reference)
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/DocSongProbe.HC",
+                              "DocSongProbe.HC");
       if (frame_ptr && !reference)
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/FramePtrProbe.HC",
                               "FramePtrProbe.HC");
@@ -7933,7 +7941,7 @@ int main(int argc, char **argv)
                   reference);
       vm.Connect();
       if (!text_probes.empty() && !reference && !bit_field_probe &&
-          !function_records_layout_probe && !memory_dump_probe) {
+          !function_records_layout_probe && !memory_dump_probe && !doc_song) {
         auto output = assert_warning
                           ? vm.WaitSerial(dir / "serial.log",
                                           "UnholyOS: finished "
@@ -8195,6 +8203,7 @@ int main(int argc, char **argv)
               << "       " << argv[0] << " --music[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --music-precision[-reference] qemu image.iso [capture-dir]\n"
+              << " --doc-song[-reference] qemu image.iso [capture-dir]\n"
               << " --waveform[-reference] qemu image.iso [capture-dir]\n"
               << " --frame-ptr[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]

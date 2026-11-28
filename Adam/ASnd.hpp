@@ -23,6 +23,7 @@ static_assert(sizeof(CMusicGlbls) == 104 &&
               offsetof(CMusicGlbls, last_tM) == 96);
 
 extern CMusicGlbls music;
+extern "C" void CurSongTaskHC();
 extern "C" [[noreturn]] void SndTaskEndCBCpp();
 extern "C" uint64_t tMCpp();
 extern "C" uint64_t BeatCpp();

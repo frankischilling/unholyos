@@ -20,6 +20,8 @@ static int64_t ToI64(uint64_t value)
   return F64ToI64(value, 0x0C00);
 }
 
+extern "C" void SndTaskEndCBHC();
+
 extern "C" [[noreturn]] void SndTaskEndCBCpp()
 {
   SndCpp(0);
@@ -273,4 +275,22 @@ extern "C" void MusicSettingsRstCpp()
   music.last_tM = tMCpp();
   music.last_Beat = 0;
   asm volatile("pushq %0; popfq" : : "r"(flags) : "cc", "memory");
+}
+
+extern "C" [[noreturn]] void CurSongTaskCpp()
+{
+  auto *task = CurrentTask();
+  task->task_end_cb = SndTaskEndCBHC;
+  for (;;) {
+    // A refresh may replace the score while Play sleeps between notes.
+    auto *song =
+        music.cur_song ? StrNew(music.cur_song, task->data_heap) : nullptr;
+    if (song) {
+      PlayCpp(song, nullptr);
+      Free(song);
+      if (music.play_note_num)
+        continue;
+    }
+    SleepCpp(1);
+  }
 }
