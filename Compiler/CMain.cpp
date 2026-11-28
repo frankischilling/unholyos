@@ -105,6 +105,8 @@ static bool CmpJoin(CCmpCtrl &cc, CAOT &aot)
     CRawType type;
     okay = LexStmt2Bin(cc, machine, type) && !cc.jit_exception;
   }
+  if (!okay && cc.parse_error_count)
+    LexPutPos(cc);
   QueRem(cc);
   return okay;
 }
@@ -230,18 +232,22 @@ extern "C" int64_t CmpCpp(const char *filename, const char *map_name,
   auto *source = table ? MStrPrintCpp("#include \"%s\"", 1, &arg) : nullptr;
   CAOT aot;
   CBinFile *bfh = nullptr;
+  uint64_t error = 0;
   if (source) {
     CCmpCtrl cc;
     CLexFile file;
     LexSourceInit(cc, file, source, CCF_AOT_COMPILE, path, table);
     if (CmpJoin(cc, aot))
       bfh = AOTBinMake(aot);
+    error = cc.parse_error_count;
     LexSourceDel(cc);
   }
-  uint64_t error =
-      !bfh || (map_name && !MapFileWrite(*table, map_name, mapfile_drv_let)) ||
-      !FileWriteCpp(out, reinterpret_cast<uint8_t *>(bfh), bfh->file_size, 0, 0);
-  uint64_t report[]{error, aot.warning_cnt, aot.size, bfh ? bfh->file_size : 0};
+  if (!error &&
+      (!bfh || (map_name && !MapFileWrite(*table, map_name, mapfile_drv_let)) ||
+       !FileWriteCpp(out, reinterpret_cast<uint8_t *>(bfh), bfh->file_size, 0, 0)))
+    error = 1;
+  uint64_t report[]{error, aot.warning_cnt, bfh ? aot.size : 0,
+                    bfh ? bfh->file_size : 0};
   PrintCpp("Errs:%d Warns:%d Code:%X Size:%X\n", 4, report);
   Free(bfh);
   AOTDel(aot, table);
@@ -279,7 +285,7 @@ CExeResult ExePutS(const char *src, const char *filename, int64_t flags,
   QueRem(cc);
   LexSourceDel(cc);
   Free(path);
-  return {okay ? value : 0, cc.jit_exception, okay};
+  return {okay ? value : 0, cc.jit_exception, okay, cc.parse_error_count != 0};
 }
 
 CExeResult ExeFile(const char *name, int64_t flags)

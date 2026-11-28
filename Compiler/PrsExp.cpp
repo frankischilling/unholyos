@@ -138,6 +138,13 @@ private:
     return coc.Add(entry);
   }
 
+  uint32_t Error(const char *message)
+  {
+    cc.parse_error = message;
+    cc.expression_error = true;
+    return NO_IC;
+  }
+
   uint32_t Defined()
   {
     unsigned parens = 0;
@@ -429,12 +436,14 @@ private:
         base.data=1;
       value = Deref(value);
     }
-    if (!IsLValue(value) || Lex(cc) != TK_IDENT)
+    if (!IsLValue(value))
       return NO_IC;
+    if (Lex(cc) != TK_IDENT)
+      return Error("Invalid member at ");
     const auto node = coc.code[value];
     auto *member = MemberFind(cc.cur_str, node.cls);
     if (!member)
-      return NO_IC;
+      return Error("Invalid member at ");
     Lex(cc);
     auto address = node.left;
     if (member->offset)
@@ -586,8 +595,10 @@ private:
     if (token == '(') {
       Lex(cc);
       uint32_t value = Expression(PREC_ASSIGN + 1, depth + 1);
-      if (value == NO_IC || cc.token != ')')
+      if (value == NO_IC)
         return NO_IC;
+      if (cc.token != ')')
+        return Error("Missing ')' at ");
       coc.code[value].grouped = true;
       Lex(cc);
       return value;
@@ -653,6 +664,8 @@ private:
       return coc.LValue(address, *member->member_class, member->dim.next,
                         FunPtrBase(member->fun_ptr));
     }
+    if (token == TK_IDENT && !cc.hash_entry && !(cc.flags & CCF_ASM_EXPRESSIONS))
+      return Error("Invalid lval at ");
     if (token == TK_IDENT && cc.hash_entry) {
       auto *hash = cc.hash_entry;
       if (hash->type & HTT_KEYWORD) {
@@ -690,20 +703,21 @@ private:
         }
       }
     }
-    return NO_IC;
+    return Error("Missing expression at ");
   }
 
   uint32_t Binary(uint32_t left, CBinaryOp op, unsigned depth)
   {
     Lex(cc);
+    const bool assignment = op.code == IC_ASSIGN || ICIsCompoundAssign(op.code);
+    if (assignment && !IsLValue(left))
+      return Error("Invalid lval at ");
     uint32_t right = Expression(op.precedence, depth + 1);
     if (right == NO_IC)
       return NO_IC;
     if (!TypeSize(coc.code[left].type) || !TypeSize(coc.code[right].type))
       return NO_IC;
-    if (op.code == IC_ASSIGN || ICIsCompoundAssign(op.code)) {
-      if (!IsLValue(left))
-        return NO_IC;
+    if (assignment) {
       auto *cls = coc.code[left].cls;
       if ((op.code == IC_ADD_EQU || op.code == IC_SUB_EQU) && cls &&
           cls->ptr_stars_cnt && (cls - 1)->size != 1) {

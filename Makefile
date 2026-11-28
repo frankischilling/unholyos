@@ -863,6 +863,12 @@ test-menu-diagnostic: $(ISO) $(BOOT_TEST)
 
 test: test-menu-diagnostic
 
+.PHONY: test-compiler-diagnostic
+test-compiler-diagnostic: $(ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --compiler-diagnostic "$(QEMU)" $(ISO)
+
+test: test-compiler-diagnostic
+
 .PHONY: test-progress
 test-progress: $(ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --progress "$(QEMU)" $(ISO)

@@ -4284,7 +4284,7 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   keys({"3", "8", "semicolon", "left", "left", "delete", "2", "right", "ret"});
   wait_text("ans=0x00000020=32");
   keys({"x", "semicolon", "ret"});
-  wait_text("Syntax Error");
+  wait_text("Undefined identifier at");
   keys({"shift-apostrophe", "shift-2", "equal", "shift-5", "s", "backslash",
         "n", "shift-apostrophe", "comma", "shift-g", "e", "t", "shift-s", "t",
         "r", "shift-9", "shift-0", "semicolon", "ret"});
@@ -6391,7 +6391,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
             "The native HolyC compiler runtime probe did not pass all checks");
       auto isolated = output.find("UnholyOS: AOT symbols isolated");
       Check(output.find("cmp compile 0\n") != std::string::npos &&
-                output.find("cmp reject 1\n") != std::string::npos &&
+                output.find("cmp reject 2\n") != std::string::npos &&
                 output.find("cmp print 0\n") != std::string::npos &&
                 isolated != std::string::npos &&
                 output.find("UnholyOS: AOT source map") != std::string::npos &&
@@ -7261,21 +7261,32 @@ int main(int argc, char **argv)
     }
   }
   if ((argc == 4 || argc == 5) &&
-      (mode == "--menu-diagnostic" || mode == "--menu-diagnostic-reference")) {
+      (mode == "--menu-diagnostic" || mode == "--menu-diagnostic-reference" ||
+       mode == "--compiler-diagnostic" || mode == "--compiler-diagnostic-reference")) {
     const bool reference = mode.ends_with("-reference");
-    char path[] = "/tmp/unholyos-menu-diagnostic-XXXXXX";
+    const auto diagnostic = mode.starts_with("--menu-diagnostic")
+                                ? CDesktopTest::MenuDiagnostic
+                                : CDesktopTest::CompilerDiagnostic;
+    char path[] = "/tmp/unholyos-diagnostic-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
     const auto dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
-      fs::create_directories(dir);
-      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
-      vm.Connect();
-      DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
-                             reference, false, false, false, false, false,
-                             false, false, false, {}, {}, 0x20000000, {},
-                             CStockStartup::None, CDesktopTest::MenuDiagnostic);
-      vm.Quit();
+      auto run = [&](const fs::path &capture, CDesktopTest test) {
+        fs::create_directories(capture);
+        CMonitor vm(argv[2], argv[3], capture, "pc", "512", false, {}, false,
+                    reference);
+        vm.Connect();
+        DriveCharacterGraphics(vm, capture,
+                               reference ? "" : vm.Boot(capture / "serial.log"),
+                               reference, false, false, false, false, false,
+                               false, false, false, {}, {}, 0x20000000, {},
+                               CStockStartup::None, test);
+        vm.Quit();
+      };
+      run(dir, diagnostic);
+      if (diagnostic == CDesktopTest::CompilerDiagnostic)
+        run(dir / "partial-cmp", CDesktopTest::CompilerCmpDiagnostic);
       if (argc == 4)
         fs::remove_all(dir);
       return 0;
@@ -8011,6 +8022,7 @@ int main(int argc, char **argv)
               << " --dictionary-install[-reference] qemu image.iso disk.img [capture-dir]\n"
               << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"
               << " --menu-diagnostic[-reference] qemu image.iso [capture-dir]\n"
+              << " --compiler-diagnostic[-reference] qemu image.iso [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"

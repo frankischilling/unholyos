@@ -131,6 +131,7 @@ bool LexAttachDoc(CCmpCtrl &cc, CDoc &doc, CLexFile *root = nullptr,
                   CDocEntryBase *entry = nullptr, uint32_t col = 0);
 int64_t LexGetChar(CCmpCtrl &cc);
 const char *LexPutLine(const CLexFile &file, const char *start);
+void LexPutPos(const CCmpCtrl &cc);
 void LexExceptReport(const CCmpCtrl &cc, const char *message);
 int64_t LexRaw(CCmpCtrl &cc);
 int64_t Lex(CCmpCtrl &cc);
@@ -702,7 +703,7 @@ struct CExeResult
 {
   uint64_t value;
   int64_t exception;
-  bool okay;
+  bool okay, parse_error;
 };
 
 CExeResult ExePutS(const char *src, const char *filename, int64_t flags,
