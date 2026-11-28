@@ -4619,6 +4619,18 @@ build/Linux/TestBoot --compiler-diagnostic-reference qemu-system-x86_64 \
   /path/to/pinned/TOS_Distro.ISO build/compiler-diagnostic-reference
 ```
 
+The compiler warning test uses the same VM settings. It checks the token
+and source line after a false `#assert`, function links for missing and
+unexpected return values, and the warning for a forward declaration with
+no uses. `Cmp` reports five warnings and no errors. `ExeFile` reports
+the same warnings, and the resolved function returns 42 at the prompt.
+
+```sh
+make -j4 test-compiler-warning
+build/Linux/TestBoot --compiler-warning-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/compiler-warning-reference
+```
+
 ## Install registration
 
 `InsRegProbe.HC` checks the 33-byte `CInsReg` layout, the startup

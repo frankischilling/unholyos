@@ -273,6 +273,8 @@ DOC_BIN_LINK := Linux/Fixtures/DocBinLink.DD
 QUEUE_PROBE := Linux/Fixtures/QueueProbe.HC
 TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInputProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
+COMPILER_WARNING_PROBE := Linux/Fixtures/CompilerWarningProbe.HC
+COMPILER_WARNING_TEST_ISO := $(BUILD)/compiler-warning-test.iso
 MEMORY_DUMP_PROBE := Linux/Fixtures/MemoryDumpProbe.HC
 MEMORY_DUMP_TEST_ISO := $(BUILD)/memory-dump-test.iso
 BIT_FIELD_PROBE := Linux/Fixtures/BitFieldProbe.HC
@@ -903,6 +905,15 @@ test-memory-dump: $(MEMORY_DUMP_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --memory-dump "$(QEMU)" $(MEMORY_DUMP_TEST_ISO)
 
 test: test-memory-dump
+
+.PHONY: test-compiler-warning
+$(COMPILER_WARNING_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(COMPILER_WARNING_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(COMPILER_WARNING_PROBE)
+
+test-compiler-warning: $(COMPILER_WARNING_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --compiler-warning "$(QEMU)" $(COMPILER_WARNING_TEST_ISO)
+
+test: test-compiler-warning
 
 .PHONY: test-progress
 test-progress: $(ISO) $(BOOT_TEST)

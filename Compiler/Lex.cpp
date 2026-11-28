@@ -1097,14 +1097,8 @@ int64_t Lex(CCmpCtrl &cc)
       uint64_t condition;
       if (!LexExpression(cc, condition))
         return cc.token = TK_ERROR;
-      if (!condition) {
-        if (cc.aot)
-          cc.aot->warning_cnt++;
-        const auto *file = cc.lex_include_stk;
-        uint64_t args[]{reinterpret_cast<uintptr_t>(file->full_name),
-                        static_cast<uint64_t>(file->line_num)};
-        PrintWarnCpp("Assert Failed %s,%d\n", 2, args, nullptr);
-      }
+      if (!condition)
+        LexWarn(cc, "Assert Failed ");
       return cc.token <= TK_EOF ? cc.token : LexEnd(cc, cc.token);
     }
     case KW_EXE:
