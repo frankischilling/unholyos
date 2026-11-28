@@ -88,6 +88,7 @@ extern "C" void MsgCpp(int64_t msg_code, int64_t arg1, int64_t arg2, int64_t fla
 extern "C" CJob *TaskMsgCpp(CTask *srv, CTask *master, int64_t code,
                            int64_t arg1, int64_t arg2, int64_t flags);
 extern "C" void KbdMsService();
+extern "C" int64_t KbdMsEvtTimeCpp();
 void KbdPoll();
 bool KbdMsInit();
 bool KbdInit();
