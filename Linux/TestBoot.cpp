@@ -3418,6 +3418,10 @@ constexpr CTextProbe adam_startup_probes[]{
     {"adam-startup","/AdamStartupProbe.HC","","Adam startup ","Adam startup ",
      "Adam startup FF\n",{},true}};
 
+constexpr CTextProbe dev_info_probes[]{
+    {"dev-info", "/DevInfoProbe.HC", "", "Device reports ", "Device reports ",
+     "Device reports 3FF\n", {}, true}};
+
 constexpr CTextProbe uasm_probes[]{
     {"uasm","/UAsmProbe.HC","","UAsm probe ","UAsm probe ",
      "UAsm probe FFF\n",{},true},
@@ -6611,10 +6615,15 @@ static void TestKernelCfgBoot(const char *qemu,const fs::path &iso,
 
 int main(int argc, char **argv)
 {
+  std::string_view mode = argc > 1 ? argv[1] : "";
   if ((argc == 4 || argc == 5) &&
-      (std::string_view(argv[1]) == "--adam-startup" ||
-       std::string_view(argv[1]) == "--adam-startup-reference")) {
-    const bool reference = std::string_view(argv[1]).ends_with("-reference");
+      (mode == "--adam-startup" || mode == "--adam-startup-reference" ||
+       mode == "--dev-info" || mode == "--dev-info-reference")) {
+    const bool reference = mode.ends_with("-reference");
+    std::span<const CTextProbe> probes = mode.starts_with("--dev-info")
+                                           ? dev_info_probes
+                                           : adam_startup_probes;
+    const auto &probe = probes.front();
     char path[] = "/tmp/unholyos-adam-startup-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
@@ -6622,13 +6631,13 @@ int main(int argc, char **argv)
     try {
       fs::create_directories(dir);
       if (!reference)
-        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/AdamStartupProbe.HC",
-                              "AdamStartupProbe.HC");
+        VerifyHostModuleMedia(argv[3], std::string("Linux/Fixtures") + probe.source,
+                              probe.source + 1);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
       DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
                              reference, false, false, false, false, false,
-                             false, false, false, adam_startup_probes);
+                             false, false, false, probes);
       vm.Quit();
       if (argc == 4)
         fs::remove_all(dir);
@@ -7492,6 +7501,7 @@ int main(int argc, char **argv)
               << " --adam-mem-aot qemu image.iso [capture-dir]\n"
               << " --adam-mem-large[-reference|-aot] qemu image.iso [capture-dir]\n"
               << " --adam-task[-reference|-aot] qemu image.iso [capture-dir]\n"
+              << " --dev-info[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"

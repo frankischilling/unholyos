@@ -24,6 +24,11 @@ static uint32_t PCIRead(uint16_t fn, uint8_t bus, uint8_t device,
   return FarCall32(SYS_PCI_SERVICES) ? c32.ecx : UINT32_MAX;
 }
 
+uint8_t PCIReadU8(uint8_t bus, uint8_t device, uint8_t function, uint8_t reg)
+{
+  return PCIRead(0xB108, bus, device, function, reg);
+}
+
 uint16_t PCIReadU16(uint8_t bus, uint8_t device, uint8_t function, uint8_t reg)
 {
   return PCIRead(0xB109, bus, device, function, reg);

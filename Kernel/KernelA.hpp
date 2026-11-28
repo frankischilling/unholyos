@@ -65,6 +65,7 @@ constexpr uint32_t MBS_USED_SIGNATURE_VAL = 0x7355424D;   // MBUs
 constexpr uint32_t HEAP_CTRL_SIGNATURE_VAL = 0x56536348;  // HcSV
 constexpr uint32_t TASK_SIGNATURE_VAL = 0x536B7354;       // TskS
 constexpr uintptr_t SYS_FIXED_AREA = 0x100000;
+constexpr uintptr_t SYS_16MEG_AREA_LIMIT = 0x1000000;
 constexpr size_t MEM_PAGE_SIZE = 0x200000;
 constexpr size_t MEM_PAG_BITS = 9;
 constexpr size_t MEM_PAG_SIZE = 1 << MEM_PAG_BITS;
@@ -162,6 +163,11 @@ struct CPCIDev
   uint8_t bus, dev, fun, pad, sub_code, base_code, reserved[6];
   uint8_t *vendor_str, *dev_id_str;
 };
+
+static_assert(sizeof(CPCIDev) == 0x30 &&
+              offsetof(CPCIDev, vendor) == 0x10 &&
+              offsetof(CPCIDev, sub_code) == 0x18 &&
+              offsetof(CPCIDev, vendor_str) == 0x20);
 
 constexpr unsigned I_DIV_ZERO = 0, I_NMI = 2, I_TIMER = 0x20, I_KBD = 0x21,
                    I_MS = 0x2C;
@@ -395,6 +401,7 @@ enum : size_t
   SEMA_FLUSH_VGA_IMAGE = 9,
   SEMA_SINGLE_USER = 10,
   SEMA_DSK_CACHE = 11,
+  SEMA_DEV_MEM = 13,
   SEMA_VGA = 14,
   SEMA_UPDATE_WIN_Z_BUF = 15,
   SEMA_MUTE = 17,
@@ -1714,9 +1721,11 @@ extern "C" {
 extern const uint8_t SYS_KERNEL[], SYS_COMPILE_TIME[];
 extern uint32_t SYS_BOOT_SRC, SYS_BOOT_BLK, SYS_RUN_LEVEL, MEM_BOOT_BASE;
 extern uint32_t SYS_PCIBIOS_SERVICE_DIR, SYS_PCI_SERVICES;
-extern uint32_t SYS_FONT_ADDRESS, SYS_E820_COUNT, MEM_PML2, MEM_PML4,
+extern uint32_t SYS_FONT_ADDRESS, SYS_E820_COUNT, MEM_PML2, MEM_PML3, MEM_PML4,
     MEM_HEAP_BASE;
 extern uint64_t MEM_PHYSICAL_SPACE, MEM_MAPPED_SPACE, MEM_HEAP_LIMIT;
+extern uint64_t MEM_2MEG_NUM, MEM_1GIG_NUM, MEM_512GIG_NUM;
+extern uint16_t SYS_PCI_BUSES;
 extern uint16_t MEM_E801[2];
 extern CMemE820 MEM_E820[48];
 extern CBlkPool *SYS_CODE_BP, *SYS_DATA_BP;

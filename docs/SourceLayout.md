@@ -1950,6 +1950,30 @@ and locked bit operations preserve interrupt state and caller-held
 locks. `test-adam-mem` runs JIT and AOT probes at 512 and 3072 MiB.
 The debug heap layout and concurrent SMP behavior remain unimplemented.
 
+## Adam device reports
+
+`Adam/DevInfo.cpp` follows the active `PCILookUpSingle`,
+`PCILookUpDevs`, `PCIRep`, `MemBIOSRep` and `MemPageRep` functions
+in Terry A. Davis's `Adam/DevInfo.HC`. The database conversion
+utility is commented out in the reference.
+
+PCI enumeration uses the BIOS bus count and the byte and word calls
+from `Kernel/PCIBIOS.HC`. The report reads the pinned
+`Misc/PCIDevices.DD` as plain DolDoc, with tab entries preserved.
+The reference identifies pcidatabase.com as the database source.
+The reference inserts records as it finds them. UnholyOS allocates the
+records and names in Adam's data heap and publishes the queue after the
+scan succeeds. The host ISO tool compresses the unchanged database to
+the reference disc path `::/Misc/PCIDevices.DD.Z`.
+
+`MemBIOSRep` reads the 32-bit device range queue and the BIOS E801 and
+E820 handoff records. `MemPageRep` reads the mapping size, page counts,
+table bases and heap bounds recorded by the kernel. NASM keeps the
+current 32-bit page-table base fields used by the bootstrap, and the
+report widens them for display. The boot path uses 2 MiB pages. The
+three public report names use the HolyC calling convention through
+`Kernel/KUtils.asm`.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. Earlier reports now cover the kernel state before compiler loading and the loaded compiler image; the opcode-resource probe runs before the module entry. These reports remain in `Linux/BootProbe.cpp`. [Source structure verification](SourceStructureVerification.md) records the earlier layout review; the compiler load cutover requires its own runtime evidence in [Boot.md](Boot.md).

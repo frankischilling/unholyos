@@ -145,6 +145,8 @@ GLOBAL DocTermNewHC,DocGetKeyHC,DocScanLineHC,GetStrHC,GetSHC,UserCmdLineHC
 GLOBAL TextCharHC,TextLenStrHC,TextLenAttrStrHC,TextLenAttrHC,TextPrintHC
 GLOBAL TextRectHC,TextBorderHC,WinZBufUpdateHC
 GLOBAL RawHC,DbgModeHC,IsDbgModeHC,PutFileLinkHC,PutSrcLinkHC,FixSetHC,AdamErrHC
+GLOBAL PCIRepHC,MemBIOSRepHC,MemPageRepHC
+EXTERN PCIRep,MemBIOSRep,MemPageRep
 GLOBAL tSHC,BusyHC,SleepUntilHC,SleepHC,Ona2FreqHC,Freq2OnaHC,SndHC
 GLOBAL ScrnCastHC,SndRstHC,BeepHC,MuteHC,IsMuteHC
 GLOBAL SndShiftHC,AUWriteHC
@@ -937,6 +939,9 @@ HOLYC_PRINT DocPrintHC,DocPrintCpp,2
 HOLYC_CPP RawHC,RawCpp,1
 HOLYC_CPP DbgModeHC,DbgModeCpp,1
 HOLYC_CPP IsDbgModeHC,IsDbgModeCpp,0
+HOLYC_CPP PCIRepHC,PCIRep,0
+HOLYC_CPP MemBIOSRepHC,MemBIOSRep,0
+HOLYC_CPP MemPageRepHC,MemPageRep,0
 HOLYC_CPP tSHC,tSCpp,0
 HOLYC_CPP BusyHC,BusyCpp,1
 HOLYC_CPP SleepUntilHC,SleepUntilCpp,1
