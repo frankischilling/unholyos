@@ -3518,6 +3518,10 @@ constexpr CTextProbe popup_probes[]{
     {"popup-menus", "/PopupProbe.HC", "", "Popup probe ", "Popup probe ",
      "Popup probe 1FF\n", {}, true}};
 
+constexpr CTextProbe ins_reg_probes[]{
+    {"ins-reg", "/InsRegProbe.HC", "", "InsReg probe ", "InsReg probe ",
+     "InsReg probe 7F\n", {}, true}};
+
 constexpr CTextProbe dev_info_probes[]{
     {"dev-info", "/DevInfoProbe.HC", "", "Device reports ", "Device reports ",
      "Device reports 3FF\n", {}, true}};
@@ -6725,12 +6729,14 @@ int main(int argc, char **argv)
        mode == "--doc-tree-aot" || mode == "--registry" ||
        mode == "--registry-reference" || mode == "--once" ||
        mode == "--once-reference" || mode == "--popup-menus" ||
-       mode == "--popup-menus-reference")) {
+       mode == "--popup-menus-reference" || mode == "--ins-reg" ||
+       mode == "--ins-reg-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
     const bool registry = mode.starts_with("--registry");
     const bool once = mode.starts_with("--once");
     const bool popup = mode.starts_with("--popup-menus");
+    const bool ins_reg = mode.starts_with("--ins-reg");
     char path[] = "/tmp/unholyos-document-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
@@ -6742,6 +6748,9 @@ int main(int argc, char **argv)
                               "PopupProbe.HC");
         VerifyHostModuleMedia(argv[3], "Demo/DolDoc/MenuBttn.HC",
                               "MenuBttn.HC", "Demo/DolDoc");
+      } else if (!reference && ins_reg) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/InsRegProbe.HC",
+                              "InsRegProbe.HC");
       } else if (!reference && once) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/OnceProbe.HC",
                               "OnceProbe.HC");
@@ -6768,6 +6777,8 @@ int main(int argc, char **argv)
         probes = once_probes;
       else if (popup)
         probes = popup_probes;
+      else if (ins_reg)
+        probes = ins_reg_probes;
       else if (aot)
         probes = doc_tree_aot_probes;
       DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
@@ -7676,6 +7687,7 @@ int main(int argc, char **argv)
               << " --registry[-reference] qemu image.iso [capture-dir]\n"
               << " --once[-reference] qemu image.iso [capture-dir]\n"
               << " --popup-menus[-reference] qemu image.iso [capture-dir]\n"
+              << " --ins-reg[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"

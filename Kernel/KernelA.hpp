@@ -986,6 +986,9 @@ static_assert(sizeof(CHashGlblVar) == 136 &&
 
 static_assert(sizeof(CHash) == 24 && sizeof(CHashSrcSym) == 64 &&
               sizeof(CHashExport) == 72 && sizeof(CHashImport) == 80);
+static_assert(sizeof(CHashGeneric) == 48 &&
+              offsetof(CHashGeneric, user_data0) == 24 &&
+              offsetof(CHashGeneric, user_data2) == 40);
 
 struct CHashTable
 {
@@ -1666,6 +1669,18 @@ static_assert(sizeof(CTaskSettings) == 392 &&
               offsetof(CTaskSettings, task_title) == 240 &&
               offsetof(CTaskSettings, autocomplete) == 388);
 static_assert(offsetof(CTask, draw_it) == 0x1C0);
+
+struct [[gnu::packed]] CInsReg
+{
+  bool registered;
+  int64_t host_os, host_vm;
+  uint8_t initials[8];
+  int64_t machine_num;
+};
+
+static_assert(sizeof(CInsReg) == 33 && offsetof(CInsReg, registered) == 0 &&
+              offsetof(CInsReg, host_os) == 1 && offsetof(CInsReg, host_vm) == 9 &&
+              offsetof(CInsReg, initials) == 17 && offsetof(CInsReg, machine_num) == 25);
 
 struct alignas(4096) CSysFixedArea
 {

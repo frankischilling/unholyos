@@ -10,9 +10,9 @@ in UnholyOS. It includes include-only and project-organization files.
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 69 | 7 |
 | `Compiler` | 33 | 33 | 0 |
-| `Adam` | 132 | 54 | 78 |
+| `Adam` | 132 | 55 | 77 |
 | `Apps` | 71 | 3 | 68 |
-| `Demo` | 203 | 22 | 181 |
+| `Demo` | 203 | 24 | 179 |
 
 A corresponding path can contain a partial translation. Counts do not
 establish that a file builds or that an original program runs. Asset,
@@ -129,8 +129,9 @@ part of the full rewrite.
   and appends. The Once queue uses the original branch and run-level
   transitions. The first user terminal runs the home script through
   `XTalk`. The registry's one-time notice uses a modal servant and writes
-  the selected suppression bit. The stock install prompt and tour and
-  installer registration remain pending.
+  the selected suppression bit. `Adam/InsReg.cpp` runs the registration
+  form and replays its saved registry branch during startup. The stock
+  install prompt and tour remain pending.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal
   and system tools in their respective reference subsystems.
 - Include the remaining applications, demos, documentation and assets,

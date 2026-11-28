@@ -1987,8 +1987,7 @@ compiles and executes the command. Adam posts the input without waiting
 and can service the resulting job as soon as it enters server mode.
 The startup lookup uses the first terminal's directory and the same
 file search as the compiler, preserving Adam's working directory.
-The reference's stock `Once.HC` installer and tour workflow and installer
-registration remain pending.
+The reference's stock `Once.HC` installer and tour workflow remains pending.
 
 ## Popup tasks and document menus
 
@@ -2014,6 +2013,21 @@ button actions reference the calling task's defines.
 `Adam/ARegistry.cpp` uses the original checkbox and OKAY button text.
 `RegOneTimePopUp` saves the system message flags when the user elects
 to suppress the message.
+
+## Install registration
+
+`Adam/InsReg.cpp` follows `Adam/InsReg.HC`. The three registration calls
+use the original form, drive override, and `Adam/InsReg` registry branch.
+`Kernel/KernelA.hpp` preserves the packed `CInsReg` layout from
+`Kernel/KernelA.HH`. The compiler's native class registration supplies
+the same four DolDoc format strings. `Kernel/KHashB.cpp` marks the
+generated defines public and updates their help metadata when the
+registry code invokes `HashPublic`.
+
+`Kernel/KMain.cpp` loads the two choice lists after `MakeAdam` and writes
+the unregistered defaults only if the registry replay leaves the record
+unregistered. These calls stand in for the `MakeAdam.HC` include and the
+`InsUnreg` call in `StartOS.HC` during the current native boot sequence.
 
 ## Original Adam memory inspection
 
