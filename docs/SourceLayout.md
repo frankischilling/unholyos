@@ -730,8 +730,7 @@ song and animation tasks, window bounds and attributes, document
 flags, and palette. The pop applies the screen settings again after a
 forced refresh. It saves whether autocomplete has a live task and
 passes that setting to `AutoComplete` on pop. `Adam/AutoComplete/ACTask.cpp`
-can turn off an existing task and raise an enabled one. Dictionary
-initialization, task creation, and completion results remain pending.
+starts and stops the pane task and raises it without changing keyboard focus.
 
 `WinBorder` in `Adam/Win.cpp` preserves the one-cell geometry changes
 and previous-state return from `Win.HC`. `GrUpdateTaskWin` in
@@ -2046,8 +2045,27 @@ document untouched during those requests.
 from the staged PS/2 decoder. Native interrupt-time dispatch remains
 pending. The current built-ins register Break, the auxiliary font, and
 both zoom directions. The rest of the reference default registrations,
-source descriptions for additional editor commands, and the modifier
-pane in `Adam/AutoComplete/ACTask.HC` still need work.
+source descriptions for additional editor commands, and the editor's
+key-map popup macro still need work.
+
+`Adam/AutoComplete/ACTask.cpp` follows `ACTask`, `ACTaskCtrl`, and
+`ACTaskAlt` in `Adam/AutoComplete/ACTask.HC`. The task waits for the
+reference keyboard and mouse idle interval, follows input filters to the
+underlying task, and queries the focused task's descriptions through
+`KeyMapFamily`. It renders registered Ctrl-Alt actions through
+`KeyMapCtrlAltFamily`. The regular pane displays Terry A. Davis's
+unchanged `Doc/StandBy.DD`. A task-end callback clears the shared task
+pointer so `AutoComplete(ON)` can start another pane after shutdown.
+
+`ACInit.cpp` initializes the word table and run-level bit, and
+`HomeSys.cpp` starts the pane after queuing `Once` on media that include
+`Doc/StandBy.DD.Z`. The regular boot image includes the document and
+starts the pane when the user runs `ACInit;` at the prompt. File-mask traversal and
+dictionary loading in `ACInit.HC`, the completion choices in
+`ACPutChoices`, and the pane's link selection behavior remain pending.
+The pane currently clears its document with `DocClear` and fits the
+content when shown. TempleOS calls `DocRst` and handles minimum-window
+sizing during every document recalculation.
 
 ## Popup tasks and document menus
 

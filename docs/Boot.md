@@ -4261,8 +4261,28 @@ build/Linux/TestBoot --key-map-reference qemu-system-x86_64 \
 ```
 
 The probe uses QEMU 8.2.2 with the PC machine, qemu64, 512 MiB, and one
-CPU. The AutoComplete modifier pane and remaining editor bindings
-still need translation.
+CPU. Additional editor bindings still need translation.
+
+## AutoComplete modifier pane
+
+`make test-stock-once` includes the original `Doc/StandBy.DD` by Terry A.
+Davis on the stock DVD image. The first chapter of the unchanged tour
+holds Ctrl-Alt and checks for the auxiliary-font and zoom-in descriptions.
+After release, it checks that StandBy returns. Ctrl-Alt-Shift displays
+the zoom-out description. The test then leaves the tour and checks that
+`AutoComplete(0)` closes the pane and `AutoComplete(1)` starts it again.
+These checks use the PS/2 keyboard and the rendered DolDoc text layer.
+
+```sh
+make -j4 test-stock-once
+build/Linux/TestBoot --stock-once qemu-system-x86_64 \
+  build/stock-once-test.iso build/stock-once-capture
+qemu-system-x86_64 -machine pc -cpu qemu64 -smp 1 -m 512 -boot d \
+  -cdrom build/stock-once-test.iso -serial stdio
+```
+
+Run `ACInit;` at the prompt on the regular boot image to start the pane.
+File indexing and word suggestions remain pending.
 
 ## Popup menus and one-time notices
 

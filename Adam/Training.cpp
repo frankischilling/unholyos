@@ -1,4 +1,5 @@
 #include "DolDoc/DolDoc.hpp"
+#include "Training.hpp"
 
 extern "C" int64_t Char2ScanCodeCpp(int64_t ch, int64_t sc_flags);
 extern "C" void PostMsgCpp(CTask *task, int64_t code, int64_t arg1,

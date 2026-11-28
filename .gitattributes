@@ -1,4 +1,5 @@
 Doc/Start.DD -text
+Doc/StandBy.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Once.HC -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Doc/Tips.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Doc/Customize.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
