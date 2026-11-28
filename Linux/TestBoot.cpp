@@ -6393,7 +6393,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
             "The native HolyC compiler runtime probe did not pass all checks");
       auto isolated = output.find("UnholyOS: AOT symbols isolated");
       Check(output.find("cmp compile 0\n") != std::string::npos &&
-                output.find("cmp reject 1\n") != std::string::npos &&
+                output.find("cmp reject 2\n") != std::string::npos &&
                 output.find("cmp print 0\n") != std::string::npos &&
                 isolated != std::string::npos &&
                 output.find("UnholyOS: AOT source map") != std::string::npos &&
@@ -7280,14 +7280,21 @@ int main(int argc, char **argv)
       if (diagnostic == CDesktopTest::CompilerWarning && !reference)
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/CompilerWarningProbe.HC",
                               "CompilerWarningProbe.HC");
-      fs::create_directories(dir);
-      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
-      vm.Connect();
-      DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
-                             reference, false, false, false, false, false,
-                             false, false, false, {}, {}, 0x20000000, {},
-                             CStockStartup::None, diagnostic);
-      vm.Quit();
+      auto run = [&](const fs::path &capture, CDesktopTest test) {
+        fs::create_directories(capture);
+        CMonitor vm(argv[2], argv[3], capture, "pc", "512", false, {}, false,
+                    reference);
+        vm.Connect();
+        DriveCharacterGraphics(vm, capture,
+                               reference ? "" : vm.Boot(capture / "serial.log"),
+                               reference, false, false, false, false, false,
+                               false, false, false, {}, {}, 0x20000000, {},
+                               CStockStartup::None, test);
+        vm.Quit();
+      };
+      run(dir, diagnostic);
+      if (diagnostic == CDesktopTest::CompilerDiagnostic)
+        run(dir / "partial-cmp", CDesktopTest::CompilerCmpDiagnostic);
       if (argc == 4)
         fs::remove_all(dir);
       return 0;

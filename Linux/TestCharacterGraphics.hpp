@@ -105,7 +105,7 @@ struct CModuleFile
 enum class CStockStartup { None, Decline, Tour };
 enum class CDesktopTest {
   None, Progress, DictionaryInstall, DictionaryGenerator, DictionaryGeneratorHolyC,
-  MenuDiagnostic, CompilerDiagnostic, CompilerWarning
+  MenuDiagnostic, CompilerDiagnostic, CompilerCmpDiagnostic, CompilerWarning
 };
 
 // Uses the same QMP input and physical-memory readers as the boot tests.
@@ -529,9 +529,10 @@ static void DriveCharacterGraphics(
     std::cout << startup_output << '\n';
   }
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
-  if (desktop == CDesktopTest::MenuDiagnostic ||
-      desktop == CDesktopTest::CompilerDiagnostic ||
-      desktop == CDesktopTest::CompilerWarning)
+  const bool compiler_probe = desktop == CDesktopTest::CompilerDiagnostic ||
+                              desktop == CDesktopTest::CompilerCmpDiagnostic ||
+                              desktop == CDesktopTest::CompilerWarning;
+  if (desktop == CDesktopTest::MenuDiagnostic || compiler_probe)
     cmd("I64 dsz;U8 *dout;");
   auto wait_compiler_exception = [&](std::string_view dir_prompt) {
     return wait([&](const Cells &cells) {
@@ -554,14 +555,26 @@ static void DriveCharacterGraphics(
     cmd("Free(dout);");
     return ReadText(output);
   };
-  if (desktop == CDesktopTest::CompilerDiagnostic ||
-      desktop == CDesktopTest::CompilerWarning) {
+  if (compiler_probe) {
     cmd("CBlkDev *db=BlkDevNextFreeSlot('A',BDT_RAM);");
     cmd("db->max_blk=131071;");
     cmd(R"("DB %X\n",BlkDevAdd(db,I64_MIN,FALSE,TRUE);)");
     wait_text("DB 1");
     cmd(R"(Cd("A:/");)");
     wait_text("A:/>");
+  }
+  if (desktop == CDesktopTest::CompilerCmpDiagnostic) {
+    cmd(R"(U8 *ci="public I64i CmpStaleExport;\nCmpStaleExport=UnboundCmpName;\n";)");
+    cmd(R"(FileWrite("Partial.HC",ci,StrLen(ci));)");
+    cmd(R"("DI %X\n",Cmp("Partial.HC",,"Bad.BIN");)");
+    wait_text("DI 2");
+    const auto rejected = save_diagnostic("compiler-partial.bin");
+    Check(rejected.find(R"(Invalid lval at "UnboundCmpName")") != std::string::npos &&
+              rejected.find("FL:A:/Partial.HC,2") != std::string::npos &&
+              rejected.find("Errs:2 Warns:0 Code:0 Size:0") != std::string::npos,
+          "Failed partial Cmp reported the wrong error, source, or output size");
+    std::cout << "HolyC Cmp reported the late error without publishing output\n";
+    return;
   }
   if (desktop == CDesktopTest::CompilerDiagnostic) {
     cmd("NoSuchParserName; // undefined statement");
