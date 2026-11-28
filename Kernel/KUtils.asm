@@ -140,7 +140,7 @@ GLOBAL CtrlFindUniqueHC
 GLOBAL CtrlInsideHC
 GLOBAL WinScrollsInitHC,ViewAnglesNewHC,ViewAnglesDelHC
 GLOBAL DrawViewAnglesCtrlHC,UpdateDerivedViewAnglesCtrlHC,LeftClickViewAnglesHC
-GLOBAL D3I32NormHC,AutoCompleteHC
+GLOBAL D3I32NormHC,AutoCompleteHC,ACInitHC,ACTaskHC,ACTaskEndCBHC
 GLOBAL WinDerivedScrollValsUpdateHC
 GLOBAL DrawWinScrollHC
 GLOBAL LeftClickHWinScrollHC
@@ -427,7 +427,7 @@ EXTERN CtrlFindUniqueCpp
 EXTERN CtrlInsideCpp
 EXTERN WinScrollsInitCpp,ViewAnglesNewCpp,ViewAnglesDelCpp
 EXTERN DrawViewAnglesCtrlCpp,UpdateDerivedViewAnglesCtrlCpp,LeftClickViewAnglesCpp
-EXTERN D3I32NormCpp,AutoCompleteCpp
+EXTERN D3I32NormCpp,AutoCompleteCpp,ACInitCpp,ACTaskCpp,ACTaskEndCBCpp
 EXTERN WinDerivedScrollValsUpdateCpp
 EXTERN DrawWinScrollCpp
 EXTERN LeftClickHWinScrollCpp
@@ -938,6 +938,9 @@ HOLYC_CPP WheelChangeWinScrollHC,WheelChangeWinScrollCpp,2
 HOLYC_CPP ViewAnglesNewHC,ViewAnglesNewCpp,1
 HOLYC_CPP ViewAnglesDelHC,ViewAnglesDelCpp,1
 HOLYC_CPP AutoCompleteHC,AutoCompleteCpp,1
+HOLYC_CPP ACInitHC,ACInitCpp,1
+HOLYC_CPP ACTaskHC,ACTaskCpp,1
+HOLYC_CPP ACTaskEndCBHC,ACTaskEndCBCpp,0
 HOLYC_CPP DrawViewAnglesCtrlHC,DrawViewAnglesCtrlCpp,2
 HOLYC_CPP UpdateDerivedViewAnglesCtrlHC,UpdateDerivedViewAnglesCtrlCpp,1
 HOLYC_CPP LeftClickViewAnglesHC,LeftClickViewAnglesCpp,4

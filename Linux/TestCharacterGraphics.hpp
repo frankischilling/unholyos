@@ -357,8 +357,31 @@ static void DriveCharacterGraphics(
                                      "CTRL ALT", "CTRL ALT SHIFT"};
       for (size_t i = 0; i < std::size(mods); i++) {
         wait_text(std::string("hold the <") + names[i] + ">");
-        vm.Hmp(std::string("sendkey ") + mods[i] + " 1400");
-        std::this_thread::sleep_for(1575ms);
+        if (i < 4) {
+          vm.Hmp(std::string("sendkey ") + mods[i] + " 1400");
+          std::this_thread::sleep_for(1575ms);
+          continue;
+        }
+        KeyboardKey(vm, "ctrl", true);
+        KeyboardKey(vm, "alt", true);
+        if (i == 5)
+          KeyboardKey(vm, "shift", true);
+        const auto held_since = std::chrono::steady_clock::now();
+        const auto description = i == 4 ? "CTRL ALT z         Cmd /Zoom In"
+                                        : "CTRL ALT SHIFT z         Cmd /Zoom Out";
+        wait([&](const Cells &cells) {
+          const auto screen = visible(cells);
+          return screen.find(description) != std::string::npos &&
+                 (i == 5 || screen.find("Cmd /Toggle Aux Font") != std::string::npos);
+        }, "Missing held Ctrl-Alt command descriptions");
+        snapshot(i == 4 ? "autocomplete-ctrl-alt" : "autocomplete-ctrl-alt-shift");
+        std::this_thread::sleep_until(held_since + 2s);
+        if (i == 5)
+          KeyboardKey(vm, "shift", false);
+        KeyboardKey(vm, "alt", false);
+        KeyboardKey(vm, "ctrl", false);
+        if (i == 4)
+          wait_text("AutoComplete is in StandBy");
       }
       wait_text("TempleOS Tours");
       snapshot("first-tour-complete");
@@ -370,6 +393,14 @@ static void DriveCharacterGraphics(
                screen.find("T:/Home>") != std::string::npos;
       }, "The stock tour did not return to the home prompt");
       snapshot("tour-exit");
+      cmd("AutoComplete(0);0;");
+      wait([&](const Cells &cells) {
+        return visible(cells).find("AutoComplete is in StandBy") == std::string::npos;
+      }, "AutoComplete task stayed visible after shutdown");
+      cmd("AutoComplete(1);0;");
+      wait_text("AutoComplete is in StandBy");
+      snapshot("autocomplete-restarted");
+      std::cout << "AutoComplete displayed Ctrl-Alt descriptions and restarted\n";
       std::cout << "Completed the first tour chapter and returned to the prompt\n";
     }
     return;

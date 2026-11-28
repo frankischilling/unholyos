@@ -1,3 +1,4 @@
+#include "Adam/AutoComplete/AutoComplete.hpp"
 #include "Adam/DolDoc/DolDoc.hpp"
 
 extern "C" void UserCmdLineHC();
@@ -63,7 +64,8 @@ bool StartUpTasks()
   size_t prefix;
   const bool found = dv && FsFileLookup(*dv, path + 2, true, true, entry, prefix);
   Free(path);
-  if (found)
-    return XTalk(user1, "Cd;#include \"Once\";\n", 0, nullptr);
-  return true;
+  const bool started = !found || XTalk(user1, "Cd;#include \"Once\";\n", 0, nullptr);
+  if (found && FileFindCpp(AC_STANDBY, nullptr, FUF_JUST_FILES))
+    ACInitCpp("/*;!*/Bible.TXT*");
+  return started;
 }

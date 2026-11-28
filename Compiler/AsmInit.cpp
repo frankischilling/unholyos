@@ -2731,6 +2731,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"ViewAnglesNew", CtrlPtr, FF_RET1, {{"task", TaskPtr, true}}},
       {"ViewAnglesDel", U0, FF_RET1, {{"task", TaskPtr, true}}},
       {"AutoComplete", Bool, FF_RET1, {{"val", Bool, true}}},
+      {"ACInit", U0, FF_RET1, {{"mask", U8Ptr, true}}},
       {"MenuSubEntryFind", MenuEntryPtr, FF_RET1, {{"haystack_first", MenuEntryPtr}, {"needle_entry_name", U8Ptr}}},
       {"MenuEntryFind", MenuEntryPtr, FF_RET1, {{"haystack_menu", MenuPtr}, {"needle_full_name", U8Ptr}}},
       {"MenuNew", MenuPtr, FF_RET1, {{"st", U8Ptr}, {"flags", I64, true}, {"task", TaskPtr, true}}},

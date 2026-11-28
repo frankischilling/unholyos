@@ -268,7 +268,8 @@ void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
 void WinRefocusHC(), WinToTopHC(), WinFocusHC(), WinTileHorzHC(), WinTileVertHC(), WinMaxHC();
 void WinScrollNullHC(), WinScrollRestoreHC();
 void CtrlFindUniqueHC(), CtrlInsideHC(), WinScrollsInitHC();
-void ViewAnglesNewHC(), ViewAnglesDelHC(), D3I32NormHC(), AutoCompleteHC();
+void ViewAnglesNewHC(), ViewAnglesDelHC(), D3I32NormHC(), AutoCompleteHC(),
+     ACInitHC();
 void MenuSubEntryFindHC();
 void MenuEntryFindHC();
 void MenuNewHC();
@@ -1481,6 +1482,7 @@ bool LoadKernel(CTask &task)
       {"ViewAnglesNew", reinterpret_cast<uintptr_t>(ViewAnglesNewHC)},
       {"ViewAnglesDel", reinterpret_cast<uintptr_t>(ViewAnglesDelHC)},
       {"AutoComplete", reinterpret_cast<uintptr_t>(AutoCompleteHC)},
+      {"ACInit", reinterpret_cast<uintptr_t>(ACInitHC)},
       {"MenuSubEntryFind", reinterpret_cast<uintptr_t>(MenuSubEntryFindHC)},
       {"MenuEntryFind", reinterpret_cast<uintptr_t>(MenuEntryFindHC)},
       {"MenuNew", reinterpret_cast<uintptr_t>(MenuNewHC)},
