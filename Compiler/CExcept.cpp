@@ -5,6 +5,8 @@ extern "C" CDocEntryBase *DocPutLineCpp(CDoc *doc, CDocEntryBase *entry);
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 extern "C" void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
                             const uintptr_t *frame);
+extern "C" void PrintWarnCpp(const char *fmt, int64_t argc, const uint64_t *argv,
+                             const uintptr_t *frame);
 extern "C" void AdamErrCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 extern "C" void FixSetCpp(const char *filename, int64_t line);
 
@@ -87,6 +89,28 @@ void LexPutPos(const CCmpCtrl &cc)
   }
 }
 
+void LexWarn(CCmpCtrl &cc, const char *message)
+{
+  if (message) {
+    const uint64_t text = reinterpret_cast<uintptr_t>(message);
+    PrintWarnCpp("%s", 1, &text, nullptr);
+  }
+  if (const auto *fun = cc.htc.fun; fun && fun->cls.sym.src_link) {
+    const auto &symbol = fun->cls.sym;
+    const uint64_t name = reinterpret_cast<uintptr_t>(symbol.hash.str);
+    const uint64_t link = reinterpret_cast<uintptr_t>(symbol.src_link);
+    PrintCpp("in fun '%s'.\n", 1, &name);
+    if (IsRawCpp())
+      PrintCpp("%s\n", 1, &link);
+    else {
+      PrintCpp("$LK,\"%s\"$\n", 1, &link);
+      AdamErrCpp("%s\n", 1, &link);
+    }
+  } else
+    LexPutPos(cc);
+  cc.warning_cnt++;
+}
+
 void LexExceptReport(const CCmpCtrl &cc, const char *message)
 {
   if (!(SYS_RUN_LEVEL & RLF_ADAM_SERVER))
@@ -104,4 +128,11 @@ extern "C" [[noreturn]] void UndefinedExternCpp(uint64_t caller)
 {
   PrintErrCpp("Undefined Extern\nat %P\n", 1, &caller, nullptr);
   RaiseHolyC(0x7478456665646E55); // UndefExt
+}
+
+void UnusedExternWarning(CCmpCtrl &cc, const CHashClass &cls)
+{
+  const uint64_t arg = reinterpret_cast<uintptr_t>(cls.sym.hash.str);
+  PrintWarnCpp("Unused extern '%s'\n", 1, &arg, nullptr);
+  cc.warning_cnt++;
 }

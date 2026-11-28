@@ -270,6 +270,8 @@ DOC_BIN_LINK := Linux/Fixtures/DocBinLink.DD
 QUEUE_PROBE := Linux/Fixtures/QueueProbe.HC
 TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInputProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
+COMPILER_WARNING_PROBE := Linux/Fixtures/CompilerWarningProbe.HC
+COMPILER_WARNING_TEST_ISO := $(BUILD)/compiler-warning-test.iso
 
 # Every bootable test image uses the same Adam source initialization.
 $(ISO) $(foreach target,$(filter %_ISO,$(.VARIABLES)),$($(target))): $(ADAM_STARTUP_SOURCES)
@@ -868,6 +870,15 @@ test-compiler-diagnostic: $(ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --compiler-diagnostic "$(QEMU)" $(ISO)
 
 test: test-compiler-diagnostic
+
+.PHONY: test-compiler-warning
+$(COMPILER_WARNING_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(COMPILER_WARNING_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(COMPILER_WARNING_PROBE)
+
+test-compiler-warning: $(COMPILER_WARNING_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --compiler-warning "$(QEMU)" $(COMPILER_WARNING_TEST_ISO)
+
+test: test-compiler-warning
 
 .PHONY: test-progress
 test-progress: $(ISO) $(BOOT_TEST)

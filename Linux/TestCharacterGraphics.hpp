@@ -105,7 +105,7 @@ struct CModuleFile
 enum class CStockStartup { None, Decline, Tour };
 enum class CDesktopTest {
   None, Progress, DictionaryInstall, DictionaryGenerator, DictionaryGeneratorHolyC,
-  MenuDiagnostic, CompilerDiagnostic
+  MenuDiagnostic, CompilerDiagnostic, CompilerWarning
 };
 
 // Uses the same QMP input and physical-memory readers as the boot tests.
@@ -530,7 +530,8 @@ static void DriveCharacterGraphics(
   }
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
   if (desktop == CDesktopTest::MenuDiagnostic ||
-      desktop == CDesktopTest::CompilerDiagnostic)
+      desktop == CDesktopTest::CompilerDiagnostic ||
+      desktop == CDesktopTest::CompilerWarning)
     cmd("I64 dsz;U8 *dout;");
   auto wait_compiler_exception = [&](std::string_view dir_prompt) {
     return wait([&](const Cells &cells) {
@@ -553,13 +554,16 @@ static void DriveCharacterGraphics(
     cmd("Free(dout);");
     return ReadText(output);
   };
-  if (desktop == CDesktopTest::CompilerDiagnostic) {
+  if (desktop == CDesktopTest::CompilerDiagnostic ||
+      desktop == CDesktopTest::CompilerWarning) {
     cmd("CBlkDev *db=BlkDevNextFreeSlot('A',BDT_RAM);");
     cmd("db->max_blk=131071;");
     cmd(R"("DB %X\n",BlkDevAdd(db,I64_MIN,FALSE,TRUE);)");
     wait_text("DB 1");
     cmd(R"(Cd("A:/");)");
     wait_text("A:/>");
+  }
+  if (desktop == CDesktopTest::CompilerDiagnostic) {
     cmd("NoSuchParserName; // undefined statement");
     wait_compiler_exception("A:/>");
     const auto prompt_doc = save_diagnostic("compiler-prompt.bin");
@@ -1096,6 +1100,37 @@ static void DriveCharacterGraphics(
       cmd(clear ? "DocClear(,1);ExePutS(cgprobe);Free(cgprobe);"
                 : "ExePutS(cgprobe);Free(cgprobe);");
   };
+  if (desktop == CDesktopTest::CompilerWarning) {
+    if (reference)
+      upload(fs::absolute("Linux/Fixtures/CompilerWarningProbe.HC"));
+    else
+      cmd(R"(ExeFile2("::/CompilerWarningProbe.HC");)");
+    wait_text("WW 1");
+    cmd("DocClear(,1);");
+    cmd(R"("WC %X\n",Cmp("Warn.PRJ",,"Warn.BIN");)");
+    wait_text("WC 0");
+    cmd(R"(ExeFile("Warn.PRJ");)");
+    cmd(R"("WJ %X\n",WarnUnused(42);)");
+    wait_text("WJ 2A");
+    const auto doc = save_diagnostic("compiler-warnings.bin");
+    auto occurrences = [&](std::string_view str) {
+      size_t count = 0;
+      for (auto pos = doc.find(str); pos != std::string::npos;
+           pos = doc.find(str, pos + str.size()))
+        count++;
+      return count;
+    };
+    Check(occurrences(R"(Assert Failed "I64i")") == 2 &&
+              occurrences("Function should return val in fun 'NoValue'.") == 4 &&
+              occurrences("Function should NOT return val in fun 'VoidValue'.") == 2 &&
+              occurrences("Unused extern 'WarnUnused'") == 2 &&
+              occurrences("FL:A:/Warn.PRJ,2") >= 6 &&
+              occurrences("FL:A:/Warn.PRJ,3") >= 2 &&
+              doc.find("Errs:0 Warns:5 ") != std::string::npos,
+          "Compiler warning text, source links or AOT count differ");
+    std::cout << "HolyC assertion, return and unused-extern warnings matched\n";
+    return;
+  }
   if (!module_files.empty()) {
     Check(reference && !text_probes.empty(),
           "A module transfer needs a reference text probe");

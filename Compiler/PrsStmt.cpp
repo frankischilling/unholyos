@@ -158,6 +158,8 @@ public:
   {
     if (!Block(0, NO_IC))
       return false;
+    if (cc.htc.fun->return_class->size && !has_return)
+      LexWarn(cc, "Function should return val ");
     coc.Append(leave);
     return !coc.failed;
   }
@@ -214,13 +216,18 @@ public:
     case KW_RETURN:
       if (leave == NO_IC || !PrsUntry(try_cnt))
         return false;
-      if (Lex(cc) == ';')
+      if (Lex(cc) == ';') {
+        if (cc.htc.fun->return_class->size)
+          LexWarn(cc, "Function should return val ");
         coc.Append(IC_RETURN_VAL, NO_IC, leave);
-      else {
+      } else {
+        if (!cc.htc.fun->return_class->size)
+          LexWarn(cc, "Function should NOT return val ");
         auto value = PrsExpression(cc, coc);
         if (value == NO_IC || coc.code[value].type == RT_AGGREGATE)
           return false;
         coc.Append(IC_RETURN_VAL, value, leave);
+        has_return = true;
       }
       return Consume(';');
     default:
@@ -680,6 +687,7 @@ private:
   CCodeCtrl &coc;
   uint32_t leave = NO_IC;
   unsigned try_cnt = 0;
+  bool has_return = false;
 };
 
 extern "C" void UndefinedExternHC();
@@ -842,6 +850,12 @@ static bool PrsFun(CCmpCtrl &cc, CHashClass &type, char *name,
     return false;
   }
   auto *table = cc.htc.glbl_hash_table;
+  if (auto *prior = HashSingleTableFind(name, table, HTT_FUN)) {
+    auto *header = reinterpret_cast<const CHashFun *>(prior);
+    if ((header->cls.flags & CF_EXTERN) && !(prior->type & HTF_IMPORT) &&
+        prior->use_cnt < 3)
+      UnusedExternWarning(cc, header->cls);
+  }
   HashAdd(&symbol.hash, table);
   auto *old_local = cc.htc.local_var_lst, *old_fun = cc.htc.fun;
   cc.htc.local_var_lst = cc.htc.fun = fun;

@@ -3779,7 +3779,8 @@ constexpr CTextProbe assert_warning_probes[]{
 static void CheckAssertWarning(std::string_view serial)
 {
   constexpr std::string_view warning =
-      ". . . . WARNING: Assert Failed T:/AssertWarningProbe.HC,4\n";
+      ". . . . WARNING: Assert Failed \"I64\" T:/AssertWarningProbe.HC,4 "
+      "I64 AssertWarningValue(I64 value)\n";
   CheckProgramOutput(serial, "/AssertWarningProbe.HC",
                      std::string(warning) + std::string(assert_warning_output),
                      '1');
@@ -3799,7 +3800,8 @@ static void CheckAssertWarning(std::string_view serial)
         "Missing assert warning module execution");
   const auto compiled = serial.substr(begin, end - begin);
   const std::regex expected(
-      R"(\. \. \. \. WARNING: Assert Failed T:/AssertWarningProbe\.HC,4\nErrs:0 Warns:1 Code:[0-9A-F]+ Size:[0-9A-F]+\n)");
+      R"(\. \. \. \. WARNING: Assert Failed "I64" T:/AssertWarningProbe\.HC,4 )"
+      R"(I64 AssertWarningValue\(I64 value\)\nErrs:0 Warns:1 Code:[0-9A-F]+ Size:[0-9A-F]+\n)");
   Check(std::regex_match(compiled.begin(), compiled.end(), expected),
         "Assert warning AOT diagnostic or warning count differs");
 }
@@ -7262,16 +7264,22 @@ int main(int argc, char **argv)
   }
   if ((argc == 4 || argc == 5) &&
       (mode == "--menu-diagnostic" || mode == "--menu-diagnostic-reference" ||
-       mode == "--compiler-diagnostic" || mode == "--compiler-diagnostic-reference")) {
+       mode == "--compiler-diagnostic" || mode == "--compiler-diagnostic-reference" ||
+       mode == "--compiler-warning" || mode == "--compiler-warning-reference")) {
     const bool reference = mode.ends_with("-reference");
-    const auto diagnostic = mode.starts_with("--menu-diagnostic")
-                                ? CDesktopTest::MenuDiagnostic
-                                : CDesktopTest::CompilerDiagnostic;
+    auto diagnostic = CDesktopTest::CompilerDiagnostic;
+    if (mode.starts_with("--menu-diagnostic"))
+      diagnostic = CDesktopTest::MenuDiagnostic;
+    else if (mode.starts_with("--compiler-warning"))
+      diagnostic = CDesktopTest::CompilerWarning;
     char path[] = "/tmp/unholyos-diagnostic-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
     const auto dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
+      if (diagnostic == CDesktopTest::CompilerWarning && !reference)
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/CompilerWarningProbe.HC",
+                              "CompilerWarningProbe.HC");
       fs::create_directories(dir);
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
       vm.Connect();
@@ -8016,6 +8024,7 @@ int main(int argc, char **argv)
               << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"
               << " --menu-diagnostic[-reference] qemu image.iso [capture-dir]\n"
               << " --compiler-diagnostic[-reference] qemu image.iso [capture-dir]\n"
+              << " --compiler-warning[-reference] qemu image.iso [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
