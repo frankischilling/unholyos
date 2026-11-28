@@ -259,6 +259,8 @@ void DocTreeWriteJoinHC(), DocTreeAppendJoinHC(), ExeDocHC(), DocTreeExeHC(),
 void GodBitsInsHC(), GodHexInsHC(), GodBitsHC();
 void GodInitHC(), GodWordStrHC(), GodWordHC();
 void GodSongStrHC(), GodSongHC();
+void GodBiblePassageHC(), BibleLine2VerseHC(), BookLinesHC(), BibleVerseHC();
+void BibleDocHC(), BibleViewHC();
 void RegDftHC(), RegExeHC(), RegWriteHC(), RegCntHC(), RegAppendHC(), AdamHC();
 void InsRegHC(), InsReregHC(), InsUnregHC();
 void AOnceFlushHC(), OnceFlushHC(), AOnceHC(), OnceHC(), AOnceDrvHC(),
@@ -1644,6 +1646,12 @@ bool LoadKernel(CTask &task)
       {"GodWord", reinterpret_cast<uintptr_t>(GodWordHC)},
       {"GodSongStr", reinterpret_cast<uintptr_t>(GodSongStrHC)},
       {"GodSong", reinterpret_cast<uintptr_t>(GodSongHC)},
+      {"GodBiblePassage", reinterpret_cast<uintptr_t>(GodBiblePassageHC)},
+      {"BibleLine2Verse", reinterpret_cast<uintptr_t>(BibleLine2VerseHC)},
+      {"BookLines", reinterpret_cast<uintptr_t>(BookLinesHC)},
+      {"BibleVerse", reinterpret_cast<uintptr_t>(BibleVerseHC)},
+      {"BibleDoc", reinterpret_cast<uintptr_t>(BibleDocHC)},
+      {"BibleView", reinterpret_cast<uintptr_t>(BibleViewHC)},
       {"AOnceFlush", reinterpret_cast<uintptr_t>(AOnceFlushHC)},
       {"OnceFlush", reinterpret_cast<uintptr_t>(OnceFlushHC)},
       {"AOnce", reinterpret_cast<uintptr_t>(AOnceHC)},

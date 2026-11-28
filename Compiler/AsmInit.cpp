@@ -1,4 +1,5 @@
 #include "../Kernel/KernelB.hpp"
+#include "../Adam/God/GodBible.hpp"
 #include "../Adam/God/GodSong.hpp"
 #include "../Adam/Gr/GrExt.hpp"
 #include "../Adam/Gr/GrGlbls.hpp"
@@ -3068,6 +3069,16 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"GodWord", U0, FF_RET1, {{"bits", I64, true, 17}}},
       {"GodSongStr", U8Ptr, FF_RET1, {}},
       {"GodSong", U0, FF_RET1, {}},
+      {"GodBiblePassage", U0, FF_RET1, {{"num_lines", I64, true, 20}}},
+      {"BibleLine2Verse", U8Ptr, FF_RET1,
+       {{"line", I64}, {"separate_ch", I64, true, ' '}}},
+      {"BookLines", U0, FF_RET1,
+       {{"doc_out", DocPtr, true}, {"start", I64}, {"lines", I64},
+        {"book_filename", U8Ptr, true, 0, BIBLE_FILENAME}}},
+      {"BibleVerse", U0, FF_RET1,
+       {{"doc_out", DocPtr, true}, {"verse", U8Ptr}, {"lines", I64}}},
+      {"BibleDoc", DocPtr, FF_RET1, {}},
+      {"BibleView", U0, FF_RET1, {}},
       {"AOnceFlush", U0, FF_RET1, {}},
       {"OnceFlush", U0, FF_RET1, {}},
       {"AOnce", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
@@ -3958,6 +3969,7 @@ static bool CmpFillHash(CHashTable *table)
       {"DOCF_DO_FULL_REFRESH", "0x200000"}, {"TASKf_IDLE", "3"}, {"TASKf_HAS_SONG", "7"},
       {"RECALCt_FIND_CURSOR", "1"},
       {"GOD_BAD_BITS", "4"}, {"GOD_GOOD_BITS", "24"},
+      {"BIBLE_FILENAME", "\"::/Misc/Bible.TXT.Z\""}, {"LK_BIBLE_FIND", "8"},
       {"BOOT_SRC_NULL", "0"}, {"BOOT_SRC_ROM", "1"}, {"BOOT_SRC_RAM", "2"},
       {"BOOT_SRC_HARDDRV", "3"}, {"BOOT_SRC_DVD", "4"},
       {"DOCT_BTTN", "29"}, {"DOCEF_LINK", "(1<<36)"},

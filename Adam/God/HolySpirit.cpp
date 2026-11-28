@@ -1,4 +1,5 @@
 #include "GodExt.hpp"
+#include "GodBible.hpp"
 #include "../DolDoc/DolDoc.hpp"
 
 extern "C" void TimeStampCBHC(), KbdMsTimeCBHC();
@@ -176,4 +177,21 @@ extern "C" void GodWordCpp(int64_t bits)
     const uint64_t arg = reinterpret_cast<uintptr_t>(word);
     PrintCpp("%s ", 1, &arg);
   }
+}
+
+
+extern "C" void GodBiblePassageCpp(int64_t num_lines)
+{
+  const auto lines = Str2I64Cpp(DefineCpp("ST_BIBLE_LINES"), 10, nullptr);
+  const int64_t range = uint64_t(lines) - uint64_t(num_lines) + 1;
+  auto value = GodBitsCpp(21, nullptr);
+  int64_t start;
+  // A zero divisor faults in the reference compiler's signed remainder.
+  asm volatile("cqto; idivq %2" : "+a"(value), "=&d"(start) : "r"(range) : "cc");
+  start++;
+  auto *verse = BibleLine2VerseCpp(start, ' ');
+  const uint64_t arg = reinterpret_cast<uintptr_t>(verse);
+  PrintCpp("%s\n\n", 1, &arg);
+  Free(verse);
+  BookLinesCpp(nullptr, start, num_lines, BIBLE_FILENAME);
 }

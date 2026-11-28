@@ -1700,8 +1700,18 @@ from `GodSong.HC`. The settings dialog uses the native metadata for
 `CMakeSongSettings` and the original rhythm list. The generator keeps the
 rhythm tables, octave changes, meter prefix, and progress counter.
 F6 in `Adam/DolDoc/DocPutKey.cpp` calls `GodSong`, which writes
-both phrases twice in a DolDoc song entry. The Bible passage and doodle command
-still need translation.
+both phrases twice in a DolDoc song entry. The doodle command still needs
+translation.
+
+`Adam/God/GodBible.cpp` follows Terry A. Davis's `GodBible.HC`. It
+registers the book names, one-based line offsets, and final passage line.
+`BibleLine2Verse` keeps the forward scan on empty lines and the backward
+scan on continuation lines. `BookLines` and `BibleVerse` copy text and
+line breaks into a DolDoc. `BibleDoc` builds book and chapter trees,
+and Ctrl-Alt-B opens them through the in-memory DolDoc editor.
+Shift-F7 seeds the FIFO from the input timestamp and calls
+`GodBiblePassage` in `HolySpirit.cpp`. The standard DVD packages the
+pinned `Misc/Bible.TXT` as `Misc/Bible.TXT.Z`.
 
 ## Speaker sound effects
 
@@ -2343,13 +2353,12 @@ optional header and footer are placed in a document passed to `PopUpMenu`.
 `Adam/DolDoc/DocPutKey.cpp` dispatches F1 and Shift-F1 to `Ed` using
 the same Help Index and About TempleOS paths as `DocPutKey.HC`.
 `Ed` and `PopUpEd` live in `DocEd.cpp`. `DocLink.cpp` resolves
-file, plain-text, in-memory, and symbol-source links and restores the
-caller's working directory when the editor returns. `DocFind.cpp`
+file, plain-text, Bible verse, in-memory, and symbol-source links. It
+restores the caller's working directory when the editor returns. `DocFind.cpp`
 supplies the one-based line, tag search, and named-anchor operations.
 `DocTerm.cpp` opens file links through the reference left-click
 callback. Raw-mode editing, the right-click terminal file menu,
-undo, generated help indexes, address, and Bible links
-remain pending.
+undo, generated help indexes, and code-address links remain pending.
 
 `Kernel/Job.cpp` follows `Kernel/Job.HC` for `PopUp` and `PopUpPrint`.
 The servant enters `SrvCmdLine` and runs the standard execute job.

@@ -1,4 +1,5 @@
 #include "BootMedia.hpp"
+#include "../Adam/God/GodBible.hpp"
 #include "../Kernel/KernelA.hpp"
 
 #include <algorithm>
@@ -1602,7 +1603,9 @@ constexpr CDefineList adam_defines[]{
 constexpr CDefineList adam_startup_lists[]{
     {"ST_HOST_OSES", "Other\0Native\0Linux\0Windows\0", 4},
     {"ST_HOST_VMS", "Other\0Native\0VMware\0QEMU\0VirtualBox\0", 5},
-    {"ST_RHYTHM_COMPLEXITY", "Simple\0Normal\0Complex\0", 3}};
+    {"ST_RHYTHM_COMPLEXITY", "Simple\0Normal\0Complex\0", 3},
+    {"ST_BIBLE_BOOKS", ST_BIBLE_BOOKS, 66},
+    {"ST_BIBLE_BOOK_LINES", ST_BIBLE_BOOK_LINES, 67}};
 
 template <size_t Count>
 constexpr std::array<uint64_t, 3>
@@ -2085,7 +2088,7 @@ public:
     VerifyTable(table, classes, false);
     VerifyTable(classes, kernel, true);
     Check(sources.size() == 25, "Missing original Adam startup functions");
-    Check(startup_defines.size() == 5, "Missing Adam startup defines");
+    Check(startup_defines.size() == 8, "Missing Adam startup defines");
     std::cout << "Verified Adam source functions " << sources.size()
               << ", owned code allocations " << used[0]
               << ", owned data allocations " << used[1] << '\n';
@@ -2292,9 +2295,15 @@ private:
     }
 
     String(def[8]);
-    const auto idx = ReadGuestName(vm, def[4]);
+    const auto idx = def[4] ? ReadGuestName(vm, def[4]) : std::string{};
     const auto link = ReadGuestName(vm, def[3]);
     const auto value = ReadGuestName(vm, def[8]);
+    if (name == "ST_BIBLE_LINES") {
+      Check(uint32_t(def[2]) == 4 && def[10] == UINT64_MAX && !def[9] &&
+                !def[4] && link.starts_with("AD:0x") && value == "100110",
+            "Invalid Bible line count");
+      return;
+    }
     Check((name == "INS_REG_PERSONAL_INITIALS" || name == "INS_REG_MACHINE_NUM") &&
               uint32_t(def[2]) == 0x01000004 && def[10] == UINT64_MAX && !def[9] &&
               idx == "Registry/Install Registration" &&
@@ -2672,7 +2681,7 @@ static uint64_t VerifyRegistryHeap(CMonitor &vm, uint64_t owner, uint64_t adam)
 }
 
 static uint64_t VerifyKeyDevHeap(CMonitor &vm, uint64_t head, uint64_t owner,
-                                  bool adam_initialized)
+                                  bool compiler_initialized, bool desktop)
 {
   const auto fields = ReadPhysical<11>(vm, head);
   const auto callbacks = fields[6], normal = fields[9], shifted = fields[10];
@@ -2687,10 +2696,14 @@ static uint64_t VerifyKeyDevHeap(CMonitor &vm, uint64_t head, uint64_t owner,
   for (unsigned i = 0; i < 26; ++i) {
     std::string_view desc, shift_desc;
     switch ('A' + i) {
+    case 'B':
+      if (desktop)
+        desc = "Cmd /Bible";
+      break;
     case 'C': desc = "Cmd /Break Execution"; break;
     case 'F': desc = "Cmd /Toggle Aux Font"; break;
     case 'Z':
-      if (adam_initialized) {
+      if (compiler_initialized) {
         desc = "Cmd /Zoom In";
         shift_desc = "Cmd /Zoom Out";
       }
@@ -2707,7 +2720,7 @@ static uint64_t VerifyKeyDevHeap(CMonitor &vm, uint64_t head, uint64_t owner,
     }
   }
 
-  const size_t count = adam_initialized ? 3 : 2;
+  const size_t count = compiler_initialized ? 3 : 2;
   constexpr uint64_t priorities[]{0x40000000, 0x60000000, 0x80000000};
   uint64_t entry = fields[0], last = head;
   for (size_t i = 0; i < count; ++i) {
@@ -3010,7 +3023,7 @@ static void VerifyFixedArea(CMonitor &vm, const fs::path &dir, uint64_t heap,
       VerifyKernelSymbols(vm, top + 0x28, owner, graphics, winmgr_slot,
                            disk, key_device, god, compiler);
   const uint64_t key_device_used =
-      VerifyKeyDevHeap(vm, key_device, owner, compiler.initialized);
+      VerifyKeyDevHeap(vm, key_device, owner, compiler.initialized, desktop);
   uint64_t winmgr = ReadPhysical<1>(vm, winmgr_slot)[0];
   uint64_t left = 0, right = 0;
   if (desktop) {
@@ -7038,6 +7051,7 @@ int main(int argc, char **argv)
        mode == "--god-input" || mode == "--god-input-reference" ||
        mode == "--god-vocabulary" || mode == "--god-vocabulary-reference" ||
        mode == "--god-song" || mode == "--god-song-reference" ||
+       mode == "--god-bible" || mode == "--god-bible-reference" ||
        mode == "--progress" || mode == "--progress-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
@@ -7050,6 +7064,7 @@ int main(int argc, char **argv)
     const bool god_input = mode.starts_with("--god-input");
     const bool god_vocabulary = mode.starts_with("--god-vocabulary");
     const bool god_song = mode.starts_with("--god-song");
+    const bool god_bible = mode.starts_with("--god-bible");
     const bool progress = mode.starts_with("--progress");
     char path[] = "/tmp/unholyos-document-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -7073,6 +7088,9 @@ int main(int argc, char **argv)
       } else if (!reference && god_vocabulary) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/GodVocabularyProbe.HC",
                               "GodVocabularyProbe.HC");
+      } else if (!reference && god_bible) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/GodBibleProbe.HC",
+                              "GodBibleProbe.HC");
       } else if (!reference && god_song) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/GodSongProbe.HC",
                               "GodSongProbe.HC");
@@ -7126,6 +7144,8 @@ int main(int argc, char **argv)
         probes = god_vocabulary_probes;
       else if (god_song)
         probes = god_song_probes;
+      else if (god_bible)
+        probes = god_bible_probes;
       else if (mode == "--dictionary-reference")
         probes = dictionary_probes;
       else if (aot)
@@ -8280,6 +8300,7 @@ int main(int argc, char **argv)
               << " --god-input[-reference] qemu image.iso [capture-dir]\n"
               << " --god-vocabulary[-reference] qemu image.iso [capture-dir]\n"
               << " --god-song[-reference] qemu image.iso [capture-dir]\n"
+              << " --god-bible[-reference] qemu image.iso [capture-dir]\n"
               << " --dictionary-reference qemu image.iso [capture-dir]\n"
               << " --dictionary-install[-reference] qemu image.iso disk.img [capture-dir]\n"
               << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"
