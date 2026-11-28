@@ -2285,6 +2285,10 @@ void BootProbe()
         *adam_task->cur_dv, *adam_task, "/InternalTypesProbe.HC",
         "/InternalTypesProbe.BIN.Z",
         "Cmp(\"::/InternalTypesProbe.HC\",,\"B:/InternalTypesProbe.BIN.Z\");");
+    BootVariadicReport(
+        *adam_task->cur_dv, *adam_task, "/FunctionRecordsProbe.HC",
+        "/FunctionRecordsProbe.BIN.Z",
+        "Cmp(\"::/FunctionRecordsProbe.HC\",,\"B:/FunctionRecordsProbe.BIN.Z\");");
     BootStagedLoadReport(*adam_task->cur_dv, "/LoadApiProbe.HC",
                          "::/LoadApiConsumer.BIN", "B:/LoadApiConsumer.BIN",
                          "UnholyOS: Load API input bytes verified\r\n");

@@ -2202,11 +2202,25 @@ private:
     Check(stars && stars <= 4 && pointer >= stars * 168,
           "Invalid Adam callback pointer companion");
     const auto base = pointer - stars * 168;
-    Allocation(base, 1, (stars + 1) * 168);
+    FunctionRecord(base);
     const auto fun = Read<21>(base);
     Check((fun[2] & 0x1FFFF) == 0x40 && !fun[19],
           "Invalid Adam callback signature");
     Members(fun[11], depth);
+  }
+
+  void FunctionRecord(uint64_t address)
+  {
+    Allocation(address, 0, 5 * 168);
+    for (uint64_t stars = 1; stars <= 4; ++stars) {
+      const auto pointer = Read<21>(address + stars * 168);
+      Check(pointer[2] == 0x40 && pointer[8] == 8 &&
+                pointer[10] == ((10ULL << 40) | (stars << 32)),
+            "Invalid Adam function pointer companion");
+      for (size_t i = 0; i < pointer.size(); ++i)
+        if (i != 2 && i != 8 && i != 10)
+          Check(!pointer[i], "Unexpected Adam function companion storage");
+    }
   }
 
   void SourceFunction(const std::string &name,
@@ -2300,7 +2314,7 @@ private:
             Members(cls[11], 0);
           } else if (type == 0x40) {
             Check(!classes, "Typed function in the wrong Adam table");
-            Allocation(address, 1, 168);
+            FunctionRecord(address);
             const auto fun = Read<21>(address);
             String(fun[1]);
             String(fun[3]);
@@ -3557,6 +3571,37 @@ constexpr CTextProbe class_records_probes[]{
 constexpr CTextProbe bit_field_probes[]{
     {"bit-field", "/BitFieldProbe.HC", "", "Bit field checks ", "Bit field checks 3F",
      "Bit field checks 3F\n", {}, true}};
+
+constexpr std::string_view function_records_common_output =
+    "FR heaps 1\n"
+    "FR named F pointers FFFF\n"
+    "FR args 7\n"
+    "FR callbacks F pointers FFFF\n"
+    "FR behavior FF stack F\n"
+    "FR cleanup 1F heap 3\n";
+const std::string function_records_source_output =
+    std::string(function_records_common_output) +
+    "FR image F phase 0\nFR DONE\n";
+const std::string function_records_module_output =
+    std::string(function_records_common_output) +
+    "FR image F phase 1\nFR DONE\n";
+const CTextProbe function_records_probes[]{
+    {"function-records", "/FunctionRecordsProbe.HC", "", "FR heaps ", "FR DONE",
+     function_records_source_output},
+    {"function-records-aot", "/FunctionRecordsProbe.BIN.Z", "", "FR heaps ",
+     "FR DONE", function_records_module_output}};
+const std::string function_records_aot_output =
+    function_records_module_output +
+    "FR AOT compile 0\nFR AOT load 1\nFR AOT DONE\n";
+const CTextProbe function_records_reference_probes[]{
+    {"function-records", "/FunctionRecordsProbe.HC", "", "FR heaps ", "FR DONE",
+     function_records_source_output, {}, false, "B:/FunctionRecordsProbe.HC"},
+    {"function-records-aot", "/FunctionRecordsAOTProbe.HC", "", "FR heaps ",
+     "FR AOT DONE", function_records_aot_output}};
+constexpr CTextProbe function_records_layout_probes[]{
+    {"function-records-layout", "/FunctionRecordLayoutProbe.HC", "",
+     "FR layout 840", "FR layout DONE",
+     "FR layout 840 856 1 F\nFR layout 840 856 1 F\nFR layout DONE\n", {}, true}};
 
 constexpr CTextProbe list_utilities_probes[]{
     {"list-utilities", "/ListUtilitiesProbe.HC", "", "LU linked ", "LU DONE",
@@ -7561,6 +7606,10 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--class-records-reference" ||
        std::string_view(argv[1]) == "--bit-field" ||
        std::string_view(argv[1]) == "--bit-field-reference" ||
+       std::string_view(argv[1]) == "--function-records" ||
+       std::string_view(argv[1]) == "--function-records-reference" ||
+       std::string_view(argv[1]) == "--function-records-layout" ||
+       std::string_view(argv[1]) == "--function-records-layout-reference" ||
        std::string_view(argv[1]) == "--list-utilities" ||
        std::string_view(argv[1]) == "--list-utilities-reference" ||
        std::string_view(argv[1]) == "--optimizer" ||
@@ -7650,6 +7699,11 @@ int main(int argc, char **argv)
     bool class_records_probe =
         std::string_view(argv[1]).starts_with("--class-records");
     bool bit_field_probe = std::string_view(argv[1]).starts_with("--bit-field");
+    bool function_records_probe =
+        std::string_view(argv[1]) == "--function-records" ||
+        std::string_view(argv[1]) == "--function-records-reference";
+    bool function_records_layout_probe =
+        std::string_view(argv[1]).starts_with("--function-records-layout");
     bool list_utilities_probe =
         std::string_view(argv[1]).starts_with("--list-utilities");
     bool optimizer_probe = std::string_view(argv[1]).starts_with("--optimizer");
@@ -7715,6 +7769,10 @@ int main(int argc, char **argv)
       text_probes = class_records_probes;
     else if (bit_field_probe)
       text_probes = bit_field_probes;
+    else if (function_records_probe)
+      text_probes = function_records_probes;
+    else if (function_records_layout_probe)
+      text_probes = function_records_layout_probes;
     else if (list_utilities_probe)
       text_probes = list_utilities_probes;
     else if (optimizer_probe)
@@ -7784,8 +7842,11 @@ int main(int argc, char **argv)
       if (bit_field_probe && !reference)
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/BitFieldProbe.HC",
                               "BitFieldProbe.HC");
-      if ((source_probe || internal_types_probe) && !reference) {
-        for (const auto &probe:text_probes)
+      if ((source_probe || internal_types_probe || function_records_probe ||
+           function_records_layout_probe) &&
+          !reference) {
+        const auto sources = function_records_probe ? text_probes.first(1) : text_probes;
+        for (const auto &probe:sources)
           VerifyHostModuleMedia(argv[3],
                                 std::string("Linux/Fixtures") + probe.source,
                                 probe.source + 1);
@@ -7823,11 +7884,14 @@ int main(int argc, char **argv)
           VerifyHostModuleMedia(argv[3],"Linux/Fixtures/UAsmProbe.HC",
                                 "UAsmProbe.HC");
       }
-      const char *memory = class_records_probe || adam_mem_large ? "3072" : "512";
+      const bool large_memory = class_records_probe || function_records_probe ||
+                                function_records_layout_probe || adam_mem_large;
+      const char *memory = large_memory ? "3072" : "512";
       CMonitor vm(argv[2], argv[3], dir, "pc", memory, false, {}, false,
                   reference);
       vm.Connect();
-      if (!text_probes.empty() && !reference && !bit_field_probe) {
+      if (!text_probes.empty() && !reference && !bit_field_probe &&
+          !function_records_layout_probe) {
         auto output = assert_warning
                           ? vm.WaitSerial(dir / "serial.log",
                                           "UnholyOS: finished "
@@ -7839,6 +7903,13 @@ int main(int argc, char **argv)
             CheckBootSourceProbe(output, probe, dir);
           if (class_records_probe)
             CheckClassRecordRecovery(output);
+        } else if (function_records_probe) {
+          for (const auto &probe : text_probes)
+            CheckBootSourceProbe(output, probe, dir);
+          const char *paths[]{text_probes[0].source, text_probes[1].source};
+          CheckBootProbeOrder(output, paths);
+          CaptureGuestFile(vm, dir, output, "FunctionRecordsProbe.BIN.Z");
+          std::cout << "Function records matched in source and loaded AOT code\n";
         } else {
           RecordTextProbes(output, text_probes, dir);
           if (assert_warning) {
@@ -7863,6 +7934,14 @@ int main(int argc, char **argv)
         DriveCharacterGraphics(vm, dir, "", true, false, false, false, false,
                                false, false, false, false,
                                internal_types_reference_probes, source);
+      } else if (function_records_probe && reference) {
+        const CModuleFile source[]{
+            {fs::absolute("Linux/Fixtures/FunctionRecordsProbe.HC"),
+             "FunctionRecordsProbe.HC", "function-records-source"}};
+        DriveCharacterGraphics(vm, dir, "", true, false, false, false, false,
+                               false, false, false, false,
+                               function_records_reference_probes, source,
+                               0xC0000000ULL);
       } else if (character || tic || breaks || screen_capture || spline ||
                  flood_fill || blot || sprite_flood || music_demo ||
                  !text_probes.empty())
@@ -7870,7 +7949,7 @@ int main(int argc, char **argv)
             vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
             tic, breaks, screen_capture, spline, flood_fill, blot, sprite_flood,
             music_demo, text_probes, {},
-            (class_records_probe || adam_mem_large) && reference ? 0xC0000000ULL : 0x20000000ULL);
+            large_memory ? 0xC0000000ULL : 0x20000000ULL);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");
@@ -8004,6 +8083,8 @@ int main(int argc, char **argv)
               << "       " << argv[0]
               << " --class-records[-reference] qemu image.iso [capture-dir]\n"
               << " --bit-field[-reference] qemu image.iso [capture-dir]\n"
+              << " --function-records[-reference] qemu image.iso [capture-dir]\n"
+              << " --function-records-layout[-reference] qemu image.iso [capture-dir]\n"
               << " --list-utilities[-reference] qemu image.iso [capture-dir]\n"
               << " --optimizer[-reference] qemu image.iso [capture-dir]\n"
               << " --optimizer-aot qemu image.iso [capture-dir]\n"

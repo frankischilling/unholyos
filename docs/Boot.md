@@ -3488,6 +3488,153 @@ an empty `T:/Home>` prompt, then exited and released the port.
 recovery check. The pull request records the exact tested commit and the
 GCC and Clang CI results.
 
+## Compiler function records
+
+`FunctionRecordLayoutProbe.HC` checks a named function and a class member
+with a callback signature. QEMU 8.2.2 uses `pc`, `qemu64`, 3 GiB of memory,
+and one CPU for both guests. Each record lives on its task's code heap,
+has 840 bytes of payload and a total allocation of 856 bytes, and exposes
+all four pointer companions. Both guests print `FR layout 840 856 1 F`
+for each record.
+
+```sh
+make -j4 test-function-records
+build/Linux/TestBoot --function-records-layout-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/function-records-layout-reference
+```
+
+The remaining captures in this section are from the original draft at
+`631bd38`. The source and AOT fixture keeps its original bytes.
+
+The GCC and Clang native builds execute `FunctionRecordsProbe.HC` as source
+and as a guest-built TOSB module. Its record checks follow Terry A. Davis's
+`Compiler/PrsLib.HC::PrsFunNew`, `PrsStmt.HC`, `PrsVar.HC`, and
+`Kernel/KHashB.HC` at
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`. Matched reference source/AOT
+comparison is pending: canonical execution in the pinned guest stalled
+while compiling the callback helper body, and diagnostics are still in
+progress. The native results below do not establish reference runtime
+parity or a complete regression pass.
+
+Both native source runs produced these 146 normalized bytes:
+
+```text
+FR heaps 1
+FR named F pointers FFFF
+FR args 7
+FR callbacks F pointers FFFF
+FR behavior FF stack F
+FR cleanup 1F heap 3
+FR image F phase 0
+FR DONE
+```
+
+Both loaded modules produced the same trace with `phase 1`. The source
+phase checks the current functions against their JIT `CHashFun` records.
+The module phase requires their raw export addresses inside the loaded
+module payload and distinct from the retained JIT addresses, establishing
+execution of the generated module. `BootVariadicReport` runs the source,
+calls `Cmp`, and loads its output after the existing `FileWriteProbe.BIN`
+RAM-drive setup. The host requires the full source and module traces, one
+completion with `checks 1`
+for each, and their order before normal boot completion. It also verifies
+all packaged source bytes and captures the generated `.BIN.Z`.
+
+Each execution constructs four fresh named functions and four callback
+signatures through nested `ExePutS`. It checks 840-byte allocations owned
+by the task's code heap, the empty base's self-list sentinel, and every byte
+of four contiguous 168-byte companions. Argument names, offsets, types,
+defaults, and data-heap ownership are checked separately. Direct calls,
+typed function pointers, and callback pointers with one through four stars
+must return the expected values with unchanged RSP. Removing only the owned
+records and their generated code must restore both heap counters and the
+saved compiler and exception links. These are selected base/member checks;
+they do not compare every byte of those records or establish parser-error
+cleanup parity.
+
+The first native attempt exposed a missing typed `HashVal` declaration;
+its existing raw export and adapter were already present. The runtime
+headers now include the exact `I64 HashVal(CHash *tmph)` signature from
+`Kernel/KernelC.HH`. The fixture also selects `_import` for `_MHEAP_CTRL`
+and `_HASH_REM_DEL` under `#ifaot`, retaining `_extern` for source execution.
+This records the kernel helper imports in the module while source calls
+bind to the existing exports. The local RSP helper remains a module-local
+assembly label.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Common `FunctionRecordsProbe.HC` | 10,713 | `4c2cf18328fb3d14854bf1aa0188277c8053155dca35c6c5e4eb9d4a5dbb0d2e` |
+| Reference `FunctionRecordsAOTProbe.HC` wrapper, comparison pending | 1,086 | `734808b845b04ef67c803ea5a36d370ea5222e18c8c2b31ef4aa202ee1cbdc72` |
+| Native source trace, GCC and Clang | 146 | `852f51fc06e2ccf0225549fef49b08675506b40e3e93126ec787eda35103898e` |
+| Native AOT trace, GCC and Clang | 146 | `4e2b685f19017cb3c5c63b014c409df40bbf6d137d9994e11ec40987c15daa1f` |
+| Native guest-built `FunctionRecordsProbe.BIN.Z`, GCC and Clang | 5,690 | `51b64c1c84294bf42bc4d2ab830c9bbd04180e9547ab45afc3df44a18ec7ea70` |
+
+```sh
+make -j4 all build/unholyos-startup-test.iso build/function-records-test.iso
+make -j4 BUILD=build/clang \
+  CXX=/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  HOSTCXX=/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  all build/clang/unholyos-startup-test.iso build/clang/function-records-test.iso
+g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+  -o build/function-records-audit/TestBoot.gcc Linux/TestBoot.cpp
+/mnt/c/Users/imike/Desktop/unholyos/build/input-fifo-allocation/build/clang-toolchain/usr/lib/llvm-20/bin/clang++ \
+  -std=c++20 -O2 -Wall -Wextra -Werror \
+  -o build/function-records-audit/TestBoot.clang Linux/TestBoot.cpp
+build/function-records-audit/TestBoot.gcc --function-records \
+  qemu-system-x86_64 build/function-records-test.iso \
+  build/function-records-gcc-imports
+build/function-records-audit/TestBoot.clang --function-records \
+  qemu-system-x86_64 build/clang/function-records-test.iso \
+  build/function-records-clang-imports
+```
+
+The native driver runs exited successfully in sessions 15060 and 62251.
+Their capture directories contain both normalized traces, the generated
+module, and serial output. QEMU 8.2.2 (`1:8.2.2+ds-0ubuntu1.18`) used
+`-machine pc -cpu qemu64 -m 3072 -boot d -cdrom <iso>`, one default vCPU,
+`-display none -monitor none -qmp stdio -no-reboot`, and serial capture.
+Both heaps must be distinct. The reference mode uses the same memory size
+and the shared bounded source-plus-NUL upload and RAM-file readback path;
+no successful final reference trace is recorded yet.
+
+A separate native cold boot of a preserved GCC standard ISO passed the
+existing startup and pool verifiers without the interactive demo sequence
+(session 68115). Each terminal contained exactly 424 named function blocks
+and 29 callback blocks, charged at 856 bytes each, plus the 81 class blocks
+charged at 656 bytes each: `453*856 + 81*656 = 440904` code bytes used.
+The verifier checks the exact name inventory, owners, allocation extents,
+companion records, member links, and callback signatures before requiring
+that total. Both terminals had 452,608 code bytes allocated and 698,824
+data bytes used within 707,072 allocated bytes. Idle and window-manager
+code heaps remained empty. Existing pool coverage, startup-stack, compiler
+image, handoff, interrupt, clock, and boot-drive checks also passed.
+
+This diagnostic includes an immutable copy of the verifier and its headers
+under `build/function-records-audit/heap-check-gcc-inputs/Linux`. Its input
+ISO, kernel, compiler, and opcode resource were copied before execution.
+The retained capture and log are `build/function-records-audit/heap-check-gcc-run`
+and `build/function-records-audit/heap-check-gcc-run.log`. The preserved
+standard ISO SHA-256 is
+`c2cd877184f76b5bb9fbdde78227db97d99ca778d04bd9743c6f91b970a75f26`;
+kernel SHA-256 is
+`e04e9acd23a1f8629831367cafbd0b80ebb79fc6d01cd010b9f20a1f7259a4e2`;
+compiler SHA-256 is
+`ee6c2f4d24c861814cb647a108629909f73a86dd89bbcc52194a837e0abb682e`.
+The diagnostic was built with GCC 13.3.0 and ran with the same QEMU settings,
+without a GDB listener:
+
+```sh
+g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+  -o build/function-records-audit/HeapCheck.gcc \
+  build/function-records-audit/HeapCheck.cpp
+cd build/function-records-audit/heap-check-gcc-inputs
+../HeapCheck.gcc qemu-system-x86_64 unholyos.iso \
+  0000Boot/0000Kernel.BIN.C ../heap-check-gcc-run
+```
+
+`make test` includes `test-function-records`. The full regression and
+matched reference source/AOT comparison remain pending for this increment.
+
 ## Linked lists and queues
 
 `ListUtilitiesProbe.HC` exercises Terry A. Davis's

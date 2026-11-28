@@ -281,17 +281,51 @@ already assigns the root slot, so it skips the duplicate store through
 the sentinel and appends normally through later real members. This
 preserves the reference's layout without treating a pointer field as
 a complete C++ `CMemberLst` object. Offset assertions cover the leading
-`next` field and the class's tail field. Null tails remain supported for
-the separate native function constructors.
+`next` field and the class's tail field. The insertion path also accepts
+a null tail.
 
 After failed completion of a forward class, `PrsClassDef` retains the
 sentinel restored by `ClassMemberLstDel`; it no longer overwrites it
 with null. That retry path is checked as native recovery behavior.
 The constructor still returns null if allocation fails, whereas the
 pinned constructor assumes allocation succeeds. Function-record
-construction and lazy per-task type registration remain separate gaps.
+construction is covered separately below. Lazy per-task type registration
+remains unfinished.
 The common lifecycle comparison and native retry checks are recorded in
 [Boot.md](Boot.md#compiler-class-records).
+
+## Compiler function records
+
+`Compiler/PrsLib.cpp::PrsFunNew` follows `Compiler/PrsLib.HC`: five adjacent
+168-byte function records come from the current task's code heap. Each
+starts with `HTT_FUN`, pointer raw type, eight-byte size, and its pointer-star
+count. Only the base receives size zero and the tail pointer to its own
+`member_lst_and_root` slot. The four companions retain their zeroed
+function-specific fields. Compile-time assertions cover the complete
+`CHashFun` size and field offsets.
+
+Named functions in `PrsStmt.cpp`, pointer signatures in `PrsVar.cpp`, and
+runtime headers in `AsmInit.cpp` use this constructor. Their callers still
+set the return class, names, flags, arguments, defaults, and executable
+address. `PrsFunPtrNew` returns the selected companion, while existing
+`FunPtrBase` users recover the base with the 168-byte stride and free the
+allocation once. The member-list sentinel uses the same insertion and
+cleanup paths as class records.
+
+`CmpRuntimeHeaders` also supplies the `I64 HashVal(CHash *tmph)` declaration
+from `Kernel/KernelC.HH`. Its existing kernel export and HolyC adapter now
+have typed metadata in both source execution and AOT compilation tables.
+
+The block requests 840 bytes and charges 856 bytes including its heap
+header. Previously, named functions used one 184-byte data-heap block,
+and signatures allocated only enough records for their declared pointer
+depth. The C++ constructor retains its existing null return on allocation
+failure; the pinned constructor assumes success. Shared compiler
+registration, source metadata, register allocation, and external-usage
+list responsibilities still require further alignment.
+The paired allocation and pointer layout checks, native source and AOT
+checks, and outstanding reference fixture are recorded in
+[Boot.md](Boot.md#compiler-function-records).
 
 ## HolyC assembler
 
