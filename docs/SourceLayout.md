@@ -1606,8 +1606,24 @@ disabled. `Play` also checks the lower bound of the note index before
 accessing `music.note_map`; the reference only checks the upper bound.
 Characters below `A` outside the notation modifiers therefore become
 rests instead of reading outside that array. SMP synchronization,
-`CurSongTask`, the waveform functions, `Noise`, and `Sweep` remain
-pending. Terry A. Davis's original song stays in `Demo/Snd/OhGreat.HC`.
+`CurSongTask`, `Noise`, and `Sweep` remain pending. Terry A. Davis's
+original song stays in `Demo/Snd/OhGreat.HC`.
+
+## Music waveform functions
+
+`Saw`, `FullSaw`, `Caw`, `FullCaw`, `Tri`, and `FullTri` in
+`Adam/ASnd.cpp` follow Terry A. Davis's `Adam/ASnd.HC`. The first
+four compare the sign of the input's raw binary64 word, as the pinned
+compiler does for `t>=0.0`. All six test the period word as an
+integer, so positive and negative zero follow different paths.
+
+`F64RemBits` in `Kernel/KMathA.asm` uses the modulo loop from
+`Compiler/Templates.HC` and stores the remainder as binary64.
+`Adam/ASnd.asm` keeps the subsequent division, scale, and offset
+operations on the x87 stack through the reference's next binary64
+store. The triangle routines store the scaled phase before comparing
+it to their bounds. The public functions use the HolyC stack
+convention and return the binary64 word in RAX.
 
 ## Linked lists and queues
 

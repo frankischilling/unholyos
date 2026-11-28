@@ -14,7 +14,7 @@ CXXFLAGS := -std=c++20 -Os -Wall -Wextra -Werror -ffreestanding -fno-pie \
 ASM_SRC := Kernel/KStart16.asm Kernel/KStart32.asm Kernel/KStart64.asm Kernel/KUtils.asm \
 	Kernel/KMathA.asm Kernel/StrA.asm Kernel/KInts.asm Kernel/KExcept.asm Kernel/KLoad.asm Kernel/KExts.asm Kernel/Sched.asm Kernel/PCIBIOS.asm \
 	Kernel/Mem/PageTables.asm Kernel/SerialDev/SerialBoot.asm Adam/Opt/Boot/DskISORedSea.asm \
-	Adam/Gr/GrAsm.asm Adam/Gr/GrTextBase.asm
+	Adam/ASnd.asm Adam/Gr/GrAsm.asm Adam/Gr/GrTextBase.asm
 CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp Kernel/KDbg.cpp Kernel/MultiProc.cpp Kernel/Display.cpp Kernel/FontStd.cpp Kernel/FontCyrillic.cpp Kernel/SerialDev/Serial.cpp \
 	Kernel/KTask.cpp Kernel/Sched.cpp Kernel/KHashA.cpp Kernel/KHashB.cpp Kernel/KLoad.cpp Kernel/KMathB.cpp Kernel/StrA.cpp \
 	Kernel/KDataTypes.cpp Kernel/KDate.cpp Kernel/KExcept.cpp Kernel/KExts.cpp Kernel/QSort.cpp \
@@ -223,6 +223,8 @@ MATH_TEST_ISO := $(BUILD)/math-test.iso
 MATH_PROBE := Linux/Fixtures/MathHelpersProbe.HC
 MUSIC_PRECISION_ISO := $(BUILD)/music-precision-test.iso
 MUSIC_PRECISION_PROBE := Linux/Fixtures/MusicPrecision.HC
+WAVEFORM_PROBE := Linux/Fixtures/WaveformProbe.HC
+WAVEFORM_TEST_ISO := $(BUILD)/waveform-test.iso
 STRINGS_TEST_ISO := $(BUILD)/strings-test.iso
 STRINGS_PROBES := Linux/Fixtures/StrScanProbe.HC Linux/Fixtures/DocScanProbe.HC Linux/Fixtures/StringUtilitiesProbe.HC \
 	Linux/Fixtures/FloatScanProbe.HC Linux/Fixtures/DateScanProbe.HC Linux/Fixtures/StringCompareProbe.HC
@@ -475,7 +477,7 @@ $(AC_GEN_DISK): $(FAT_TOOL) $(AC_GEN_INPUT) Linux/Fixtures/ACDictGen.HC
 
 $(ISO) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(ATA_TEST_ISO) $(FAT_WRITE_ISO) \
 $(FAT_FORMAT_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(BREAK_TEST_ISO) \
-$(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(STRINGS_TEST_ISO) \
+$(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(WAVEFORM_TEST_ISO) $(STRINGS_TEST_ISO) \
 $(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO) $(LATE_IMPORT_TEST_ISO) $(LOAD_API_TEST_ISO) $(LOAD_PASS2_TEST_ISO) $(COMPILER_DEFINES_TEST_ISO) $(STRING_DEFINES_TEST_ISO) $(SYSTEM_DEFINES_TEST_ISO) $(COLOR_CONVERSIONS_TEST_ISO) $(FORMAT_MISSING_ARGS_TEST_ISO) $(INTERNAL_TYPES_TEST_ISO) $(CLASS_RECORDS_TEST_ISO): $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 
 $(HOST_MODULE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(HOST_MODULE)
@@ -656,6 +658,9 @@ $(BREAK_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(BREAK_PROBE)
 
 $(MATH_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(MATH_PROBE) $(FILE_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(MATH_PROBE) --file $(FILE_WRITE_PROBE)
+
+$(WAVEFORM_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(WAVEFORM_PROBE) $(FILE_WRITE_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --dir Home --file $(WAVEFORM_PROBE) --file $(FILE_WRITE_PROBE)
 
 $(MUSIC_PRECISION_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(MUSIC_PRECISION_PROBE) $(FILE_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(MUSIC_PRECISION_PROBE) --file $(FILE_WRITE_PROBE)
@@ -952,6 +957,12 @@ test-optical-image: $(OPTICAL_IMAGE_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --optical-image "$(QEMU)" $(OPTICAL_IMAGE_TEST_ISO)
 
 test: test-nested-redsea test-fat32-image test-optical-image
+
+.PHONY: test-waveform
+test-waveform: $(WAVEFORM_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --waveform "$(QEMU)" $(WAVEFORM_TEST_ISO)
+
+test: test-waveform
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio

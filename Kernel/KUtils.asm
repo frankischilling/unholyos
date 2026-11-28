@@ -174,6 +174,7 @@ GLOBAL tSHC,BusyHC,SleepUntilHC,SleepHC,Ona2FreqHC,Freq2OnaHC,SndHC
 GLOBAL ScrnCastHC,SndRstHC,BeepHC,MuteHC,IsMuteHC
 GLOBAL SndShiftHC,AUWriteHC
 GLOBAL SndTaskEndCBHC,tMHC,BeatHC,MusicSetOctaveHC,MusicSetMeterHC,MusicSetNoteLenHC
+GLOBAL SawHC,FullSawHC,CawHC,FullCawHC,TriHC,FullTriHC
 GLOBAL Note2OnaHC,Ona2NoteHC,Ona2OctaveHC,PlayHC,MusicSettingsRstHC
 GLOBAL SpawnHC,TaskValidateHC,SuspendHC,IsSuspendedHC,TaskQueInsHC,TaskQueRemHC
 GLOBAL KillHC
@@ -463,6 +464,7 @@ EXTERN RawCpp,DbgModeCpp,IsDbgModeCpp,PutFileLinkCpp,PutSrcLinkCpp,FixSetCpp,Ada
 EXTERN tSCpp,BusyCpp,SleepUntilCpp,SleepCpp,Ona2FreqCpp,Freq2OnaCpp,SndCpp
 EXTERN ScrnCastCpp,SndRstCpp,BeepCpp,MuteCpp,IsMuteCpp
 EXTERN SndShiftCpp,AUWriteCpp
+EXTERN SawCpp,FullSawCpp,CawCpp,FullCawCpp,TriCpp,FullTriCpp
 EXTERN SndTaskEndCBCpp,tMCpp,BeatCpp,MusicSetOctaveCpp,MusicSetMeterCpp,MusicSetNoteLenCpp
 EXTERN Note2OnaCpp,Ona2NoteCpp,Ona2OctaveCpp,PlayCpp,MusicSettingsRstCpp
 
@@ -1104,6 +1106,12 @@ HOLYC_CPP SndShiftHC,SndShiftCpp,2
 HOLYC_CPP AUWriteHC,AUWriteCpp,4
 HOLYC_CPP SndRstHC,SndRstCpp,0
 HOLYC_CPP SndTaskEndCBHC,SndTaskEndCBCpp,0
+HOLYC_CPP SawHC,SawCpp,2
+HOLYC_CPP FullSawHC,FullSawCpp,2
+HOLYC_CPP CawHC,CawCpp,2
+HOLYC_CPP FullCawHC,FullCawCpp,2
+HOLYC_CPP TriHC,TriCpp,2
+HOLYC_CPP FullTriHC,FullTriCpp,2
 HOLYC_CPP tMHC,tMCpp,0
 HOLYC_CPP BeatHC,BeatCpp,0
 HOLYC_CPP MusicSetOctaveHC,MusicSetOctaveCpp,1
