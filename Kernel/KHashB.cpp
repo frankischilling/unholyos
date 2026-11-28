@@ -129,6 +129,37 @@ extern "C" void HashTableDelCpp(CHashTable *table)
   Free(table);
 }
 
+extern "C" int64_t HashTablePurgeCpp(CHashTable *table)
+{
+  if (!table)
+    return 0;
+  const auto flags = GetRFlags();
+  asm volatile("cli" : : : "memory");
+  int64_t count = 0;
+  for (int64_t i = 0; i <= table->mask; ++i)
+    for (auto *entry = table->body[i]; entry; entry = entry->next) {
+      if (!(entry->type & (HTT_FUN | HTT_GLBL_VAR)))
+        continue;
+      auto **link = &entry->next;
+      while (auto *older = *link) {
+        if (((older->type & HTT_EXPORT_SYS_SYM) ||
+             !(older->type & HTG_TYPE_MASK)) &&
+            !StrCmpCpp(reinterpret_cast<const uint8_t *>(entry->str),
+                       reinterpret_cast<const uint8_t *>(older->str))) {
+          *link = older->next;
+          if (!(older->type & HTG_TYPE_MASK))
+            older->type = HTT_KEYWORD;
+          HashDel(older);
+          ++count;
+          break;
+        }
+        link = &older->next;
+      }
+    }
+  SetRFlags(flags);
+  return count;
+}
+
 extern "C" void HashSrcFileSetCpp(const CCmpCtrl *cc, CHashSrcSym *sym,
                                   int64_t line_offset)
 {
@@ -154,4 +185,22 @@ extern "C" void HashSrcFileSetCpp(const CCmpCtrl *cc, CHashSrcSym *sym,
     sym->hash.type |= HTF_PRIVATE;
   Free(const_cast<char *>(sym->idx));
   sym->idx = idx;
+}
+
+extern "C" CHashGeneric *HashPublicCpp(const char *st, uint64_t mask,
+                                       uint8_t val)
+{
+  auto *task = CurrentTask();
+  auto *entry = HashFind(st, task->hash_table, mask);
+  if (!entry)
+    return nullptr;
+  if (val)
+    entry->type |= HTF_PUBLIC;
+  else
+    entry->type &= ~HTF_PUBLIC;
+  auto *cc = task->last_cc;
+  if ((entry->type & HTG_SRC_SYM) &&
+      cc != reinterpret_cast<CCmpCtrl *>(&task->next_cc) && cc->lex_include_stk)
+    HashSrcFileSetCpp(cc, reinterpret_cast<CHashSrcSym *>(entry), 0);
+  return reinterpret_cast<CHashGeneric *>(entry);
 }

@@ -1,4 +1,8 @@
 #include "DolDoc.hpp"
+#include "../AutoComplete/AutoComplete.hpp"
+
+extern "C" void ViewHC();
+extern "C" int64_t PopUpCpp(const char *src, CTask *parent, CTask **popup);
 
 extern "C" uint64_t ViewCpp()
 {
@@ -70,7 +74,10 @@ extern "C" uint64_t DocEdCpp(CDoc *doc, int64_t dof_flags)
   WinZBufUpdateCpp();
   if (!(dof_flags & DOF_DONT_WINMGR_SYNC))
     RefreshCpp(2, true);
-  bool res = ViewCpp();
+  uint64_t accepted;
+  const bool okay = CallHolyC0Checked(
+      reinterpret_cast<const uint8_t *>(ViewHC), &accepted);
+  const bool res = okay && accepted;
   DocLock(*doc);
   if (res)
     for (auto *entry = doc->head.next; entry != &doc->head; entry = entry->next)
@@ -94,5 +101,49 @@ extern "C" uint64_t DocEdCpp(CDoc *doc, int64_t dof_flags)
     DocUnlock(*doc);
   DocDelCpp(border);
   WinZBufUpdateCpp();
+  if (!okay)
+    RethrowHolyC();
+  return res;
+}
+
+extern "C" bool EdCpp(const char *link_st, int64_t edf_dof_flags)
+{
+  char *filename, *needle_str;
+  int64_t num;
+  const int64_t type = EdLinkCvtCpp(link_st, &filename, &needle_str, &num,
+                                    edf_dof_flags);
+  bool res = false;
+  if (type == LK_DEF && filename) {
+    res = !(edf_dof_flags & EDF_WAS_WRITE);
+    if (!(edf_dof_flags & EDF_BAIL)) {
+      auto *doc = DocNewCpp(nullptr, nullptr);
+      if (doc) {
+        doc->desc = 0x0066654474636944; // DictDef
+        ACDDefsPutCpp(doc, filename, num);
+        DocEdCpp(doc, 0);
+        DocDelCpp(doc);
+      } else {
+        res = false;
+      }
+    }
+  } else if (type >= 0 && filename && !IsRawCpp()) {
+    const bool in_memory = LK_DOC <= type && type <= LK_DOC_LINE;
+    if ((edf_dof_flags & EDF_BAIL) || in_memory || FilesFindMatch(filename, FILEMASK_TXT) ||
+        PopUpCancelOkCpp("$RED$$BK,1$WARNING:$FG$$BK,0$ Not Text File\n\n", nullptr))
+      res = DocFileEd(type, filename, needle_str, &num, edf_dof_flags);
+  }
+  Free(filename);
+  Free(needle_str);
+  return res;
+}
+
+extern "C" int64_t PopUpEdCpp(const char *filename, CTask *parent, CTask **popup)
+{
+  const uint64_t arg = reinterpret_cast<uintptr_t>(filename);
+  auto *src = MStrPrintCpp("Ed(\"%Q\");", 1, &arg);
+  if (!src)
+    return 0;
+  const int64_t res = PopUpCpp(src, parent, popup);
+  Free(src);
   return res;
 }

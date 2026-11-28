@@ -1,6 +1,8 @@
 #include "../KernelB.hpp"
 
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
+extern "C" void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
+                             const uintptr_t *frame);
 
 extern "C" void HomeSetCpp(const char *dirname)
 {
@@ -81,8 +83,18 @@ extern "C" uint64_t CdCpp(const char *name, uint8_t make_dirs)
       if (pos > 1)
         dir[pos++] = '/';
       MemCpy(dir + pos, part, size + 1);
-      if (dv &&
-          (FsIsDir(*dv, dir) || (make_dirs && FsMkDir(*dv, dir)))) {
+      bool exists = dv && FsIsDir(*dv, dir);
+      if (!exists && dv && make_dirs) {
+        uint64_t arg = reinterpret_cast<uintptr_t>(part);
+        if (!FileNameChk(part))
+          PrintErrCpp("Invalid FileName: \"%s\".\n", 1, &arg, nullptr);
+        else {
+          PrintCpp("Make Directory:%s\n", 1, &arg);
+          if (WritableFS(*dv))
+            exists = FsMkDir(*dv, dir);
+        }
+      }
+      if (exists) {
         len = pos + size;
       } else {
         dir[len] = 0;
@@ -185,14 +197,21 @@ extern "C" uint64_t DirMkCpp(const char *filename, int64_t entry_cnt)
     return false;
   bool res = false;
   if (auto *dirc = DirContextNewCpp(filename, false, false, false)) {
-    if (*dirc->mask && FileNameChk(dirc->mask)) {
-      auto *path = DirEntryFullName(CurrentTask()->cur_dir, dirc->mask);
-      if (path && WritableFS(*dirc->dv)) {
+    if (*dirc->mask) {
+      if (!FileNameChk(dirc->mask)) {
+        uint64_t arg = reinterpret_cast<uintptr_t>(dirc->mask);
+        PrintErrCpp("Invalid FileName: \"%s\".\n", 1, &arg, nullptr);
+      } else {
         uint64_t arg = reinterpret_cast<uintptr_t>(filename);
         PrintCpp("Make Directory:%s\n", 1, &arg);
-        res = FsMkDir(*dirc->dv, path, entry_cnt);
+        auto *name = PathTrim(dirc->mask, CurrentTask()->data_heap);
+        auto *path = name ? DirEntryFullName(CurrentTask()->cur_dir, name)
+                          : nullptr;
+        if (path && WritableFS(*dirc->dv))
+          res = FsMkDir(*dirc->dv, path, entry_cnt);
+        Free(path);
+        Free(name);
       }
-      Free(path);
     }
     DirContextDelCpp(dirc, true);
   }

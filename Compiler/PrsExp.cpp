@@ -138,6 +138,13 @@ private:
     return coc.Add(entry);
   }
 
+  uint32_t Error(const char *message)
+  {
+    cc.parse_error = message;
+    cc.expression_error = true;
+    return NO_IC;
+  }
+
   uint32_t Defined()
   {
     unsigned parens = 0;
@@ -172,20 +179,41 @@ private:
       if (paren)
         Lex(cc);
       uint32_t operands[]{NO_IC, NO_IC};
+      auto opcode = static_cast<CICode>(
+          reinterpret_cast<uintptr_t>(callee.exe_addr));
+      auto *member=callee.cls.member_lst_and_root;
       for (unsigned i = 0; i < callee.arg_cnt; ++i) {
+        if (!member || !member->member_class || member->dim.next)
+          return NO_IC;
         if (i && (cc.token != ',' || Lex(cc) == TK_EOF))
           return NO_IC;
         operands[i] = Expression(PREC_ASSIGN + 1, depth + 1);
         if (operands[i] == NO_IC || !TypeSize(coc.code[operands[i]].type))
           return NO_IC;
+        // Match the reference's argument conversion flags for intrinsics.
+        // Integer arguments keep their value bits; float/int conversions
+        // are explicit so each lowering sees the declared numeric category.
+        auto from=coc.code[operands[i]].type;
+        auto to=ClassRawType(*member->member_class);
+        if (!TypeSize(to))
+          return NO_IC;
+        if (opcode!=IC_TO_I64 && opcode!=IC_TO_F64 &&
+            (from==RT_F64)!=(to==RT_F64)) {
+          operands[i]=Add({0,operands[i],NO_IC,
+                           to==RT_F64?IC_TO_F64:IC_TO_I64,
+                           to==RT_F64?RT_F64:RT_I64,false,false,
+                           coc.code[operands[i]].runtime});
+          if (operands[i]==NO_IC)
+            return NO_IC;
+        }
+        member=member->next;
       }
       if (paren) {
         if (cc.token != ')')
           return NO_IC;
         Lex(cc);
       }
-      auto opcode = reinterpret_cast<uintptr_t>(callee.exe_addr);
-      return Add({0, operands[0], operands[1], static_cast<CICode>(opcode),
+      return Add({0, operands[0], operands[1], opcode,
                   ClassRawType(*callee.return_class), false, false, true,
                   NO_IC, callee.return_class});
     }
@@ -397,14 +425,25 @@ private:
 
   uint32_t Member(uint32_t value)
   {
-    if (cc.token == TK_DEREFERENCE)
+    if (cc.token == TK_DEREFERENCE) {
+      // PrsUnaryModifier in the reference changes the class on a
+      // pointer-update value before selecting the member. The reference
+      // increment/decrement emitter sees a non-pointer class and uses one byte.
+      auto &base=coc.code[value];
+      if ((base.code==IC__PP || base.code==IC__MM ||
+           base.code==IC_PP_ || base.code==IC_MM_) && base.cls &&
+          base.cls->ptr_stars_cnt==1)
+        base.data=1;
       value = Deref(value);
-    if (!IsLValue(value) || Lex(cc) != TK_IDENT)
+    }
+    if (!IsLValue(value))
       return NO_IC;
+    if (Lex(cc) != TK_IDENT)
+      return Error("Invalid member at ");
     const auto node = coc.code[value];
     auto *member = MemberFind(cc.cur_str, node.cls);
     if (!member)
-      return NO_IC;
+      return Error("Invalid member at ");
     Lex(cc);
     auto address = node.left;
     if (member->offset)
@@ -556,8 +595,10 @@ private:
     if (token == '(') {
       Lex(cc);
       uint32_t value = Expression(PREC_ASSIGN + 1, depth + 1);
-      if (value == NO_IC || cc.token != ')')
+      if (value == NO_IC)
         return NO_IC;
+      if (cc.token != ')')
+        return Error("Missing ')' at ");
       coc.code[value].grouped = true;
       Lex(cc);
       return value;
@@ -623,6 +664,8 @@ private:
       return coc.LValue(address, *member->member_class, member->dim.next,
                         FunPtrBase(member->fun_ptr));
     }
+    if (token == TK_IDENT && !cc.hash_entry && !(cc.flags & CCF_ASM_EXPRESSIONS))
+      return Error("Invalid lval at ");
     if (token == TK_IDENT && cc.hash_entry) {
       auto *hash = cc.hash_entry;
       if (hash->type & HTT_KEYWORD) {
@@ -660,20 +703,21 @@ private:
         }
       }
     }
-    return NO_IC;
+    return Error("Missing expression at ");
   }
 
   uint32_t Binary(uint32_t left, CBinaryOp op, unsigned depth)
   {
     Lex(cc);
+    const bool assignment = op.code == IC_ASSIGN || ICIsCompoundAssign(op.code);
+    if (assignment && !IsLValue(left))
+      return Error("Invalid lval at ");
     uint32_t right = Expression(op.precedence, depth + 1);
     if (right == NO_IC)
       return NO_IC;
     if (!TypeSize(coc.code[left].type) || !TypeSize(coc.code[right].type))
       return NO_IC;
-    if (op.code == IC_ASSIGN || ICIsCompoundAssign(op.code)) {
-      if (!IsLValue(left))
-        return NO_IC;
+    if (assignment) {
       auto *cls = coc.code[left].cls;
       if ((op.code == IC_ADD_EQU || op.code == IC_SUB_EQU) && cls &&
           cls->ptr_stars_cnt && (cls - 1)->size != 1) {

@@ -114,6 +114,10 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not initialize kernel globals\r\n");
     return;
   }
+  if (!KeyDevInit()) {
+    SerialPutS("UnholyOS: Could not initialize keyboard output devices\r\n");
+    return;
+  }
   if (!Mem32DevInit(adam_task->data_heap)) {
     SerialPutS("UnholyOS: Could not initialize device memory ranges\r\n");
     return;
@@ -189,14 +193,32 @@ extern "C" void KMainCpp()
     return;
   }
   SYS_RUN_LEVEL |= RLF_COMPILER;
+  if (!(SYS_RUN_LEVEL & RLF_VGA)) {
+    BootKernelCfgReport();
+    BootPutS("Text mode: kernel ready; graphical Adam startup disabled");
+    SerialPutS("UnholyOS: text mode kernel ready; graphical Adam startup disabled\r\n");
+    for (;;)
+      asm volatile("cli; hlt" : : : "memory");
+  }
   if (!GrPaletteInit()) {
     SerialPutS("UnholyOS: Could not register color names\r\n");
     return;
   }
-  if (!LoadDocDefines()) {
+  if (!MakeDoc()) {
     SerialPutS("UnholyOS: Could not register document definitions\r\n");
     return;
   }
+  GrEnd();
+  if (!MakeAdam()) {
+    BootPutS("Could not load Adam sources");
+    SerialPutS("UnholyOS: Could not load Adam sources\r\n");
+    return;
+  }
+  if (!InsRegInit()) {
+    SerialPutS("UnholyOS: Could not register install form lists\r\n");
+    return;
+  }
+  BootKernelCfgReport();
   if (!GrInit2()) {
     SerialPutS("UnholyOS: Could not allocate graphics device contexts\r\n");
     return;
@@ -212,8 +234,16 @@ extern "C" void KMainCpp()
   adam_task->win_inhibit |= WIF_SELF_FOCUS;
   SYS_RUN_LEVEL |= RLF_DOC;
   adam_task->display_flags |= DISPLAYF_CHILDREN_NOT_ON_TOP;
+  if (RegInit()) {
+    SYS_RUN_LEVEL |= RLF_REGISTRY;
+    if (!ins_reg.registered)
+      InsUnregCpp(0);
+  } else
+    SerialPutS("UnholyOS: Could not initialize the registry\r\n");
   DbgModeCpp(false);
   if (!StartUpTasks())
     SerialPutS("UnholyOS: Could not start the user task\r\n");
+  SYS_RUN_LEVEL |= RLF_ADAM_SERVER;
   SerialPutS("UnholyOS: kernel entered in 64-bit mode\r\n");
+  SrvTaskContCpp();
 }

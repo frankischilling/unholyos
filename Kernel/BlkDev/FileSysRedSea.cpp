@@ -1,10 +1,23 @@
 #include "../KernelB.hpp"
+#include "../../Adam/Opt/Boot/DskISORedSea.hpp"
 
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
+extern "C" void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
+                             const uintptr_t *frame);
+
+extern "C" void RedSeaFreeFreeLstCpp(CDrv *dv)
+{
+  DrvChkCpp(dv,true);
+  CDiskLock lock(*dv);
+  if (DrvFreeListValid(*dv)) DrvFreeListClear(*dv);
+}
 
 bool RedSeaInit(CDrv &dv)
 {
   CRedSeaBoot boot;
+  if (!dv.bd || dv.drv_offset < 0 || dv.bd->max_blk < 0 ||
+      uint64_t(dv.bd->max_blk) >= SIZE_MAX / BLK_SIZE)
+    return false;
   uint64_t first = dv.drv_offset, end = uint64_t(dv.bd->max_blk) + 1;
   if (first >= end ||
       !BlkDevReadBytes(*dv.bd, reinterpret_cast<uint8_t *>(&boot),
@@ -16,6 +29,10 @@ bool RedSeaInit(CDrv &dv)
       boot.root_clus < first + boot.bitmap_sects ||
       boot.root_clus >= first + boot.sects)
     return false;
+  if (dv.next_free) {
+    if (!DrvFreeListValid(dv)) return false;
+    DrvFreeListClear(dv);
+  }
   dv.fs_type = FSt_REDSEA;
   dv.spc = 1;
   dv.size = boot.sects;
@@ -25,41 +42,101 @@ bool RedSeaInit(CDrv &dv)
   return true;
 }
 
+extern "C" uint64_t RedSeaValidateCpp(uint8_t drv_let)
+{
+  auto *dv=Let2DrvCpp(drv_let,false);
+  CRedSeaBoot br;
+  return dv && dv->fs_type==FSt_REDSEA &&
+         BlkReadCpp(dv,reinterpret_cast<uint8_t *>(&br),dv->drv_offset,1) &&
+         br.signature==MBR_PT_REDSEA && br.signature2==0xAA55;
+}
+
+static bool RedSeaWriteDevice(const CDrv &dv)
+{
+  return dv.bd && !(dv.bd->flags & BDF_READ_ONLY) &&
+         ((dv.bd->type == BDT_RAM && dv.bd->RAM_dsk) ||
+          (dv.bd->type == BDT_ISO_FILE_WRITE && BlkDevImageCanWrite(dv.bd))) &&
+         !BlkDevImageBacking(dv.bd) &&
+         dv.bd->max_blk >= 0 &&
+         uint64_t(dv.bd->max_blk) < SIZE_MAX / BLK_SIZE &&
+         dv.drv_offset >= 0 && dv.size > 0 &&
+         uint64_t(dv.drv_offset) <= uint64_t(dv.bd->max_blk) &&
+         uint64_t(dv.size) <= uint64_t(dv.bd->max_blk) + 1 - dv.drv_offset;
+}
+
 bool RedSeaFormatRAM(CDrv &dv, size_t root_blocks)
 {
   constexpr size_t clusters_per_bitmap_block = 8 * BLK_SIZE;
+  if (!RedSeaWriteDevice(dv) || !root_blocks || (dv.fat_blk_dirty & 1))
+    return false;
+  CDiskLock lock(dv);
+  if (!RedSeaWriteDevice(dv) || (dv.fat_blk_dirty & 1))
+    return false;
   uint64_t blocks = dv.size;
   uint64_t map_blocks =
       (blocks + clusters_per_bitmap_block - 1) / clusters_per_bitmap_block;
   if (!map_blocks || root_blocks >= blocks ||
       map_blocks + 1 > blocks - root_blocks)
     return false;
-  auto *base = dv.bd->RAM_dsk + size_t(dv.drv_offset) * BLK_SIZE;
+  if (!DrvFATWriteAllowed(dv.bd, uint64_t(dv.drv_offset) * BLK_SIZE,
+                          blocks * BLK_SIZE))
+    return false;
+  DrvFATCacheReset(dv);
+  DskCacheInvalidateDevice(dv.bd);
   uint64_t root = dv.drv_offset + map_blocks + 1;
-  auto *boot = reinterpret_cast<CRedSeaBoot *>(base);
-  MemSet(boot, 0, (map_blocks + 1) * BLK_SIZE);
-  boot->signature = MBR_PT_REDSEA;
-  boot->signature2 = 0xAA55;
-  boot->drv_offset = dv.drv_offset;
-  boot->sects = blocks;
-  boot->bitmap_sects = map_blocks;
-  boot->root_clus = root;
+  CRedSeaBoot boot{};
+  boot.signature = MBR_PT_REDSEA;
+  boot.signature2 = 0xAA55;
+  boot.drv_offset = dv.drv_offset;
+  boot.sects = blocks;
+  boot.bitmap_sects = map_blocks;
+  boot.root_clus = root;
   uint32_t lo, hi;
   asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
   uint64_t date = Now();
-  boot->unique_id = ((uint64_t(hi) << 32) | lo) ^ date;
-  for (size_t bit = 0; bit <= root_blocks; bit++)
-    base[BLK_SIZE + bit / 8] |= uint8_t{1} << (bit % 8);
-
-  auto *dir =
-      reinterpret_cast<CRedSeaDirEntry *>(dv.bd->RAM_dsk + root * BLK_SIZE);
-  MemSet(dir, 0, root_blocks * BLK_SIZE);
+  boot.unique_id = ((uint64_t(hi) << 32) | lo) ^ date;
+  uint64_t used = root_blocks + 1;
+  uint8_t map[BLK_SIZE];
+  for (uint64_t i = 0; i < map_blocks; i++) {
+    MemSet(map, 0, sizeof(map));
+    uint64_t n = used < clusters_per_bitmap_block ? used : clusters_per_bitmap_block;
+    for (uint64_t bit = 0; bit < n; bit++)
+      map[bit / 8] |= uint8_t{1} << (bit % 8);
+    if (!BlkDevWriteBytes(*dv.bd, map, (dv.drv_offset + 1 + i) * BLK_SIZE,
+                          sizeof(map)))
+      return false;
+    used -= n;
+  }
+  CRedSeaDirEntry dir[BLK_SIZE / sizeof(CRedSeaDirEntry)]{};
   dir[0].attr = dir[1].attr = RS_ATTR_DIR | RS_ATTR_CONTIGUOUS;
   dir[0].name[0] = dir[1].name[0] = dir[1].name[1] = '.';
   dir[0].clus = dir[1].clus = root;
   dir[0].size = root_blocks * BLK_SIZE;
   dir[0].datetime = dir[1].datetime = date;
-  return RedSeaInit(dv);
+  return BlkWriteZero(dv, root + 1, root_blocks - 1) &&
+         BlkDevWriteBytes(*dv.bd, reinterpret_cast<const uint8_t *>(dir),
+                          root * BLK_SIZE, sizeof(dir)) &&
+         BlkDevWriteBytes(*dv.bd, reinterpret_cast<const uint8_t *>(&boot),
+                          uint64_t(dv.drv_offset) * BLK_SIZE, sizeof(boot)) &&
+         RedSeaInit(dv);
+}
+
+bool RedSeaFormatDrive(CDrv &dv,bool quick)
+{
+  CDiskLock lock(dv);
+  if (!RedSeaWriteDevice(dv) || (dv.fat_blk_dirty&1)) return false;
+  ResidentDriveClear(dv.drv_let);
+  DrvFATCacheReset(dv);
+  auto root=dv.bd->init_root_dir_blks;
+  return (quick || BlkWriteZero(dv,dv.drv_offset,dv.size)) &&
+         RedSeaFormatRAM(dv,root>0?root:1) && DrvFATCacheInit(dv) &&
+         (dv.bd->type!=BDT_ISO_FILE_WRITE || RedSeaISO9660Write(dv));
+}
+
+extern "C" void RedSeaFmtCpp(uint8_t drv_let,uint8_t quick)
+{
+  auto *dv=Let2DrvCpp(drv_let,true);
+  if (!RedSeaFormatDrive(*dv,quick)) RaiseHolyC(0x767244); //Drv
 }
 
 static bool RedSeaExtent(const CDrv &dv, uint64_t clus, uint64_t bytes)
@@ -89,7 +166,7 @@ bool RedSeaFileFind(const CDrv &dv, uint64_t dir, const char *name,
   auto *buf = reinterpret_cast<uint8_t *>(block);
   if (dv.fs_type != FSt_REDSEA || !FileNameChk(name) ||
       !RedSeaExtent(dv, dir, BLK_SIZE) ||
-      !BlkDevReadBytes(*dv.bd, buf, dir * BLK_SIZE, BLK_SIZE))
+      !DrvReadBytes(dv, buf, dir * BLK_SIZE, BLK_SIZE))
     return false;
   uint64_t size = block[0].size;
   if (size < BLK_SIZE || size % BLK_SIZE || !RedSeaExtent(dv, dir, size))
@@ -97,7 +174,7 @@ bool RedSeaFileFind(const CDrv &dv, uint64_t dir, const char *name,
   block[0].name[0] = '.';
   block[0].name[1] = 0;
   for (uint64_t pos = 0; pos < size; pos += BLK_SIZE) {
-    if (pos && !BlkDevReadBytes(*dv.bd, buf, dir * BLK_SIZE + pos, BLK_SIZE))
+    if (pos && !DrvReadBytes(dv, buf, dir * BLK_SIZE + pos, BLK_SIZE))
       return false;
     for (const auto &candidate : block) {
       if (!candidate.name[0])
@@ -122,42 +199,272 @@ bool RedSeaFileRead(const CDrv &dv, const CRedSeaDirEntry &entry, uint64_t pos,
     return false;
   return !bytes ||
          (RedSeaExtent(dv, entry.clus, entry.size) &&
-          BlkDevReadBytes(*dv.bd, buf, entry.clus * BLK_SIZE + pos, bytes));
+          DrvReadBytes(dv, buf, entry.clus * BLK_SIZE + pos, bytes));
 }
 
-static uint8_t *RedSeaBlock(const CDrv &dv, uint64_t cluster)
+static uint64_t RedSeaBlocks(uint64_t bytes)
 {
-  return dv.bd->RAM_dsk + cluster * BLK_SIZE;
+  return bytes / BLK_SIZE + (bytes % BLK_SIZE != 0);
 }
 
-static bool RedSeaClusterUsed(const CDrv &dv, uint64_t cluster)
+struct CRedSeaBitmap
 {
-  auto bit = cluster - dv.data_area;
-  return RedSeaBlock(dv, dv.fat1)[bit / 8] & (uint8_t{1} << (bit % 8));
+  uint64_t index = UINT64_MAX;
+  uint8_t sector[BLK_SIZE];
+};
+
+static bool RedSeaClusterUsed(const CDrv &dv, CRedSeaBitmap &map,
+                               uint64_t cluster, bool &used)
+{
+  uint64_t bit = cluster - dv.data_area;
+  uint64_t index = bit / (BLK_SIZE * 8);
+  if (map.index != index) {
+    if (!DrvFATRead(dv, index, map.sector, 0, sizeof(map.sector)))
+      return false;
+    map.index = index;
+  }
+  used = map.sector[(bit / 8) % BLK_SIZE] & (uint8_t{1} << (bit % 8));
+  return true;
 }
 
-static void RedSeaMark(const CDrv &dv, uint64_t cluster, uint64_t blocks,
-                       bool used)
+static CFreeLst *RedSeaFreeHead(CDrv &dv)
 {
-  auto *map = RedSeaBlock(dv, dv.fat1);
-  for (uint64_t i = 0; i < blocks; i++) {
-    auto bit = cluster + i - dv.data_area;
-    auto mask = uint8_t{1} << (bit % 8);
-    if (used)
-      map[bit / 8] |= mask;
-    else
-      map[bit / 8] &= ~mask;
+  return reinterpret_cast<CFreeLst *>(&dv.next_free);
+}
+
+static bool RedSeaFreeLstBuild(CDrv &dv)
+{
+  if (!adam_task || dv.fs_type!=FSt_REDSEA || dv.spc!=1 ||
+      !dv.bd || dv.drv_offset<0 || dv.size<=0 || dv.data_area<dv.drv_offset ||
+      dv.bd->max_blk<0 || uint64_t(dv.drv_offset)+dv.size>uint64_t(dv.bd->max_blk)+1 ||
+      uint64_t(dv.data_area)>=uint64_t(dv.drv_offset)+dv.size ||
+      (dv.fat_blk_dirty&1) || !DrvFreeListValid(dv)) return false;
+  DrvFreeListClear(dv);
+  QueInit(dv.next_free,dv.last_free);
+  CRedSeaBitmap map;
+  uint64_t end=uint64_t(dv.drv_offset)+dv.size;
+  for (uint64_t first=dv.data_area;first<end;) {
+    uint64_t n=0;
+    while (first+n<end) {
+      bool used;
+      if (!RedSeaClusterUsed(dv,map,first+n,used)) {
+        DrvFreeListClear(dv);
+        return false;
+      }
+      if (used) break;
+      n++;
+    }
+    if (n) {
+      auto *p=reinterpret_cast<CFreeLst *>(MAlloc(sizeof(CFreeLst),adam_task->data_heap));
+      if (!p) {
+        DrvFreeListClear(dv);
+        return false;
+      }
+      p->start=first;
+      p->size=n;
+      QueIns(*p,*dv.last_free);
+    }
+    first+=n+1;
+  }
+  return true;
+}
+
+extern "C" void RedSeaFreeLstBuildCpp(CDrv *dv)
+{
+  DrvChkCpp(dv,true);
+  bool okay;
+  {
+    CDiskLock lock(*dv);
+    okay=RedSeaFreeLstBuild(*dv);
+  }
+  if (!okay) RaiseHolyC(0x767244); //Drv
+}
+
+// Maintain the reference's queue order. Free merges the first adjacent
+// entry; a newly freed extent without a neighbor is appended.
+static void RedSeaFreeLstMark(CDrv &dv,uint64_t cluster,uint64_t blocks,bool used)
+{
+  if (!dv.next_free) return;
+  auto *head=RedSeaFreeHead(dv);
+  uint64_t end=cluster+blocks;
+  if (!used) {
+    CFreeLst *adjacent=nullptr;
+    for (auto *p=dv.next_free;p!=head;p=p->next) {
+      uint64_t start=p->start,last=start+p->size;
+      if (start<end && cluster<last) {
+        DrvFreeListClear(dv);
+        return;
+      }
+      if (!adjacent && (last==cluster || start==end)) adjacent=p;
+    }
+    if (adjacent) {
+      if (end==uint64_t(adjacent->start)) adjacent->start=cluster;
+      adjacent->size+=blocks;
+    } else if (auto *p=reinterpret_cast<CFreeLst *>(MAlloc(sizeof(CFreeLst),adam_task->data_heap))) {
+      p->start=cluster;
+      p->size=blocks;
+      QueIns(*p,*dv.last_free);
+    } else DrvFreeListClear(dv);
+    return;
+  }
+  for (auto *p=dv.next_free;p!=head;) {
+    auto *next=p->next;
+    uint64_t start=p->start,last=start+p->size;
+    if (start<end && cluster<last) {
+      if (start<cluster && end<last) {
+        auto *tail=reinterpret_cast<CFreeLst *>(MAlloc(sizeof(CFreeLst),adam_task->data_heap));
+        if (!tail) { DrvFreeListClear(dv); return; }
+        tail->start=end;
+        tail->size=last-end;
+        p->size=cluster-start;
+        QueIns(*tail,*p);
+      } else if (start<cluster)
+        p->size=cluster-start;
+      else if (end<last) {
+        p->start=end;
+        p->size=last-end;
+      } else {
+        QueRem(*p);
+        Free(p);
+      }
+    }
+    p=next;
   }
 }
 
-uint64_t RedSeaAllocClus(const CDrv &dv, uint64_t blocks)
+static bool RedSeaGeometry(const CDrv &dv)
 {
-  uint64_t end = dv.drv_offset + dv.size;
+  if (!RedSeaWriteDevice(dv) || dv.fs_type != FSt_REDSEA || dv.spc != 1 ||
+      (dv.dv_signature == DRV_SIGNATURE_VAL &&
+       dv.bd->bd_signature != BD_SIGNATURE_VAL) ||
+      dv.fat1 != dv.drv_offset + 1 || dv.fat2 != dv.fat1 ||
+      dv.data_area <= dv.drv_offset || dv.root_clus <= dv.data_area)
+    return false;
+  uint64_t end = uint64_t(dv.drv_offset) + dv.size, data = dv.data_area;
+  CRedSeaBitmap map;
+  bool used;
+  return data < end && uint64_t(dv.root_clus) < end &&
+         (end - data - 1) / (BLK_SIZE * 8) < data - dv.drv_offset &&
+         RedSeaClusterUsed(dv, map, data, used) && used;
+}
+
+static bool RedSeaNativeWriteReady(CDrv &dv)
+{
+  if (!RedSeaWriteDevice(dv) || (dv.fat_blk_dirty & 1) || !DrvFreeListValid(dv))
+    return false;
+  // Staged RAM and image drives are not yet registered.
+  if (dv.dv_signature == DRV_SIGNATURE_VAL &&
+      !BlkDevEnsureInitialized(*dv.bd))
+    return false;
+  return RedSeaGeometry(dv) &&
+         DrvFATWriteAllowed(dv.bd, uint64_t(dv.drv_offset) * BLK_SIZE,
+                            uint64_t(dv.size) * BLK_SIZE);
+}
+
+static bool RedSeaClusterRange(const CDrv &dv, uint64_t c, uint64_t cnt)
+{
+  uint64_t end = uint64_t(dv.drv_offset) + dv.size;
+  return c > uint64_t(dv.data_area) && c < end && cnt <= end - c;
+}
+
+static bool RedSeaMark(const CDrv &dv, uint64_t cluster, uint64_t blocks,
+                        bool used)
+{
+  if (!blocks)
+    return true;
+  if (!RedSeaClusterRange(dv, cluster, blocks))
+    return false;
+  constexpr uint64_t bits = BLK_SIZE * 8;
+  uint64_t first = cluster - dv.data_area, last = first + blocks - 1;
+  uint64_t index = first / bits, count = last / bits - index + 1;
+  uint8_t saved[BLK_SIZE], sector[BLK_SIZE];
+  auto *old = count == 1 ? saved :
+      MAlloc(count * BLK_SIZE, CurrentTask()->data_heap);
+  if (!old)
+    return false;
+  bool okay = true;
+  for (uint64_t i = 0; i < count; i++)
+    if (!DrvFATRead(dv, index + i, old + i * BLK_SIZE, 0, BLK_SIZE)) {
+      okay = false;
+      break;
+    }
+  if (okay)
+    for (uint64_t i = 0; i < count; i++) {
+      MemCpy(sector, old + i * BLK_SIZE, sizeof(sector));
+      uint64_t base = (index + i) * bits;
+      uint64_t begin = first > base ? first - base : 0;
+      uint64_t end = last - base < bits ? last - base + 1 : bits;
+      for (uint64_t bit = begin; bit < end; bit++) {
+        auto mask = uint8_t{1} << (bit % 8);
+        if (used)
+          sector[bit / 8] |= mask;
+        else
+          sector[bit / 8] &= ~mask;
+      }
+      if (!BlkDevWriteBytes(*dv.bd, sector,
+                            (uint64_t(dv.fat1) + index + i) * BLK_SIZE,
+                            sizeof(sector),&dv)) {
+        // Restore the original bitmap if a later sector write fails.
+        for (uint64_t j = 0; j <= i; j++)
+          BlkDevWriteBytes(*dv.bd, old + j * BLK_SIZE,
+                           (uint64_t(dv.fat1) + index + j) * BLK_SIZE,
+                           BLK_SIZE,&dv);
+        okay = false;
+        break;
+      }
+    }
+  if (old != saved)
+    Free(old);
+  auto &mutable_dv=const_cast<CDrv &>(dv);
+  if (okay) RedSeaFreeLstMark(mutable_dv,cluster,blocks,used);
+  else if (DrvFreeListValid(mutable_dv)) DrvFreeListClear(mutable_dv);
+  return okay;
+}
+
+uint64_t RedSeaAllocClus(const CDrv &drive, uint64_t blocks)
+{
+  auto &dv = const_cast<CDrv &>(drive);
+  CDiskLock lock(dv);
+  if (!blocks || !RedSeaNativeWriteReady(dv) || blocks > uint64_t(dv.size))
+    return INVALID_CLUS;
+  if (dv.dv_signature==DRV_SIGNATURE_VAL) {
+    if (!DrvFreeListValid(dv) || (!dv.next_free && !RedSeaFreeLstBuild(dv)))
+      return INVALID_CLUS;
+    CFreeLst *best=nullptr;
+    auto *head=RedSeaFreeHead(dv);
+    for (auto *p=dv.next_free;p!=head;p=p->next)
+      if (p->size>0 && uint64_t(p->size)>=blocks &&
+          (!best || p->size<best->size)) {
+        best=p;
+        if (uint64_t(p->size)==blocks) break;
+      }
+    if (!best || best->start<=dv.data_area ||
+        !RedSeaClusterRange(dv,best->start,blocks)) return INVALID_CLUS;
+    uint64_t start=best->start;
+    // A direct guest RAM edit can bypass the cache invalidation path.
+    CRedSeaBitmap map;
+    for (uint64_t i=0;i<blocks;i++) {
+      bool used;
+      if (!RedSeaClusterUsed(dv,map,start+i,used) || used) {
+        DrvFreeListClear(dv);
+        return INVALID_CLUS;
+      }
+    }
+    return RedSeaMark(dv,start,blocks,true)?start:INVALID_CLUS;
+  }
+  uint64_t end = uint64_t(dv.drv_offset) + dv.size;
   uint64_t best = INVALID_CLUS, best_size = UINT64_MAX;
-  for (uint64_t clus = dv.data_area; clus < end;) {
+  CRedSeaBitmap map;
+  for (uint64_t clus = dv.data_area + 1; clus < end;) {
     uint64_t start = clus;
-    while (clus < end && !RedSeaClusterUsed(dv, clus))
+    while (clus < end) {
+      bool used;
+      if (!RedSeaClusterUsed(dv, map, clus, used))
+        return INVALID_CLUS;
+      if (used)
+        break;
       clus++;
+    }
     uint64_t size = clus - start;
     if (size >= blocks && size < best_size) {
       best = start;
@@ -167,73 +474,216 @@ uint64_t RedSeaAllocClus(const CDrv &dv, uint64_t blocks)
     }
     clus++;
   }
-  if (best != INVALID_CLUS)
-    RedSeaMark(dv, best, blocks, true);
+  if (best != INVALID_CLUS && !RedSeaMark(dv, best, blocks, true))
+    return INVALID_CLUS;
   return best;
-}
-
-static uint64_t RedSeaBlocks(uint64_t bytes)
-{
-  return bytes / BLK_SIZE + (bytes % BLK_SIZE != 0);
 }
 
 struct CRedSeaDir
 {
-  uint64_t cluster;
-  CRedSeaDirEntry *parent_entry;
+  uint64_t cluster, parent_pos;
 };
 
-static CRedSeaDirEntry *RedSeaDirHead(const CDrv &dv, CRedSeaDir dir)
+static bool RedSeaDirHead(const CDrv &dv, CRedSeaDir dir, CRedSeaDirEntry &head)
 {
-  if (!RedSeaExtent(dv, dir.cluster, BLK_SIZE))
-    return nullptr;
-  auto *head =
-      reinterpret_cast<CRedSeaDirEntry *>(RedSeaBlock(dv, dir.cluster));
-  if (head->size < BLK_SIZE || head->size % BLK_SIZE ||
-      !RedSeaExtent(dv, dir.cluster, head->size))
-    return nullptr;
-  return head;
+  return RedSeaExtent(dv, dir.cluster, BLK_SIZE) &&
+         DrvReadBytes(dv, reinterpret_cast<uint8_t *>(&head),
+                      dir.cluster * BLK_SIZE, sizeof(head)) &&
+         head.size >= BLK_SIZE && !(head.size % BLK_SIZE) &&
+         RedSeaExtent(dv, dir.cluster, head.size);
 }
 
-static CRedSeaDirEntry *RedSeaDirGrow(CDrv &dv, CRedSeaDir &dir,
-                                      CRedSeaDirEntry *head)
+static bool RedSeaAllocated(const CDrv &dv, uint64_t c, uint64_t cnt)
 {
+  if (!RedSeaClusterRange(dv, c, cnt))
+    return false;
+  CRedSeaBitmap map;
+  for (uint64_t i = 0; i < cnt; i++) {
+    bool used;
+    if (!RedSeaClusterUsed(dv, map, c + i, used) || !used)
+      return false;
+  }
+  return true;
+}
+
+static bool RedSeaOverlap(uint64_t a, uint64_t an, uint64_t b, uint64_t bn)
+{
+  return an && bn && (a <= b ? b - a < an : a - b < bn);
+}
+
+static bool RedSeaAllocatedDir(const CDrv &dv, CRedSeaDir dir,
+                                CRedSeaDirEntry &head)
+{
+  return RedSeaDirHead(dv, dir, head) && (head.attr & RS_ATTR_DIR) &&
+         head.clus == dir.cluster &&
+         RedSeaAllocated(dv, dir.cluster, RedSeaBlocks(head.size));
+}
+
+static CRedSeaDirEntry *RedSeaReadDir(CDrv &dv, uint64_t clus);
+
+struct CRedSeaDirBuf
+{
+  CRedSeaDirEntry *head;
+
+  CRedSeaDirBuf(CDrv &dv, CRedSeaDir dir) : head(RedSeaReadDir(dv, dir.cluster))
+  {
+    if (head && (!(head->attr & RS_ATTR_DIR) || head->clus != dir.cluster ||
+                 !RedSeaAllocated(dv, dir.cluster, RedSeaBlocks(head->size)))) {
+      Free(head);
+      head = nullptr;
+    }
+  }
+
+  ~CRedSeaDirBuf()
+  {
+    Free(head);
+  }
+
+  CRedSeaDirBuf(const CRedSeaDirBuf &) = delete;
+  CRedSeaDirBuf &operator=(const CRedSeaDirBuf &) = delete;
+};
+
+static bool RedSeaEntryWrite(const CDrv &dv, uint64_t pos,
+                              const CRedSeaDirEntry &entry)
+{
+  return !(pos % sizeof(entry)) &&
+         RedSeaExtent(dv, pos / BLK_SIZE, BLK_SIZE) &&
+         BlkDevWriteBytes(*dv.bd, reinterpret_cast<const uint8_t *>(&entry),
+                          pos, sizeof(entry));
+}
+
+static uint64_t RedSeaEntryPos(CRedSeaDir dir, uint64_t index)
+{
+  return dir.cluster * BLK_SIZE + index * sizeof(CRedSeaDirEntry);
+}
+
+extern "C" void RedSeaFreeClusCpp(CDrv *dv, int64_t c, int64_t cnt)
+{
+  DrvChkCpp(dv, true);
+  if (!c || cnt <= 0)
+    return;
+  if (dv->fs_type != FSt_REDSEA) {
+    PrintErrCpp("Not RedSea Drv\n", 0, nullptr, nullptr);
+    return;
+  }
+  CDiskLock lock(*dv);
+  DskCacheInvalidateDevice(dv->bd);
+  if (!RedSeaNativeWriteReady(*dv) || !RedSeaClusterRange(*dv, c, cnt))
+    return;
+  CRedSeaDirEntry root;
+  if (RedSeaAllocatedDir(*dv, {uint64_t(dv->root_clus), 0}, root) &&
+      !RedSeaOverlap(c, cnt, dv->root_clus, RedSeaBlocks(root.size)))
+    RedSeaMark(*dv, c, cnt, false);
+}
+
+extern "C" int64_t RedSeaAllocClusCpp(CDrv *dv, int64_t cnt)
+{
+  if (cnt <= 0)
+    RaiseHolyC(0x767244); // Drv
+  DrvChkCpp(dv, true);
+  uint64_t c = INVALID_CLUS;
+  {
+    CDiskLock lock(*dv);
+    DskCacheInvalidateDevice(dv->bd);
+    CRedSeaDirEntry root;
+    if (RedSeaNativeWriteReady(*dv) && cnt <= dv->size &&
+        RedSeaAllocatedDir(*dv, {uint64_t(dv->root_clus), 0}, root))
+      c = RedSeaAllocClus(*dv, cnt);
+  }
+  if (c == INVALID_CLUS) RaiseHolyC(0x767244); // Drv
+  return int64_t(c);
+}
+
+static bool RedSeaDirGrow(CDrv &dv, CRedSeaDir &dir, CRedSeaDirEntry *head)
+{
+  CRedSeaDirEntry parent, old_head = head[0];
+  CRedSeaBoot boot;
   size_t bytes = head->size, blocks = bytes / BLK_SIZE;
-  RedSeaMark(dv, dir.cluster, blocks, false);
+  if (dir.parent_pos) {
+    if (!DrvReadBytes(dv, reinterpret_cast<uint8_t *>(&parent),
+                       dir.parent_pos, sizeof(parent)) ||
+        !(parent.attr & RS_ATTR_DIR) || (parent.attr & RS_ATTR_DELETED) ||
+        parent.clus != dir.cluster || parent.size != bytes)
+      return false;
+  } else if (dir.cluster != uint64_t(dv.root_clus) ||
+             !DrvReadBytes(dv, reinterpret_cast<uint8_t *>(&boot),
+                            uint64_t(dv.drv_offset) * BLK_SIZE, sizeof(boot)) ||
+             boot.root_clus != dir.cluster)
+    return false;
+
+  // The in-memory directory survives even if its new extent overlaps the old.
+  if (!RedSeaMark(dv, dir.cluster, blocks, false))
+    return false;
   uint64_t cluster = RedSeaAllocClus(dv, blocks + 1);
   if (cluster == INVALID_CLUS) {
     RedSeaMark(dv, dir.cluster, blocks, true);
-    return nullptr;
+    return false;
   }
-  auto *src = reinterpret_cast<uint8_t *>(head),
-       *dst = RedSeaBlock(dv, cluster);
-  if (cluster > dir.cluster && cluster - dir.cluster < blocks) {
-    for (size_t i = bytes; i > 0; i--)
-      dst[i - 1] = src[i - 1];
-  } else if (cluster != dir.cluster) {
-    MemCpy(dst, src, bytes);
-  }
-  MemSet(dst + bytes, 0, BLK_SIZE);
-  head = reinterpret_cast<CRedSeaDirEntry *>(dst);
   head->size = bytes + BLK_SIZE;
   head->clus = cluster;
-  if (dir.parent_entry) {
-    dir.parent_entry->clus = cluster;
-    dir.parent_entry->size = head->size;
-  } else {
-    auto *boot =
-        reinterpret_cast<CRedSeaBoot *>(RedSeaBlock(dv, dv.drv_offset));
-    dv.root_clus = boot->root_clus = cluster;
+  bool okay = BlkDevWriteBytes(*dv.bd, reinterpret_cast<const uint8_t *>(head),
+                               cluster * BLK_SIZE, bytes) &&
+              BlkWriteZero(dv, cluster + blocks, 1);
+  if (okay) {
+    if (dir.parent_pos) {
+      parent.clus = cluster;
+      parent.size = head->size;
+      okay = RedSeaEntryWrite(dv, dir.parent_pos, parent);
+      if (!okay) {
+        parent.clus = dir.cluster;
+        parent.size = bytes;
+        RedSeaEntryWrite(dv, dir.parent_pos, parent);
+      }
+    } else {
+      boot.root_clus = cluster;
+      okay = BlkDevWriteBytes(*dv.bd, reinterpret_cast<const uint8_t *>(&boot),
+                               uint64_t(dv.drv_offset) * BLK_SIZE, sizeof(boot));
+      if (okay)
+        dv.root_clus = cluster;
+      else {
+        boot.root_clus = dir.cluster;
+        BlkDevWriteBytes(*dv.bd, reinterpret_cast<const uint8_t *>(&boot),
+                         uint64_t(dv.drv_offset) * BLK_SIZE, sizeof(boot));
+      }
+    }
+  }
+  if (!okay) {
+    head[0] = old_head;
+    BlkDevWriteBytes(*dv.bd, reinterpret_cast<const uint8_t *>(head),
+                     dir.cluster * BLK_SIZE, bytes);
+    RedSeaMark(dv, cluster, blocks + 1, false);
+    RedSeaMark(dv, dir.cluster, blocks, true);
+    return false;
   }
   dir.cluster = cluster;
-  return head;
+  return true;
+}
+
+static bool RedSeaWriteData(CDrv &dv, uint64_t cluster, const uint8_t *data,
+                             uint64_t size)
+{
+  if (!size)
+    return true;
+  if (!data || !RedSeaExtent(dv, cluster, size))
+    return false;
+  uint64_t bytes = size / BLK_SIZE * BLK_SIZE;
+  if (bytes && !BlkDevWriteBytes(*dv.bd, data, cluster * BLK_SIZE, bytes))
+    return false;
+  if (bytes != size) {
+    uint8_t sector[BLK_SIZE]{};
+    MemCpy(sector, data + bytes, size - bytes);
+    return BlkDevWriteBytes(*dv.bd, sector, cluster * BLK_SIZE + bytes,
+                            sizeof(sector));
+  }
+  return true;
 }
 
 static uint64_t RedSeaDirNew(CDrv &dv, CRedSeaDir &dir, CRedSeaDirEntry &entry,
                              const uint8_t *data, bool directory,
                              bool reserve = false)
 {
-  auto *head = RedSeaDirHead(dv, dir);
+  CRedSeaDirBuf buf(dv, dir);
+  auto *head = buf.head;
   if (!head)
     return 0;
   size_t capacity = head->size / sizeof(*head), empty = 0, previous = 0, i = 1;
@@ -251,67 +701,244 @@ static uint64_t RedSeaDirNew(CDrv &dv, CRedSeaDir &dir, CRedSeaDirEntry &entry,
   }
   if (!empty)
     empty = i;
-  if (i == capacity)
+  if (i == capacity || (directory && (!entry.size || entry.size % BLK_SIZE)))
     return 0;
 
   uint64_t old_size = previous ? head[previous].size : 0;
   uint64_t old_cluster = previous ? head[previous].clus : INVALID_CLUS;
-  if (old_size && !RedSeaExtent(dv, old_cluster, old_size))
+  uint64_t old_blocks = RedSeaBlocks(old_size), blocks = RedSeaBlocks(entry.size);
+  if (old_blocks &&
+      (!RedSeaAllocated(dv, old_cluster, old_blocks) ||
+       RedSeaOverlap(old_cluster, old_blocks, dir.cluster,
+                      RedSeaBlocks(head->size))))
     return 0;
-  uint64_t old_blocks = RedSeaBlocks(old_size),
-           blocks = RedSeaBlocks(entry.size);
-  RedSeaMark(dv, old_cluster, old_blocks, false);
+  if (!RedSeaMark(dv, old_cluster, old_blocks, false))
+    return 0;
   uint64_t cluster = blocks ? RedSeaAllocClus(dv, blocks) : INVALID_CLUS;
   if (blocks && cluster == INVALID_CLUS) {
     RedSeaMark(dv, old_cluster, old_blocks, true);
     return 0;
   }
-  if (empty == i && i + 1 == capacity) {
-    head = RedSeaDirGrow(dv, dir, head);
-    if (!head) {
+  if (empty == i && i + 1 == capacity && !RedSeaDirGrow(dv, dir, head)) {
+    RedSeaMark(dv, cluster, blocks, false);
+    RedSeaMark(dv, old_cluster, old_blocks, true);
+    return 0;
+  }
+
+  // A failed payload write must not leave an old live entry pointing into
+  // the newly allocated extent, which can reuse part of its previous chain.
+  if (previous) {
+    CRedSeaDirEntry deleted = head[previous];
+    deleted.attr |= RS_ATTR_DELETED;
+    if (!RedSeaEntryWrite(dv, RedSeaEntryPos(dir, previous), deleted)) {
       RedSeaMark(dv, cluster, blocks, false);
       RedSeaMark(dv, old_cluster, old_blocks, true);
+      RedSeaEntryWrite(dv, RedSeaEntryPos(dir, previous), head[previous]);
       return 0;
     }
+    head[previous] = deleted;
   }
 
   if (blocks || !reserve)
     entry.clus = cluster;
+  bool okay = true;
   if (directory) {
-    auto *child = reinterpret_cast<CRedSeaDirEntry *>(RedSeaBlock(dv, cluster));
-    MemSet(child, 0, blocks * BLK_SIZE);
+    CRedSeaDirEntry child[BLK_SIZE / sizeof(CRedSeaDirEntry)]{};
     child[0] = entry;
     child[1] = {entry.attr, "..", dir.cluster, 0, entry.datetime};
-  } else if (blocks && !reserve) {
-    auto *buf = RedSeaBlock(dv, cluster);
-    MemCpy(buf, data, entry.size);
-    MemSet(buf + entry.size, 0, blocks * BLK_SIZE - entry.size);
+    okay = BlkWriteZero(dv, cluster + 1, blocks - 1) &&
+           BlkDevWriteBytes(*dv.bd, reinterpret_cast<const uint8_t *>(child),
+                            cluster * BLK_SIZE, sizeof(child));
+  } else if (blocks && !reserve)
+    okay = RedSeaWriteData(dv, cluster, data, entry.size);
+  if (!okay) {
+    RedSeaMark(dv, cluster, blocks, false);
+    return 0;
   }
-  if (previous && previous != empty)
-    head[previous].attr |= RS_ATTR_DELETED;
-  head[empty] = entry;
+  uint64_t pos = RedSeaEntryPos(dir, empty);
+  if (!RedSeaEntryWrite(dv, pos, entry)) {
+    // Do not release an extent if its directory entry could have been written.
+    if (RedSeaEntryWrite(dv, pos, head[empty]))
+      RedSeaMark(dv, cluster, blocks, false);
+    return 0;
+  }
   return cluster;
 }
 
-static CRedSeaDirEntry *RedSeaChild(const CDrv &dv, CRedSeaDir dir,
-                                    const char *name)
+static bool RedSeaChild(CDrv &dv, CRedSeaDir dir, const char *name,
+                         CRedSeaDirEntry &child, uint64_t &pos)
 {
-  auto *head = RedSeaDirHead(dv, dir);
+  pos = 0;
+  CRedSeaDirBuf buf(dv, dir);
+  auto *head = buf.head;
   if (!head)
-    return nullptr;
+    return false;
   for (size_t i = 2; i < head->size / sizeof(*head) && head[i].name[0]; i++)
-    if (!(head[i].attr & RS_ATTR_DELETED) && RedSeaNameEq(head[i].name, name))
-      return head + i;
-  return nullptr;
+    if (!(head[i].attr & RS_ATTR_DELETED) && RedSeaNameEq(head[i].name, name)) {
+      child = head[i];
+      pos = RedSeaEntryPos(dir, i);
+      break;
+    }
+  return true;
+}
+
+static bool RedSeaDirPath(CDrv &dv, const char *path, CRedSeaDir *dirs,
+                          size_t &depth)
+{
+  depth = 1;
+  dirs[0] = {uint64_t(dv.root_clus), 0};
+  CRedSeaDirEntry root;
+  if (!RedSeaAllocatedDir(dv, dirs[0], root))
+    return false;
+  while (*path) {
+    const char *part = path;
+    while (*path && *path != '/')
+      path++;
+    size_t len = path - part;
+    if (*path)
+      path++;
+    if (!len || (len == 1 && *part == '.'))
+      continue;
+    if (len == 2 && part[0] == '.' && part[1] == '.') {
+      if (depth > 1)
+        depth--;
+      continue;
+    }
+    char name[CDIR_FILENAME_LEN];
+    if (len >= sizeof(name))
+      return false;
+    MemCpy(name, part, len);
+    name[len] = 0;
+    CRedSeaDirEntry child, head;
+    uint64_t pos;
+    if (!FileNameChk(name) || !RedSeaChild(dv, dirs[depth - 1], name, child, pos) ||
+        !pos || !(child.attr & RS_ATTR_DIR))
+      return false;
+    CRedSeaDir next{child.clus, pos};
+    if (!RedSeaAllocatedDir(dv, next, head) || head.size != child.size)
+      return false;
+    for (size_t i = 0; i < depth; i++) {
+      CRedSeaDirEntry ancestor;
+      if (!RedSeaDirHead(dv, dirs[i], ancestor) ||
+          RedSeaOverlap(next.cluster, RedSeaBlocks(head.size), dirs[i].cluster,
+                         RedSeaBlocks(ancestor.size)))
+        return false;
+    }
+    dirs[depth++] = next;
+  }
+  return true;
+}
+
+static bool RedSeaDirExtentSafe(const CDrv &dv, const CRedSeaDir *dirs,
+                                size_t depth, uint64_t c, uint64_t blocks)
+{
+  if (!blocks)
+    return true;
+  if (!RedSeaAllocated(dv, c, blocks))
+    return false;
+  for (size_t i = 0; i < depth; i++) {
+    CRedSeaDirEntry head;
+    if (!RedSeaDirHead(dv, dirs[i], head) ||
+        RedSeaOverlap(c, blocks, dirs[i].cluster, RedSeaBlocks(head.size)))
+      return false;
+  }
+  return true;
+}
+
+static void RedSeaDirPut(CDrv &dv, CRedSeaDir *dirs, size_t depth,
+                          const CRedSeaDirEntry &entry, bool free_old_chain)
+{
+  uint64_t blocks = RedSeaBlocks(entry.size);
+  uint64_t extent_blocks = blocks;
+  if (!extent_blocks && entry.clus && entry.clus != INVALID_CLUS)
+    extent_blocks = 1;
+  if ((entry.attr & RS_ATTR_DIR) && (!entry.size || entry.size % BLK_SIZE))
+    return;
+  if (!RedSeaDirExtentSafe(dv, dirs, depth, entry.clus, extent_blocks))
+    return;
+
+  auto &dir = dirs[depth - 1];
+  CRedSeaDirBuf buf(dv, dir);
+  auto *head = buf.head;
+  if (!head)
+    return;
+  size_t capacity = head->size / sizeof(*head), empty = 0, i = 2;
+  for (; i < capacity && head[i].name[0]; i++) {
+    if (head[i].attr & RS_ATTR_DELETED) {
+      if (!empty)
+        empty = i;
+    } else if (RedSeaNameEq(head[i].name, entry.name)) {
+      uint64_t old_blocks = RedSeaBlocks(head[i].size),
+               old_cluster = head[i].clus;
+      if (free_old_chain && old_blocks &&
+          (!RedSeaDirExtentSafe(dv, dirs, depth, old_cluster, old_blocks) ||
+           RedSeaOverlap(old_cluster, old_blocks, entry.clus, extent_blocks)))
+        return;
+      uint64_t pos = RedSeaEntryPos(dir, empty ? empty : i);
+      if (!RedSeaEntryWrite(dv, pos, entry))
+        return;
+      if (empty) {
+        CRedSeaDirEntry deleted = head[i];
+        deleted.attr |= RS_ATTR_DELETED;
+        if (!RedSeaEntryWrite(dv, RedSeaEntryPos(dir, i), deleted)) {
+          RedSeaEntryWrite(dv, pos, head[empty]);
+          return;
+        }
+      }
+      if (free_old_chain)
+        RedSeaMark(dv, old_cluster, old_blocks, false);
+      return;
+    }
+  }
+  if (i == capacity)
+    return;
+  if (i + 1 == capacity && !RedSeaDirGrow(dv, dir, head))
+    return;
+  RedSeaEntryWrite(dv, RedSeaEntryPos(dir, empty ? empty : i), entry);
+}
+
+extern "C" uint64_t RedSeaDirNewCpp(CDrv *dv, const char *cur_dir,
+                                     CDirEntry *entry, uint8_t free_old_chain)
+{
+  static_assert(sizeof(CRedSeaDirEntry) == 64 &&
+                sizeof(CRedSeaDirEntry) == sizeof(CDirEntry) -
+                                               offsetof(CDirEntry, attr));
+  if (!entry)
+    return false;
+  entry->attr |= RS_ATTR_CONTIGUOUS;
+  if (!DrvChkCpp(dv, false) || !cur_dir || entry->size < 0 ||
+      !FileNameChk(entry->name) ||
+      (entry->name[0] == '.' && (!entry->name[1] ||
+                               (entry->name[1] == '.' && !entry->name[2]))))
+    return false;
+  CRedSeaDirEntry record;
+  MemCpy(&record, &entry->attr, sizeof(record));
+  size_t capacity = StrLen(cur_dir) / 2 + 2;
+  if (capacity > SIZE_MAX / sizeof(CRedSeaDir))
+    return false;
+  auto *dirs = reinterpret_cast<CRedSeaDir *>(
+      MAlloc(capacity * sizeof(CRedSeaDir), CurrentTask()->data_heap));
+  if (!dirs)
+    return false;
+  {
+    CDiskLock lock(*dv);
+    DskCacheInvalidateDevice(dv->bd);
+    size_t depth;
+    if (RedSeaNativeWriteReady(*dv) &&
+        RedSeaDirPath(*dv, cur_dir, dirs, depth))
+      RedSeaDirPut(*dv, dirs, depth, record, free_old_chain);
+  }
+  Free(dirs);
+  // The reference returns FALSE even after publishing a directory entry.
+  return false;
 }
 
 static bool RedSeaStreamDir(CDrv &dv, const char *path, CRedSeaDir &dir,
                              char (&name)[CDIR_FILENAME_LEN])
 {
-  if (dv.fs_type != FSt_REDSEA || dv.bd->type != BDT_RAM ||
-      (dv.bd->flags & BDF_READ_ONLY) || *path++ != '/')
+  if (!path || *path++ != '/')
     return false;
-  dir = {uint64_t(dv.root_clus), nullptr};
+  dir = {uint64_t(dv.root_clus), 0};
   for (;;) {
     const char *part = path;
     while (*path && *path != '/')
@@ -324,36 +951,49 @@ static bool RedSeaStreamDir(CDrv &dv, const char *path, CRedSeaDir &dir,
     if (!FileNameChk(name) || (name[0] == '.' &&
         (len == 1 || (len == 2 && name[1] == '.'))))
       return false;
+    CRedSeaDirEntry child;
     if (!*path)
-      return RedSeaDirHead(dv, dir) != nullptr;
-    auto *child = RedSeaChild(dv, dir, name);
-    if (!child || !(child->attr & RS_ATTR_DIR))
+      return RedSeaAllocatedDir(dv, dir, child);
+    uint64_t pos;
+    if (!RedSeaChild(dv, dir, name, child, pos) || !pos ||
+        !(child.attr & RS_ATTR_DIR) || child.clus == dir.cluster ||
+        child.clus == uint64_t(dv.root_clus))
       return false;
-    dir = {child->clus, child};
+    dir = {child.clus, pos};
     path++;
   }
 }
 
 bool RedSeaStreamPrepare(CDrv &dv, const char *path, CDirEntry &de, int64_t cnt)
 {
-  CMemLock lock(dv.locked_flags);
-  CRedSeaDir dir;
-  CRedSeaDirEntry entry{};
-  if (!RedSeaStreamDir(dv, path, dir, entry.name) || cnt > dv.size)
+  CDiskLock lock(dv);
+  DskCacheInvalidateDevice(dv.bd);
+  if (!RedSeaNativeWriteReady(dv))
     return false;
-  auto *old = RedSeaChild(dv, dir, entry.name);
-  if (old && (old->attr & RS_ATTR_DIR))
+  CRedSeaDir dir;
+  CRedSeaDirEntry entry{}, old;
+  uint64_t pos;
+  if (!RedSeaStreamDir(dv, path, dir, entry.name) || cnt > dv.size ||
+      !RedSeaChild(dv, dir, entry.name, old, pos) ||
+      (pos && (old.attr & RS_ATTR_DIR)))
     return false;
   if (cnt > 0) {
     entry.size = uint64_t(cnt) * BLK_SIZE;
     entry.attr = RS_ATTR_CONTIGUOUS;
     if (!RedSeaDirNew(dv, dir, entry, nullptr, false, true))
       return false;
-  } else if (old) {
-    if (old->size && !RedSeaExtent(dv, old->clus, old->size))
+  } else if (pos) {
+    uint64_t blocks = RedSeaBlocks(old.size);
+    CRedSeaDirEntry head;
+    if (blocks &&
+        (!RedSeaAllocated(dv, old.clus, blocks) ||
+         !RedSeaDirHead(dv, dir, head) ||
+         RedSeaOverlap(old.clus, blocks, dir.cluster, RedSeaBlocks(head.size))))
       return false;
-    RedSeaMark(dv, old->clus, RedSeaBlocks(old->size), false);
-    old->attr |= RS_ATTR_DELETED;
+    old.attr |= RS_ATTR_DELETED;
+    if (!RedSeaEntryWrite(dv, pos, old) ||
+        !RedSeaMark(dv, old.clus, blocks, false))
+      return false;
   }
   MemCpy(&de.attr, &entry, sizeof(entry));
   return true;
@@ -361,36 +1001,41 @@ bool RedSeaStreamPrepare(CDrv &dv, const char *path, CDirEntry &de, int64_t cnt)
 
 bool RedSeaStreamCommit(CDrv &dv, const char *path, CDirEntry &de, bool new_file)
 {
-  CMemLock lock(dv.locked_flags);
+  CDiskLock lock(dv);
+  DskCacheInvalidateDevice(dv.bd);
+  if (!RedSeaNativeWriteReady(dv))
+    return false;
   CRedSeaDir dir;
   char name[CDIR_FILENAME_LEN];
   if (!RedSeaStreamDir(dv, path, dir, name) || !RedSeaNameEq(de.name, name) ||
       de.size < 0 || (de.attr & (RS_ATTR_DIR | RS_ATTR_DELETED)))
     return false;
-  CRedSeaDirEntry entry;
+  CRedSeaDirEntry entry, old;
   de.attr |= RS_ATTR_CONTIGUOUS;
   MemCpy(&entry, &de.attr, sizeof(entry));
   if (new_file)
     return !entry.size && !entry.clus &&
            RedSeaDirNew(dv, dir, entry, nullptr, false, true);
-  auto *old = RedSeaChild(dv, dir, name);
-  if (!old || (old->attr & RS_ATTR_DIR) || old->clus != entry.clus ||
-      RedSeaBlocks(entry.size) > RedSeaBlocks(old->size))
+  uint64_t pos;
+  if (!RedSeaChild(dv, dir, name, old, pos) || !pos ||
+      (old.attr & RS_ATTR_DIR) || old.clus != entry.clus ||
+      RedSeaBlocks(entry.size) > RedSeaBlocks(old.size) ||
+      (old.size && !RedSeaAllocated(dv, old.clus, RedSeaBlocks(old.size))))
     return false;
-  *old = entry;
-  return true;
+  return RedSeaEntryWrite(dv, pos, entry);
 }
 
 static uint64_t RedSeaWrite(CDrv &dv, const char *path, const uint8_t *data,
                             size_t size, uint64_t date, uint16_t attr,
                             bool directory, int64_t entry_cnt = 0)
 {
-  if (*path++ != '/' || dv.bd->type != BDT_RAM ||
-      (dv.bd->flags & BDF_READ_ONLY) || dv.fs_type != FSt_REDSEA ||
-      size > uint64_t(dv.size) * BLK_SIZE || (attr & RS_ATTR_DIR))
+  if (!path || *path++ != '/' || (attr & RS_ATTR_DIR))
     return 0;
-  CMemLock lock(dv.locked_flags);
-  CRedSeaDir dir{uint64_t(dv.root_clus), nullptr};
+  CDiskLock lock(dv);
+  DskCacheInvalidateDevice(dv.bd);
+  if (!RedSeaNativeWriteReady(dv) || size > uint64_t(dv.size) * BLK_SIZE)
+    return 0;
+  CRedSeaDir dir{uint64_t(dv.root_clus), 0};
   for (;;) {
     const char *part = path;
     while (*path && *path != '/')
@@ -411,8 +1056,11 @@ static uint64_t RedSeaWrite(CDrv &dv, const char *path, const uint8_t *data,
       return RedSeaDirNew(dv, dir, entry, data, false);
     }
 
-    auto *child = RedSeaChild(dv, dir, entry.name);
-    if (!child) {
+    CRedSeaDirEntry child;
+    uint64_t pos;
+    if (!RedSeaChild(dv, dir, entry.name, child, pos))
+      return 0;
+    if (!pos) {
       entry.attr = RS_ATTR_DIR | RS_ATTR_CONTIGUOUS;
       entry.size = BLK_SIZE;
       if (directory && !*path && entry_cnt > 0) {
@@ -422,13 +1070,14 @@ static uint64_t RedSeaWrite(CDrv &dv, const char *path, const uint8_t *data,
         entry.size = RedSeaBlocks((uint64_t(entry_cnt) + 3) * sizeof(entry)) *
                      BLK_SIZE;
       }
-      if (!RedSeaDirNew(dv, dir, entry, nullptr, true))
+      if (!RedSeaDirNew(dv, dir, entry, nullptr, true) ||
+          !RedSeaChild(dv, dir, entry.name, child, pos))
         return 0;
-      child = RedSeaChild(dv, dir, entry.name);
     }
-    if (!child || !(child->attr & RS_ATTR_DIR))
+    if (!pos || !(child.attr & RS_ATTR_DIR) || child.clus == dir.cluster ||
+        child.clus == uint64_t(dv.root_clus))
       return 0;
-    dir = {child->clus, child};
+    dir = {child.clus, pos};
     if (!*path)
       return dir.cluster;
     path++;
@@ -438,15 +1087,20 @@ static uint64_t RedSeaWrite(CDrv &dv, const char *path, const uint8_t *data,
 int64_t RedSeaFilesDel(CDrv &dv, const char *cur_dir, const char *mask,
                       uint64_t flags, bool del_dir, bool print_msg)
 {
-  if (dv.fs_type != FSt_REDSEA || dv.bd->type != BDT_RAM ||
-      (dv.bd->flags & BDF_READ_ONLY))
+  CDiskLock lock(dv);
+  DskCacheInvalidateDevice(dv.bd);
+  if (!RedSeaNativeWriteReady(dv))
     return 0;
-  CMemLock lock(dv.locked_flags);
   uint64_t cluster;
   if (!RedSeaDirClus(dv, cur_dir, StrLen(cur_dir), cluster))
     return 0;
-  auto *head = RedSeaDirHead(dv, {cluster, nullptr});
+  CRedSeaDir dir{cluster, 0};
+  CRedSeaDirBuf buf(dv, dir);
+  auto *head = buf.head;
   if (!head)
+    return 0;
+  CRedSeaDirEntry root;
+  if (!RedSeaAllocatedDir(dv, {uint64_t(dv.root_clus), 0}, root))
     return 0;
   int64_t res = 0;
   size_t count = head->size / sizeof(*head);
@@ -456,17 +1110,23 @@ int64_t RedSeaFilesDel(CDrv &dv, const char *cur_dir, const char *mask,
         (!del_dir && (entry.attr & RS_ATTR_DIR)) ||
         !FileNameChk(entry.name) || !FilesFindMatch(entry.name, mask, flags))
       continue;
-    if (entry.size && (!RedSeaExtent(dv, entry.clus, entry.size) ||
-                       entry.clus == cluster || entry.clus == uint64_t(dv.root_clus)))
+    uint64_t blocks = RedSeaBlocks(entry.size);
+    if (blocks &&
+        (!RedSeaAllocated(dv, entry.clus, blocks) ||
+         RedSeaOverlap(entry.clus, blocks, cluster, RedSeaBlocks(head->size)) ||
+         RedSeaOverlap(entry.clus, blocks, dv.root_clus, RedSeaBlocks(root.size))))
       continue;
+    entry.attr |= RS_ATTR_DELETED;
+    if (!RedSeaEntryWrite(dv, RedSeaEntryPos(dir, i), entry))
+      break;
     if (!(entry.attr & RS_ATTR_DIR))
       res++;
     if (print_msg) {
       uint64_t arg = reinterpret_cast<uintptr_t>(entry.name);
       PrintCpp("Del %s\n", 1, &arg);
     }
-    entry.attr |= RS_ATTR_DELETED;
-    RedSeaMark(dv, entry.clus, RedSeaBlocks(entry.size), false);
+    if (!RedSeaMark(dv, entry.clus, blocks, false))
+      break;
   }
   return res;
 }
@@ -479,10 +1139,10 @@ uint64_t RedSeaFileWrite(CDrv &dv, const char *path, const uint8_t *data,
 
 static CRedSeaDirEntry *RedSeaReadDir(CDrv &dv, uint64_t clus)
 {
-  CMemLock lock(dv.locked_flags);
+  CDiskLock lock(dv);
   CRedSeaDirEntry block[BLK_SIZE / sizeof(CRedSeaDirEntry)];
   if (!RedSeaExtent(dv, clus, BLK_SIZE) ||
-      !BlkDevReadBytes(*dv.bd, reinterpret_cast<uint8_t *>(block),
+      !DrvReadBytes(dv, reinterpret_cast<uint8_t *>(block),
                        clus * BLK_SIZE, BLK_SIZE))
     return nullptr;
   auto size = block[0].size;
@@ -493,7 +1153,7 @@ static CRedSeaDirEntry *RedSeaReadDir(CDrv &dv, uint64_t clus)
     return nullptr;
   MemCpy(data, block, BLK_SIZE);
   if (size > BLK_SIZE &&
-      !BlkDevReadBytes(*dv.bd, data + BLK_SIZE, (clus + 1) * BLK_SIZE,
+      !DrvReadBytes(dv, data + BLK_SIZE, (clus + 1) * BLK_SIZE,
                        size - BLK_SIZE)) {
     Free(data);
     return nullptr;

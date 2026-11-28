@@ -1,7 +1,8 @@
 #include "../KernelB.hpp"
 
 constexpr uint8_t ATA_NOP = 0, ATA_READ = 0x20, ATA_WRITE = 0x30,
-                  ATA_PACKET = 0xA0, ATA_FLUSH = 0xE7, ATA_ID_DEV = 0xEC;
+                  ATA_PACKET = 0xA0,
+                  ATA_FLUSH = 0xE7, ATA_ID_DEV = 0xEC;
 constexpr uint8_t ATAS_ERR = 1, ATAS_DRQ = 8, ATAS_DF = 0x20,
                   ATAS_DRDY = 0x40, ATAS_BSY = 0x80;
 constexpr uint16_t ATAR0_DATA = 0, ATAR0_FEAT = 1, ATAR0_LCYL = 4,
@@ -159,6 +160,30 @@ bool ATAReadCapacity(CBlkDev &bd)
   return true;
 }
 
+bool ATAIdentifyRecord(CBlkDev &bd)
+{
+  uint16_t id[256];
+  {
+    CATAChannelLock lock(bd);
+    ATASel(bd);
+    auto deadline=ATADeadline(1000);
+    if (ATAWait(bd,deadline,0)<=0)
+      return false;
+    ATACmd(bd,ATA_ID_DEV);
+    if (!ATAGetRes(bd,deadline,reinterpret_cast<uint8_t *>(id),
+                   sizeof(id),sizeof(id)))
+      return false;
+  }
+  auto *record=reinterpret_cast<uint16_t *>(
+      MAlloc(sizeof(id),adam_task->data_heap));
+  if (!record)
+    return false;
+  MemCpy(record,id,sizeof(id));
+  Free(bd.dev_id_record);
+  bd.dev_id_record=record;
+  return true;
+}
+
 static bool ATABlkSel(const CBlkDev &bd,uint32_t lba,uint8_t cnt,uint64_t deadline)
 {
   if (!cnt || uint64_t(lba)+cnt>0x10000000 ||
@@ -307,6 +332,21 @@ bool ATAPIStartStop(const CBlkDev &bd, bool start)
 {
   CATAChannelLock lock(bd);
   return ATAPIStartStop(bd, ATADeadline(5000), start);
+}
+
+bool ATAPIPreventRemoval(const CBlkDev &bd, bool prevent)
+{
+  CATAChannelLock lock(bd);
+  uint64_t deadline=ATADeadline(5000);
+  ATASel(bd);
+  if (ATAWait(bd,deadline,0)<0)
+    return false;
+  ATACmd(bd,ATA_PACKET);
+  const uint16_t pkt[6]{0x1E00,0,uint16_t(prevent?0x100:0),0,0,0};
+  if (!ATAPIWritePktWord(bd,deadline,pkt))
+    return false;
+  int status=ATAWait(bd,deadline,0);
+  return status>=0 && !(status&(ATAS_DRQ|ATAS_ERR|ATAS_DF));
 }
 
 static bool ATAPIWaitReady(const CBlkDev &bd, uint64_t deadline)

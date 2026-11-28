@@ -83,11 +83,29 @@ constexpr CTextProbe math_probes[]{{"math-helpers", "/MathHelpersProbe.HC",
 constexpr CTextProbe music_precision_probes[]{
     {"music-precision", "/MusicPrecision.HC", "/MusicPrecision.BIN.Z",
      "MP initial ", "MP DONE", music_precision_output}};
+constexpr CTextProbe training_input_probes[]{
+    {"training-input", "/InputTrainingProbe.HC", "",
+     "Training result ", "Training result FF", "Training result FF\n", {}, true}};
+constexpr CTextProbe file_editor_probes[]{
+    {"file-editor", "/FileEditorProbe.HC", "",
+     "File editor ", "File editor 1FF", "File editor 1FF\n", {}, true}};
+constexpr CTextProbe key_map_probes[]{
+    {"key-map", "/KeyMapProbe.HC", "", "Key map probe ", "Key map probe 7F",
+     "Key map probe 7F\n", {}, true}};
+constexpr CTextProbe dictionary_probes[]{
+    {"dictionary", "/DictionaryProbe.HC", "", "Dictionary probe ",
+     "Dictionary probe 3F", "Dictionary probe 3F\n", {}, true}};
 
 struct CModuleFile
 {
   fs::path source;
   const char *guest_name, *evidence_name;
+};
+
+enum class CStockStartup { None, Decline, Tour };
+enum class CDesktopTest {
+  None, Progress, DictionaryInstall, DictionaryGenerator, DictionaryGeneratorHolyC,
+  MenuDiagnostic, CompilerDiagnostic
 };
 
 // Uses the same QMP input and physical-memory readers as the boot tests.
@@ -98,8 +116,14 @@ static void DriveCharacterGraphics(
     bool sprite_flood = false, bool music_demo = false,
     std::span<const CTextProbe> text_probes = {},
     std::span<const CModuleFile> module_files = {},
-    uint64_t memory_limit = 0x20000000)
+    uint64_t memory_limit = 0x20000000,
+    std::string_view startup_output = {},
+    CStockStartup stock = CStockStartup::None,
+    CDesktopTest desktop = CDesktopTest::None)
 {
+  const bool reference_dictionary = reference && !text_probes.empty() &&
+      std::string_view(text_probes.front().name) == "dictionary";
+  const std::string prompt = reference_dictionary ? "A:/Home>" : "T:/Home>";
   auto in_memory = [memory_limit](uint64_t addr, uint64_t size) {
     return addr && size <= memory_limit && addr <= memory_limit - size;
   };
@@ -214,8 +238,78 @@ static void DriveCharacterGraphics(
     vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
                (dir / (std::string(name) + ".ppm")).string() + R"("}})");
   };
+  auto training_input = [&] {
+    const auto training = visible(wait_text("Training string"));
+    Check(training.find("Training output 27") != std::string::npos,
+          "InPrint did not format the training message");
+    key("x");
+    wait_text("Press the <f> key.");
+    key("spc");
+    key("f");
+    key("g");
+    Check(visible(wait_text("Training key")).find("fg") != std::string::npos,
+          "InGetStr did not echo the requested characters");
+    key("x");
+    wait_text("Press the <F1> key");
+    key("spc");
+    key("f1");
+    wait_text("Training choice");
+    key("x");
+    wait_text("Press <a>, <b> or <c>.");
+    key("spc");
+    key("b");
+    wait_text("Training until key");
+    key("right");
+    wait_text("Training until char");
+    key("d");
+    wait_text("Training view");
+    key("esc");
+    wait_text("Training result FF");
+  };
+  auto file_editor = [&] {
+    wait_text("EditorSave");
+    key("end");
+    key("q");
+    wait_text("EditorSaveq");
+    key("esc");
+    wait_text("Editor canceled write test");
+    wait_text("EditorSaveq");
+    key("end");
+    key("w");
+    wait_text("EditorSaveqw");
+    key("shift-esc");
+    wait_text("Open editor help");
+    key("spc");
+    wait_text("Keyboard Ctrls");
+    key("shift-esc");
+    wait_text("Open editor help");
+    key("shift-esc");
+    wait_text("Not Text File");
+    key("shift-esc");
+    wait_text("File editor 1FF");
+  };
+  auto dictionary_keys = [&] {
+    type("Albatros");
+    wait_text("'0' Albatross");
+    key("ctrl-shift-0");
+    wait_text("A web-footed bird");
+    snapshot("dictionary-definition");
+    key("shift-esc");
+    wait_text("'0' Albatross");
+    key("ctrl-0");
+    wait_text(prompt + "Albatross");
+    snapshot("dictionary-completion");
+    for (size_t i = 0; i < std::string_view("Albatross").size(); ++i)
+      key("backspace");
+    wait_text("AutoComplete is in StandBy");
+    cmd(R"(Ed("DN:Albatross,1");0;)");
+    wait_text("A web-footed bird");
+    snapshot("dictionary-link");
+    key("shift-esc");
+  };
   auto addresses = [&](std::string_view marker,
-                       std::array<uint64_t, 3> sizes = {8, 8, 8}) {
+                       std::array<uint64_t, 3> sizes = {8, 8, 8},
+                       unsigned attempts = 180) {
     const std::regex pattern(std::string(marker) +
                              "([0-9A-Fa-f]+) ([0-9A-Fa-f]+) ([0-9A-Fa-f]+)");
     std::smatch match;
@@ -223,7 +317,7 @@ static void DriveCharacterGraphics(
     wait([&](const Cells &cells) {
       screen = visible(cells);
       return std::regex_search(screen, match, pattern);
-    }, "Missing graphics runtime addresses");
+    }, "Missing graphics runtime addresses", attempts);
     std::array<uint64_t, 3> result{};
     for (size_t i = 0; i < result.size(); i++) {
       result[i] = std::stoull(match[i + 1].str(), nullptr, 16);
@@ -231,8 +325,565 @@ static void DriveCharacterGraphics(
     }
     return result;
   };
+  auto pane_links = [&] {
+    cmd(R"("ACM %X %X %X\n",&ms.pos.x,&ms.lb,&ms.rb;)");
+    const auto mouse = addresses("ACM ", {16, 1, 1});
+    auto click = [&](std::string_view label) {
+      const auto screen = visible(wait_text(label));
+      const auto index = screen.find(label);
+      const int64_t x = (index % 81) * 8 + 4, y = (index / 81) * 8 + 4;
+      bool reached = false;
+      for (unsigned i = 0; i < 90; i++) {
+        const auto coords = ReadPhysical<2>(vm, mouse[0]);
+        auto dx = x - int64_t(coords[0]), dy = y - int64_t(coords[1]);
+        if (std::abs(dx) <= 1 && std::abs(dy) <= 1) {
+          reached = true;
+          break;
+        }
+        MouseMove(vm, std::clamp(dx, int64_t(-40), int64_t(40)) * 2,
+                  std::clamp(dy, int64_t(-40), int64_t(40)) * 2);
+        std::this_thread::sleep_for(55ms);
+      }
+      Check(reached, "Mouse did not reach the DolDoc entry");
+      std::this_thread::sleep_for(100ms);
+      for (bool down : {true, false}) {
+        MouseButton(vm, "left", down);
+        unsigned i = 0;
+        while (bool(ReadPhysical<1>(vm, mouse[1], 'b')[0]) != down && ++i < 100)
+          std::this_thread::sleep_for(25ms);
+        Check(i < 100, "Mouse button state did not change");
+        std::this_thread::sleep_for(down ? 180ms : 400ms);
+      }
+    };
+    wait_text("AutoComplete is in StandBy");
+    click("System Keys Quick Guide");
+    wait_text("Keyboard Ctrls");
+    snapshot("pane-help");
+    vm.ResetDeadline(120s);
+    click("Key Map");
+    wait(
+        [&](const Cells &cells) {
+          return visible(cells).find("KeyMap Completed.") != std::string::npos;
+        },
+        "The Key Map macro did not finish", 2900);
+    snapshot("pane-key-map");
+    key("shift-esc");
+    wait(
+        [&](const Cells &cells) {
+          const auto screen = visible(cells);
+          return screen.find("Keyboard Ctrls") != std::string::npos &&
+                 screen.find("KeyMap Completed.") == std::string::npos;
+        },
+        "Closing Key Map did not return to HelpIndex");
+    key("shift-esc");
+    wait(
+        [&](const Cells &cells) {
+          const auto screen = visible(cells);
+          return screen.find("AutoComplete is in StandBy") !=
+                     std::string::npos &&
+                 screen.find("Keyboard Ctrls") == std::string::npos;
+        },
+        "Closing HelpIndex did not return to StandBy");
+    std::cout
+        << "The StandBy link opened HelpIndex and its Key Map macro ran\n";
+  };
   wait_text("T:/Home>");
+  if (stock != CStockStartup::None) {
+    const auto prompt = visible(wait_text("Install onto hard drive (y or n)?"));
+    Check(prompt.find("the live CD without installing.") != std::string::npos,
+          "The live DVD option is missing");
+    snapshot("install-prompt");
+    key("n");
+    wait_text("Take Tour(y or n)?");
+    snapshot("take-tour");
+    if (stock == CStockStartup::Decline) {
+      key("n");
+      const auto screen = visible(wait_text("Take Tour(y or n)? NO"));
+      Check(screen.find("Install onto hard drive (y or n)? NO") != std::string::npos,
+            "The install prompt did not accept No");
+      wait_text("T:/Home>");
+      snapshot("live-prompt");
+      std::cout << "Declined installation and tour on the stock Once script\n";
+      key("f1");
+      wait_text("Keyboard Ctrls");
+      snapshot("help-index");
+      key("shift-f1");
+      wait_text("Owner/President:");
+      snapshot("about");
+      key("shift-esc");
+      wait_text("Keyboard Ctrls");
+      key("shift-esc");
+      wait_text("T:/Home>");
+      cmd("WinMax;DocClear(,1);Seed(12345);TipOfDay;");
+      wait_text("* Use <CTRL-ALT-f> to toggle between Std Font and Cyrillic Font.");
+      snapshot("tip-of-day");
+      std::cout << "Displayed the seeded tip from the original Tips.DD\n";
+      cmd(R"(ExeFile2("::/InputTrainingProbe.HC");0;)");
+      training_input();
+      snapshot("training-input");
+      std::cout << "Training result FF\n";
+      cmd(R"(ExeFile2("::/FileEditorProbe.HC");0;)");
+      file_editor();
+      snapshot("file-editor");
+      std::cout << "File editor 1FF\n";
+    } else {
+      key("y");
+      const auto menu = visible(wait_text("Part 12: Test Suite"));
+      Check(menu.find("TempleOS Tours") != std::string::npos &&
+                menu.find("Part  1: The help system") != std::string::npos &&
+                menu.find("Done") != std::string::npos,
+            "The original tour menu is incomplete");
+      snapshot("tour-menu");
+      key("spc");
+      wait_text("for the main help index.");
+      key("x");
+      wait_text("Press the <F1> key");
+      key("spc");
+      key("f1");
+      wait_text("Keyboard Ctrls");
+      wait_text("to abort and exit.");
+      snapshot("tour-help-index");
+      key("shift-esc");
+      constexpr const char *mods[]{"ctrl", "ctrl-shift", "alt", "alt-shift",
+                                    "ctrl-alt", "ctrl-alt-shift"};
+      constexpr const char *names[]{"CTRL", "CTRL SHIFT", "ALT", "ALT SHIFT",
+                                     "CTRL ALT", "CTRL ALT SHIFT"};
+      for (size_t i = 0; i < std::size(mods); i++) {
+        wait_text(std::string("hold the <") + names[i] + ">");
+        if (i < 4) {
+          vm.Hmp(std::string("sendkey ") + mods[i] + " 1400");
+          std::this_thread::sleep_for(1575ms);
+          continue;
+        }
+        KeyboardKey(vm, "ctrl", true);
+        KeyboardKey(vm, "alt", true);
+        if (i == 5)
+          KeyboardKey(vm, "shift", true);
+        const auto held_since = std::chrono::steady_clock::now();
+        const auto description = i == 4 ? "CTRL ALT z         Cmd /Zoom In"
+                                        : "CTRL ALT SHIFT z         Cmd /Zoom Out";
+        wait([&](const Cells &cells) {
+          const auto screen = visible(cells);
+          return screen.find(description) != std::string::npos &&
+                 (i == 5 || screen.find("Cmd /Toggle Aux Font") != std::string::npos);
+        }, "Missing held Ctrl-Alt command descriptions");
+        snapshot(i == 4 ? "autocomplete-ctrl-alt" : "autocomplete-ctrl-alt-shift");
+        std::this_thread::sleep_until(held_since + 2s);
+        if (i == 5)
+          KeyboardKey(vm, "shift", false);
+        KeyboardKey(vm, "alt", false);
+        KeyboardKey(vm, "ctrl", false);
+        if (i == 4)
+          wait_text("AutoComplete is in StandBy");
+      }
+      wait_text("TempleOS Tours");
+      snapshot("first-tour-complete");
+      key("shift-esc");
+      wait([&](const Cells &cells) {
+        const auto screen = visible(cells);
+        return screen.find("TempleOS Tours") == std::string::npos &&
+               screen.find("Directory of T:/Home") != std::string::npos &&
+               screen.find("T:/Home>") != std::string::npos;
+      }, "The stock tour did not return to the home prompt");
+      snapshot("tour-exit");
+      cmd("AutoComplete(0);0;");
+      wait([&](const Cells &cells) {
+        return visible(cells).find("AutoComplete is in StandBy") == std::string::npos;
+      }, "AutoComplete task stayed visible after shutdown");
+      cmd("AutoComplete(1);0;");
+      wait_text("AutoComplete is in StandBy");
+      snapshot("autocomplete-restarted");
+      std::cout << "AutoComplete displayed Ctrl-Alt descriptions and restarted\n";
+      std::cout << "Completed the first tour chapter and returned to the prompt\n";
+      cmd(R"(ACInit("::/ACIndex.TXT*");)");
+      wait_text("ACIndex.TXT.Z");
+      type("AcIndex");
+      wait([&](const Cells &cells) {
+        const auto screen = visible(cells);
+        return screen.find("Word:AcIndex") != std::string::npos &&
+               screen.find("F01 AcIndexGamma") != std::string::npos &&
+               screen.find("F02 AcIndexBeta") != std::string::npos &&
+               screen.find("F03 AcIndexAlpha") != std::string::npos &&
+               screen.find("acIndexWrong") == std::string::npos;
+      }, "Missing frequency-ordered completion for the active prefix");
+      snapshot("autocomplete-words");
+      key("ctrl-f1");
+      wait_text("T:/Home>AcIndexGamma");
+      key("shift-esc");
+      wait_text("AutoComplete is in StandBy");
+      std::cout << "AutoComplete ranked and inserted a completion from compressed text\n";
+      cmd("WinMax;");
+      cmd(R"(ExeFile2("::/DictionaryProbe.HC");0;)");
+      wait_text("Dictionary probe 3F");
+      dictionary_keys();
+      std::cout << "Dictionary probe 3F and keyboard actions passed\n";
+      pane_links();
+    }
+    return;
+  }
+  if (!startup_output.empty()) {
+    auto screen = visible(wait_text(startup_output));
+    Check(screen.find(startup_output) == screen.rfind(startup_output),
+          "Startup command ran in multiple terminals");
+    snapshot("once-startup");
+    std::cout << startup_output << '\n';
+  }
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
+  if (desktop == CDesktopTest::MenuDiagnostic ||
+      desktop == CDesktopTest::CompilerDiagnostic)
+    cmd("I64 dsz;U8 *dout;");
+  auto wait_compiler_exception = [&](std::string_view dir_prompt) {
+    return wait([&](const Cells &cells) {
+      const auto screen = visible(cells);
+      const auto exception = screen.find("Except:Compiler");
+      return exception != std::string::npos &&
+             screen.find(dir_prompt, exception) != std::string::npos;
+    }, "The terminal did not return after its Compiler exception");
+  };
+  auto save_diagnostic = [&](const char *filename) {
+    cmd("dout=DocSave(DocPut,&dsz);");
+    cmd(R"("DGP %X %X %X\n",dout,&dsz,&dout;)");
+    const auto fields = addresses("DGP ", {1, 8, 8});
+    const auto size = ReadPhysical<1>(vm, fields[1])[0];
+    Check(size && in_memory(fields[0], size), "Invalid diagnostic document size");
+    const auto output = dir / filename;
+    vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+               std::to_string(fields[0]) + R"(,"size":)" + std::to_string(size) +
+               R"(,"filename":")" + output.string() + R"("}})");
+    cmd("Free(dout);");
+    return ReadText(output);
+  };
+  if (desktop == CDesktopTest::CompilerDiagnostic) {
+    cmd("CBlkDev *db=BlkDevNextFreeSlot('A',BDT_RAM);");
+    cmd("db->max_blk=131071;");
+    cmd(R"("DB %X\n",BlkDevAdd(db,I64_MIN,FALSE,TRUE);)");
+    wait_text("DB 1");
+    cmd(R"(Cd("A:/");)");
+    wait_text("A:/>");
+    cmd("NoSuchParserName; // undefined statement");
+    wait_compiler_exception("A:/>");
+    const auto prompt_doc = save_diagnostic("compiler-prompt.bin");
+    Check(prompt_doc.find(R"(Undefined identifier at ";")") != std::string::npos,
+          "Missing undefined identifier diagnostic or lookahead token");
+    cmd("DocClear(,1);");
+    cmd(R"(U8 *bad="I64 Broke(){return 4+; } // bad expression\n";)");
+    cmd(R"("DW %X\n",FileWrite("Bad.HC",bad,StrLen(bad));)");
+    wait_text("DW ");
+    cmd(R"("DF %X\n",ExeFile("Bad.HC");)");
+    wait_text("DF 0");
+    cmd(R"(ExeFile2("Bad.HC");)");
+    wait_compiler_exception("A:/>");
+    cmd(R"(U8 *bo="4+; // bad AOT expression\n";)");
+    cmd(R"(FileWrite("BadAot.PRJ",bo,StrLen(bo));)");
+    cmd(R"("DA %X\n",Cmp("BadAot.PRJ",,"Bad.BIN");)");
+    wait_text("DA 2");
+    cmd(R"("DR %X %X\n",FileFind("Bad.BIN")==0,6*7;)");
+    wait_text("DR 1 2A");
+    const auto doc = save_diagnostic("compiler-file.bin");
+    size_t next = 0;
+    auto report = [&](std::string_view diagnostic, std::string_view link,
+                      std::string_view line) {
+      const auto message = doc.find(diagnostic, next);
+      const auto file = doc.find(link, message);
+      const auto source = doc.find(line, file);
+      Check(message != std::string::npos && file != std::string::npos &&
+                source != std::string::npos && file < doc.find('\n', message) &&
+                source < doc.find('\n', file),
+            "Missing compiler diagnostic token, link, or source line");
+      next = source + 1;
+    };
+    constexpr std::string_view missing = R"(Missing expression at ";")";
+    constexpr std::string_view parse = R"(Compiler Parse Error at ";")";
+    constexpr std::string_view jit = "FL:A:/Bad.HC,1",
+                               jit_line = "I64 Broke(){return 4+; } // bad expression";
+    for (unsigned i = 0; i < 2; i++) {
+      report(missing, jit, jit_line);
+      report(parse, jit, jit_line);
+    }
+    constexpr std::string_view aot = "FL:A:/BadAot.PRJ,1",
+                               aot_line = "4+; // bad AOT expression";
+    report(missing, aot, aot_line);
+    report(parse, aot, aot_line);
+    report(R"(";" $LK,)", aot, aot_line);
+    cmd("DocClear(,1);");
+    cmd(R"(U8 *ci="public I64i CmpStaleExport;\n";)");
+    cmd(R"(ci=MStrPrint("%sCmpStaleExport=UnboundCmpName;\n",ci);)");
+    cmd(R"(FileWrite("Partial.HC",ci,StrLen(ci));Free(ci);)");
+    cmd(R"("DI %X\n",Cmp("Partial.HC",,"Bad.BIN");)");
+    wait_text("DI 2");
+    const auto rejected = save_diagnostic("compiler-partial.bin");
+    Check(rejected.find(R"(Invalid lval at "UnboundCmpName")") != std::string::npos &&
+              rejected.find("FL:A:/Partial.HC,2") != std::string::npos &&
+              rejected.find("Errs:2 Warns:0 Code:0 Size:0") != std::string::npos,
+          "Failed partial Cmp reported the wrong error, source, or output size");
+    std::cout << "HolyC diagnostics matched the prompt, ExeFile, ExeFile2 and Cmp paths\n";
+    return;
+  }
+  if (desktop == CDesktopTest::MenuDiagnostic) {
+    cmd("CBlkDev *mdb=BlkDevNextFreeSlot('A',BDT_RAM);");
+    cmd("mdb->max_blk=131071;");
+    cmd(R"("MB %X\n",BlkDevAdd(mdb,I64_MIN,FALSE,TRUE);)");
+    wait_text("MB 1");
+    cmd(R"(Cd("A:/");)");
+    wait_text("A:/>");
+    cmd(R"(U8 *bad="Root {\nLeaf(1)\n} // End of menu\n";)");
+    cmd(R"("MW %X\n",FileWrite("BadMenu.HC",bad,StrLen(bad));)");
+    wait_text("MW ");
+    cmd(R"(CMenu *oldm=MenuPush("Root {Leaf(1);}");)");
+    cmd(R"hc(if(oldm)"MS %X\n",1;)hc");
+    wait_text("MS 1");
+    cmd(R"(MenuFilePush("BadMenu.HC");)");
+    wait_compiler_exception("A:/>");
+    cmd(R"("Menu intact %X\n",Fs->cur_menu==oldm;)");
+    const auto terminal = visible(wait_text("Menu intact 1"));
+    std::ofstream(dir / "menu-diagnostic-terminal.txt") << terminal;
+    snapshot("menu-diagnostic");
+    Check(terminal.find(R"(Missing ';' at"}")") != std::string::npos &&
+              terminal.find("Except:Compiler") != std::string::npos,
+          "Missing menu parser token or exception");
+    const auto doc = save_diagnostic("menu-diagnostic-document.bin");
+    const auto link = doc.find("FL:A:/BadMenu.HC,3");
+    Check(link != std::string::npos &&
+              doc.find("} // End of menu", link) != std::string::npos,
+          "Missing menu parser source link or source line");
+    cmd("MenuPop;");
+    std::cout << "Malformed menu reported its source and preserved the menu stack\n";
+    return;
+  }
+  if (desktop == CDesktopTest::DictionaryGenerator ||
+      desktop == CDesktopTest::DictionaryGeneratorHolyC) {
+    vm.ResetDeadline(1200s);
+    const bool holyc = reference || desktop == CDesktopTest::DictionaryGeneratorHolyC;
+    cmd("CBlkDev *genbd=BlkDevNextFreeSlot('A',BDT_RAM);");
+    auto wait_number = [&](std::string_view prefix, unsigned attempts) {
+      const std::regex number("(^|\n) {0,4}" + std::string(prefix) +
+                              " [1-9A-Fa-f][0-9A-Fa-f]*\\b");
+      return wait([&](const Cells &cells) {
+        return std::regex_search(visible(cells), number);
+      }, "Missing dictionary generator transfer result", attempts);
+    };
+    cmd("genbd->max_blk=262143;");
+    cmd(R"("GB %X\n",BlkDevAdd(genbd,I64_MIN,FALSE,TRUE);)");
+    try {
+      wait_number("GB", 1200);
+      cmd(R"(Cd("A:/");)");
+      wait_text("A:/>");
+    } catch (...) {
+      snapshot("ram-disk-terminal");
+      throw;
+    }
+    if (reference) {
+      cmd(R"("GM %X\n",ATAMount('C',BDT_ATA,0x1F0,0x3F4,0);)");
+      wait_number("GM", 1200);
+    }
+    cmd(R"(DirMk("Adam");DirMk("Adam/AutoComplete");)");
+    cmd(R"(Cd("Adam/AutoComplete");)");
+    wait_text("A:/Adam/AutoComplete>");
+    cmd("I64 gn;U8 *gp;");
+    cmd(R"(gp=FileRead("C:/DICTIONARY.DD",&gn);"GR %X\n",gn;)");
+    wait_number("GR", 6000);
+    cmd(R"("GW %X\n",FileWrite("DICTIONARY.DD",gp,gn);)");
+    wait_number("GW", 6000);
+    cmd("Free(gp);");
+    if (holyc)
+      cmd(R"(Copy("C:/ACDictGen.HC","ACDictGen.HC");)");
+    cmd(holyc ? R"(ExeFile2("ACDictGen.HC");"DGG return %X\n",1;)"
+              : R"(ACDictGen;"DGG return %X\n",1;)");
+    const auto done = wait([&](const Cells &cells) {
+      const auto screen = visible(cells);
+      return screen.find("DGG return 1") != std::string::npos ||
+             screen.find("Except:Compiler") != std::string::npos;
+    }, "The dictionary generator did not finish", 28000);
+    const auto terminal = visible(done);
+    std::ofstream(dir / "generator-terminal.txt") << terminal;
+    if (terminal.find("Word File Size:") == std::string::npos ||
+        terminal.find("Word Count") == std::string::npos)
+      throw std::runtime_error(
+          "The dictionary generator returned without writing the files\n" + terminal);
+    snapshot("dictionary-generator");
+    struct CGeneratedFile {
+      const char *name, *evidence, *marker;
+    };
+    constexpr CGeneratedFile files[]{
+        {"DICTIONARY2.DD", "DICTIONARY2.DD", "GPP "},
+        {"ACDefs.DATA", "ACDefs.DATA", "GDF "},
+        {"ACWords.DATA.Z", "ACWords.DATA", "GWD "}};
+    for (const auto &file : files) {
+      cmd(std::string(R"(gp=FileRead(")") + file.name + R"(",&gn);")" +
+          file.marker + R"(read %X\n",gn;)");
+      wait_number(std::string(file.marker) + "read", 6000);
+      cmd(std::string("\"") + file.marker + R"(%X %X %X\n",gp,&gn,&gp;)");
+      const auto fields = addresses(file.marker, {1, 8, 8}, 6000);
+      const auto size = ReadPhysical<1>(vm, fields[1])[0];
+      Check(size && in_memory(fields[0], size), "Invalid generated dictionary file size");
+      const auto output = dir / file.evidence;
+      vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+                 std::to_string(fields[0]) + R"(,"size":)" +
+                 std::to_string(size) + R"(,"filename":")" + output.string() + R"("}})");
+      Check(fs::file_size(output) == size, "Incomplete generated dictionary file capture");
+      cmd("Free(gp);");
+      std::cout << file.evidence << " has " << size << " bytes\n";
+    }
+    return;
+  }
+  if (desktop == CDesktopTest::DictionaryInstall) {
+    const auto expected = FileRead("Adam/AutoComplete/ACDefs.DATA");
+    const auto blocks = (expected.size() + 511) / 512;
+    vm.ResetDeadline(420s);
+    if (reference)
+      cmd("ATAMount('C',BDT_ATA,0x1F0,0x3F4,0);");
+    cmd("Let2Drv('C',0)->drv_let;");
+    wait_text("=67");
+    cmd("Let2Drv('C',0)->bd->flags&=~BDF_READ_ONLY;");
+    cmd(R"(Cd("C:/");)");
+    wait_text("C:/>");
+    if (reference)
+      cmd(R"(blkdev.home_dir=AStrNew("C:/");)");
+    cmd(R"(U8 *dcz="/Adam/AutoComplete/ACDefs.DATA.Z";)");
+    cmd(R"hc(if(FileFind(dcz))"DIC staged %X\n",1;)hc");
+    wait_text("DIC staged 1");
+    cmd(R"("ACP %X %X %X\n",&progress1,&progress1_max,progress1_desc;)");
+    const auto progress = addresses("ACP ", {8, 8, 48});
+    Check(progress[1] == progress[0] + 8,
+          "The dictionary progress fields are not adjacent");
+    constexpr char desc[] = "Uncompressing Dictionary";
+    bool named = false, rendered = false;
+    uint64_t written = 0, observed_max = 0;
+    type(R"(ACInit;"DIC ready %X\n",acd.num_words;)");
+    vm.Hmp("sendkey ret 35");
+    const std::regex ready_count(R"((^|\n) {0,4}DIC ready [0-9a-fA-F]+\b)");
+    const auto ready = wait(
+        [&](const Cells &cells) {
+          const auto counters = ReadPhysical<2>(vm, progress[0]);
+          const auto val = counters[0], max = counters[1];
+          observed_max = std::max(observed_max, max);
+          if (max == blocks) {
+            written = std::max(written, val);
+            if (!named) {
+              const auto label =
+                  ReadPhysical<sizeof(desc)>(vm, progress[2], 'b');
+              named = std::equal(label.begin(), label.end(), desc);
+            }
+            if (named && val >= blocks / 10 && !rendered) {
+              snapshot("dictionary-install-progress");
+              const auto rgb = ReadVGA(dir / "dictionary-install-progress.ppm");
+              const auto *pixel = &rgb[(172 * 640 + 105) * 3];
+              rendered = pixel[1] > 200 && pixel[0] < 150 && pixel[2] < 150;
+            }
+          }
+          return std::regex_search(visible(cells), ready_count);
+        },
+        "The writable dictionary did not finish initialization", 10000);
+    if (visible(ready).find("DIC ready 1743D") == std::string::npos)
+      throw std::runtime_error(
+          "The installed dictionary did not load 95,293 words\n" +
+          visible(ready));
+    if (!named || !written || !rendered)
+      throw std::runtime_error(
+          "Did not observe the dictionary write progress (maximum " +
+          std::to_string(observed_max) + ", value " + std::to_string(written) +
+          ")");
+    wait(
+        [&](const Cells &) {
+          return !ReadPhysical<1>(vm, progress[0])[0] &&
+                 !ReadPhysical<1>(vm, progress[1])[0] &&
+                 !ReadPhysical<1>(vm, progress[2], 'b')[0];
+        },
+        "The dictionary progress bar did not clear");
+    cmd("AutoComplete(0);WinMax;");
+    cmd(R"hc(if(FileFind(dcz)==0)"DIC removed %X\n",1;)hc");
+    wait_text("DIC removed 1");
+    cmd(R"(I64 dsz;U8 *dict=FileRead("/Adam/AutoComplete/ACDefs.DATA",&dsz);"DIB %X %X %X\n",dict,&dsz,&progress1;)");
+    const auto data = addresses("DIB ", {expected.size(), 8, 8}, 2200);
+    Check(ReadPhysical<1>(vm, data[1])[0] == expected.size(),
+          "The expanded definitions size differs");
+    auto installed = dir / "installed-definitions.bin";
+    vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+               std::to_string(data[0]) + R"(,"size":)" +
+               std::to_string(expected.size()) + R"(,"filename":")" +
+               installed.string() + R"("}})");
+    Check(FileRead(installed) == expected,
+          "The expanded definitions bytes differ");
+    std::cout
+        << "Dictionary progress reached " << written << " of " << blocks
+        << " blocks and cleared. Expanded definitions and word count matched\n";
+    return;
+  }
+  if (desktop == CDesktopTest::Progress) {
+    cmd(R"("PGM %X %X %X\n",&progress1,&sys_progresses[0].val,&progress1_max;)");
+    const auto progress = addresses("PGM ");
+    Check(progress[0] == progress[1] && progress[2] - progress[0] == 8,
+          "Progress fields do not alias the CProgress record");
+    cmd(R"(ExeFile2("::/Demo/Progress.HC");)");
+    const char *phases[]{
+        "With description.", "With description and elapsed time.",
+        "With description, elapsed time and registry total time.",
+        "No description."};
+    const auto render = dir / "progress-current.ppm";
+    for (size_t i = 0; i < std::size(phases); i++) {
+      wait_text(phases[i]);
+      Check(ReadPhysical<2>(vm, progress[0]) == std::array<uint64_t, 2>{},
+            "The earlier progress bar did not reset");
+      key("spc");
+      bool filled = false;
+      for (unsigned attempt = 0; attempt < 60; attempt++) {
+        vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
+                   render.string() + R"("}})");
+        const auto rgb = ReadVGA(render);
+        auto green = [&](int x) {
+          const auto *pixel = &rgb[(172 * 640 + x) * 3];
+          return pixel[1] > 200 && pixel[0] < 150 && pixel[2] < 150;
+        };
+        if (green(105) && !green(520)) {
+          filled = true;
+          break;
+        }
+        std::this_thread::sleep_for(45ms);
+      }
+      Check(filled, "The Progress demo bar did not partially fill");
+      fs::copy_file(render,
+                    dir / ("progress-" + std::to_string(i + 1) + ".ppm"),
+                    fs::copy_options::overwrite_existing);
+      wait(
+          [&](const Cells &) {
+            return ReadPhysical<2>(vm, progress[0]) ==
+                   std::array<uint64_t, 2>{};
+          },
+          "The Progress demo did not clear the bar", 330);
+    }
+    wait_text("Watch the progress on the wallpaper.");
+    vm.ResetDeadline(300s);
+    key("spc");
+    uint64_t val = 0;
+    wait(
+        [&](const Cells &) {
+          val = ReadPhysical<1>(vm, progress[0])[0];
+          return val > 0 && val < 12000000;
+        },
+        "The Progress demo assembly loop did not update the shared counter");
+    const auto first = val;
+    for (unsigned i = 0; val && i < 1800; i++) {
+      std::this_thread::sleep_for(150ms);
+      val = ReadPhysical<1>(vm, progress[0])[0];
+    }
+    if (val)
+      throw std::runtime_error(
+          "The Progress demo assembly loop did not clear the counter (" +
+          std::to_string(first) + " to " + std::to_string(val) + ")");
+    std::cout << "Progress.HC drew and reset its four display phases and ran its assembly loop\n";
+    return;
+  }
+  if (reference_dictionary) {
+    cmd("CBlkDev *dictbd=BlkDevNextFreeSlot('A',BDT_RAM);");
+    cmd("dictbd->max_blk=131071;BlkDevAdd(dictbd,I64_MIN,FALSE,TRUE);");
+    cmd(R"(Cd("A:/");DirMk("Adam");DirMk("Adam/AutoComplete");DirMk("Home");)");
+    cmd(R"(Copy("::/Adam/AutoComplete/ACDefs.DATA.Z","/Adam/AutoComplete/ACDefs.DATA");)");
+    cmd(R"(Cd("/Home");)");
+    wait([&](const Cells &cells) {
+      return visible(cells).find(prompt) != std::string::npos;
+    }, "The reference dictionary did not finish copying to the RAM drive", 2500);
+    cmd(R"(blkdev.home_dir=AStrNew("A:/Home");)");
+  }
   if (music_demo) {
     vm.ResetDeadline(180s);
     cmd("I64 mu1=&scrncast.snd_head,mu2=&scrncast.ona;");
@@ -510,12 +1161,50 @@ static void DriveCharacterGraphics(
     for (const auto &probe : text_probes) {
       vm.ResetDeadline(150s);
       cmd("DocClear(,1);");
-      upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
+      if (reference && probe.reference_file)
+        cmd(std::string("DocClear(,1);ExeFile2(\"") + probe.reference_file + "\");");
+      else if (reference)
+        upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
+      else
+        cmd(std::string("ExeFile(\"::") + probe.source + "\");0;");
+      if (std::string_view(probe.name) == "popup-menus") {
+        wait_text("Menu Beta");
+        snapshot("popup-menu");
+        key("tab");
+        key("spc");
+        wait_text("Cancel menu");
+        key("shift-esc");
+        wait_text("Popup Value:");
+        key("esc");
+        wait_text("One-time probe");
+        snapshot("popup-checkbox");
+        key("spc");
+        key("tab");
+        key("spc");
+        wait_text("One-time cancel");
+        key("shift-esc");
+        wait_text("Registry Notice");
+        key("spc");
+        key("tab");
+        key("spc");
+      }
+      if (std::string_view(probe.name) == "training-input")
+        training_input();
+      if (std::string_view(probe.name) == "file-editor")
+        file_editor();
+      if (std::string_view(probe.name) == "key-map") {
+        wait_text("Press the key map probe chord");
+        key("ctrl-alt-q");
+        wait([&](const Cells &cells) {
+          return visible(cells).find("KeyMap Completed.") != std::string::npos;
+        }, "KeyMap did not complete its key description scan", 2700);
+      }
       const auto cells = wait(
           [&](const Cells &cells) {
             const auto screen = visible(cells);
-            return screen.find(probe.finish) != std::string::npos &&
-                   screen.find("T:/Home>") != std::string::npos;
+            const auto finish = screen.find(probe.finish);
+            return finish != std::string::npos &&
+                   screen.find(prompt, finish) != std::string::npos;
           },
           "Missing completed reference text probe");
       const auto screen = visible(cells);
@@ -543,10 +1232,12 @@ static void DriveCharacterGraphics(
                       std::string_view::npos &&
                   diagnostic.find("ERROR:") == std::string_view::npos,
               "Reference failed assertion did not produce exactly one warning");
-      } else
+      } else if (!probe.allow_prefix)
         Check(
             first / 81 == 2 && first % 81 == 1,
             "Reference text probe did not begin at the cleared window origin");
+      else
+        Check(first % 81 == 1,"Reference probe result did not begin at a line");
       const auto finish = screen.find(probe.finish, first);
       Check(finish != std::string::npos,
             "Missing last reference text probe line");
@@ -561,13 +1252,15 @@ static void DriveCharacterGraphics(
         output.append(terminal_line(row));
         output += '\n';
       }
-      const auto prompt = screen.find("T:/Home>", finish);
-      Check(prompt != std::string::npos && prompt % 81 == first % 81 &&
-                terminal_line(prompt / 81) == "T:/Home>",
+      const auto prompt_pos = screen.find(prompt, finish);
+      Check(prompt_pos != std::string::npos && prompt_pos % 81 == first % 81 &&
+                terminal_line(prompt_pos / 81) == prompt,
             "Reference probe did not return to an empty command prompt");
       bool timed = false;
-      const std::regex timing(R"([0-9]+\.[0-9]{6}s)");
-      for (size_t row = finish / 81 + 1; row < prompt / 81; row++) {
+      const bool answer = !reference || std::string_view(probe.name) == "startup-exec";
+      const std::regex timing(answer ? R"([0-9]+\.[0-9]{6}s ans=0x00000000=0)"
+                                     : R"([0-9]+\.[0-9]{6}s)");
+      for (size_t row = finish / 81 + 1; row < prompt_pos / 81; row++) {
         const auto line = terminal_line(row);
         if (line.empty())
           continue;
@@ -583,9 +1276,69 @@ static void DriveCharacterGraphics(
       if (output != probe.expected)
         failures +=
             std::string("Reference output differs: ") + probe.source + "\n";
+      if (std::string_view(probe.name) == "dictionary" && output == probe.expected) {
+        cmd("AutoComplete(1);");
+        dictionary_keys();
+        std::cout << "Dictionary keyboard actions passed\n";
+        pane_links();
+      }
     }
     if (!failures.empty())
       throw std::runtime_error(failures);
+    if (std::string_view(text_probes.front().name) == "popup-menus") {
+      cmd(R"(ExeFile("::/Demo/DolDoc/MenuBttn.HC");0;)");
+      wait_text("Menu Demo");
+      key("tab");
+      key("spc");
+      wait_text("100 Hz");
+      snapshot("menu-button-demo");
+      key("tab");
+      key("spc");
+      wait([&](const Cells &cells) {
+        auto screen = visible(cells);
+        return screen.find("100 Hz") == std::string::npos &&
+               screen.find("Menu Demo") != std::string::npos;
+      }, "MenuBttn.HC did not return from the frequency popup");
+      key("end");
+      key("spc");
+      wait_text("T:/Home>");
+      std::cout << "MenuBttn.HC opened the frequency menu and returned to the prompt\n";
+    }
+    if (std::string_view(text_probes.front().name) == "ins-reg") {
+      cmd("InsReg;0;");
+      wait_text("Install Registration");
+      wait_text("Host OS:");
+      wait_text("Host VM:");
+      wait_text("Your Initials:");
+      wait_text("This Machine Num (Choose Any):");
+      snapshot("ins-reg-form");
+      key("spc");
+      wait_text("Windows");
+      key("down");
+      key("down");
+      key("esc");
+      wait_text("[Linux]");
+      key("tab");
+      key("spc");
+      wait_text("VirtualBox");
+      key("down");
+      key("down");
+      key("down");
+      key("esc");
+      wait_text("[QEMU]");
+      key("tab");
+      type("ABC");
+      key("tab");
+      type("4");
+      wait_text("This Machine Num (Choose Any):4");
+      snapshot("ins-reg-filled");
+      key("esc");
+      wait_text("InsReg:ABC:4");
+      cmd(R"("Reg fields %d %d\n",ins_reg.host_os,ins_reg.host_vm;0;)");
+      wait_text("Reg fields 2 3");
+      snapshot("ins-reg-saved");
+      std::cout << "Install registration saved Linux, QEMU, ABC and 4\n";
+    }
     return;
   }
   if (screen_capture) {
@@ -1013,8 +1766,36 @@ static void DriveCharacterGraphics(
           hash = (hash ^ uint8_t(cells[y * 80 + x] >> shift)) * 0x100000001B3;
     return hash;
   };
-  cmd("Seed(12345);DocClear(,1);");
-  cmd(R"(ExeFile("::/Demo/Games/CharDemo.HC");)");
+  // Load identical test-only source on both guests. Long keyboard-entered
+  // definitions and address commands can leave the terminal panned or still
+  // editing when the host expects the observer's setup output.
+  cmd("DocClear(,1);");
+  if (reference)
+    upload(fs::absolute("Linux/Fixtures/CharPanObserver.HC"),true);
+  else
+    cmd(R"(ExeFile("::/CharPanObserver.HC");)");
+  // Column zero belongs to the window border (the reference spells its
+  // title vertically there). Match the complete marker inside the window.
+  const std::regex observer_marker(R"((?:^|\n). *CGPAN:([0-9A-Fa-f]+):END *\n)");
+  std::smatch observer_match;
+  std::string observer_screen;
+  wait([&](const Cells &cells) {
+    observer_screen=visible(cells);
+    return std::regex_search(observer_screen,observer_match,observer_marker) &&
+           observer_screen.find("T:/Home>",observer_match.position()+observer_match.length())!=std::string::npos;
+  },"CharDemo pan observer setup did not finish");
+  const auto pan_watch=std::stoull(observer_match[1].str(),nullptr,16);
+  Check(in_memory(pan_watch,32),"Invalid CharDemo pan observer address");
+  const auto initial_observer = ReadPhysical<4>(vm, pan_watch);
+  Check(initial_observer==std::array<uint64_t,4>{},
+        "CharDemo pan observer was not initialized");
+  // Start the observer and enter the demo in one guest operation.
+  cmd("CGRun;");
+  wait([&](const Cells &) {
+    const auto observed = ReadPhysical<4>(vm, pan_watch);
+    return !observed[2] && observed[3] > initial_observer[3];
+  },
+       "CharDemo pan observer did not start");
   auto initial = wait(map_visible, "CharDemo did not draw its terrain");
   Check(terrain_hash(initial) == 0xB980E584B8EAAC9C,
         "CharDemo initial terrain differs from the pinned seed");
@@ -1060,14 +1841,27 @@ static void DriveCharacterGraphics(
   };
   auto scroll = [&](const Cells &before, const char *button, int dx, int dy,
                     const char *name) {
+    const size_t axis = dx ? 0 : 1;
+    const auto start = ReadPhysical<4>(vm, pan_watch);
     key(button);
-    bool subcell = false;
-    auto cells = wait([&](const Cells &now) {
-      auto pan = ReadPhysical<2>(vm, pan_slot);
-      subcell |= pan[0] != 7 || pan[1] != 7;
-      return subcell && pan[0] == 7 && pan[1] == 7 &&
-             matches_shift(before, now, dx, dy);
-    }, "CharDemo did not scroll exactly four cells");
+    std::array<uint64_t, 2> pan{};
+    std::array<uint64_t, 4> observed{};
+    bool shifted = false;
+    Cells cells;
+    try {
+      cells = wait([&](const Cells &now) {
+        pan = ReadPhysical<2>(vm, pan_slot);
+        observed = ReadPhysical<4>(vm, pan_watch);
+        shifted = matches_shift(before, now, dx, dy);
+        return observed[axis] > start[axis] && pan[0] == 7 && pan[1] == 7 && shifted;
+      }, "CharDemo did not scroll exactly four cells");
+    } catch (...) {
+      std::cerr << name << " pan " << pan[0] << ' ' << pan[1]
+                << " observer " << start[0] << ' ' << start[1] << ' ' << start[3]
+                << " -> " << observed[0] << ' ' << observed[1] << ' ' << observed[3]
+                << " shifted " << shifted << '\n';
+      throw;
+    }
     snapshot(name);
     return cells;
   };
@@ -1093,6 +1887,20 @@ static void DriveCharacterGraphics(
   wait_text("T:/Home>");
   wait_restored();
   snapshot("char-exit");
+  wait([&](const Cells &) {
+    return ReadPhysical<4>(vm, pan_watch)[2] == 2;
+  }, "CharDemo pan observer did not stop");
+  wait([&](const Cells &cells) {
+    auto screen=visible(cells);
+    auto done=screen.find("CGWATCH 2");
+    return done!=std::string::npos && screen.find("T:/Home>",done)!=std::string::npos;
+  },"CharDemo pan observer did not exit");
+  cmd("CGDone;");
+  wait([&](const Cells &cells) {
+    auto screen=visible(cells);
+    auto done=screen.find("CGDONE");
+    return done!=std::string::npos && screen.find("T:/Home>",done)!=std::string::npos;
+  },"CharDemo pan observer cleanup did not finish");
   std::cout << "CharDemo.HC animated all four glyphs, scrolled four ways, restarted and restored state\n";
 
   auto move_to = [&](int x, int y) {

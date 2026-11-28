@@ -116,6 +116,8 @@ constexpr int64_t LFSF_DOC = 1, LFSF_DEFINE = 2;
 constexpr int64_t COMPILER_ERROR = 0x72656C69706D6F43; // Compiler
 constexpr int64_t OPTF_WARN_UNUSED_VAR = 1 << 0x10,
                   OPTF_WARN_HEADER_MISMATCH = 1 << 0x13;
+constexpr int64_t OPTf_NO_REG_VAR = 0x22;
+extern "C" uint64_t GetOptionCpp(int64_t num);
 char *CmdLinePmt();
 
 // The caller owns the root source and filename. The lexer owns nested sources
@@ -129,6 +131,8 @@ bool LexAttachDoc(CCmpCtrl &cc, CDoc &doc, CLexFile *root = nullptr,
                   CDocEntryBase *entry = nullptr, uint32_t col = 0);
 int64_t LexGetChar(CCmpCtrl &cc);
 const char *LexPutLine(const CLexFile &file, const char *start);
+void LexPutPos(const CCmpCtrl &cc);
+void LexExceptReport(const CCmpCtrl &cc, const char *message);
 int64_t LexRaw(CCmpCtrl &cc);
 int64_t Lex(CCmpCtrl &cc);
 char *LexExtStr(CCmpCtrl &cc, size_t &size);
@@ -233,6 +237,7 @@ inline const CInst *AsmInstEntries(const CHashOpcode &op)
 }
 
 bool AsmHashLoad();
+bool UAsmHashLoad(const CHashTable &table, CHeapCtrl *heap);
 const CHash *AsmHashFind(const char *name, uint32_t mask);
 bool CmpAsmHashLoad(CHashTable *table);
 CHashTable *CmpAsmHashNew();
@@ -257,6 +262,8 @@ static_assert(sizeof(CHashFun) == 168 && offsetof(CHashFun, cls) == 0 &&
               offsetof(CHashFun, exe_addr) == 152 &&
               offsetof(CHashFun, ext_lst) == 160);
 CHashFun *PrsFunNew();
+constexpr int8_t REG_UNDEF = INT8_MIN, REG_NONE = 32, REG_ALLOC = 33;
+bool PrsReg(CCmpCtrl &cc, int8_t &reg);
 struct CPrsDeclarator
 {
   CPrsDeclarator() = default;
@@ -271,6 +278,7 @@ struct CPrsDeclarator
   CHashClass *cls = nullptr;
   const char *name = nullptr;
   CHashFun *fun_ptr = nullptr;
+  int8_t reg = REG_UNDEF;
 };
 
 inline CHashFun *FunPtrBase(CHashFun *fun)
@@ -370,6 +378,8 @@ enum CICode : uint8_t
   IC_GS = 0x18,
   IC_TO_I64 = 0x1B,
   IC_TO_F64 = 0x1C,
+  IC_TO_BOOL = 0x1D,
+  IC_TOUPPER = 0x1E,
   IC_HOLYC_TYPECAST = 0x1F,
   IC_ADDR = 0x20,
   IC_DEREF = 0x24,
@@ -382,6 +392,8 @@ enum CICode : uint8_t
   IC_UNARY_MINUS,
   IC_SHL = 0x2B,
   IC_SHR,
+  IC_SHL_CONST,
+  IC_SHR_CONST,
   IC_POWER = 0x2F,
   IC_MUL,
   IC_DIV,
@@ -391,6 +403,8 @@ enum CICode : uint8_t
   IC_XOR,
   IC_ADD,
   IC_SUB,
+  IC_ADD_CONST,
+  IC_SUB_CONST,
   IC_EQU_EQU = 0x3A,
   IC_NOT_EQU,
   IC_LESS,
@@ -420,7 +434,23 @@ enum CICode : uint8_t
   IC_CALL_INDIRECT,
   IC_ASM = 0x61,
   IC_PUSH = 0x62,
+  IC_IN_U8 = 0x66,
+  IC_IN_U16,
+  IC_IN_U32,
+  IC_OUT_U8,
+  IC_OUT_U16,
+  IC_OUT_U32,
   IC_GET_RFLAGS = 0x6C,
+  IC_RDTSC = 0x76,
+  IC_BT = 0x77,
+  IC_BTS,
+  IC_BTR,
+  IC_BTC,
+  IC_LBTS,
+  IC_LBTR,
+  IC_LBTC,
+  IC_BSF = 0x7E,
+  IC_BSR = 0x7F,
   IC_QUE_INIT = 0x80,
   IC_QUE_INS,
   IC_QUE_INS_REV,
@@ -428,12 +458,26 @@ enum CICode : uint8_t
   IC_STRLEN,
   IC_BR_ZERO = 0x85,
   IC_BR_NOT_ZERO,
+  IC_SWAP_U8 = 0xA5,
+  IC_SWAP_U16,
+  IC_SWAP_U32,
+  IC_SWAP_I64,
+  IC_ABS_I64 = 0xA9,
+  IC_SIGN_I64 = 0xAA,
   IC_MIN_I64 = 0xAB,
+  IC_MIN_U64 = 0xAC,
   IC_MAX_I64 = 0xAD,
+  IC_MAX_U64 = 0xAE,
+  IC_MOD_U64 = 0xAF,
   IC_SQR_I64 = 0xB0,
+  IC_SQR_U64,
+  IC_SQR,
+  IC_ABS,
   IC_SQRT = 0xB4,
   IC_SIN,
   IC_COS,
+  IC_TAN,
+  IC_ATAN,
   IC_SUB_ENTRY = 0xF0,
   IC_CALL_TRY,
   IC_CATCH_ENTRY,
@@ -451,6 +495,30 @@ constexpr bool ICIsCompoundAssign(CICode code)
 
 constexpr uint32_t NO_IC = UINT32_MAX;
 
+struct COptAddress
+{
+  uint32_t base=NO_IC,index=NO_IC;
+  int32_t disp=0;
+  uint8_t shift=0;
+  bool valid=false;
+};
+
+enum class COptRhsKind : uint8_t { Stack, Imm32, Reg, Frame };
+struct COptRhs
+{
+  COptRhsKind kind=COptRhsKind::Stack;
+  int32_t disp=0;
+  uint8_t reg=0;
+};
+
+struct CCodeBytes
+{
+  uint8_t bytes[16]{};
+  uint8_t count=0;
+};
+
+enum class CMemOp : uint8_t { Lea, Load, Store };
+
 struct CIntermediateCode
 {
   uint64_t data;
@@ -463,6 +531,26 @@ struct CIntermediateCode
   const CArrayDim *dim = nullptr;
   const CHashFun *fun_ptr = nullptr;
   uint32_t call_target = NO_IC;
+  bool cmp_link = false;
+  uint8_t local_reg = 0; // Promoted IC_DEREF operand; zero uses memory.
+  COptAddress address{};
+  COptRhs rhs{};
+  bool stack_reg=false; // The left result can remain in R9 during RHS evaluation.
+  uint32_t branch_end=0;
+  bool short_branch=false;
+};
+
+struct COptReg
+{
+  CMemberLst *m;
+  int64_t offset;
+  uint8_t reg;
+};
+
+struct COptRegPlan
+{
+  COptReg regs[4]{};
+  unsigned count = 0;
 };
 
 class CAsm;
@@ -598,11 +686,23 @@ uint8_t *LexTypedExpression2Bin(CCmpCtrl &cc, CRawType type,
                                 bool strings = false);
 uint32_t PrsExpression(CCmpCtrl &cc, CCodeCtrl &coc);
 uint32_t PrsPrint(CCmpCtrl &cc, CCodeCtrl &coc);
+void OptPass012(CIntermediateCode *code, uint32_t count);
+void OptPass3(CIntermediateCode *code, uint32_t count, CHashFun &fun,
+              COptRegPlan &plan, bool no_reg_var = false);
+void OptPass4(CIntermediateCode *code,uint32_t count);
+void OptPass5(CIntermediateCode *code,uint32_t count);
+void OptPass6(CIntermediateCode *code,uint32_t count,CHashFun *fun,
+              bool no_reg_var = false);
+bool OptContextTransfer(const CIntermediateCode &node);
+bool OptPass789A(CIntermediateCode *code,uint32_t count);
+CCodeBytes ICModr1(CMemOp op,CRawType type,uint8_t base,
+                    uint8_t index=16,uint8_t shift=0,int32_t disp=0);
+CCodeBytes ICBinaryRhs(CICode op,const COptRhs &rhs);
 bool OptBranch(CCodeCtrl &coc, uint32_t value, CICode branch, uint32_t target,
                unsigned depth = 0);
 bool LexExpression(CCmpCtrl &cc, uint64_t &result);
 uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
-                    const CHashFun *fun = nullptr, CAOT *aot = nullptr,
+                    CHashFun *fun = nullptr, CAOT *aot = nullptr,
                     size_t *size = nullptr);
 bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type);
 bool PrsStreamBlk(CCmpCtrl &cc);
@@ -612,12 +712,14 @@ struct CExeResult
 {
   uint64_t value;
   int64_t exception;
-  bool okay;
+  bool okay, parse_error;
 };
 
 CExeResult ExePutS(const char *src, const char *filename, int64_t flags,
                    const CLexHashTableContext *htc = nullptr);
 CExeResult ExeFile(const char *name, int64_t flags = 0);
+CExeResult ExeDoc(CDoc &doc, int64_t flags = 0);
+CExeResult DocTreeExe(CDoc *doc, const char *path);
 int64_t ExeAnswer(const CExeResult &result);
 extern "C" int64_t ExeFileCpp(const char *name, int64_t flags);
 

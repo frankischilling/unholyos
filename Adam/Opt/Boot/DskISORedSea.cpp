@@ -130,48 +130,40 @@ void RedSeaISO9660(uint8_t *disc,uint32_t iso_size,uint32_t root_clus)
 extern "C" const uint8_t BDVD_START[];
 extern "C" char *DirNameAbsCpp(const char *name);
 extern "C" char *ExtChgCpp(const char *name,const char *ext);
-extern "C" uint64_t FileWriteCpp(const char *name,const uint8_t *data,
-                                 uint64_t count,uint64_t date,uint64_t attr);
 
-constexpr size_t ISO_DRV_OFFSET=(ISO_LOADER_LBA+1)*DVD_BLK_SIZE/BLK_SIZE;
-
-struct CISOEntry
+bool RedSeaISO9660Write(CDrv &dv)
 {
-  CISOEntry *next,*sub;
-  CRedSeaDirEntry de;
-  size_t dir_blocks;
-};
-
-static void DirTreeDel(CISOEntry *node)
-{
-  while (node) {
-    auto *next=node->next;
-    DirTreeDel(node->sub);
-    Free(node);
-    node=next;
-  }
+  if (!dv.bd || dv.drv_offset!=int64_t(ISO_DRV_OFFSET) ||
+      dv.bd->max_blk<int64_t(ISO_DRV_OFFSET) ||
+      uint64_t(dv.bd->max_blk)+1>uint64_t(UINT32_MAX)*DVD_BLK_SIZE/BLK_SIZE ||
+      dv.root_clus>UINT32_MAX)
+    return false;
+  auto *prefix=CAlloc(ISO_DRV_OFFSET*BLK_SIZE,CurrentTask()->data_heap);
+  if (!prefix) return false;
+  RedSeaISO9660(prefix,(uint64_t(dv.bd->max_blk)+1)*BLK_SIZE/DVD_BLK_SIZE,
+                dv.root_clus);
+  bool res=BlkDevWriteBytes(*dv.bd,prefix,0,ISO_DRV_OFFSET*BLK_SIZE);
+  Free(prefix);
+  return res;
 }
 
-static CISOEntry *DirFilesSort(CISOEntry *first,size_t count)
+static bool RedSeaISOContains(const char *path,const char *dir,bool fold)
 {
-  if (count<2)
-    return first;
-  auto *middle=first;
-  for (size_t i=1;i<count/2;i++)
-    middle=middle->next;
-  auto *right=middle->next;
-  middle->next=nullptr;
-  auto *left=DirFilesSort(first,count/2);
-  right=DirFilesSort(right,count-count/2);
-  CISOEntry *res=nullptr,**tail=&res;
-  while (left && right) {
-    auto **entry=DirEntryCompareName(left->de,right->de)<=0?&left:&right;
-    *tail=*entry;
-    *entry=(*entry)->next;
-    tail=&(*tail)->next;
+  auto ch=[fold](char c) {
+    return fold && 'a'<=c && c<='z'?char(c-'a'+'A'):c;
+  };
+  while (*dir && ch(*path)==ch(*dir)) {
+    path++;
+    dir++;
   }
-  *tail=left?left:right;
-  return res;
+  return !*dir && (!*path || *path=='/' || path[-1]=='/');
+}
+
+static bool RedSeaISOPathEqual(const char *a,const char *b,bool fold)
+{
+  return fold?!StrICmpCpp(a,b):
+      !StrCmpCpp(reinterpret_cast<const uint8_t *>(a),
+                 reinterpret_cast<const uint8_t *>(b));
 }
 
 static size_t RedSeaBlocks(uint64_t bytes)
@@ -179,183 +171,204 @@ static size_t RedSeaBlocks(uint64_t bytes)
   return bytes/BLK_SIZE+(bytes%BLK_SIZE!=0);
 }
 
-static bool RedSeaISOPass1(const CDrv &dv,CISOEntry &dir,size_t &blocks,
-                           unsigned depth)
+// The reference helper can also be used on an existing image.
+extern "C" void RedSeaISO9660Cpp(const char *iso_filename,uint8_t drv_let)
 {
-  // Bound recursion when a malformed directory links back to an ancestor.
-  CRedSeaDirEntry head;
-  if (depth==64 || !RedSeaFileFind(dv,dir.de.clus,".",true,head))
-    return false;
-
-  CHeapCtrl *hc=CurrentTask()->data_heap;
-  auto *block=reinterpret_cast<CRedSeaDirEntry *>(MAlloc(BLK_SIZE,hc));
-  if (!block)
-    return false;
-  size_t count=0;
-  bool okay=true,end=false;
-  auto **tail=&dir.sub;
-  for (uint64_t pos=0;okay && !end && pos<head.size;pos+=BLK_SIZE) {
-    if (!BlkDevReadBytes(*dv.bd,reinterpret_cast<uint8_t *>(block),
-                         dir.de.clus*BLK_SIZE+pos,BLK_SIZE)) {
-      okay=false;
-      break;
-    }
-    for (size_t i=pos?0:2;i<BLK_SIZE/sizeof(*block);i++) {
-      const auto &de=block[i];
-      if (!de.name[0]) {
-        end=true;
-        break;
+  auto *dv=Let2DrvCpp(drv_let,false);
+  if (!iso_filename || !dv || !BlkDevChkCpp(dv->bd,false) ||
+      dv->root_clus<0 || dv->root_clus>UINT32_MAX)
+    return;
+  auto *name=FileNameAbs(iso_filename,*CurrentTask());
+  if (!name || !*name || name[1]!=':') {
+    Free(name);
+    return;
+  }
+  auto *bd=dv->bd;
+  if (bd->type==BDT_ISO_FILE_WRITE && bd->file_dsk && bd->file_dsk_name &&
+      PathDrive(*CurrentTask(),name[0])==bd->file_dsk->dv &&
+      RedSeaISOPathEqual(name+2,reinterpret_cast<char *>(bd->file_dsk_name)+2,
+                        bd->file_dsk->dv->fs_type==FSt_FAT32)) {
+    RedSeaISO9660Write(*dv);
+  } else {
+    CDirEntry de;
+    if (FileFindCpp(name,&de,FUF_JUST_FILES)) {
+      auto size=de.size;
+      Free(de.full_name);
+      if (size>=int64_t(ISO_DRV_OFFSET*BLK_SIZE) &&
+          uint64_t(size)/DVD_BLK_SIZE<=UINT32_MAX) {
+        auto *prefix=CAlloc(ISO_DRV_OFFSET*BLK_SIZE,CurrentTask()->data_heap);
+        if (prefix) {
+          if (auto *f=FOpenCpp(name,"wc+",0)) {
+            RedSeaISO9660(prefix,size/DVD_BLK_SIZE,dv->root_clus);
+            FBlkWriteCpp(f,prefix,0,ISO_DRV_OFFSET);
+            FCloseCpp(f);
+          }
+          Free(prefix);
+        }
       }
-      if ((de.attr & RS_ATTR_DELETED) ||
-          ((de.attr & RS_ATTR_DIR) && de.name[0]=='.'))
-        continue;
-      if (de.name[sizeof(de.name)-1]) {
-        okay=false;
-        break;
-      }
-      auto *entry=reinterpret_cast<CISOEntry *>(CAlloc(sizeof(CISOEntry),hc));
-      if (!entry) {
-        okay=false;
-        break;
-      }
-      entry->de=de;
-      *tail=entry;
-      tail=&entry->next;
-      count++;
     }
   }
-  Free(block);
-  if (!okay)
-    return false;
+  Free(name);
+}
 
-  dir.sub=DirFilesSort(dir.sub,count);
-  dir.dir_blocks=RedSeaBlocks((count+3)*sizeof(CRedSeaDirEntry));
-  blocks+=dir.dir_blocks;
-  for (auto *entry=dir.sub;entry;entry=entry->next) {
-    if (entry->de.attr & RS_ATTR_DIR) {
-      if (!RedSeaISOPass1(dv,*entry,blocks,depth+1))
+static bool RedSeaISO9660Stage1(CDrv &dv,const char *stage2_filename)
+{
+  if (!stage2_filename)
+    return true;
+  CDirEntry de;
+  if (!FileFindCpp(stage2_filename,&de,FUF_JUST_FILES))
+    return false;
+  Free(de.full_name);
+  if (de.clus<0 || de.size<=0)
+    return false;
+  auto extent=DvdExtent(de.clus,de.size);
+  if (extent.lba+extent.sectors>(uint64_t(dv.bd->max_blk)+1)/4)
+    return false;
+  uint8_t loader[DVD_BLK_SIZE];
+  MemCpy(loader,BDVD_START,sizeof(loader));
+  return RedSeaISO9660Stage1(loader,extent)==DVD_EXTENT_OK &&
+         BlkDevWriteBytes(*dv.bd,loader,ISO_LOADER_LBA*DVD_BLK_SIZE,
+                          sizeof(loader));
+}
+
+// Count directory slots and stored file blocks as in RedSeaISOPass1.
+static bool RedSeaISOPass1(const CDirEntry *de,size_t &blocks,size_t &dir_blocks,
+                           size_t &entries,unsigned depth=0)
+{
+  if (depth==64)
+    return false;
+  size_t cnt=0;
+  for (;de;de=de->next) {
+    if (++cnt>UINT32_MAX || ++entries>UINT32_MAX)
+      return false;
+    if (de->attr & RS_ATTR_DIR) {
+      size_t child_blocks;
+      if (!RedSeaISOPass1(de->sub,blocks,child_blocks,entries,depth+1))
         return false;
     } else {
-      if (entry->de.size>uint64_t(dv.size)*BLK_SIZE)
+      if (de->size<0 || RedSeaBlocks(de->size)>UINT32_MAX-blocks)
         return false;
-      blocks+=RedSeaBlocks(entry->de.size);
+      blocks+=RedSeaBlocks(de->size);
     }
-    if (blocks>UINT32_MAX)
-      return false;
   }
+  dir_blocks=RedSeaBlocks((cnt+3)*sizeof(CRedSeaDirEntry));
+  if (dir_blocks>UINT32_MAX-blocks)
+    return false;
+  blocks+=dir_blocks;
   return true;
 }
 
-static bool CopyTree2(const CDrv &src,CDrv &dst,const CISOEntry &dir,
-                      uint64_t clus,uint64_t stage2_src,uint64_t &stage2_dst)
+static const CDirEntry *RedSeaISOStage2(const CDirEntry *de,const char *name,
+                                        bool fold)
 {
-  auto *out=reinterpret_cast<CRedSeaDirEntry *>(dst.bd->RAM_dsk+clus*BLK_SIZE);
-  size_t index=2;
-  for (auto *entry=dir.sub;entry;entry=entry->next) {
-    auto de=entry->de;
-    de.attr|=RS_ATTR_CONTIGUOUS;
-    if (de.attr & RS_ATTR_DIR) {
-      de.attr=RS_ATTR_DIR|RS_ATTR_CONTIGUOUS;
-      de.size=entry->dir_blocks*BLK_SIZE;
-      de.datetime=Now();
-    } else if (IsDotExt(de.name,'Z')) {
-      de.attr|=RS_ATTR_COMPRESSED;
-    } else {
-      de.attr&=~RS_ATTR_COMPRESSED;
-    }
-    size_t blocks=RedSeaBlocks(de.size);
-    de.clus=blocks?RedSeaAllocClus(dst,blocks):INVALID_CLUS;
-    if (blocks && de.clus==INVALID_CLUS)
-      return false;
-    out[index++]=de;
-
-    if (de.attr & RS_ATTR_DIR) {
-      auto *child=reinterpret_cast<CRedSeaDirEntry *>(
-          dst.bd->RAM_dsk+de.clus*BLK_SIZE);
-      child[0]=de;
-      child[1]={de.attr,"..",clus,0,de.datetime};
-      if (!CopyTree2(src,dst,*entry,de.clus,stage2_src,stage2_dst))
-        return false;
-    } else {
-      if (blocks && !RedSeaFileRead(src,entry->de,0,
-                                    dst.bd->RAM_dsk+de.clus*BLK_SIZE,de.size))
-        return false;
-      if (stage2_src!=INVALID_CLUS && stage2_src==entry->de.clus)
-        stage2_dst=de.clus;
-    }
+  for (;de;de=de->next) {
+    if (de->attr & RS_ATTR_DIR) {
+      if (auto *found=RedSeaISOStage2(de->sub,name,fold))
+        return found;
+    } else if (RedSeaISOPathEqual(de->full_name+2,name+2,fold))
+      return de;
   }
-  return true;
+  return nullptr;
 }
 
-static bool RedSeaISOContains(const char *path,const char *dir)
+static bool RedSeaISOFilesFind(CDrv &dv,const char *src_dir,CDirEntry *&tree)
 {
-  while (*dir && *path==*dir) {
-    path++;
-    dir++;
-  }
-  return !*dir && (!*path || *path=='/' || path[-1]=='/');
+  uint64_t clus,parent,size;
+  auto len=StrLen(src_dir+2);
+  if (!Name2DirClus(dv,src_dir+2,len,clus) ||
+      !Name2ParentDirClus(dv,src_dir+2,len,parent))
+    return false;
+  // FilesFind returns NULL for both an empty directory and a failed scan.
+  // Use its filesystem walkers here to distinguish those cases before
+  // creating the destination image.
+  return dv.fs_type==FSt_FAT32?
+      FAT32FilesFind(dv,clus,src_dir,"*",FUF_RECURSE,nullptr,tree,size):
+      RedSeaFilesFind(dv,clus,parent,src_dir,"*",FUF_RECURSE,nullptr,tree);
 }
 
-static size_t RedSeaISO(const CDrv &src,const char *out_name,uint64_t root_clus,
-                        const CRedSeaDirEntry *stage2)
+static size_t RedSeaISO(CDrv &src,const char *src_dir,const char *out_name,
+                        const char *stage2_filename,bool fold)
 {
-  CISOEntry root{};
-  root.de.clus=root_clus;
-  size_t content=0;
-  if (!RedSeaISOPass1(src,root,content,0)) {
-    DirTreeDel(root.sub);
+  CDirEntry *tree=nullptr;
+  if (!RedSeaISOFilesFind(src,src_dir,tree)) {
+    DirTreeDelCpp(tree);
     return 0;
   }
-
-  // Reserve cluster zero of the data area, and room for the shifted stage-two
-  // read if its final DVD sector would otherwise extend past the volume.
-  size_t bitmap=1;
-  size_t total;
-  for (;;) {
-    total=(ISO_DRV_OFFSET+1+bitmap+content+3)&~size_t{3};
-    if (stage2)
-      total+=4;
-    size_t needed=(total-ISO_DRV_OFFSET+8*BLK_SIZE-1)/(8*BLK_SIZE);
-    if (needed==bitmap)
-      break;
-    bitmap=needed;
-  }
-  auto *iso=CAlloc(total*BLK_SIZE,CurrentTask()->data_heap);
-  CBlkDev bd;
-  CDrv dst;
-  MemSet(&bd,0,sizeof(bd));
-  MemSet(&dst,0,sizeof(dst));
-  bd.type=BDT_RAM;
-  bd.RAM_dsk=iso;
-  bd.max_blk=total-1;
-  dst.bd=&bd;
-  dst.drv_offset=ISO_DRV_OFFSET;
-  dst.size=total-ISO_DRV_OFFSET;
-  uint64_t stage2_clus=INVALID_CLUS;
-  bool okay=iso && RedSeaFormatRAM(dst,root.dir_blocks) &&
-            CopyTree2(src,dst,root,dst.root_clus,
-                      stage2?stage2->clus:INVALID_CLUS,stage2_clus);
-  if (okay) {
-    RedSeaISO9660(iso,total/4,dst.root_clus);
-    if (stage2) {
-      auto *loader=iso+ISO_LOADER_LBA*DVD_BLK_SIZE;
-      MemCpy(loader,BDVD_START,DVD_BLK_SIZE);
-      auto extent=DvdExtent(stage2_clus,stage2->size);
-      okay=stage2_clus!=INVALID_CLUS && extent.lba+extent.sectors<=total/4 &&
-           RedSeaISO9660Stage1(loader,extent)==DVD_EXTENT_OK;
+  size_t content=0,root_blocks=0,entries=0,res=0;
+  const CDirEntry *stage2=stage2_filename?
+      RedSeaISOStage2(tree,stage2_filename,fold):nullptr;
+  if ((!stage2_filename || (stage2 && stage2->size>0)) &&
+      RedSeaISOPass1(tree,content,root_blocks,entries)) {
+    // Reserve cluster zero, and allow one extra DVD sector for the
+    // shifted stage-two read, as in the host ISO builder.
+    size_t bitmap=1,total;
+    for (;;) {
+      total=(ISO_DRV_OFFSET+1+bitmap+content+3)&~size_t{3};
+      if (stage2)
+        total+=4;
+      size_t needed=(total-ISO_DRV_OFFSET+8*BLK_SIZE-1)/(8*BLK_SIZE);
+      if (needed==bitmap)
+        break;
+      bitmap=needed;
+    }
+    char letter='Q';
+    while (letter<='S' && (MountedDrive(letter) ||
+           blkdev.drvs[letter-'A'].dv_signature==DRV_SIGNATURE_VAL))
+      letter++;
+    if (letter<='S' && total/4<=UINT32_MAX) {
+      auto *name=StrNew(out_name,adam_task->data_heap);
+      auto *bd=name?BlkDevNextFreeSlot(letter,BDT_ISO_FILE_WRITE):nullptr;
+      if (bd) {
+        bd->file_dsk_name=reinterpret_cast<uint8_t *>(name);
+        bd->drv_offset=ISO_DRV_OFFSET;
+        bd->max_blk=total-1;
+        bd->init_root_dir_blks=root_blocks;
+        if (BlkDevAddCpp(bd,INT64_MIN,true,true)==1) {
+          char dest[]{letter,':','/',0};
+          char *stage2_dest=nullptr;
+          if (stage2) {
+            size_t prefix=StrLen(src_dir);
+            if (prefix==3)
+              prefix--;
+            auto *relative=stage2->full_name+prefix;
+            size_t len=StrLen(relative);
+            stage2_dest=reinterpret_cast<char *>(
+                MAlloc(len+3,CurrentTask()->data_heap));
+            if (stage2_dest) {
+              stage2_dest[0]=letter;
+              stage2_dest[1]=':';
+              MemCpy(stage2_dest+2,relative,len+1);
+            }
+          }
+          auto *dv=MountedDrive(letter);
+          bool okay=dv && (!stage2 || stage2_dest) &&
+              CopyTreeCpp(src_dir,dest,true)==int64_t(entries+1) &&
+              RedSeaISO9660Write(*dv) &&
+              RedSeaISO9660Stage1(*dv,stage2_dest);
+          Free(stage2_dest);
+          BlkDevDelCpp(bd);
+          if (okay)
+            res=content;
+          else
+            DelCpp(out_name,false,false,false);
+        } else {
+          // On failure the caller still owns the requested name.
+          if (bd->file_dsk_name==reinterpret_cast<uint8_t *>(name))
+            bd->file_dsk_name=nullptr;
+          Free(name);
+        }
+      } else
+        Free(name);
     }
   }
-  if (okay)
-    okay=FileWriteCpp(out_name,iso,total*BLK_SIZE,0,0)!=0;
-  Free(iso);
-  DirTreeDel(root.sub);
-  return okay?content:0;
+  DirTreeDelCpp(tree);
+  return res;
 }
 
 extern "C" int64_t RedSeaISOCpp(const char *iso_filename,const char *src_dir,
                                 const char *stage2_filename)
 {
-  if (!src_dir)
+  if (!src_dir || !adam_task)
     return 0;
   auto &task=*CurrentTask();
   auto *src=DirNameAbsCpp(src_dir);
@@ -363,21 +376,16 @@ extern "C" int64_t RedSeaISOCpp(const char *iso_filename,const char *src_dir,
                       "ISO.C");
   auto *out_path=out?FileNameAbs(out,task):nullptr;
   auto *stage2=stage2_filename?FileNameAbs(stage2_filename,task):nullptr;
-  size_t res=0,prefix;
-  uint64_t root;
-  CRedSeaDirEntry kernel;
+  size_t res=0;
   auto *dv=src && *src && src[1]==':'?PathDrive(task,src[0]):nullptr;
   auto *target=out_path && *out_path && out_path[1]==':'?PathDrive(task,out_path[0]):nullptr;
-  if (dv && target && target->bd->type==BDT_RAM &&
-      !(target->bd->flags & BDF_READ_ONLY) &&
-      (target!=dv || !RedSeaISOContains(out_path+2,src+2)) &&
-      RedSeaDirClus(*dv,src+2,StrLen(src+2),root) &&
+  if (dv && target && ReadableFS(*dv) && WritableFS(*target) &&
+      (target!=dv || !RedSeaISOContains(out_path+2,src+2,dv->fs_type==FSt_FAT32)) &&
+      IsDirCpp(src) &&
       (!stage2_filename ||
        (stage2 && *stage2 && stage2[1]==':' && PathDrive(task,stage2[0])==dv &&
-        RedSeaISOContains(stage2+2,src+2) &&
-        RedSeaFileLookup(*dv,stage2+2,false,false,kernel,prefix) &&
-        kernel.size && kernel.clus!=INVALID_CLUS)))
-    res=RedSeaISO(*dv,out_path,root,stage2_filename?&kernel:nullptr);
+        RedSeaISOContains(stage2+2,src+2,dv->fs_type==FSt_FAT32))))
+    res=RedSeaISO(*dv,src,out_path,stage2,dv->fs_type==FSt_FAT32);
   Free(stage2);
   Free(out_path);
   Free(out);

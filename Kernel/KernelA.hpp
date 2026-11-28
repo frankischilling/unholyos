@@ -8,7 +8,11 @@ constexpr uint32_t RLF_FULL_HEAPS = 1 << 7;
 constexpr uint32_t RLF_INTERRUPTS = 1 << 9;
 constexpr uint32_t RLF_COMPILER = 1 << 12;
 constexpr uint32_t RLF_DOC = 1 << 13;
+constexpr uint32_t RLF_REGISTRY = 1 << 15;
 constexpr uint32_t RLF_AUTO_COMPLETE = 1 << 17;
+constexpr uint32_t RLF_ADAM_SERVER = 1 << 18;
+constexpr uint32_t RLF_ONCE_ADAM = 1 << 19;
+constexpr uint32_t RLF_ONCE_USER = 1 << 20;
 
 struct CTask;
 struct CTaskDying;
@@ -65,6 +69,7 @@ constexpr uint32_t MBS_USED_SIGNATURE_VAL = 0x7355424D;   // MBUs
 constexpr uint32_t HEAP_CTRL_SIGNATURE_VAL = 0x56536348;  // HcSV
 constexpr uint32_t TASK_SIGNATURE_VAL = 0x536B7354;       // TskS
 constexpr uintptr_t SYS_FIXED_AREA = 0x100000;
+constexpr uintptr_t SYS_16MEG_AREA_LIMIT = 0x1000000;
 constexpr size_t MEM_PAGE_SIZE = 0x200000;
 constexpr size_t MEM_PAG_BITS = 9;
 constexpr size_t MEM_PAG_SIZE = 1 << MEM_PAG_BITS;
@@ -163,6 +168,11 @@ struct CPCIDev
   uint8_t *vendor_str, *dev_id_str;
 };
 
+static_assert(sizeof(CPCIDev) == 0x30 &&
+              offsetof(CPCIDev, vendor) == 0x10 &&
+              offsetof(CPCIDev, sub_code) == 0x18 &&
+              offsetof(CPCIDev, vendor_str) == 0x20);
+
 constexpr unsigned I_DIV_ZERO = 0, I_NMI = 2, I_TIMER = 0x20, I_KBD = 0x21,
                    I_MS = 0x2C;
 constexpr unsigned I_MP_CRASH = 0x30, I_WAKE = 0x31, I_DBG = 0x32;
@@ -224,6 +234,8 @@ constexpr unsigned BOOT_SRC_DVD = 4;
 constexpr uint32_t BDT_NULL = 0, BDT_RAM = 1, BDT_ATA = 2,
                    BDT_ISO_FILE_READ = 3, BDT_ISO_FILE_WRITE = 4, BDT_ATAPI = 5;
 constexpr uint16_t FSt_REDSEA = 1, FSt_FAT32 = 2;
+constexpr uint16_t FSG_TYPE_MASK = 0x7FFF;
+constexpr unsigned FStf_DISABLE = 15;
 constexpr uint8_t MBR_PT_REDSEA = 0x88;
 constexpr uint32_t BD_SIGNATURE_VAL = 0x56534442;  // BDSV
 constexpr uint32_t DRV_SIGNATURE_VAL = 0x56535644; // DVSV
@@ -319,6 +331,12 @@ struct [[gnu::packed]] CBlkDev
   uint32_t max_reads, max_writes;
 };
 
+struct CFreeLst
+{
+  CFreeLst *next, *last;
+  int64_t start, size;
+};
+
 struct CDrv
 {
   uint64_t locked_flags;
@@ -340,7 +358,25 @@ constexpr char DFT_ISO_FILENAME[] = "::/Tmp/CDDVD.ISO",
                DFT_ISO_C_FILENAME[] = "::/Tmp/CDDVD.ISO.C",
                DFT_TMP_FILENAME[] = "~/Tmp.DD.Z";
 
-struct CCacheBlk;
+constexpr size_t DSK_CACHE_HASH_SIZE = 0x2000;
+
+struct CCacheBlk
+{
+  CCacheBlk *next_lru, *last_lru;
+  CCacheBlk *next_hash, *last_hash;
+  CDrv *dv;
+  int64_t blk;
+  uint8_t body[BLK_SIZE];
+};
+
+static_assert(sizeof(CCacheBlk) == 560 &&
+              offsetof(CCacheBlk, next_lru) == 0 &&
+              offsetof(CCacheBlk, last_lru) == 8 &&
+              offsetof(CCacheBlk, next_hash) == 16 &&
+              offsetof(CCacheBlk, last_hash) == 24 &&
+              offsetof(CCacheBlk, dv) == 32 &&
+              offsetof(CCacheBlk, blk) == 40 &&
+              offsetof(CCacheBlk, body) == 48);
 
 struct CBlkDevGlbls
 {
@@ -368,6 +404,8 @@ enum : size_t
   SEMA_REFRESH_IN_PROGRESS = 8,
   SEMA_FLUSH_VGA_IMAGE = 9,
   SEMA_SINGLE_USER = 10,
+  SEMA_DSK_CACHE = 11,
+  SEMA_DEV_MEM = 13,
   SEMA_VGA = 14,
   SEMA_UPDATE_WIN_Z_BUF = 15,
   SEMA_MUTE = 17,
@@ -427,6 +465,17 @@ struct CD3I32
 };
 
 constexpr int64_t GR_WIDTH = 640, GR_HEIGHT = 480;
+
+constexpr int64_t PROGRESS_BARS_NUM = 4, PROGRESS_DESC_LEN = 64 - 8 - 8;
+struct CProgress
+{
+  int64_t val, max;
+  uint64_t t0, tf;
+  char desc[PROGRESS_DESC_LEN];
+};
+static_assert(sizeof(CProgress) == 80 && offsetof(CProgress, max) == 8 &&
+              offsetof(CProgress, t0) == 16 && offsetof(CProgress, tf) == 24 &&
+              offsetof(CProgress, desc) == 32);
 constexpr int64_t TEXT_COLS = 80, TEXT_ROWS = 60;
 constexpr int64_t GR_SCALE = int64_t{1} << 32;
 enum : uint32_t
@@ -677,6 +726,8 @@ static_assert(sizeof(CBlkDev) == 124 && offsetof(CBlkDev, base0) == 32 &&
               offsetof(CBlkDev, RAM_dsk) == 76);
 static_assert(sizeof(CDrv) == 160 && offsetof(CDrv, root_clus) == 64 &&
               offsetof(CDrv, bd) == 104);
+static_assert(sizeof(CFreeLst) == 32 && offsetof(CFreeLst, start) == 16 &&
+              offsetof(CFreeLst, size) == 24);
 static_assert(sizeof(CRedSeaBoot) == BLK_SIZE &&
               offsetof(CRedSeaBoot, signature2) == 510);
 static_assert(sizeof(CRedSeaDirEntry) == 64 &&
@@ -830,6 +881,15 @@ struct CHashReg
 };
 #pragma pack(pop)
 
+struct CHashAC
+{
+  CHash hash;
+  int32_t num;
+  uint32_t hits;
+};
+
+static_assert(sizeof(CHashAC) == 32 && offsetof(CHashAC, hits) == 28);
+
 struct CInst
 {
   uint8_t ins_entry_num, opcode_cnt, opcode[4];
@@ -946,6 +1006,9 @@ static_assert(sizeof(CHashGlblVar) == 136 &&
 
 static_assert(sizeof(CHash) == 24 && sizeof(CHashSrcSym) == 64 &&
               sizeof(CHashExport) == 72 && sizeof(CHashImport) == 80);
+static_assert(sizeof(CHashGeneric) == 48 &&
+              offsetof(CHashGeneric, user_data0) == 24 &&
+              offsetof(CHashGeneric, user_data2) == 40);
 
 struct CHashTable
 {
@@ -1017,7 +1080,8 @@ constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
                    DOCEF_LEFT_MACRO = 64, DOCEF_RIGHT_EXP = 128,
                    DOCEF_RIGHT_MACRO = 256, DOCEF_HAS_BIN = 512,
                    DOCEF_BIN_PTR_LINK = 1024, DOCEF_RAW_TYPE = 2048,
-                   DOCEF_LEFT_CB = 1ull << 16, DOCEF_RIGHT_CB = 1ull << 18,
+                   DOCEF_LEFT_CB = 1ull << 16, DOCEF_LEFT_IN_STR = 1ull << 17,
+                   DOCEF_RIGHT_CB = 1ull << 18, DOCEF_RIGHT_IN_STR = 1ull << 19,
                    DOCEF_LEFT_X = 1ull << 20, DOCEF_CENTER_X = 1ull << 21,
                    DOCEF_RIGHT_X = 1ull << 22, DOCEF_TOP_Y = 1ull << 23,
                    DOCEF_CENTER_Y = 1ull << 24, DOCEF_BOTTOM_Y = 1ull << 25,
@@ -1034,7 +1098,7 @@ constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
                    DOCEF_DEREF_DATA = 1ull << 47,
                    DOCEF_REMALLOC_DATA = 1ull << 48,
                    DOCEF_HAS_TERMINATOR = 1ull << 49, DOCEF_HOLD = 1ull << 51,
-                   DOCEF_TREE = 1ull << 52,
+                   DOCEF_TREE = 1ull << 52, DOCEF_POPUP = 1ull << 55,
                    DOCEF_LST = 1ull << 53, DOCEF_SKIP = 1ull << 54,
                    DOCEF_SKIP_IN_FORM = 1ull << 56,
                    DOCEF_FILTER_SKIP = 1ull << 57, DOCEF_NO_CLICK_ON = 1ull << 58,
@@ -1054,6 +1118,8 @@ constexpr uint64_t DOF_SIZE_MIN = 1, DOF_INTERCEPT_TASK_END = 2,
                    DOF_DONT_HOME = 4, DOF_WIN_MAX = 8,
                    DOF_DONT_TEXT_ATTR = 16, DOF_DONT_WINMGR_SYNC = 32,
                    DOF_DONT_SHOW = 64;
+constexpr uint64_t EDF_BAIL = 1 << 8, EDF_COLLAPSE = 1 << 9,
+                   EDF_UNCOLLAPSE = 1 << 10, EDF_WAS_WRITE = 1 << 11;
 
 struct CDocSettings
 {
@@ -1165,14 +1231,18 @@ struct CDoc
 };
 
 static_assert(sizeof(CDocSettings) == 24 && sizeof(CEdFindText) == 304);
+static_assert(sizeof(CEdFileName) == 264 && offsetof(CEdFileName, name) == 8);
 static_assert(sizeof(CDocBin) == 56 && offsetof(CDocBin, num) == 32 &&
               offsetof(CDocBin, data) == 48);
 static_assert(sizeof(CDocEntryBase) == 88 &&
               offsetof(CDocEntryBase, tag) == 16 &&
+              offsetof(CDocEntryBase, x) == 40 && offsetof(CDocEntryBase, y) == 44 &&
               offsetof(CDocEntryBase, settings) == 56 &&
               sizeof(CDocEntry) == 208 && offsetof(CDocEntry, left_exp) == 88 &&
               offsetof(CDocEntry, right_exp) == 104 && offsetof(CDocEntry, bin_data) == 192);
-static_assert(sizeof(CDoc) == 768 && offsetof(CDoc, cur_entry) == 104 &&
+static_assert(sizeof(CDoc) == 768 && offsetof(CDoc, head) == 0 &&
+              offsetof(CDoc, cur_entry) == 104 &&
+              offsetof(CDoc, x) == 184 && offsetof(CDoc, y) == 188 &&
               offsetof(CDoc, filename) == 304 &&
               offsetof(CDoc, bin_head) == 632);
 
@@ -1230,6 +1300,9 @@ struct CCmpCtrl
   int64_t pass, opts;
   int64_t jit_exception;
   char *pmt_buf;
+  const char *parse_error;
+  unsigned parse_error_count;
+  bool expression_error;
 };
 
 static_assert(sizeof(CLexFile) == 80 && offsetof(CLexFile, full_name) == 40);
@@ -1330,11 +1403,34 @@ constexpr uint32_t SCF_E0_PREFIX = 1 << 7, SCF_KEY_UP = 1 << 8,
                    SCF_NO_SHIFT = 1U << 30, SCF_KEY_DESC = 1U << 31;
 constexpr uint8_t SC_ENTER = 0x1C, SC_SHIFT = 0x2A, SC_CTRL = 0x1D,
                   SC_ALT = 0x38, SC_CAPS = 0x3A, SC_NUM = 0x45,
+                  SC_F1 = 0x3B, SC_F10 = 0x44,
                   SC_SCROLL = 0x46, SC_HOME = 0x47, SC_CURSOR_UP = 0x48,
                   SC_PAGE_UP = 0x49, SC_CURSOR_LEFT = 0x4B, SC_CURSOR_RIGHT = 0x4D,
                   SC_END = 0x4F, SC_CURSOR_DOWN = 0x50, SC_PAGE_DOWN = 0x51,
-                  SC_INS = 0x52, SC_DELETE = 0x53, SC_GUI = 0xDB;
+                  SC_INS = 0x52, SC_DELETE = 0x53, SC_PRTSCRN1 = 0xAA,
+                  SC_GUI = 0xDB;
 constexpr int64_t GSF_SHIFT_ESC_EXIT = 1, GSF_WITH_NEW_LINE = 2;
+
+constexpr int64_t KDF_HAS_DESCS = 1;
+struct CKeyDevEntry
+{
+  CKeyDevEntry *next, *last;
+  int64_t priority, flags;
+  uintptr_t put_key, put_s;
+};
+struct CKeyDevGlbls
+{
+  CKeyDevEntry put_key_head;
+  uintptr_t *fp_ctrl_alt_cbs;
+  uint64_t ctrl_alt_in_irq_flags;
+  uintptr_t **ctrl_alt_ret_addr;
+  char **ctrl_alt_no_shift_descs, **ctrl_alt_shift_descs;
+  char desc[144];
+  uintptr_t hndlr;
+};
+static_assert(sizeof(CKeyDevEntry) == 48 && offsetof(CKeyDevEntry, put_key) == 32);
+static_assert(sizeof(CKeyDevGlbls) == 240 && offsetof(CKeyDevGlbls, desc) == 88 &&
+              offsetof(CKeyDevGlbls, hndlr) == 232);
 
 constexpr int64_t SUF_REM_CTRL_CHARS = 0x001, SUF_REM_LEADING = 0x002,
                   SUF_REM_TRAILING = 0x004, SUF_REM_SPACES = 0x008,
@@ -1398,6 +1494,12 @@ struct CD3
   uint64_t x, y, z;
 };
 
+struct Complex
+{
+  uint64_t x, y; // binary64 bit patterns
+};
+static_assert(sizeof(Complex)==16 && offsetof(Complex,y)==8);
+
 struct [[gnu::packed]] CMsHardStateGlbls
 {
   CD3I64 pos, prescale;
@@ -1420,8 +1522,6 @@ struct CMsStateGlbls
        right_down_sent;
 };
 
-struct CHashAC;
-
 constexpr uint64_t ACF_INIT_IN_PROGRESS = 1;
 constexpr int64_t AC_FILLINS_NUM = 10;
 
@@ -1438,6 +1538,28 @@ struct CAutoCompleteGlbls
 
 static_assert(sizeof(CAutoCompleteGlbls) == 232 &&
               offsetof(CAutoCompleteGlbls, task) == 32);
+
+constexpr int64_t ACD_BLK_SIZE = 0x4000, ACD_FILLINS_NUM = 10;
+constexpr int64_t ACD_H1 = 0, ACD_H1_END = 1, ACD_DEF = 2, ACD_DEF_END = 3,
+                  ACD_PRONUNCIATION = 4, ACD_PRONUNCIATION_END = 5,
+                  ACD_POS = 6, ACD_POS_END = 7, ACD_EXTRA = 8, ACD_EXTRA_END = 9;
+constexpr uint8_t ACD_END_CHAR = 0, ACD_WORD_CHAR = 1, ACD_DEF_CHAR = 2,
+                  ACD_PRONUNCIATION_CHAR = 3, ACD_POS_CHAR = 4,
+                  ACD_EXTRA_CHAR = 5;
+
+#pragma pack(push, 1)
+struct CAutoCompleteDictGlbls
+{
+  uint8_t *word_lst;
+  int64_t word_lst_size, num_words, num_fillins;
+  uint8_t *fillins[ACD_FILLINS_NUM];
+  bool has_words, has_defs;
+};
+#pragma pack(pop)
+
+static_assert(sizeof(CAutoCompleteDictGlbls) == 114 &&
+              offsetof(CAutoCompleteDictGlbls, fillins) == 32 &&
+              offsetof(CAutoCompleteDictGlbls, has_words) == 112);
 
 struct CWinMgrTimingGlbls;
 
@@ -1620,6 +1742,18 @@ static_assert(sizeof(CTaskSettings) == 392 &&
               offsetof(CTaskSettings, autocomplete) == 388);
 static_assert(offsetof(CTask, draw_it) == 0x1C0);
 
+struct [[gnu::packed]] CInsReg
+{
+  bool registered;
+  int64_t host_os, host_vm;
+  uint8_t initials[8];
+  int64_t machine_num;
+};
+
+static_assert(sizeof(CInsReg) == 33 && offsetof(CInsReg, registered) == 0 &&
+              offsetof(CInsReg, host_os) == 1 && offsetof(CInsReg, host_vm) == 9 &&
+              offsetof(CInsReg, initials) == 17 && offsetof(CInsReg, machine_num) == 25);
+
 struct alignas(4096) CSysFixedArea
 {
   CFPU init_fpu_mmx;
@@ -1663,6 +1797,7 @@ static_assert(offsetof(CTask, win_left) == 0x48 &&
               offsetof(CTask, scroll_z) == 0x110);
 static_assert(offsetof(CTask, fault_num) == 0x440 &&
               offsetof(CTask, fault_err_code) == 0x448);
+static_assert(offsetof(CTask, last_fun) == 0x410);
 static_assert(offsetof(CCPU, cpu_flags) == 0x10 &&
               offsetof(CCPU, idle_pt_hits) == 0x20);
 static_assert(offsetof(CCPU, total_jiffies) == 0x30 &&
@@ -1679,9 +1814,11 @@ extern "C" {
 extern const uint8_t SYS_KERNEL[], SYS_COMPILE_TIME[];
 extern uint32_t SYS_BOOT_SRC, SYS_BOOT_BLK, SYS_RUN_LEVEL, MEM_BOOT_BASE;
 extern uint32_t SYS_PCIBIOS_SERVICE_DIR, SYS_PCI_SERVICES;
-extern uint32_t SYS_FONT_ADDRESS, SYS_E820_COUNT, MEM_PML2, MEM_PML4,
+extern uint32_t SYS_FONT_ADDRESS, SYS_E820_COUNT, MEM_PML2, MEM_PML3, MEM_PML4,
     MEM_HEAP_BASE;
 extern uint64_t MEM_PHYSICAL_SPACE, MEM_MAPPED_SPACE, MEM_HEAP_LIMIT;
+extern uint64_t MEM_2MEG_NUM, MEM_1GIG_NUM, MEM_512GIG_NUM;
+extern uint16_t SYS_PCI_BUSES;
 extern uint16_t MEM_E801[2];
 extern CMemE820 MEM_E820[48];
 extern CBlkPool *SYS_CODE_BP, *SYS_DATA_BP;

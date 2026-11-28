@@ -1,4 +1,5 @@
 #include "DolDoc.hpp"
+#include "../../Compiler/CompilerA.hpp"
 
 static constexpr const char *commands[] = {
     "TX", "CR", "SR", "TB", "PB", "CU", "MK", "PT", "CL", "PL", "LM",
@@ -141,11 +142,58 @@ public:
 
   bool Number(int64_t &result)
   {
+    const char *start = ptr;
+    if (Literal(result) &&
+        (!Peek() || Peek() == ',' || Peek() == ')' || Ident(Peek())))
+      return true;
+    ptr = start;
+    if (!(SYS_RUN_LEVEL & RLF_COMPILER))
+      return false;
+
+    auto *task = CurrentTask();
+    size_t bytes = end - ptr;
+    auto *source = reinterpret_cast<char *>(MAlloc(bytes + 1, task->data_heap));
+    if (!source)
+      return false;
+    MemCpy(source, ptr, bytes);
+    source[bytes] = 0;
+    CCmpCtrl cc;
+    CLexFile file;
+    LexSourceInit(cc, file, source, 0, nullptr, task->hash_table);
+    uint8_t *code = Lex(cc) > TK_EOF
+                        ? LexTypedExpression2Bin(cc, RT_I64, false)
+                        : nullptr;
+    const char *next = source + bytes;
+    if (cc.lex_include_stk == &file && cc.token == ',') {
+      next = cc.cur_buf_ptr - bool(cc.last_U16);
+      while (next > source && next[-1] == CH_CURSOR)
+        next--;
+      if (next > source && next[-1] == ',')
+        next--;
+      else
+        next = source;
+    } else if (cc.lex_include_stk != &file || cc.token != TK_EOF)
+      next = source;
+
+    uint64_t value;
+    const bool okay = code && next > source && CmpCall(cc, code, value);
+    if (okay) {
+      ptr += next - source;
+      result = value;
+    }
+    Free(code);
+    LexSourceDel(cc);
+    Free(source);
+    return okay;
+  }
+
+  bool Literal(int64_t &result)
+  {
     bool neg = Eat('-');
     if (!neg)
       Eat('+');
     if (Eat('(')) {
-      if (!Number(result) || !Eat(')'))
+      if (!Literal(result) || !Eat(')'))
         return false;
       if (neg)
         result = static_cast<int64_t>(0 - uint64_t(result));

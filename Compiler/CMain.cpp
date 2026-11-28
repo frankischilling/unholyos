@@ -6,6 +6,7 @@ extern "C" void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
 
 extern "C" char *ExtChgCpp(const char *name, const char *ext);
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
+extern "C" int64_t LastFunCpp(int64_t argc, const uint64_t *argv);
 extern "C" uint64_t FileWriteCpp(const char *name, const uint8_t *data,
                                  uint64_t size, uint64_t date, uint64_t attr);
 
@@ -104,6 +105,8 @@ static bool CmpJoin(CCmpCtrl &cc, CAOT &aot)
     CRawType type;
     okay = LexStmt2Bin(cc, machine, type) && !cc.jit_exception;
   }
+  if (!okay && cc.parse_error_count)
+    LexPutPos(cc);
   QueRem(cc);
   return okay;
 }
@@ -126,7 +129,8 @@ static void AOTDel(CAOT &aot, CHashTable *table)
       for (auto *entry = table->body[i]; entry; entry = entry->next)
         if (entry->type & HTT_FUN) {
           auto &fun = *reinterpret_cast<CHashFun *>(entry);
-          if (!(fun.cls.flags & FF__EXTERN))
+          // Internal declarations store an IC opcode, not allocated code.
+          if (!(fun.cls.flags & (FF__EXTERN | FF_INTERNAL)))
             Free(fun.exe_addr);
           for (auto *member = fun.cls.member_lst_and_root; member;
                member = member->next)
@@ -228,18 +232,22 @@ extern "C" int64_t CmpCpp(const char *filename, const char *map_name,
   auto *source = table ? MStrPrintCpp("#include \"%s\"", 1, &arg) : nullptr;
   CAOT aot;
   CBinFile *bfh = nullptr;
+  uint64_t error = 0;
   if (source) {
     CCmpCtrl cc;
     CLexFile file;
     LexSourceInit(cc, file, source, CCF_AOT_COMPILE, path, table);
     if (CmpJoin(cc, aot))
       bfh = AOTBinMake(aot);
+    error = cc.parse_error_count;
     LexSourceDel(cc);
   }
-  uint64_t error =
-      !bfh || (map_name && !MapFileWrite(*table, map_name, mapfile_drv_let)) ||
-      !FileWriteCpp(out, reinterpret_cast<uint8_t *>(bfh), bfh->file_size, 0, 0);
-  uint64_t report[]{error, aot.warning_cnt, aot.size, bfh ? bfh->file_size : 0};
+  if (!error &&
+      (!bfh || (map_name && !MapFileWrite(*table, map_name, mapfile_drv_let)) ||
+       !FileWriteCpp(out, reinterpret_cast<uint8_t *>(bfh), bfh->file_size, 0, 0)))
+    error = 1;
+  uint64_t report[]{error, aot.warning_cnt, bfh ? aot.size : 0,
+                    bfh ? bfh->file_size : 0};
   PrintCpp("Errs:%d Warns:%d Code:%X Size:%X\n", 4, report);
   Free(bfh);
   AOTDel(aot, table);
@@ -277,7 +285,7 @@ CExeResult ExePutS(const char *src, const char *filename, int64_t flags,
   QueRem(cc);
   LexSourceDel(cc);
   Free(path);
-  return {okay ? value : 0, cc.jit_exception, okay};
+  return {okay ? value : 0, cc.jit_exception, okay, cc.parse_error_count != 0};
 }
 
 CExeResult ExeFile(const char *name, int64_t flags)
@@ -310,9 +318,65 @@ extern "C" int64_t ExePutSCpp(const char *src, const char *filename,
   return ExeAnswer(ExePutS(src, filename, flags, htc));
 }
 
+static CExeResult ExePrint(const char *fmt, int64_t argc, const uint64_t *argv)
+{
+  auto *source = StrPrintJoin(nullptr, fmt, argc, argv);
+  if (!source)
+    return {};
+  auto result = ExePutS(source, nullptr, 0);
+  Free(source);
+  return result;
+}
+
+extern "C" int64_t ExePrintCpp(const char *fmt, int64_t argc,
+                                const uint64_t *argv)
+{
+  return ExeAnswer(ExePrint(fmt, argc, argv));
+}
+
 extern "C" int64_t ExeFileCpp(const char *name, int64_t flags)
 {
   return ExeAnswer(ExeFile(name, flags));
+}
+
+extern "C" int64_t RunFileCpp(const char *name, int64_t flags, int64_t argc,
+                               const uint64_t *argv)
+{
+  ExeFileCpp(name, flags);
+  return LastFunCpp(argc, argv);
+}
+
+static int64_t ExeAnswer2(const CExeResult &result)
+{
+  if (result.exception)
+    RethrowHolyC();
+  if (!result.okay)
+    RaiseHolyC(COMPILER_ERROR);
+  return static_cast<int64_t>(result.value);
+}
+
+extern "C" int64_t ExePutS2Cpp(const char *src, const char *filename,
+                                int64_t flags)
+{
+  return ExeAnswer2(ExePutS(src, filename, flags));
+}
+
+extern "C" int64_t ExePrint2Cpp(const char *fmt, int64_t argc,
+                                 const uint64_t *argv)
+{
+  return ExeAnswer2(ExePrint(fmt, argc, argv));
+}
+
+extern "C" int64_t ExeFile2Cpp(const char *name, int64_t flags)
+{
+  return ExeAnswer2(ExeFile(name, flags));
+}
+
+extern "C" int64_t RunFile2Cpp(const char *name, int64_t flags, int64_t argc,
+                                const uint64_t *argv)
+{
+  ExeFile2Cpp(name, flags);
+  return LastFunCpp(argc, argv);
 }
 
 extern "C" int64_t StreamExePrintCpp(const char *fmt, int64_t argc,

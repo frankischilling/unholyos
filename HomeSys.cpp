@@ -1,3 +1,4 @@
+#include "Adam/AutoComplete/AutoComplete.hpp"
 #include "Adam/DolDoc/DolDoc.hpp"
 
 extern "C" void UserCmdLineHC();
@@ -26,6 +27,17 @@ void UserStartUp()
   DirCpp("*", false);
 }
 
+void SrvStartUp()
+{
+  auto *task = CurrentTask();
+  DocTermNewCpp();
+  WinHorzCpp(task->win_left, TEXT_COLS - 2, task);
+  WinVertCpp(task->win_top, TEXT_ROWS - 2, task);
+  task->display_flags |= DISPLAYF_SHOW;
+  WinToTopCpp(task, false);
+  WinZBufUpdateCpp();
+}
+
 bool StartUpTasks()
 {
   auto *user1 = SpawnCpp(reinterpret_cast<uintptr_t>(UserCmdLineHC), nullptr,
@@ -45,5 +57,21 @@ bool StartUpTasks()
   WinToTopCpp(user1, false);
   WinTileVertCpp();
   WinZBufUpdateCpp();
-  return true;
+  auto *path = FileNameAbs("Once.HC.Z", *user1);
+  auto *dv = path && *path && path[1] == ':' ? PathDrive(*user1, path[0])
+                                             : nullptr;
+  CRedSeaDirEntry entry;
+  size_t prefix;
+  const bool found = dv && FsFileLookup(*dv, path + 2, true, true, entry, prefix);
+  Free(path);
+  const bool started = !found || XTalk(user1, "Cd;#include \"Once\";\n", 0, nullptr);
+  if (found && FileFindCpp(AC_STANDBY, nullptr, FUF_JUST_FILES)) {
+    auto *task = CurrentTask();
+    bool was_silent = task->display_flags & DISPLAYF_SILENT;
+    task->display_flags |= DISPLAYF_SILENT;
+    ACInitCpp("/*;!*/Bible.TXT*");
+    if (!was_silent)
+      task->display_flags &= ~DISPLAYF_SILENT;
+  }
+  return started;
 }

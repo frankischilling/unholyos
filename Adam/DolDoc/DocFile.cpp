@@ -65,7 +65,8 @@ extern "C" void DocLoadCpp(CDoc *doc, const uint8_t *src, int64_t size)
     DocLoad(*doc, src, size, nullptr);
 }
 
-CDoc *DocRead(const char *name, int64_t flags, const CDocReadContext *parent)
+CDoc *DocRead(const char *name, int64_t flags, const CDocReadContext *parent,
+              CTask *task)
 {
   auto *path = FileNameAbs(name ? name : blkdev.tmp_filename, *CurrentTask());
   for (auto *read = parent; path && read; read = read->parent)
@@ -74,7 +75,7 @@ CDoc *DocRead(const char *name, int64_t flags, const CDocReadContext *parent)
       Free(path);
       return nullptr;
     }
-  auto *doc = DocNewCpp(path, nullptr);
+  auto *doc = DocNewCpp(path, task);
   if (doc) {
     doc->flags |= flags;
     size_t size = 0;
@@ -215,7 +216,7 @@ extern "C" uint64_t DocWriteCpp(CDoc *doc, uint8_t prompt)
   return 1;
 }
 
-static bool DocInsDoc(CDoc &doc, CDoc &source)
+bool DocInsDoc(CDoc &doc, CDoc &source)
 {
   CDocLock lock_source(source);
   CDocLock lock(doc);

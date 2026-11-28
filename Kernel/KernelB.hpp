@@ -1,6 +1,7 @@
 #pragma once
 
 #include "KernelA.hpp"
+#include "KCfg.hpp"
 #include "../Adam/ASnd.hpp"
 
 inline void MemSet(void *dst, uint8_t value, size_t count)
@@ -103,6 +104,7 @@ bool WinGrabScrollInput();
 bool WinMenuInput();
 bool WinMsCursorVisible();
 extern CAutoCompleteGlbls ac;
+extern CAutoCompleteDictGlbls acd;
 extern "C" uint64_t AutoCompleteCpp(uint8_t val);
 alignas(8) extern CWinMgrGlbls winmgr;
 int64_t WinQueIPMsgs(bool que);
@@ -130,6 +132,18 @@ extern CMsStateGlbls ms, ms_last, old_ms;
 extern CGridGlbls ms_grid;
 extern "C" void PutKeyCpp(int64_t ch, int64_t sc);
 extern "C" void PutCharsCpp(uint64_t chars);
+extern "C" CKeyDevGlbls keydev;
+bool KeyDevInit();
+extern "C" CKeyDevEntry *KeyDevAddCpp(uintptr_t put_key, uintptr_t put_s,
+                                     int64_t priority, uint8_t key_descs);
+extern "C" void CtrlAltCBSetCpp(uint8_t ch, uintptr_t hndlr, const char *no_shift,
+                                const char *shift, uint8_t in_irq);
+void GrEnd();
+void SetKeyDescription(const char *desc, uintptr_t hndlr = 0);
+void KbdCtrlAltKey(int64_t sc);
+extern "C" uint8_t ScanCode2CharCpp(int64_t sc);
+extern "C" char *Char2KeyNameCpp(int64_t ch, uint8_t include_ctrl);
+extern "C" char *ScanCode2KeyNameCpp(int64_t sc);
 extern "C" int64_t GetKeyCpp(int64_t *sc, uint8_t echo, uint8_t raw_cursor);
 extern "C" char *GetStrCpp(const char *msg, const char *dft, int64_t flags);
 void JobCtrlInit(CJobCtrl *ctrl);
@@ -138,7 +152,12 @@ extern "C" void JobDelCpp(CJob *job);
 extern "C" void TaskRstAwaitingMsgCpp(CTask *task);
 extern "C" void TaskWaitCpp(CTask *task, uint8_t cmd_line_pmt);
 extern "C" int64_t JobsHndlrCpp(uint64_t run_flags, CTask *task);
+extern "C" int64_t PopUpPrintCpp(const char *fmt, int64_t argc,
+                                  const uint64_t *argv);
+int64_t AdamText(const char *src);
+bool XTalk(CTask *task, const char *fmt, int64_t argc, const uint64_t *argv);
 extern "C" int64_t FlushMsgsCpp(CTask *task);
+extern "C" [[noreturn]] void SrvTaskContCpp();
 extern "C" void InputFilterTaskHC();
 extern "C" uint64_t SingleUserCpp(uint8_t val);
 extern "C" [[noreturn]] void Exit();
@@ -163,6 +182,7 @@ extern "C" bool CallHolyC3Checked(uintptr_t function, uint64_t arg1,
 extern "C" bool CallHolyC4Checked(uintptr_t function, uint64_t arg1,
                                   uint64_t arg2, uint64_t arg3, uint64_t arg4,
                                   uint64_t *result);
+extern "C" int64_t CallHolyC1(uintptr_t function, uint64_t arg1);
 extern "C" int64_t CallHolyC2(uintptr_t function, uint64_t arg1, uint64_t arg2);
 extern "C" int64_t CallHolyC3(uintptr_t function, uint64_t arg1, uint64_t arg2,
                               uint64_t arg3);
@@ -183,6 +203,7 @@ extern "C" char *CatPrintCpp(char *dst, const char *fmt, int64_t argc,
 extern "C" void PrintWarnCpp(const char *fmt, int64_t argc,
                              const uint64_t *argv, const uintptr_t *frame);
 const CHash *FunSegFind(uintptr_t addr, uint64_t &offset);
+char *SrcEdLink(uintptr_t addr, int64_t count);
 int64_t YearStartDate(int64_t year);
 CDate Struct2Date(const CDateStruct &ds);
 int64_t DayOfWeek(int64_t date);
@@ -230,6 +251,7 @@ bool WinMgrInit();
 extern uint64_t sys_font_std[256],sys_font_cyrillic[256];
 void WinDerivedValsUpdate(CTask *task);
 bool StartUpTasks();
+bool MakeAdam();
 extern "C" uint64_t RandU16Cpp();
 extern "C" CDC *DCNewCpp(int64_t width, int64_t height, CTask *task,
                          uint8_t null_bitmap);
@@ -259,9 +281,13 @@ extern char *str2color_lst;
 extern "C" uint64_t Str2ColorU16Cpp(const char *st);
 extern "C" uint64_t Str2ColorU32Cpp(char *st);
 bool LoadDocDefines();
+bool MakeDoc();
 extern "C" void PutS(const char *text);
 extern "C" void StrCpyCpp(char *dst, const char *src);
 void PutTaskS(CTask &task, const char *text);
+// Both functions take ownership of their input.
+void In(char *text);
+void InStr(char *src);
 
 CFifoU8 *FifoU8New(int64_t size, CTask *mem_task = nullptr);
 void FifoU8Del(CFifoU8 *f);
@@ -413,15 +439,28 @@ using CExt = int64_t (*)(...);
 
 extern CTask *adam_task, *sys_focus_task, *sys_winmgr_task,
     *sys_task_being_scrn_updated;
+extern CCPU *cpu_structs;
+extern int64_t mp_cnt;
 extern CBlkDevGlbls blkdev;
+extern CProgress sys_progresses[PROGRESS_BARS_NUM] asm("SYS_PROGRESSES");
+void ProgressBarsRegTf(const char *path);
+extern "C" void ProgressBarsRstCpp(const char *path);
 extern CDbgGlbls dbg;
 extern CSema sys_semas[SEMA_SEMAS_NUM];
 extern CScrnCastGlbls scrncast;
-extern uint8_t sys_var_init_flag, sys_var_init_val;
 extern CJob sys_macro_head;
 extern CTask *sys_macro_task;
 extern CDevGlbls dev;
 extern uint64_t sys_cache_line_width;
+extern uint64_t sys_os_version;
+extern CDoc *sys_registry_doc;
+extern int64_t sys_msg_flags[1];
+extern uint64_t registry_version;
+extern CInsReg ins_reg;
+CDoc *RegCache();
+bool RegInit();
+bool InsRegInit();
+extern "C" uint64_t InsUnregCpp(uint8_t drv_let);
 extern uint8_t *rev_bits_table, *set_bits_table;
 extern uint64_t *pow10_I64;
 extern CExt *ext;
@@ -461,15 +500,18 @@ extern "C" int64_t AUWriteCpp(const char *filename, CSndData *head,
 extern "C" void BeepCpp(int8_t ona, uint8_t busy);
 extern "C" uint64_t MuteCpp(uint8_t val);
 extern "C" uint64_t IsMuteCpp();
+uint8_t PCIReadU8(uint8_t bus, uint8_t device, uint8_t function, uint8_t reg);
 uint16_t PCIReadU16(uint8_t bus, uint8_t device, uint8_t function, uint8_t reg);
 uint32_t PCIReadU32(uint8_t bus, uint8_t device, uint8_t function, uint8_t reg);
 int32_t PCIClassFind(uint32_t class_code, uint16_t index);
 
 uint32_t ATAProbe(const CBlkDev &bd);
 bool ATAReadCapacity(CBlkDev &bd);
+bool ATAIdentifyRecord(CBlkDev &bd);
 bool ATAReadBytes(CBlkDev &bd, uint8_t *buf, uint64_t pos, size_t bytes);
 bool ATAWriteBytes(CBlkDev &bd, const uint8_t *buf, uint64_t pos, size_t bytes);
 bool ATAPIStartStop(const CBlkDev &bd, bool start);
+bool ATAPIPreventRemoval(const CBlkDev &bd, bool prevent);
 bool ATAPIReadCapacity(CBlkDev &bd);
 bool ATAPIReadBlks2(const CBlkDev &bd, uint8_t *buf, uint32_t lba,
                     uint32_t count);
@@ -480,15 +522,132 @@ bool ATAPIReadBytes(const CBlkDev &bd, uint8_t *buf, uint64_t pos,
 CDrv *BlkDevsInitAll();
 bool BlkDevGlblsInit();
 CDrv *MountedDrive(char letter);
+extern uint64_t disk_lock_flags;
+extern uint64_t mount_flags;
+CBlkDev *BlkDevLockTarget(CBlkDev *bd);
+bool BlkDevLockOwner(CBlkDev *bd);
+bool BlkDevUnlockOwner(CBlkDev *bd,bool rst);
+bool DrvLockOwner(CDrv *dv);
+bool DrvUnlockOwner(CDrv *dv);
+extern "C" uint64_t DrvLockCpp(CDrv *dv);
+extern "C" uint64_t DrvUnlockCpp(CDrv *dv,uint8_t rst);
+extern "C" void DrvsReleaseCpp();
+extern "C" void DrvDelCpp(CDrv *dv);
+extern "C" void DrvBlkDevDelCpp(CBlkDev *bd);
+extern "C" void BlkDevDelCpp(CBlkDev *bd);
+extern "C" uint64_t DrvEnableCpp(uint8_t drv_let,uint8_t val);
+extern "C" void DskCacheInvalidateCpp(CDrv *dv);
+extern "C" void DskChgCpp(uint8_t drv_let);
+// Lifecycle helpers require mount_flags and disk_lock_flags held.
+bool DrvDeleteReady(const CDrv *dv);
+void DrvDelete(CDrv &dv);
+bool BlkDevDeleteReady(const CBlkDev *bd);
+void BlkDevDelete(CBlkDev &bd,uint8_t *keep_ram=nullptr);
+uint8_t *BlkDevOwnedRAM(const CBlkDev *bd);
+void BlkDevReleaseRAM(CBlkDev &bd,uint8_t *keep_ram);
+bool BlkDevSameBacking(const CBlkDev &a,const CBlkDev &b);
+bool BlkDevImageDependsOn(const CBlkDev &image,const CBlkDev &parent);
+bool BlkDevImageBacking(const CBlkDev *bd);
+bool BlkDevRegistered(const CBlkDev *bd);
+bool BlkDevImageChain(const CBlkDev &bd,bool write=false);
+bool BlkDevImageCanWrite(const CBlkDev *bd);
+bool BlkDevMediaPin(CBlkDev &bd);
+void BlkDevMediaUnpin(CBlkDev &bd);
+bool BlkDevMediaPinned(const CBlkDev &bd);
+bool DrvHasImageDependents(const CDrv &dv);
+extern "C" uint64_t BlkDevLockCpp(CBlkDev *bd);
+extern "C" uint64_t BlkDevUnlockCpp(CBlkDev *bd,uint8_t rst);
+bool BlkDevEnsureInitialized(CBlkDev &bd);
+extern "C" uint64_t BlkDevInitCpp(CBlkDev *bd);
+extern "C" void BlkDevsReleaseCpp();
+extern "C" void DskCacheInitCpp(int64_t size_in_U8s);
+extern "C" void DskCacheAddCpp(CDrv *dv,const uint8_t *buf,int64_t blk,int64_t cnt);
+extern "C" void DskCacheInvalidate2Cpp(CDrv *dv);
+extern "C" void RCacheCpp(CDrv *dv,uint8_t **buf,int64_t *blk,int64_t *cnt);
+void DskCacheInvalidateDevice(CBlkDev *bd);
+void DskCacheWriteThrough(CBlkDev *bd,const uint8_t *buf,uint64_t pos,
+                          size_t bytes,bool okay);
+bool DrvReadBytes(const CDrv &drive,uint8_t *buf,uint64_t pos,size_t bytes);
+
+// Native scopes retain existing non-yielding I/O and preserve outer ownership.
+// Acquire before disabling interrupts; release without entering the scheduler.
+class CDiskLock
+{
+public:
+  explicit CDiskLock(CBlkDev &bd) : CDiskLock(&bd,nullptr) {}
+  explicit CDiskLock(CDrv &dv) : CDiskLock(dv.bd,&dv) {}
+  ~CDiskLock()
+  {
+    if (unlock_dv) DrvUnlockOwner(dv);
+    if (unlock_bd) BlkDevUnlockOwner(bd,false);
+    SetRFlags(rflags);
+  }
+  CDiskLock(const CDiskLock &)=delete;
+  CDiskLock &operator=(const CDiskLock &)=delete;
+private:
+  CDiskLock(CBlkDev *device,CDrv *drive) :
+      bd(BlkDevLockTarget(device)),dv(drive),
+      unlock_bd(bd && BlkDevLockOwner(bd)),
+      unlock_dv(dv && DrvLockOwner(dv)),rflags(GetRFlags())
+  {
+    asm volatile("cli" : : : "memory");
+  }
+  CBlkDev *bd;
+  CDrv *dv;
+  bool unlock_bd,unlock_dv;
+  uint64_t rflags;
+};
+
+extern "C" CDrv *DrvMakeFreeSlotCpp(uint8_t drv_let);
+extern "C" void DrvFATBlkAllocCpp(CDrv *dv);
+extern "C" void DrvFATBlkCleanCpp(CDrv *dv,int64_t fat_sel=3);
+extern "C" void DrvFATBlkSetCpp(CDrv *dv,int64_t c,int64_t fat_sel=3);
+bool DrvFATCacheInit(CDrv &dv);
+void DrvFATCacheDrop(CDrv &dv);
+void DrvFATCacheReset(CDrv &dv);
+void DrvFATCacheResetDevice(CBlkDev *bd,bool controller=false);
+bool DrvFreeListValid(CDrv &dv);
+void DrvFreeListClear(CDrv &dv);
+bool DrvFATRead(const CDrv &dv,uint64_t index,void *buf,size_t offset,size_t bytes);
+bool DrvFATWriteAllowed(CBlkDev *bd,uint64_t pos,size_t bytes,const CDrv *origin=nullptr);
+bool DrvFATWriteAllowedImage(CBlkDev *bd,uint64_t pos,size_t bytes,const CDrv *origin);
+void DrvFATWriteThrough(CBlkDev *bd,const uint8_t *buf,uint64_t pos,size_t bytes,
+                        bool okay,const CDrv *origin=nullptr);
+extern "C" uint64_t DrvNextFreeLetCpp(uint8_t first_drv_let);
+extern "C" CDrv *DrvChkCpp(CDrv *dv,uint8_t except);
+extern "C" uint64_t Drv2LetCpp(CDrv *dv);
+extern "C" uint64_t Let2LetCpp(uint8_t drv_let);
+extern "C" int64_t Let2BlkDevTypeCpp(uint8_t drv_let);
 extern "C" CDrv *Let2DrvCpp(uint8_t letter, uint8_t except);
+extern "C" CBlkDev *DrvIsWritableCpp(uint8_t drv_let,uint8_t except);
+extern "C" uint64_t DrvMapCpp(uint8_t drv_let,CDrv *dv);
+extern "C" uint64_t DrvCpp(uint8_t drv_let);
+extern "C" char *DrvSerialNumCpp(uint8_t drv_let);
+extern "C" char *DrvModelNumCpp(uint8_t drv_let);
+extern "C" uint64_t DrvTextAttrGetCpp(uint8_t drv_let);
+extern "C" void DrvRepCpp();
+extern "C" uint8_t blkdev_text_attr[6],drv_text_attr[3];
+CBlkDev *BlkDevNextFreeSlot(uint8_t first_drv_let,uint32_t type);
+extern "C" CBlkDev *BlkDevNextFreeSlotCpp(uint8_t first_drv_let,int64_t type);
+extern "C" CBlkDev *BlkDevChkCpp(CBlkDev *bd,uint8_t except);
+extern "C" CBlkDev *Let2BlkDevCpp(uint8_t drv_let,uint8_t except);
+extern "C" int64_t BlkDevAddCpp(CBlkDev *bd,int64_t prt_num,uint8_t whole_drv,
+                                uint8_t make_free);
+extern "C" void UnmountCpp(uint8_t drv_let);
+extern "C" uint64_t MountFileCpp(const char *filename);
 bool BlkDevReadBytes(CBlkDev &bd, uint8_t *buf, uint64_t pos,
                      size_t bytes);
 bool BlkDevWriteBytes(CBlkDev &bd, const uint8_t *buf, uint64_t pos,
-                      size_t bytes);
+                      size_t bytes,const CDrv *fat_origin=nullptr);
 uint64_t Now();
 bool ISOInit(CDrv &dv);
 bool RedSeaInit(CDrv &dv);
 bool RedSeaFormatRAM(CDrv &dv, size_t root_blocks);
+bool RedSeaFormatDrive(CDrv &dv,bool quick);
+extern "C" uint64_t RedSeaValidateCpp(uint8_t drv_let);
+extern "C" void RedSeaFmtCpp(uint8_t drv_let,uint8_t quick);
+extern "C" void RedSeaFreeFreeLstCpp(CDrv *dv);
+extern "C" void RedSeaFreeLstBuildCpp(CDrv *dv);
 bool RedSeaFileFind(const CDrv &dv, uint64_t dir, const char *name,
                     bool directory, CRedSeaDirEntry &entry);
 bool RedSeaFileRead(const CDrv &dv, const CRedSeaDirEntry &entry, uint64_t pos,
@@ -529,12 +688,17 @@ inline bool ReadableFS(const CDrv &dv)
 }
 inline bool WritableFS(const CDrv &dv)
 {
-  return dv.bd && !(dv.bd->flags&BDF_READ_ONLY) &&
-         ((dv.fs_type==FSt_REDSEA && dv.bd->type==BDT_RAM) ||
+  return dv.bd && BlkDevImageCanWrite(dv.bd) && !BlkDevImageBacking(dv.bd) &&
+         ((dv.fs_type==FSt_REDSEA &&
+           (dv.bd->type==BDT_RAM || dv.bd->type==BDT_ISO_FILE_WRITE)) ||
           (dv.fs_type==FSt_FAT32 && dv.bd->type==BDT_ATA));
 }
 inline bool FsMkDir(CDrv &dv,const char *path,int64_t entry_cnt=0);
 bool Name2DirClus(const CDrv &dv, const char *path, size_t count, uint64_t &dir);
+bool Name2ParentDirClus(const CDrv &dv, const char *path, size_t count,
+                        uint64_t &parent);
+extern "C" uint64_t Name2DirClusCpp(CDrv *dv,const char *dirname);
+extern "C" uint64_t Name2ParentDirClusCpp(CDrv *dv,const char *dirname);
 bool FsIsDir(const CDrv &dv, const char *path);
 bool FsFileFind(const CDrv &dv, uint64_t dir, const char *name,
                 bool directory, CRedSeaDirEntry &entry);
@@ -548,11 +712,44 @@ bool RedSeaStreamPrepare(CDrv &dv, const char *path, CDirEntry &de, int64_t cnt)
 bool RedSeaStreamCommit(CDrv &dv, const char *path, CDirEntry &de, bool new_file);
 extern "C" int64_t FSizeCpp(CFile *f);
 extern "C" CFile *FOpenCpp(const char *filename, const char *flags, int64_t cnt);
+CFile *FOpenImageRead(const char *absolute,CDrv *backing);
+struct CImageMountUndo
+{
+  CRedSeaDirEntry old{};
+  uint8_t *data=nullptr;
+  bool existed=false,prepared=false,rollback_failed=false;
+};
+CFile *FOpenImageWrite(const char *absolute,CDrv *backing,int64_t cnt,
+                       CImageMountUndo &undo);
+bool FDiscardImageWrite(CFile *f,CImageMountUndo &undo);
+void FCloseImage(CFile *f);
+bool FImageByteRange(const CFile &f,uint64_t pos,size_t bytes,uint64_t &physical);
+bool FImageReadBytes(CFile *f,uint8_t *buf,uint64_t pos,size_t bytes);
+bool FImageWriteBytes(CFile *f,const uint8_t *buf,uint64_t pos,size_t bytes);
 extern "C" void FCloseCpp(CFile *f);
 extern "C" uint64_t FBlkReadCpp(CFile *f, uint8_t *buf, int64_t blk, int64_t cnt);
 extern "C" uint64_t FBlkWriteCpp(CFile *f, const uint8_t *buf, int64_t blk, int64_t cnt);
 extern "C" uint64_t BlkReadCpp(CDrv *dv, uint8_t *buf, int64_t blk, int64_t count);
 extern "C" uint64_t BlkWriteCpp(CDrv *dv, const uint8_t *buf, int64_t blk, int64_t count);
+extern "C" int64_t ClusNumNextCpp(CDrv *dv,int64_t c,int64_t cnt);
+extern "C" int64_t Clus2BlkCpp(CDrv *dv,int64_t c);
+extern "C" int64_t ClusBlkReadCpp(CDrv *dv,uint8_t *buf,int64_t c,int64_t blks);
+extern "C" int64_t ClusReadCpp(CDrv *dv,uint8_t *buf,int64_t c,int64_t cnt);
+extern "C" int64_t ClusBlkWriteCpp(CDrv *dv,const uint8_t *buf,int64_t c,int64_t blks);
+extern "C" int64_t ClusWriteCpp(CDrv *dv,const uint8_t *buf,int64_t c,int64_t cnt);
+extern "C" int64_t ClusAllocCpp(CDrv *dv,int64_t c,int64_t cnt,uint8_t contiguous);
+bool FAT32GetClusLink(const CDrv &dv,uint64_t c,uint32_t &next);
+extern "C" int64_t FAT32AllocClusCpp(CDrv *dv,int64_t c,int64_t cnt);
+extern "C" int64_t FAT32AllocContiguousClusCpp(CDrv *dv,int64_t cnt);
+extern "C" void FAT32FreeClusCpp(CDrv *dv,int64_t c);
+extern "C" int64_t RedSeaAllocClusCpp(CDrv *dv,int64_t cnt);
+extern "C" void RedSeaFreeClusCpp(CDrv *dv,int64_t c,int64_t cnt);
+extern "C" uint64_t FAT32DirNewCpp(CDrv *dv,const char *cur_dir,CDirEntry *entry,
+                                   uint8_t free_old_chain);
+extern "C" uint64_t RedSeaDirNewCpp(CDrv *dv,const char *cur_dir,CDirEntry *entry,
+                                    uint8_t free_old_chain);
+extern "C" uint64_t DirNewCpp(CDrv *dv,const char *cur_dir,CDirEntry *entry,
+                              uint8_t free_old_chain);
 char *FileNameAbs(const char *name, const CTask &task, uint64_t flags = 0);
 char *DirNameAbs(const char *name, const CTask &task);
 char *PathTrim(const char *name, CHeapCtrl *hc);
@@ -565,6 +762,15 @@ extern "C" uint64_t FilesFindMatchCpp(const char *name, const char *mask,
                                       uint64_t flags);
 extern "C" char *ExtDftCpp(const char *name, const char *ext);
 const char *FileExtDot(const char *name);
+extern "C" char *FileExtDotCpp(char *src);
+extern "C" char *FileExtRemCpp(char *src,char *dst);
+extern "C" uint64_t IsDotZCpp(const char *filename);
+extern "C" uint64_t IsDotCCpp(const char *filename);
+extern "C" uint64_t FileNameChkCpp(const char *filename);
+extern "C" uint64_t CFileNameToCpp(char *dst,const char *src);
+extern "C" char *ToggleZorNotZCpp(const char *name);
+extern "C" char *FileNameTmpTxtCpp();
+extern "C" CDirEntry *Cd2DirEntryCpp(CDirEntry *tmpde,const char *abs_name);
 bool IsDotExt(const char *name, char ext);
 extern "C" uint64_t FileAttrCpp(const char *name,uint64_t attr);
 extern "C" uint64_t CopySingleCpp(const char *f1,const char *f2);
@@ -579,7 +785,13 @@ extern "C" void ScanFlagsCpp(uint8_t *dst, const uint8_t *list,
                              const char *src);
 int64_t DirEntryCompareName(const CRedSeaDirEntry &a, const CRedSeaDirEntry &b);
 bool DirFilesSort(CDirEntry *&first, bool by_cluster);
+extern "C" int64_t DirEntryCompareNameCpp(const CDirEntry *a,const CDirEntry *b);
+extern "C" int64_t DirEntryCompareClusCpp(const CDirEntry *a,const CDirEntry *b);
+extern "C" void DirFilesSortCpp(CDirEntry **first,int64_t key);
 void DirFilesFlatten(CDirEntry *&first, uint64_t flags);
+extern "C" CDirEntry *DirFilesFlattenCpp(CDirEntry *entry,CDirEntry **res,
+                                        uint64_t flags);
+extern "C" CDirEntry *FilesFind2Cpp(const char *mask,uint64_t flags);
 char *DirEntryFullName(const char *directory, const char *name);
 extern "C" void DirEntryDelCpp(CDirEntry *entry);
 extern "C" void DirEntryDel2Cpp(CDirEntry *entry);
@@ -628,6 +840,13 @@ extern "C" void HashSrcFileSetCpp(const CCmpCtrl *cc, CHashSrcSym *sym,
                                    int64_t line_offset);
 void ClassMemberLstDel(CHashClass *cls);
 extern "C" void LinkedLstDelCpp(void *node);
+extern "C" uint8_t *LinkedLstCopyCpp(const void *node,CTask *mem_task);
+extern "C" int64_t LinkedLstCntCpp(const void *node);
+extern "C" uint64_t LinkedLstSizeCpp(const void *node);
+extern "C" void QueDelCpp(CQue *head,uint8_t remove);
+extern "C" CQue *QueCopyCpp(CQue *head,CTask *mem_task);
+extern "C" int64_t QueCntCpp(CQue *head);
+extern "C" int64_t QueSizeCpp(CQue *head);
 extern "C" char *MStrPrintCpp(const char *fmt, int64_t argc,
                               const uint64_t *argv);
 

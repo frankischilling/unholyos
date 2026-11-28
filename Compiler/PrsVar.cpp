@@ -25,10 +25,39 @@ CHashFun *CPrsDeclarator::TakeFun()
 void CPrsDeclarator::Bind(CMemberLst &member)
 {
   name = nullptr;
+  member.reg = reg;
   if (fun_ptr) {
     member.flags |= MLF_FUN;
     member.fun_ptr = TakeFun();
   }
+}
+
+bool PrsReg(CCmpCtrl &cc, int8_t &reg)
+{
+  while (cc.token == TK_IDENT && cc.hash_entry &&
+         (cc.hash_entry->type & HTT_KEYWORD)) {
+    auto keyword =
+        reinterpret_cast<const CHashGeneric *>(cc.hash_entry)->user_data0;
+    if (keyword == KW_NOREG) {
+      reg = REG_NONE;
+      Lex(cc);
+    } else if (keyword == KW_REG) {
+      reg = REG_ALLOC;
+      if (Lex(cc) == TK_IDENT) {
+        auto *names = reinterpret_cast<const CHashDefineStr *>(
+            HashFind("ST_U64_REGS", CurrentTask()->hash_table, HTT_DEFINE_STR));
+        auto index = names ? LstMatchCpp(
+            reinterpret_cast<const uint8_t *>(cc.cur_str),
+            reinterpret_cast<const uint8_t *>(names->data), 0) : -1;
+        if (index >= 0 && index < 16) {
+          reg = index;
+          Lex(cc);
+        }
+      }
+    } else
+      break;
+  }
+  return cc.token != TK_ERROR;
 }
 
 CHashFun *PrsFunPtrNew(CHashClass &result, unsigned stars, uint16_t flags)
@@ -44,14 +73,13 @@ CHashFun *PrsFunPtrNew(CHashClass &result, unsigned stars, uint16_t flags)
 bool PrsType(CCmpCtrl &cc, CHashClass &base, CPrsDeclarator &decl,
              uint16_t flags, bool local, unsigned depth)
 {
+  if (local && !PrsReg(cc, decl.reg))
+    return false;
   auto *cls = PrsStars(cc, &base);
   if (!cls || depth == 127)
     return false;
-  if (local && cc.token == TK_IDENT && cc.hash_entry &&
-      (cc.hash_entry->type & HTT_KEYWORD) &&
-      reinterpret_cast<const CHashGeneric *>(cc.hash_entry)->user_data0 ==
-          KW_NOREG)
-    Lex(cc);
+  if (local && !PrsReg(cc, decl.reg))
+    return false;
 
   unsigned stars = 0;
   if (cc.token == '(') {
@@ -88,7 +116,7 @@ bool PrsType(CCmpCtrl &cc, CHashClass &base, CPrsDeclarator &decl,
   return true;
 }
 
-static bool PrsDotDotDot(CCmpCtrl &cc, CHashFun &fun)
+static bool PrsDotDotDot(CCmpCtrl &cc, CHashFun &fun, int8_t reg)
 {
   if (Lex(cc) != ')')
     return false;
@@ -107,6 +135,7 @@ static bool PrsDotDotDot(CCmpCtrl &cc, CHashFun &fun)
     return false;
   }
   member->flags = MLF_DOT_DOT_DOT;
+  member->reg = reg;
   --fun.cls.member_cnt; // Only explicitly declared arguments are counted.
 
   name = StrNew("argv", heap);
@@ -116,6 +145,7 @@ static bool PrsDotDotDot(CCmpCtrl &cc, CHashFun &fun)
     return false;
   }
   member->flags = MLF_DOT_DOT_DOT;
+  member->reg = reg;
   --fun.cls.member_cnt;
   auto *dim = reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
   if (!dim)
@@ -133,14 +163,16 @@ bool PrsFunArgs(CCmpCtrl &cc, CHashFun &fun, unsigned depth)
   if (cc.token == ')')
     return true;
   do {
+    CPrsDeclarator decl;
+    if (!PrsReg(cc, decl.reg))
+      return false;
     if (cc.token == TK_ELLIPSIS)
-      return PrsDotDotDot(cc, fun);
+      return PrsDotDotDot(cc, fun, decl.reg);
     auto *base = PrsClass(cc);
     if (!base)
       return false;
     Lex(cc);
-    CPrsDeclarator decl;
-    if (!PrsType(cc, *base, decl, 0, false, depth) ||
+    if (!PrsType(cc, *base, decl, 0, true, depth) ||
         !TypeSize(ClassRawType(*decl.cls)) || fun.arg_cnt >= UINT16_MAX / 8)
       return false;
     if (!decl.name && (cc.token == ',' || cc.token == ')')) {

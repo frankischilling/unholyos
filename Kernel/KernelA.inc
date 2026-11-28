@@ -77,6 +77,8 @@
 %define CTask_FAULT_ERR_CODE	0x448
 %define CTask_LAST_EXCEPT	0x320
 %define CTask_CATCH_EXCEPT	0x378
+%define CTask_LAST_FUN		0x410
+%define CHashFun_EXE_ADDR	152
 
 %define CExcept_HNDLR_CATCH	16
 %define CExcept_HNDLR_UNTRY	24
@@ -172,6 +174,9 @@
 %1:
 	HC_FRAME_ENTER
 	MOV	RDI,[RBP+16]
+%if %3=0
+	LEA	RSI,[RBP+24]
+%else
 	MOV	RSI,[RBP+24]
 %if %3=2
 	MOV	RDX,[RBP+32]
@@ -180,6 +185,7 @@
 	LEA	RDX,[RBP+32]
 %if %4
 	MOV	RCX,RBP
+%endif
 %endif
 %endif
 	HC_FRAME_CALL %2

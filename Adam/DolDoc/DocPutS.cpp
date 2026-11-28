@@ -1,5 +1,12 @@
 #include "DolDoc.hpp"
 
+extern "C" bool KDDocPutSCpp(const char *text)
+{
+  if (auto *doc = DocPut())
+    DocPutS(*doc, text, StrLen(text));
+  return false;
+}
+
 static bool PutBase(CDoc &doc, uint8_t type, const char *text = nullptr,
                     size_t size = 0, bool final = false, uint32_t columns = 0)
 {

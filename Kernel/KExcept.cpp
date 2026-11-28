@@ -103,7 +103,8 @@ extern "C" void BreakCpp()
   }
   task->wake_jiffy = 0;
   TaskRstAwaitingMsgCpp(task);
-  // Drive and block locks in this kernel never yield while held.
+  DrvsReleaseCpp();
+  BlkDevsReleaseCpp();
   FlushMsgsCpp(task);
   RaiseHolyC(0x6B61657242); // 'Break'
 }

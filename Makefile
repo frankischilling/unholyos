@@ -23,20 +23,20 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Kernel/PCIBIOS.cpp Kernel/Mem/MemPag.cpp Kernel/Mem/MAllocFree.cpp \
 	Kernel/Mem/BlkPool.cpp Kernel/Mem/HeapCtrl.cpp Kernel/Mem/MemPhysical.cpp Kernel/Mem/PageTables.cpp \
 	Kernel/BlkDev/DskATA.cpp Kernel/BlkDev/DskATAId.cpp Kernel/BlkDev/DskAddDev.cpp \
-	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/FileSysFAT.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
-	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/BlkDev/DskFmt.cpp Kernel/Compress.cpp \
-	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ASnd.cpp Adam/TaskSettings.cpp Adam/AutoComplete/ACTask.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
-	Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
+	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/DskDrv.cpp Kernel/BlkDev/DskBlkDev.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/FileSysFAT.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
+	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskStrB.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/BlkDev/DskClus.cpp Kernel/BlkDev/DskCache.cpp Kernel/BlkDev/DskFmt.cpp Kernel/Compress.cpp \
+	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ARegistry.cpp Adam/InsReg.cpp Adam/Training.cpp Adam/InFile.cpp Adam/ASnd.cpp Adam/TaskSettings.cpp Adam/CPURep.cpp Adam/DevInfo.cpp Adam/AutoComplete/ACTask.cpp Adam/AutoComplete/ACInit.cpp Adam/AutoComplete/ACFill.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
+	Adam/AutoComplete/ACDictGen.cpp Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
 	Adam/Gr/SpriteNew.cpp Adam/Gr/GrSpritePlot.cpp Adam/Gr/ScrnCast.cpp \
 	Adam/DolDoc/DocNew.cpp Adam/DolDoc/DocDblBuf.cpp Adam/DolDoc/DocRecalc.cpp Adam/DolDoc/DocRecalcLib.cpp \
-	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp \
-	Adam/DolDoc/DocChar.cpp Adam/DolDoc/DocPutKey.cpp Adam/DolDoc/DocRun.cpp \
-	Adam/DolDoc/DocGet.cpp Adam/DolDoc/DocForm.cpp Adam/DolDoc/DocEd.cpp Adam/DolDoc/DocTerm.cpp HomeSys.cpp \
-	Adam/ABlkDev/ADskA.cpp Adam/Opt/Boot/DskISORedSea.cpp
+	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp Adam/DolDoc/DocClipBoard.cpp Adam/DolDoc/DocTree.cpp \
+	Adam/DolDoc/DocChar.cpp Adam/DolDoc/DocPutKey.cpp Adam/DolDoc/DocRun.cpp Adam/DolDoc/MakeDoc.cpp \
+	Adam/DolDoc/DocGet.cpp Adam/DolDoc/DocForm.cpp Adam/DolDoc/DocEd.cpp Adam/DolDoc/DocFind.cpp Adam/DolDoc/DocLink.cpp Adam/DolDoc/DocPopUp.cpp Adam/DolDoc/DocTerm.cpp HomeSys.cpp \
+	Adam/ABlkDev/ADskA.cpp Adam/ABlkDev/Mount.cpp Adam/Opt/Boot/DskISORedSea.cpp Adam/MakeAdam.cpp
 GUEST_TEST_SRC := Linux/BootProbe.cpp
-COMPILER_ASM_SRC := Compiler/CExcept.asm Compiler/CMain.asm Compiler/CMisc.asm Compiler/LexLib.asm
+COMPILER_ASM_SRC := Compiler/CExcept.asm Compiler/CMain.asm Compiler/CMisc.asm Compiler/LexLib.asm Compiler/Templates.asm
 COMPILER_CXX_SRC := Compiler/CInit.cpp Compiler/CMain.cpp Compiler/Asm.cpp Compiler/AsmResolve.cpp Compiler/AsmLib.cpp Compiler/CHash.cpp Compiler/CExcept.cpp Compiler/CMisc.cpp Compiler/Lex.cpp Compiler/LexLib.cpp Compiler/AsmInit.cpp Compiler/PrsLib.cpp \
-	Compiler/PrsExp.cpp Compiler/PrsStmt.cpp Compiler/PrsVar.cpp Compiler/OptLib.cpp Compiler/BackC.cpp
+	Compiler/PrsExp.cpp Compiler/PrsStmt.cpp Compiler/PrsVar.cpp Compiler/OptLib.cpp Compiler/OptPass012.cpp Compiler/OptPass3.cpp Compiler/OptPass4.cpp Compiler/OptPass5.cpp Compiler/OptPass6.cpp Compiler/OptPass789A.cpp Compiler/CExts.cpp Compiler/BackLib.cpp Compiler/BackA.cpp Compiler/BackB.cpp Compiler/BackFA.cpp Compiler/BackFB.cpp Compiler/BackC.cpp Compiler/UAsm.cpp
 ASM_OBJ := $(ASM_SRC:%.asm=$(BUILD)/%.asm.o)
 CXX_OBJ := $(CXX_SRC:%.cpp=$(BUILD)/%.o) $(GUEST_TEST_SRC:%.cpp=$(BUILD)/%.o)
 COMPILER_ASM_OBJ := $(COMPILER_ASM_SRC:%.asm=$(BUILD)/%.asm.o)
@@ -51,6 +51,11 @@ ISO_TOOL := $(BUILD)/Linux/MakeISO
 BOOT_TEST := $(BUILD)/Linux/TestBoot
 COMPRESS_TEST := $(BUILD)/Linux/TestCompress
 STR_COMPARE_TEST := $(BUILD)/Linux/TestStrCompare
+OPT_PASS_TEST := $(BUILD)/Linux/TestOptPass012
+OPT_PASS3_TEST := $(BUILD)/Linux/TestOptPass3
+OPERAND_LOWERING_TEST := $(BUILD)/Linux/TestOperandLowering
+OPT_PASS6_TEST := $(BUILD)/Linux/TestOptPass6
+BRANCH_LAYOUT_TEST := $(BUILD)/Linux/TestBranchLayout
 BIN_TOOL := $(BUILD)/Linux/MakeBIN
 MAKE_BIN_TEST := $(BUILD)/Linux/TestMakeBIN
 HOST_MODULE_CPP := $(BUILD)/Linux/Fixtures/HostModuleProbe.cpp.o
@@ -94,7 +99,108 @@ INTERNAL_TYPES_TEST_ISO := $(BUILD)/internal-types-test.iso
 CLASS_RECORDS_PROBE := Linux/Fixtures/ClassRecordsProbe.HC
 CLASS_RECORDS_TEST_ISO := $(BUILD)/class-records-test.iso
 FUNCTION_RECORDS_PROBE := Linux/Fixtures/FunctionRecordsProbe.HC
+FUNCTION_RECORD_LAYOUT_PROBE := Linux/Fixtures/FunctionRecordLayoutProbe.HC
 FUNCTION_RECORDS_TEST_ISO := $(BUILD)/function-records-test.iso
+LIST_UTILITIES_PROBE := Linux/Fixtures/ListUtilitiesProbe.HC
+LIST_UTILITIES_TEST_ISO := $(BUILD)/list-utilities-test.iso
+STORAGE_SERVICES_PROBES := $(addprefix Linux/Fixtures/,DriveServicesProbe.HC PathNamesProbe.HC DirectoryServicesProbe.HC)
+STORAGE_SERVICES_TEST_ISO := $(BUILD)/storage-services-test.iso
+CLUSTER_ENTRY_PROBE := Linux/Fixtures/ClusterEntryProbe.HC
+CLUSTER_ENTRY_TEST_ISO := $(BUILD)/cluster-entry-test.iso
+FAT_CLUSTER_PROBE := Linux/Fixtures/Fat32ClusterProbe.HC
+FAT_CLUSTER_TEST_ISO := $(BUILD)/fat32-cluster-test.iso
+DISK_CACHE_PROBE := Linux/Fixtures/DiskCacheProbe.HC
+DISK_CACHE_TEST_ISO := $(BUILD)/disk-cache-test.iso
+FAT_SECTOR_CACHE_PROBE := $(addprefix Linux/Fixtures/,FatSectorCacheProbe.HC FatSectorCacheNativeProbe.HC)
+FAT_SECTOR_CACHE_TEST_ISO := $(BUILD)/fat-sector-cache-test.iso
+STORAGE_LIFECYCLE_PROBE := $(addprefix Linux/Fixtures/,StorageLifecycleProbe.HC StorageLifecycleNativeProbe.HC)
+STORAGE_LIFECYCLE_TEST_ISO := $(BUILD)/storage-lifecycle-test.iso
+FILE_BACKED_REDSEA_PROBES := $(addprefix Linux/Fixtures/,FileBackedRedSeaProbe.HC FileBackedRedSeaWriteProbe.HC FileBackedRedSeaNativeProbe.HC)
+FILE_BACKED_REDSEA_TEST_ISO := $(BUILD)/file-backed-redsea-test.iso
+OPTIMIZER_PROBE := Linux/Fixtures/OptimizerProbe.HC
+OPTIMIZER_AOT_PROBE := Linux/Fixtures/OptimizerAOTProbe.HC
+OPTIMIZER_TEST_ISO := $(BUILD)/optimizer-test.iso
+OPTIMIZER_AOT_TEST_ISO := $(BUILD)/optimizer-aot-test.iso
+REGISTER_ALLOCATION_PROBES := $(addprefix Linux/Fixtures/,RegisterAllocationProbe.HC RegisterAllocationNativeProbe.HC)
+REGISTER_ALLOCATION_TEST_ISO := $(BUILD)/register-allocation-test.iso
+REGISTER_ALLOCATION_AOT_PROBE := Linux/Fixtures/RegisterAllocationAOTProbe.HC
+REGISTER_ALLOCATION_AOT_TEST_ISO := $(BUILD)/register-allocation-aot-test.iso
+ADDRESS_FOLD_PROBES := $(addprefix Linux/Fixtures/,AddressFoldProbe.HC AddressFoldNativeProbe.HC)
+ADDRESS_FOLD_TEST_ISO := $(BUILD)/address-fold-test.iso
+ADDRESS_FOLD_AOT_PROBE := Linux/Fixtures/AddressFoldAOTProbe.HC
+ADDRESS_FOLD_AOT_TEST_ISO := $(BUILD)/address-fold-aot-test.iso
+BACKEND_PROBES := $(addprefix Linux/Fixtures/,BackendProbe.HC BackendNativeProbe.HC)
+BACKEND_TEST_ISO := $(BUILD)/backend-test.iso
+BACKEND_AOT_PROBE := Linux/Fixtures/BackendAOTProbe.HC
+BACKEND_AOT_TEST_ISO := $(BUILD)/backend-aot-test.iso
+ADAM_MATH_SOURCE := Adam/AMath.HC
+ADAM_MATH_PROBE := Linux/Fixtures/AdamMathProbe.HC
+ADAM_MATH_AOT_PROBE := Linux/Fixtures/AdamMathAOTProbe.HC
+ADAM_MATH_TEST_ISO := $(BUILD)/adam-math-test.iso
+ADAM_MATH_AOT_TEST_ISO := $(BUILD)/adam-math-aot-test.iso
+ADAM_MEM_SOURCE := Adam/AMem.HC
+ADAM_MEM_PROBE := Linux/Fixtures/AdamMemProbe.HC
+ADAM_MEM_AOT_PROBE := Linux/Fixtures/AdamMemAOTProbe.HC
+ADAM_MEM_TEST_ISO := $(BUILD)/adam-mem-test.iso
+ADAM_MEM_AOT_TEST_ISO := $(BUILD)/adam-mem-aot-test.iso
+ADAM_TASK_SOURCE := Adam/TaskRep.HC
+ADAM_TASK_PROBE := Linux/Fixtures/AdamTaskProbe.HC
+ADAM_TASK_AOT_PROBE := Linux/Fixtures/AdamTaskAOTProbe.HC
+ADAM_TASK_TEST_ISO := $(BUILD)/adam-task-test.iso
+ADAM_TASK_AOT_TEST_ISO := $(BUILD)/adam-task-aot-test.iso
+ADAM_STARTUP_PROBE := Linux/Fixtures/AdamStartupProbe.HC
+DEV_INFO_TEST_ISO := $(BUILD)/dev-info-test.iso
+DEV_INFO_PROBE := Linux/Fixtures/DevInfoProbe.HC
+CPU_REP_TEST_ISO := $(BUILD)/cpu-rep-test.iso
+CPU_REP_PROBE := Linux/Fixtures/CPURepProbe.HC
+ADAM_STARTUP_TEST_ISO := $(BUILD)/adam-startup-test.iso
+DOC_TREE_PROBE := Linux/Fixtures/DocTreeProbe.HC
+KEY_MAP_PROBE := Linux/Fixtures/KeyMapProbe.HC
+KEY_MAP_TEST_ISO := $(BUILD)/key-map-test.iso
+DOC_TREE_AOT_PROBE := Linux/Fixtures/DocTreeAOTProbe.HC
+DOC_TREE_TEST_ISO := $(BUILD)/doc-tree-test.iso
+REGISTRY_DEMO := Demo/RegistryDemo.HC
+REGISTRY_PROBE := Linux/Fixtures/RegistryProbe.HC
+REGISTRY_BOOT := Linux/Fixtures/RegistryBoot.DD
+REGISTRY_TEST_ISO := $(BUILD)/registry-test.iso
+ONCE_PROBE := Linux/Fixtures/OnceProbe.HC
+ONCE_HOME := Linux/Fixtures/OnceHome.HC
+ONCE_BOOT := Linux/Fixtures/OnceBoot.DD
+ONCE_TEST_ISO := $(BUILD)/once-test.iso
+STOCK_ONCE_TEST_ISO := $(BUILD)/stock-once-test.iso
+AC_INSTALL_DISK := $(BUILD)/dictionary-install.img
+AC_GEN_INPUT ?= Linux/Fixtures/DictionaryGenInput.DD
+AC_GEN_DISK ?= $(BUILD)/dictionary-generator.img
+INPUT_TRAINING_PROBE := Linux/Fixtures/InputTrainingProbe.HC
+FILE_EDITOR_PROBE := Linux/Fixtures/FileEditorProbe.HC
+STOCK_TOUR := $(wildcard Misc/Tour/*.IN)
+STARTUP_TIPS := Doc/Tips.DD Doc/Customize.DD
+HELP_DOCS := Doc/HelpIndex.DD Doc/AboutTempleOS.DD Doc/Welcome.DD Doc/DemoIndex.DD Doc/CmdLineOverview.DD Doc/Credits.DD
+AC_STANDBY := Doc/StandBy.DD
+AC_INDEX_PROBE := Linux/Fixtures/ACIndex.TXT
+AC_DICT_PROBE := Linux/Fixtures/DictionaryProbe.HC
+AC_WORDS := Adam/AutoComplete/ACWords.DATA
+AC_DEFS := Adam/AutoComplete/ACDefs.DATA
+AC_DICT_ARGS := --compress-at $(AC_WORDS).Z $(AC_WORDS) --file-at $(AC_DEFS) $(AC_DEFS)
+POPUP_PROBE := Linux/Fixtures/PopupProbe.HC
+POPUP_DEMO := Demo/DolDoc/MenuBttn.HC
+POPUP_TEST_ISO := $(BUILD)/popup-test.iso
+INS_REG_PROBE := Linux/Fixtures/InsRegProbe.HC
+INS_REG_TEST_ISO := $(BUILD)/ins-reg-test.iso
+STARTUP_EXEC_PROBE := Linux/Fixtures/StartupExecProbe.HC
+STARTUP_EXEC_TEST_ISO := $(BUILD)/startup-exec-test.iso
+UASM_PROBES := $(addprefix Linux/Fixtures/,UAsmProbe.HC UAsmNativeProbe.HC)
+UASM_TEST_ISO := $(BUILD)/uasm-test.iso
+UASM_AOT_PROBE := Linux/Fixtures/UAsmAOTProbe.HC
+UASM_AOT_TEST_ISO := $(BUILD)/uasm-aot-test.iso
+NESTED_REDSEA_PROBES := $(addprefix Linux/Fixtures/,NestedRedSeaProbe.HC RedSeaFreeListProbe.HC RedSeaISOImageProbe.HC NestedRedSeaNativeProbe.HC)
+NESTED_REDSEA_TEST_ISO := $(BUILD)/nested-redsea-test.iso
+FAT32_IMAGE_PROBE := Linux/Fixtures/Fat32ImageProbe.HC
+FAT32_IMAGE_TEST_ISO := $(BUILD)/fat32-image-test.iso
+OPTICAL_IMAGE_PROBE := Linux/Fixtures/OpticalImageProbe.HC
+OPTICAL_IMAGE_TEST_ISO := $(BUILD)/optical-image-test.iso
+CHARACTER_GRAPHICS_PROBE := Linux/Fixtures/CharPanObserver.HC
+CHARACTER_GRAPHICS_TEST_ISO := $(BUILD)/character-graphics-test.iso
 FAT_TOOL := $(BUILD)/Linux/MakeFAT32
 FAT_DISK := $(BUILD)/fat32.img
 FAT_INVALID_DISK := $(BUILD)/fat32-invalid.img
@@ -122,9 +228,12 @@ STRINGS_PROBES := Linux/Fixtures/StrScanProbe.HC Linux/Fixtures/DocScanProbe.HC 
 	Linux/Fixtures/FloatScanProbe.HC Linux/Fixtures/DateScanProbe.HC Linux/Fixtures/StringCompareProbe.HC
 STARTUP_FIXTURE := Linux/Fixtures/StartOS.HC.Z
 STARTUP_DOC := Doc/Start.DD
+PCI_DEV_FILE := Misc/PCIDevices.DD
 COMPILER_RESOURCE := Compiler/OpCodes.DD
+ADAM_STARTUP_SOURCES := Adam/AMath.HC Adam/AMem.HC Adam/TaskRep.HC
 COMPILER_ISO_ARGS := --file-at $(COMPILER_RESOURCE) $(COMPILER_RESOURCE) \
-	--file-at Compiler/Compiler.BIN $(COMPILER_MODULE)
+	--file-at Compiler/Compiler.BIN $(COMPILER_MODULE) \
+	$(foreach source,$(ADAM_STARTUP_SOURCES),--file-at $(source) $(source))
 MODULE_PROBE := Linux/Fixtures/LoadProbe.BIN
 MODULE_CALLER := Linux/Fixtures/LoadCaller.BIN
 RUNTIME_PROBE := Linux/Fixtures/RuntimeProbe.BIN
@@ -153,11 +262,11 @@ CMP_PROBES := $(addprefix Linux/Fixtures/,CmpProbeRunner.HC CmpProbe.PRJ CmpProb
 	ScreenProbe.HC FontTextProbe.HC PromptProbe.HC DateOffsetProbe.HC CursorProbe.HC CursorExcept.HC Grid.HC FunctionPtrProbe.HC VariadicProbe.HC VariadicPtrProbe.HC DocFrame.HC DocButton.HC DocCallback.HC TryProbe.HC Exceptions.HC DirectoryProbe.HC DirContextProbe.HC FileStreamProbe.HC FileCopyProbe.HC FileOperationsProbe.HC DocBinLinkProbe.HC SpriteProbe.HC MemberMetaProbe.HC LastClassProbe.HC)
 GRAPHICS_DEMOS := Demo/Graphics/3DPoly.HC Demo/Graphics/Box.HC \
 	Demo/Graphics/Symmetry.HC Demo/Graphics/CommonAncestor.HC Demo/Graphics/Shading.HC Demo/Graphics/ScrnCapture.HC Demo/Graphics/BSpline.HC \
-	Demo/PullDownMenu.HC Demo/ExtChars.HC Demo/Prompt.HC Demo/Graphics/Blot.HC
+	Demo/PullDownMenu.HC Demo/ExtChars.HC Demo/Prompt.HC Demo/Progress.HC Demo/Graphics/Blot.HC
 GAME_DEMOS := Demo/Games/Digits.HC Demo/Games/Maze.HC Demo/Games/CharDemo.HC Demo/Games/TicTacToe.HC
 APP_FILES := Apps/TimeClock/Load.HC Apps/TimeClock/Install.HC Apps/TimeClock/TimeClk.HC
 CLASS_META_DEMO := Demo/ClassMeta.HC Demo/LastClass.HC
-FORM_DEMOS := Demo/Dsk/DataBase.HC Demo/DolDoc/Form.HC
+FORM_DEMOS := Demo/Dsk/DataBase.HC Demo/DolDoc/Form.HC $(POPUP_DEMO)
 SOUND_DEMOS := Demo/Snd/OhGreat.HC
 DOC_BIN_DEMOS := Demo/Graphics/SpritePut.HC Demo/Graphics/SpritePutExt.HC
 DOC_BIN_LINK := Linux/Fixtures/DocBinLink.DD
@@ -165,7 +274,11 @@ QUEUE_PROBE := Linux/Fixtures/QueueProbe.HC
 TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInputProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 
-.PHONY: all run test test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args test-internal-types test-class-records test-function-records
+# Every bootable test image uses the same Adam source initialization.
+$(ISO) $(foreach target,$(filter %_ISO,$(.VARIABLES)),$($(target))): $(ADAM_STARTUP_SOURCES)
+
+.PHONY: all run test test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args test-internal-types test-class-records
+.PHONY: test-function-records
 all: $(ISO)
 
 $(LOADER): Adam/Opt/Boot/BootDVD.asm Kernel/KernelA.inc
@@ -174,6 +287,35 @@ $(LOADER): Adam/Opt/Boot/BootDVD.asm Kernel/KernelA.inc
 
 $(BUILD)/Adam/Opt/Boot/DskISORedSea.asm.o: NASMFLAGS += -D'BDVD_FILE="$(LOADER)"'
 $(BUILD)/Adam/Opt/Boot/DskISORedSea.asm.o: $(LOADER)
+
+$(BUILD)/Kernel/KStart16.asm.o $(BUILD)/Kernel/KStart32.asm.o: Kernel/KCfg.inc
+$(BUILD)/Kernel/KStart16.asm.o $(BUILD)/Kernel/KStart32.asm.o: NASMFLAGS += $(KCFG_NASMFLAGS)
+
+$(BUILD)/Linux/KernelCfgTest.asm.o: Kernel/KStart32.asm Kernel/KernelA.inc Kernel/KCfg.inc
+	mkdir -p $(@D)
+	$(NASM) -DKCFG_MEM_INIT=0xA5 -DKCFG_HEAP_INIT=0 -DKCFG_VAR_INIT=-1 \
+		-DKCFG_BOOT_DRV_LET=85 -DKCFG_FIRST_HD_DRV_LET=68 -DKCFG_MOUNT_PRIMARY_HD=0 \
+		-D'KCFG_HOME_DIR="::/Account"' -DKCFG_CACHE_MIN=32768 -DKCFG_CACHE_MAX=32768 \
+		-DKCFG_CACHE_LIMIT=0x80000000 -f elf64 -o $@ $<
+
+$(BUILD)/Linux/TestKernelCfg: Linux/TestKernelCfg.cpp Kernel/KCfg.hpp $(BUILD)/Linux/KernelCfgTest.asm.o
+	$(HOSTCXX) $(HOSTCXXFLAGS) -no-pie -Wl,--gc-sections -o $@ $< $(BUILD)/Linux/KernelCfgTest.asm.o
+
+.PHONY: test-kernel-cfg
+test-kernel-cfg: $(BUILD)/Linux/TestKernelCfg
+	$<
+
+test: test-kernel-cfg
+
+$(BUILD)/kernel-cfg-test.iso: $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) Linux/Fixtures/KernelCfgProbe.HC $(COMPILER_MODULE) $(COMPILER_RESOURCE) $(ADAM_STARTUP_SOURCES)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --dir Account --file Linux/Fixtures/KernelCfgProbe.HC
+
+KCFG_TEST_PROFILE ?= default
+KCFG_TEST_MEMORY ?= 512
+.PHONY: test-kernel-cfg-boot
+test-kernel-cfg-boot: $(BUILD)/kernel-cfg-test.iso $(FAT_WRITE_DISK) $(BOOT_TEST)
+	$(BOOT_TEST) --kernel-cfg "$(QEMU)" $(BUILD)/kernel-cfg-test.iso $(FAT_WRITE_DISK) \
+		$(KCFG_TEST_PROFILE) $(KCFG_TEST_MEMORY) $(BUILD)/kernel-cfg-$(KCFG_TEST_MEMORY)
 
 $(ASM_OBJ) $(COMPILER_ASM_OBJ): $(BUILD)/%.asm.o: %.asm Kernel/KernelA.inc
 	mkdir -p $(@D)
@@ -205,7 +347,7 @@ $(ISO_TOOL): Linux/MakeISO.cpp Adam/Opt/Boot/DskISORedSea.cpp Kernel/Compress.cp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
 
-$(BOOT_TEST): Linux/TestBoot.cpp Linux/BootMedia.hpp Linux/TestCharacterGraphics.hpp Linux/TestStrings.hpp
+$(BOOT_TEST): Linux/TestBoot.cpp Linux/BootMedia.hpp Linux/TestCharacterGraphics.hpp Linux/TestStrings.hpp Linux/TestFileBackedRedSea.hpp Kernel/KernelA.hpp
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
 
@@ -217,6 +359,56 @@ $(COMPRESS_TEST): Linux/TestCompress.cpp Linux/BootMedia.hpp Kernel/Compress.cpp
 $(STR_COMPARE_TEST): Linux/TestStrCompare.cpp $(BUILD)/Kernel/StrA.asm.o
 	mkdir -p $(@D)
 	$(HOSTCXX) $(HOSTCXXFLAGS) -fno-pie -no-pie -mno-red-zone -o $@ $^
+
+$(OPT_PASS_TEST): Linux/Fixtures/OptPass012Probe.cpp Compiler/OptPass012.cpp Compiler/CompilerA.hpp Kernel/KernelA.hpp
+	mkdir -p $(@D)
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
+
+.PHONY: test-opt-pass012
+test-opt-pass012: $(OPT_PASS_TEST)
+	$(OPT_PASS_TEST)
+
+test: test-opt-pass012
+
+$(OPT_PASS3_TEST): Linux/Fixtures/OptPass3Probe.cpp Compiler/OptPass3.cpp Compiler/CompilerA.hpp Kernel/KernelA.hpp
+	mkdir -p $(@D)
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
+
+.PHONY: test-opt-pass3
+test-opt-pass3: $(OPT_PASS3_TEST)
+	$(OPT_PASS3_TEST)
+
+test: test-opt-pass3
+
+$(OPERAND_LOWERING_TEST): Linux/Fixtures/OperandLoweringProbe.cpp Compiler/BackLib.cpp Compiler/OptPass5.cpp Compiler/OptPass4.cpp Compiler/CompilerA.hpp Kernel/KernelA.hpp
+	mkdir -p $(@D)
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
+
+.PHONY: test-operand-lowering
+test-operand-lowering: $(OPERAND_LOWERING_TEST)
+	$(OPERAND_LOWERING_TEST)
+
+test: test-operand-lowering
+
+$(OPT_PASS6_TEST): Linux/Fixtures/OptPass6Probe.cpp Compiler/OptPass6.cpp Compiler/OptPass3.cpp Compiler/CompilerA.hpp Kernel/KernelA.hpp
+	mkdir -p $(@D)
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
+
+.PHONY: test-opt-pass6
+test-opt-pass6: $(OPT_PASS6_TEST)
+	$(OPT_PASS6_TEST)
+
+test: test-opt-pass6
+
+$(BRANCH_LAYOUT_TEST): Linux/Fixtures/BranchLayoutProbe.cpp Compiler/OptPass789A.cpp Compiler/CompilerA.hpp Kernel/KernelA.hpp
+	mkdir -p $(@D)
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
+
+.PHONY: test-branch-layout
+test-branch-layout: $(BRANCH_LAYOUT_TEST)
+	$(BRANCH_LAYOUT_TEST)
+
+test: test-branch-layout
 
 $(BIN_TOOL): Linux/MakeBIN.cpp Linux/BootMedia.hpp Kernel/KernelA.hpp
 	mkdir -p $(@D)
@@ -258,9 +450,9 @@ $(LATE_IMPORT_PROVIDER): $(LATE_IMPORT_PROVIDER_OBJECT) Linux/Fixtures/LateImpor
 $(LOAD_API_CONSUMER): $(LOAD_API_CONSUMER_OBJECT) Linux/Fixtures/LoadApiConsumer.bindings $(BIN_TOOL)
 	$(BIN_TOOL) $(LOAD_API_CONSUMER_OBJECT) Linux/Fixtures/LoadApiConsumer.bindings $@
 
-$(FAT_TOOL): Linux/MakeFAT32.cpp
+$(FAT_TOOL): Linux/MakeFAT32.cpp Kernel/Compress.cpp Kernel/Compress.hpp Kernel/KernelA.hpp Kernel/KernelB.hpp
 	mkdir -p $(@D)
-	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
 
 $(FAT_DISK): $(FAT_TOOL)
 	$(FAT_TOOL) $@
@@ -271,10 +463,16 @@ $(FAT_INVALID_DISK): $(FAT_TOOL)
 $(FAT_WRITE_DISK): $(FAT_TOOL)
 	$(FAT_TOOL) $@ writable
 
+$(AC_INSTALL_DISK): $(FAT_TOOL) $(AC_DEFS) $(AC_WORDS)
+	$(FAT_TOOL) $@ dictionary $(AC_DEFS) $(AC_WORDS)
+
+$(AC_GEN_DISK): $(FAT_TOOL) $(AC_GEN_INPUT) Linux/Fixtures/ACDictGen.HC
+	$(FAT_TOOL) $@ generator $(AC_GEN_INPUT) Linux/Fixtures/ACDictGen.HC
+
 $(ISO) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(ATA_TEST_ISO) $(FAT_WRITE_ISO) \
 $(FAT_FORMAT_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(BREAK_TEST_ISO) \
 $(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(STRINGS_TEST_ISO) \
-$(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO) $(LATE_IMPORT_TEST_ISO) $(LOAD_API_TEST_ISO) $(LOAD_PASS2_TEST_ISO) $(COMPILER_DEFINES_TEST_ISO) $(STRING_DEFINES_TEST_ISO) $(SYSTEM_DEFINES_TEST_ISO) $(COLOR_CONVERSIONS_TEST_ISO) $(FORMAT_MISSING_ARGS_TEST_ISO) $(INTERNAL_TYPES_TEST_ISO) $(CLASS_RECORDS_TEST_ISO) $(FUNCTION_RECORDS_TEST_ISO): $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+$(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO) $(LATE_IMPORT_TEST_ISO) $(LOAD_API_TEST_ISO) $(LOAD_PASS2_TEST_ISO) $(COMPILER_DEFINES_TEST_ISO) $(STRING_DEFINES_TEST_ISO) $(SYSTEM_DEFINES_TEST_ISO) $(COLOR_CONVERSIONS_TEST_ISO) $(FORMAT_MISSING_ARGS_TEST_ISO) $(INTERNAL_TYPES_TEST_ISO) $(CLASS_RECORDS_TEST_ISO): $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 
 $(HOST_MODULE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(HOST_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(HOST_MODULE)
@@ -312,8 +510,124 @@ $(INTERNAL_TYPES_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(INT
 $(CLASS_RECORDS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(CLASS_RECORDS_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(CLASS_RECORDS_PROBE)
 
-$(FUNCTION_RECORDS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FUNCTION_RECORDS_PROBE) $(FILE_WRITE_PROBE)
-	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FUNCTION_RECORDS_PROBE) --file $(FILE_WRITE_PROBE)
+$(FUNCTION_RECORDS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(FUNCTION_RECORDS_PROBE) $(FUNCTION_RECORD_LAYOUT_PROBE) $(FILE_WRITE_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FUNCTION_RECORDS_PROBE) --file $(FUNCTION_RECORD_LAYOUT_PROBE) --file $(FILE_WRITE_PROBE)
+
+$(LIST_UTILITIES_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(LIST_UTILITIES_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(LIST_UTILITIES_PROBE)
+
+$(STORAGE_SERVICES_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STORAGE_SERVICES_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(STORAGE_SERVICES_PROBES))
+
+$(CLUSTER_ENTRY_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(CLUSTER_ENTRY_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(CLUSTER_ENTRY_PROBE)
+
+$(FAT_CLUSTER_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_CLUSTER_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_CLUSTER_PROBE)
+
+$(DISK_CACHE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(DISK_CACHE_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(DISK_CACHE_PROBE)
+
+$(FAT_SECTOR_CACHE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_SECTOR_CACHE_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(FAT_SECTOR_CACHE_PROBE))
+
+$(STORAGE_LIFECYCLE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STORAGE_LIFECYCLE_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(STORAGE_LIFECYCLE_PROBE))
+
+$(FILE_BACKED_REDSEA_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FILE_BACKED_REDSEA_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(FILE_BACKED_REDSEA_PROBES))
+
+$(OPTIMIZER_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(OPTIMIZER_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(OPTIMIZER_PROBE)
+
+$(OPTIMIZER_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(OPTIMIZER_PROBE) $(OPTIMIZER_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(OPTIMIZER_PROBE) --file $(OPTIMIZER_AOT_PROBE)
+
+$(REGISTER_ALLOCATION_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(REGISTER_ALLOCATION_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(REGISTER_ALLOCATION_PROBES))
+
+$(REGISTER_ALLOCATION_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(firstword $(REGISTER_ALLOCATION_PROBES)) $(REGISTER_ALLOCATION_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(firstword $(REGISTER_ALLOCATION_PROBES)) --file $(REGISTER_ALLOCATION_AOT_PROBE)
+
+$(ADDRESS_FOLD_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADDRESS_FOLD_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(ADDRESS_FOLD_PROBES))
+
+$(ADDRESS_FOLD_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(firstword $(ADDRESS_FOLD_PROBES)) $(ADDRESS_FOLD_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(firstword $(ADDRESS_FOLD_PROBES)) --file $(ADDRESS_FOLD_AOT_PROBE)
+
+$(BACKEND_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(BACKEND_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(BACKEND_PROBES))
+
+$(BACKEND_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(firstword $(BACKEND_PROBES)) $(BACKEND_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(firstword $(BACKEND_PROBES)) --file $(BACKEND_AOT_PROBE)
+
+$(ADAM_MATH_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MATH_SOURCE) $(ADAM_MATH_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_MATH_PROBE)
+
+$(ADAM_MATH_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MATH_SOURCE) $(ADAM_MATH_PROBE) $(ADAM_MATH_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_MATH_PROBE) --file $(ADAM_MATH_AOT_PROBE)
+
+$(ADAM_MEM_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_SOURCE) $(ADAM_MEM_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_MEM_PROBE)
+
+$(ADAM_MEM_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_SOURCE) $(ADAM_MEM_PROBE) $(ADAM_MEM_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_MEM_PROBE) --file $(ADAM_MEM_AOT_PROBE)
+
+$(ADAM_TASK_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_SOURCE) $(ADAM_TASK_SOURCE) $(ADAM_TASK_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_TASK_PROBE)
+
+$(ADAM_TASK_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_MEM_SOURCE) $(ADAM_TASK_SOURCE) $(ADAM_TASK_PROBE) $(ADAM_TASK_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_TASK_PROBE) --file $(ADAM_TASK_AOT_PROBE)
+
+$(ADAM_STARTUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ADAM_STARTUP_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(ADAM_STARTUP_PROBE)
+
+$(DOC_TREE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(DOC_TREE_PROBE) $(DOC_TREE_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(DOC_TREE_PROBE) --file $(DOC_TREE_AOT_PROBE)
+
+$(KEY_MAP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(KEY_MAP_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(KEY_MAP_PROBE)
+
+$(REGISTRY_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(REGISTRY_PROBE) $(REGISTRY_BOOT) $(REGISTRY_DEMO) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at Home/Registry.HC.Z $(REGISTRY_BOOT) --file $(REGISTRY_PROBE) --file-at $(REGISTRY_DEMO) $(REGISTRY_DEMO)
+
+$(ONCE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ONCE_PROBE) $(ONCE_HOME) $(ONCE_BOOT) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at Home/Registry.HC.Z $(ONCE_BOOT) --file-at Home/Once.HC $(ONCE_HOME) --file $(ONCE_PROBE)
+
+$(STOCK_ONCE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) Once.HC $(STARTUP_TIPS) $(HELP_DOCS) $(AC_STANDBY) $(STOCK_TOUR) $(INPUT_TRAINING_PROBE) $(FILE_EDITOR_PROBE) $(AC_INDEX_PROBE) $(AC_DICT_PROBE) $(AC_WORDS) $(AC_DEFS) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at $(AC_STANDBY).Z $(AC_STANDBY) --dir Home --file Once.HC --file $(INPUT_TRAINING_PROBE) --file $(FILE_EDITOR_PROBE) \
+		--compress-at ACIndex.TXT.Z $(AC_INDEX_PROBE) --file $(AC_DICT_PROBE) $(AC_DICT_ARGS) \
+		$(foreach asset,$(STARTUP_TIPS) $(HELP_DOCS) $(STOCK_TOUR),--file-at $(asset) $(asset))
+
+$(POPUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(POPUP_PROBE) $(POPUP_DEMO) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(POPUP_PROBE) --file-at $(POPUP_DEMO) $(POPUP_DEMO)
+
+$(INS_REG_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(INS_REG_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(INS_REG_PROBE)
+
+$(STARTUP_EXEC_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STARTUP_EXEC_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(STARTUP_EXEC_PROBE)
+
+$(DEV_INFO_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(PCI_DEV_FILE) $(DEV_INFO_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at $(PCI_DEV_FILE).Z $(PCI_DEV_FILE) --dir Home --file $(DEV_INFO_PROBE)
+
+$(CPU_REP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(CPU_REP_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(CPU_REP_PROBE)
+
+$(UASM_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(UASM_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(UASM_PROBES))
+
+$(UASM_AOT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(UASM_PROBES) $(UASM_AOT_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file Linux/Fixtures/UAsmProbe.HC --file $(UASM_AOT_PROBE)
+
+$(NESTED_REDSEA_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(NESTED_REDSEA_PROBES) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(NESTED_REDSEA_PROBES))
+
+$(FAT32_IMAGE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT32_IMAGE_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT32_IMAGE_PROBE)
+
+$(OPTICAL_IMAGE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(OPTICAL_IMAGE_PROBE) $(FILE_BACKED_REDSEA_TEST_ISO) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(OPTICAL_IMAGE_PROBE) --file-at Embedded.ISO.C $(FILE_BACKED_REDSEA_TEST_ISO)
 
 $(FAT_WRITE_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(FAT_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FAT_WRITE_PROBE)
@@ -345,9 +659,13 @@ $(MUSIC_PRECISION_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(MUSIC_P
 $(STRINGS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STRINGS_PROBES) $(FILE_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(STRINGS_PROBES) $(FILE_WRITE_PROBE))
 
-$(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS)
-	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home \
-		$(foreach demo,$(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS),--file-at $(demo) $(demo))
+$(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STARTUP_TIPS) $(HELP_DOCS) $(AC_STANDBY) $(AC_WORDS) $(AC_DEFS) $(PCI_DEV_FILE) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS) $(REGISTRY_DEMO)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at $(AC_STANDBY).Z $(AC_STANDBY) $(AC_DICT_ARGS) --compress-at $(PCI_DEV_FILE).Z $(PCI_DEV_FILE) --dir Home \
+		$(foreach asset,$(STARTUP_TIPS) $(HELP_DOCS) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS) $(REGISTRY_DEMO),--file-at $(asset) $(asset))
+
+$(CHARACTER_GRAPHICS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(GAME_DEMOS) $(CHARACTER_GRAPHICS_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(CHARACTER_GRAPHICS_PROBE) \
+		$(foreach demo,$(GAME_DEMOS),--file-at $(demo) $(demo))
 
 TEST_MODULES := $(MODULE_PROBE) $(MODULE_CALLER) $(RUNTIME_PROBE) $(FILE_READ_PROBE) \
 	$(FILE_WRITE_PROBE) $(EXCEPT_PROBE) $(FORMAT_PROBE) $(HASH_CALLER) $(HASH_PROBE) \
@@ -400,11 +718,223 @@ test-class-records: $(CLASS_RECORDS_TEST_ISO) $(BOOT_TEST)
 
 test-function-records: $(FUNCTION_RECORDS_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --function-records "$(QEMU)" $(FUNCTION_RECORDS_TEST_ISO)
+	$(BOOT_TEST) --function-records-layout "$(QEMU)" $(FUNCTION_RECORDS_TEST_ISO)
+
+test: test-function-records
+
+.PHONY: test-list-utilities
+test-list-utilities: $(LIST_UTILITIES_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --list-utilities "$(QEMU)" $(LIST_UTILITIES_TEST_ISO)
+
+.PHONY: test-storage-services
+test-storage-services: $(STORAGE_SERVICES_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --storage-services "$(QEMU)" $(STORAGE_SERVICES_TEST_ISO)
+
+test: test-list-utilities test-storage-services
+
+.PHONY: test-cluster-entry
+test-cluster-entry: $(CLUSTER_ENTRY_TEST_ISO) $(FAT_CLUSTER_TEST_ISO) $(FAT_WRITE_DISK) $(BOOT_TEST)
+	$(BOOT_TEST) --cluster-entry "$(QEMU)" $(CLUSTER_ENTRY_TEST_ISO)
+	$(BOOT_TEST) --fat32-cluster "$(QEMU)" $(FAT_CLUSTER_TEST_ISO) $(FAT_WRITE_DISK)
+
+test: test-cluster-entry
+
+.PHONY: test-disk-cache
+test-disk-cache: $(DISK_CACHE_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --disk-cache "$(QEMU)" $(DISK_CACHE_TEST_ISO)
+
+test: test-disk-cache
+
+.PHONY: test-fat-sector-cache
+test-fat-sector-cache: $(FAT_SECTOR_CACHE_TEST_ISO) $(FAT_WRITE_DISK) $(BOOT_TEST)
+	$(BOOT_TEST) --fat-sector-cache "$(QEMU)" $(FAT_SECTOR_CACHE_TEST_ISO) $(FAT_WRITE_DISK)
+
+test: test-fat-sector-cache
+
+.PHONY: test-storage-lifecycle
+test-storage-lifecycle: $(STORAGE_LIFECYCLE_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --storage-lifecycle "$(QEMU)" $(STORAGE_LIFECYCLE_TEST_ISO)
+
+test: test-storage-lifecycle
+
+.PHONY: test-file-backed-redsea
+test-file-backed-redsea: $(FILE_BACKED_REDSEA_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --file-backed-redsea "$(QEMU)" $(FILE_BACKED_REDSEA_TEST_ISO)
+
+test: test-file-backed-redsea
+
+.PHONY: test-optimizer
+test-optimizer: $(OPTIMIZER_TEST_ISO) $(OPTIMIZER_AOT_TEST_ISO) $(BOOT_TEST) test-opt-pass012
+	$(BOOT_TEST) --optimizer "$(QEMU)" $(OPTIMIZER_TEST_ISO)
+	$(BOOT_TEST) --optimizer-aot "$(QEMU)" $(OPTIMIZER_AOT_TEST_ISO)
+
+test: test-optimizer
+
+.PHONY: test-register-allocation
+test-register-allocation: $(REGISTER_ALLOCATION_TEST_ISO) $(REGISTER_ALLOCATION_AOT_TEST_ISO) $(BOOT_TEST) test-opt-pass3
+	$(BOOT_TEST) --register-allocation "$(QEMU)" $(REGISTER_ALLOCATION_TEST_ISO)
+	$(BOOT_TEST) --register-allocation-aot "$(QEMU)" $(REGISTER_ALLOCATION_AOT_TEST_ISO)
+
+test: test-register-allocation
+
+.PHONY: test-address-fold
+test-address-fold: $(ADDRESS_FOLD_TEST_ISO) $(ADDRESS_FOLD_AOT_TEST_ISO) $(BOOT_TEST) test-operand-lowering
+	$(BOOT_TEST) --address-fold "$(QEMU)" $(ADDRESS_FOLD_TEST_ISO)
+	$(BOOT_TEST) --address-fold-aot "$(QEMU)" $(ADDRESS_FOLD_AOT_TEST_ISO)
+
+test: test-address-fold
+
+.PHONY: test-backend
+test-backend: $(BACKEND_TEST_ISO) $(BACKEND_AOT_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --backend "$(QEMU)" $(BACKEND_TEST_ISO)
+	$(BOOT_TEST) --backend-aot "$(QEMU)" $(BACKEND_AOT_TEST_ISO)
+
+test: test-backend
+
+.PHONY: test-adam-math
+test-adam-math: $(ADAM_MATH_TEST_ISO) $(ADAM_MATH_AOT_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --adam-math "$(QEMU)" $(ADAM_MATH_TEST_ISO)
+	$(BOOT_TEST) --adam-math-aot "$(QEMU)" $(ADAM_MATH_AOT_TEST_ISO)
+
+test: test-adam-math
+
+.PHONY: test-adam-mem
+test-adam-mem: $(ADAM_MEM_TEST_ISO) $(ADAM_MEM_AOT_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --adam-mem "$(QEMU)" $(ADAM_MEM_TEST_ISO)
+	$(BOOT_TEST) --adam-mem-aot "$(QEMU)" $(ADAM_MEM_AOT_TEST_ISO)
+	$(BOOT_TEST) --adam-mem-large "$(QEMU)" $(ADAM_MEM_TEST_ISO)
+	$(BOOT_TEST) --adam-mem-large-aot "$(QEMU)" $(ADAM_MEM_AOT_TEST_ISO)
+
+test: test-adam-mem
+
+.PHONY: test-adam-task
+test-adam-task: $(ADAM_TASK_TEST_ISO) $(ADAM_TASK_AOT_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --adam-task "$(QEMU)" $(ADAM_TASK_TEST_ISO)
+	$(BOOT_TEST) --adam-task-aot "$(QEMU)" $(ADAM_TASK_AOT_TEST_ISO)
+
+test: test-adam-task
+
+.PHONY: test-adam-startup
+test-adam-startup: $(ADAM_STARTUP_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --adam-startup "$(QEMU)" $(ADAM_STARTUP_TEST_ISO)
+
+test: test-adam-startup
+
+.PHONY: test-doc-tree
+test-doc-tree: $(DOC_TREE_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --doc-tree "$(QEMU)" $(DOC_TREE_TEST_ISO)
+	$(BOOT_TEST) --doc-tree-aot "$(QEMU)" $(DOC_TREE_TEST_ISO)
+
+test: test-doc-tree
+
+.PHONY: test-key-map
+test-key-map: $(KEY_MAP_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --key-map "$(QEMU)" $(KEY_MAP_TEST_ISO)
+
+test: test-key-map
+
+.PHONY: test-registry
+test-registry: $(REGISTRY_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --registry "$(QEMU)" $(REGISTRY_TEST_ISO)
+
+test: test-registry
+
+.PHONY: test-once
+test-once: $(ONCE_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --once "$(QEMU)" $(ONCE_TEST_ISO)
+
+test: test-once
+
+.PHONY: test-stock-once
+test-stock-once: $(STOCK_ONCE_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --stock-once "$(QEMU)" $(STOCK_ONCE_TEST_ISO)
+
+test: test-stock-once
+
+.PHONY: test-dictionary-install
+test-dictionary-install: $(ISO) $(AC_INSTALL_DISK) $(BOOT_TEST)
+	$(BOOT_TEST) --dictionary-install "$(QEMU)" $(ISO) $(AC_INSTALL_DISK)
+
+test: test-dictionary-install
+
+.PHONY: test-dictionary-generator
+test-dictionary-generator: $(ISO) $(AC_GEN_DISK) $(BOOT_TEST)
+	$(BOOT_TEST) --dictionary-generator-check "$(QEMU)" $(ISO) $(AC_GEN_DISK)
+	$(BOOT_TEST) --dictionary-generator-holyc-check "$(QEMU)" $(ISO) $(AC_GEN_DISK)
+
+test: test-dictionary-generator
+
+.PHONY: test-popup-menus
+test-popup-menus: $(POPUP_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --popup-menus "$(QEMU)" $(POPUP_TEST_ISO)
+
+test: test-popup-menus
+
+.PHONY: test-menu-diagnostic
+test-menu-diagnostic: $(ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --menu-diagnostic "$(QEMU)" $(ISO)
+
+test: test-menu-diagnostic
+
+.PHONY: test-compiler-diagnostic
+test-compiler-diagnostic: $(ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --compiler-diagnostic "$(QEMU)" $(ISO)
+
+test: test-compiler-diagnostic
+
+.PHONY: test-progress
+test-progress: $(ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --progress "$(QEMU)" $(ISO)
+
+test: test-progress
+
+.PHONY: test-ins-reg
+test-ins-reg: $(INS_REG_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --ins-reg "$(QEMU)" $(INS_REG_TEST_ISO)
+
+test: test-ins-reg
+
+.PHONY: test-startup-exec
+test-startup-exec: $(STARTUP_EXEC_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --startup-exec "$(QEMU)" $(STARTUP_EXEC_TEST_ISO)
+
+test: test-startup-exec
+
+.PHONY: test-dev-info
+test-dev-info: $(DEV_INFO_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --dev-info "$(QEMU)" $(DEV_INFO_TEST_ISO)
+
+test: test-dev-info
+
+.PHONY: test-cpu-rep
+test-cpu-rep: $(CPU_REP_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --cpu-rep "$(QEMU)" $(CPU_REP_TEST_ISO)
+
+test: test-cpu-rep
+
+.PHONY: test-uasm
+test-uasm: $(UASM_TEST_ISO) $(UASM_AOT_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --uasm "$(QEMU)" $(UASM_TEST_ISO)
+	$(BOOT_TEST) --uasm-aot "$(QEMU)" $(UASM_AOT_TEST_ISO)
+
+test: test-uasm
+
+.PHONY: test-nested-redsea test-fat32-image test-optical-image
+test-nested-redsea: $(NESTED_REDSEA_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --nested-redsea "$(QEMU)" $(NESTED_REDSEA_TEST_ISO)
+
+test-fat32-image: $(FAT32_IMAGE_TEST_ISO) $(FAT_WRITE_DISK) $(BOOT_TEST)
+	$(BOOT_TEST) --fat32-image "$(QEMU)" $(FAT32_IMAGE_TEST_ISO) $(FAT_WRITE_DISK)
+
+test-optical-image: $(OPTICAL_IMAGE_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --optical-image "$(QEMU)" $(OPTICAL_IMAGE_TEST_ISO)
+
+test: test-nested-redsea test-fat32-image test-optical-image
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio
 
-test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args test-internal-types test-class-records test-function-records
+test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(FAT_DISK) $(FAT_INVALID_DISK) $(ATA_TEST_ISO) $(FAT_WRITE_DISK) $(FAT_WRITE_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(FAT_FORMAT_ISO) $(BREAK_TEST_ISO) $(CHARACTER_GRAPHICS_TEST_ISO) test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args test-internal-types test-class-records
 	$(COMPRESS_TEST) $(STARTUP_FIXTURE) Linux/Fixtures/KDbg.HC.Z
 	$(STR_COMPARE_TEST)
 	$(BOOT_TEST) --compiler-failures "$(QEMU)" $(ISO) $(KERNEL)
@@ -416,7 +946,7 @@ test: $(ISO) $(BOOT_TEST) $(COMPRESS_TEST) $(STR_COMPARE_TEST) $(STARTUP_TEST_IS
 	$(BOOT_TEST) --fat32-stream "$(QEMU)" $(FAT_STREAM_ISO) $(FAT_WRITE_DISK)
 	$(BOOT_TEST) --fat32-tree "$(QEMU)" $(FAT_TREE_ISO) $(FAT_WRITE_DISK)
 	$(BOOT_TEST) "$(QEMU)" $< $(KERNEL) $(STARTUP_TEST_ISO)
-	$(BOOT_TEST) --character-graphics "$(QEMU)" $<
+	$(BOOT_TEST) --character-graphics "$(QEMU)" $(CHARACTER_GRAPHICS_TEST_ISO)
 	$(BOOT_TEST) --music "$(QEMU)" $<
 	$(BOOT_TEST) --tic-tac-toe "$(QEMU)" $<
 	$(BOOT_TEST) --screen-capture "$(QEMU)" $<

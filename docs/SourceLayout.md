@@ -134,10 +134,10 @@ public HolyC adapters. The loader also exposes `winmgr` and
 maps `sys_var_init_flag` and `sys_var_init_val` to
 `SYS_VAR_INIT_FLAG` and `SYS_VAR_INIT_VAL`.
 
-`Compiler/Compiler.bindings` imports those 45 native functions and
-30 data symbols. It exports the nine public adapters, 16 native
+`Compiler/Compiler.bindings` imports 44 of those native functions and
+32 data symbols. It exports twelve public adapters, 16 native
 compiler bodies under `__unholyos_sysv.`, and the module-owned
-`__unholyos_compiler.CInitStatus`. The nine public names are published
+`__unholyos_compiler.CInitStatus`. The twelve public names are published
 by the module rather than `LoadKernel`. `CInitHC` in
 `Compiler/CMain.asm` is the sole `IET_MAIN` target.
 
@@ -176,8 +176,9 @@ only if both `CmpLoadDefines` and `AsmHashLoad` succeed. KMain sets
 status `1`.
 
 This C++ entry does not reproduce all of pinned `Compiler/CMain.HC`'s
-`CInit`: it omits that routine's `CmpFillTables`,
-`cmp.ic_nop` setup, and `UAsmHashLoad` calls. GCC and Clang have built
+`CInit`: it omits that routine's `CmpFillTables` and
+`cmp.ic_nop` setup. `AsmHashLoad` now calls `UAsmHashLoad` before publishing
+the opcode dictionary. GCC and Clang have built
 the separate module successfully, and both guest builds passed all seven
 focused compiler failure cases and the boot and startup matrices,
 including a cold boot of the ISO built in the guest.
@@ -244,8 +245,19 @@ The reference registers these primitives once in `AsmHashLoad` and
 stores their addresses in `cmp.internal_types`. The native compiler
 still initializes separate child hash tables on first use. The table
 migration restores the listed fields and registration inputs; shared
-compiler ownership, `CCmpGlbls`, `CmpFillTables`, `cmp.ic_nop`, and
-`UAsmHashLoad` remain unfinished.
+compiler ownership, `CCmpGlbls`, `CmpFillTables` and `cmp.ic_nop`
+remain unfinished.
+
+`Compiler/UAsm.cpp` builds separate 16/32-bit and 64-bit instruction
+views from the non-alias entries of the original opcode dictionary.
+`Ui` resolves prefixes, opcode extensions, registers, ModR/M and SIB
+operands, immediate values and relative destinations for the supported
+forms. `U` walks an instruction count and `Un` walks a byte range;
+unsupported or truncated encodings advance by one byte. Their typed
+headers and stack adapters use the existing compiler module ABI. These
+are partial translations of the reference disassembler: complete
+selection rules, operand families, 16/32-bit behavior, source links
+and debugger presentation remain to be verified or implemented.
 
 The primitive probe checks selected record fields and pointer
 companions. Its original comparison at `24030d55` preceded the class
@@ -311,8 +323,9 @@ depth. The C++ constructor retains its existing null return on allocation
 failure; the pinned constructor assumes success. Shared compiler
 registration, source metadata, register allocation, and external-usage
 list responsibilities still require further alignment.
-The native source/AOT checks and pending reference comparison are recorded
-in [Boot.md](Boot.md#compiler-function-records).
+The paired allocation and pointer layout checks, native source and AOT
+checks, and outstanding reference fixture are recorded in
+[Boot.md](Boot.md#compiler-function-records).
 
 ## HolyC assembler
 
@@ -751,8 +764,7 @@ song and animation tasks, window bounds and attributes, document
 flags, and palette. The pop applies the screen settings again after a
 forced refresh. It saves whether autocomplete has a live task and
 passes that setting to `AutoComplete` on pop. `Adam/AutoComplete/ACTask.cpp`
-can turn off an existing task and raise an enabled one. Dictionary
-initialization, task creation, and completion results remain pending.
+starts and stops the pane task and raises it without changing keyboard focus.
 
 `WinBorder` in `Adam/Win.cpp` preserves the one-cell geometry changes
 and previous-state return from `Win.HC`. `GrUpdateTaskWin` in
@@ -825,8 +837,20 @@ code in `Adam/Menu.HC`. Menu arguments use the HolyC lexer and expression
 evaluator, including lexical includes for menu files. `CMenu` and
 `CMenuEntry` keep the reference record layouts and `CTask.cur_menu`
 points to the top of the menu stack. Menu parse failures throw the
-`Compiler` exception. The source-position report in
-`Compiler/CExcept.HC`'s `LexExcept` remains pending.
+`Compiler` exception. `LexExceptReport` follows the source-position report
+in `Compiler/CExcept.HC`. It prints the token, file link and source line,
+and passes the location to `FixSet` after Adam starts. `MenuNew` reports before
+freeing the lexer context and raises the exception after cleanup.
+
+`PrsStmt.cpp` and `PrsExp.cpp` pass parser errors through the same source
+report in `LexStmt2Bin`. The expression error report follows the token
+diagnostic when the original `PrsExpression` would find the operator stack
+still populated. `CmpJoin` repeats the source position and `Cmp` returns
+the number of errors. `ExeFile` returns zero on a parser failure and
+`ExeFile2` raises `Compiler` after native cleanup. Boot failures print
+the source position while the startup namespace can still roll back.
+Boot-phase debugger entry and warnings from partially declared functions
+remain pending.
 
 `Adam/WinMgr.cpp` follows `WinKeyNavMenu` and the mouse menu loop in
 `Adam/WinMgr.HC`. Mouse selection starts at the screen's top edge.
@@ -834,6 +858,22 @@ The GUI key opens keyboard selection, the arrow keys position the
 highlight, and releasing the GUI key sends the highlighted command
 to the focused task. UnholyOS tracks that virtual cursor during
 drawing so the input pump can keep sampling the physical mouse.
+
+## Wallpaper progress bars
+
+`Kernel/KStart32.asm` holds the four contiguous 80-byte `CProgress`
+records declared by `Kernel/KernelA.HH`. The zero-initialized storage is
+in the kernel BSS. The `SYS_PROGRESS*` labels and the typed HolyC
+`progress*` globals address the same fields as `sys_progresses`.
+The C++ view stores `t0` and `tf` as IEEE-754 bits for the freestanding
+floating-point helpers. HolyC sees both fields as `F64`.
+
+`Adam/Win.cpp` follows `DrawProgressBars`, `ProgressBarsRegTf`, and
+`WinFinalUpdate` from `Adam/Win.HC`. The bars draw before the menu and
+mouse. `Kernel/KMisc.cpp` calls the registry writer directly from
+`ProgressBarsRst` and then clears all four records. The reference
+resolves the same writer through `CallExtStr`. Dictionary installation
+uses the first bar through `ACProgressTask`.
 
 ## DolDoc windows
 
@@ -870,7 +910,7 @@ task. Entry callbacks run with the document unlocked. Live tags in
 `DocRecalc.cpp` receive the locked document, entry, and owning memory
 task. A tag callback that throws falls back to an empty tag during
 that refresh. `DocRecalcLib.cpp` supplies `DocBottom` and the hold-aware
-`DocClear` pass. Macro dispatch, wrapping, data widgets, and the full
+`DocClear` pass. Complex wrapping, data widgets, and the full
 editor remain pending.
 
 `Adam/DolDoc/DocTerm.cpp` creates the put, display, and border documents
@@ -994,10 +1034,16 @@ selection other than FAT 0, and complete error diagnostics remain pending.
 `FAT32MkDir`, `FAT32FilesDel`, and `FAT32FileWrite` follow the corresponding
 reference allocation, directory, and whole-file operations. Allocation
 checks the available chain before changing either FAT, retains the
-reserved high bits and updates both copies. Noncontiguous allocation
+reserved high bits and groups link updates by FAT sector. Each group
+updates both copies and restores the primary sector if the mirror fails.
+This follows the sector granularity of `DrvFATBlkClean` in TempleOS.
+Noncontiguous allocation
 starts after the FSInfo recent-allocation hint. Whole-file replacement
 writes a new chain before replacing the directory entry and reclaiming
-the old chain. Directory growth allocates and zeroes a cluster before
+the old chain. Large file writes group contiguous clusters and yield
+between PIO batches while the drive stays locked, so the desktop can
+display write progress. Directory
+growth allocates and zeroes a cluster before
 linking it; deletion tracks the short entry and its validated long-name
 records, including names that cross a cluster boundary.
 
@@ -1543,6 +1589,723 @@ rests instead of reading outside that array. SMP synchronization,
 `CurSongTask`, the waveform functions, `Noise`, and `Sweep` remain
 pending. Terry A. Davis's original song stays in `Demo/Snd/OhGreat.HC`.
 
+## Linked lists and queues
+
+`Kernel/KDataTypes.cpp` follows the order of Terry A. Davis's
+`Kernel/KDataTypes.HC` list and queue routines. `LinkedLstCopy` copies the
+entire allocated payload of each node with `MAllocIdent` and replaces
+its first pointer with the next copied node. `LinkedLstCnt` counts nodes
+through that pointer. `QueCopy` copies the allocated head and each entry,
+initializes the new head, and inserts entries in the original order.
+`QueCnt` and `QueSize` exclude the sentinel head; both size routines
+include the allocator overhead through `MSize2`.
+
+The native list implementation reads and writes link fields with
+`MemCpy` so packed records do not require C++ pointer alignment.
+The copy routines use the existing allocator's task or heap selection.
+If allocation fails, they free the partially copied list or queue and
+return null. The reference assumes allocation succeeds. The public
+HolyC adapters follow the existing `KUtils.asm` convention with one
+or two stack arguments and the original names exported by `KLoad.cpp`.
+`Compiler/AsmInit.cpp` registers all eight list and queue functions
+with the declarations and defaults in `Kernel/KernelC.HH`.
+The matching guest test covers empty lists, allocated payloads, link
+order, ownership and cleanup. See [Boot.md](Boot.md#linked-lists-and-queues).
+
+## Drive, filename and directory services
+
+`Kernel/BlkDev/DskDrv.cpp` and `DskBlkDev.cpp` hold the drive and device
+slot lookup, signature checks, drive letter aliases, writable queries,
+drive selection, remapping and identity reporting from the corresponding
+reference files. `DskAddDev.cpp` retains mounting and initialization.
+The ATA mount keeps its identify record on Adam's heap for the model and
+serial routines. ATAPI devices leave this record unset, as the reference
+does. The drive color tables retain the reference names and contents and
+are exposed as data exports. The compiler registers their array metadata,
+the drive and device members, and the typed HolyC declarations.
+
+`Kernel/BlkDev/DskStrA.cpp` supplies extension handling, filename checks,
+temporary names and the directory-entry lookup. `DskStrB.cpp` translates
+`CFileNameTo`, `Name2DirClus` and `Name2ParentDirClus`; the filesystem's
+bounded internal traversal shares that implementation. `DskDirA.cpp`
+provides extension-first sorting, cluster sorting, recursive flattening
+and entry/tree disposal. The flattening return value is the final link
+slot, which aliases the last entry because `next` is its first field.
+As in TempleOS, a flattened files-only result can retain parent pointer
+values belonging to freed directory entries; callers must not dereference
+them. `DskFind.cpp` exposes `FilesFind2` for the current directory and
+`DskDirB.cpp` emits the directory-creation diagnostic before dispatch.
+
+The native mount path still requires canonical drive letters, supported
+device types and validated partition geometry. Its slot locking is not
+the reference's task-owned lock protocol, and its writable filesystem
+guard deliberately rejects writes to read-only disks. The reference's
+removable-media initialization sequence remains partial. Directory resolution uses the existing bounded
+filesystem lookup and lacks the reference drive lock; failure and
+allocation-exhaustion paths are not fully matched. See [Rewrite audit](RewriteAudit.md)
+for their dependencies.
+
+## Cluster and directory-entry services
+
+`Kernel/BlkDev/DskClus.cpp` translates `ClusNumNext`, `Clus2Blk`,
+`ClusBlkRead`, `ClusRead`, `ClusBlkWrite`, `ClusWrite` and `ClusAlloc`
+in reference order. The APIs retain the reference's RedSea arithmetic,
+FAT32 next-link traversal, cluster-to-block conversion, partial-block
+counts and return conventions. `DskDirA.cpp` dispatches `DirNew` to
+the filesystem implementations. Native exports and HolyC declarations
+include the public cluster calls, directory publication and private
+filesystem allocation and free routines.
+
+The RedSea RAM implementation copies the supplied 64-byte disk record,
+sets the contiguous attribute, preserves or releases the prior extent
+according to `free_old_chain`, and updates the parent entry or boot root
+when a directory grows. FAT32 publishes the supplied cluster chain and
+metadata, retains the long-name alias on replacement, and reclaims the
+old chain when requested. Both `DirNew` implementations return false
+even after successful publication, as in the reference.
+
+The native implementation rejects malformed geometry and invalid cluster
+links, protects the root and overlapping or shared chains, and refuses
+nonterminal append, freeing an overlapping extent, or replacing a
+nonempty directory with a different chain. Same-chain metadata changes
+preserve the chain; FAT32 replacement may stay in place instead of using
+an earlier deleted slot. Allocation uses the per-drive FAT sector cache
+and RedSea free-extent queue described below.
+Low-level freeing still relies on caller ownership outside the checked
+root, parent and directory entries. Rollback is best effort on hardware
+write failures, and full reference locking, break handling and exception
+semantics remain pending. RedSea mutation supports RAM drives and writable
+file-backed images; FAT32 mutation supports explicitly writable ATA devices.
+
+## Block cache and drive ownership
+
+`Kernel/BlkDev/DskCache.cpp` restores the 560-byte `CCacheBlk` record,
+LRU queue, compact hash sentinels, initialization, insertion and
+invalidation, and `RCache`. The cache key is the drive pointer and
+absolute 512-byte block number. Cache hits do not promote entries;
+`RCache` consumes cached prefixes and suffixes. DVD startup selects
+the pinned distribution's `Scale2Mem(2048,0x40000)` configuration.
+This is not yet a general implementation of the kernel configuration
+language.
+
+`DskDrv.cpp` and `DskBlkDev.cpp` implement task ownership, same-task
+reentry, contention, reset and release. The native filesystem scopes
+retain interrupt exclusion after acquiring ownership, without yielding
+while unwinding a C++ scope. Task exit and Break release owned drives
+and devices. Controller-sharing IDE devices forward to the common
+device lock. Native release clears the drive before the device and
+does not reproduce every intermediate reference yield. SMP and
+contention across multiple partitions sharing a controller remain
+untested.
+
+`DskBlk.cpp` routes filesystem reads of published drives through the
+cache, including partial-sector reads; mount-time reads bypass it.
+Raw writes update overlapping cached bytes for the same device or
+invalidate affected blocks after a failed ATA write. RedSea mutations
+use bounded device I/O and update or invalidate cached blocks.
+Device reset and RAM replacement invalidate cached state.
+Reinitialization covers RAM, ATA, ATAPI and supported file-backed devices; the
+reference's removable-media sequence and full
+exception paths remain incomplete.
+
+## Per-drive FAT and bitmap cache
+
+`DskDrv.cpp` also maintains the Adam-owned 512-byte `cur_fat_blk`
+buffer for mounted FAT32 and RedSea drives. `DrvFATBlkAlloc`,
+`DrvFATBlkClean` and `DrvFATBlkSet` use the reference sector indices
+and selector defaults. A same-sector set does not reload the other
+FAT copy; for two copies, selector 0 writes the first and leaves the
+dirty bit set, selector 1 writes the second and clears it, and
+selector 3 writes both. Single-copy flushes clear the dirty bit.
+
+Native allocation and free operations retain immediate persistence,
+independent FAT mirror updates and best-effort rollback. Normal FAT
+link reads and RedSea bitmap reads consume the persistent buffer.
+Raw writes update its clean, selected sector; conflicting overlapping
+writes are rejected while a guest's dirty sector is pending. Native
+allocation and mutation likewise reject a pending dirty buffer rather
+than overwriting it. A private copy selector preserves the public
+`CDrv` layout. Native reads of another sector bypass pending guest
+data, and clean native primary reads may reload FAT1. Explicit cache
+allocation reuses the existing buffer if possible; failed flushes
+retain pending data. These are deliberate differences from the
+reference's less guarded behavior.
+
+Mounting publishes a stable buffer only after successful geometry and
+initial sector reads. Temporary drives are not retained in the cache.
+Normal replacement refuses dirty state; explicit reset and format
+discard it. Direct writes through an arbitrary guest RAM pointer
+cannot be intercepted. Persistent FSInfo ownership and full
+media-change/error paths remain outstanding.
+
+`FileSysRedSea.cpp` implements `RedSeaFreeFreeLst`, `RedSeaFreeLstBuild`,
+`RedSeaAllocClus`, and `RedSeaFreeClus` with the circular `CFreeLst` records
+anchored in `CDrv`. Allocation selects the smallest sufficient extent;
+freeing merges the first adjacent extent in queue order. Successful native
+bitmap writes maintain the queue and sector cache; external bitmap writes
+and device resets invalidate the queue so the next allocation rebuilds it.
+Mount-time allocation for an unpublished drive still scans the bitmap.
+`RedSeaValidate` and `RedSeaFmt` expose validation and formatting through the
+HolyC ABI. The native formatter rejects pending dirty allocation metadata.
+
+## Drive and device lifecycle
+
+`DrvEnable` changes bit 15 of the filesystem type and returns the
+previous enabled state. Disabled drives retain their geometry and raw
+block access. The enabled state survives device reinitialization.
+`DrvDel`, `DrvBlkDevDel` and `BlkDevDel` invalidate cached blocks and
+resident files, release drive metadata, and clear the reference-sized
+records. Drive aliases are restored to their canonical slots. RAM
+replacement uses the same teardown path and tracks the actual owned
+allocation separately from caller-provided memory.
+
+Deletion refuses locked or dirty drives and devices with forwarding
+or backing-file dependents. Native-owned RAM is freed; caller-owned
+RAM is retained. Disabling a drive with pending allocation-sector
+writes is also rejected. These guards deliberately differ from the
+reference's less restricted deletion and enable operations. Ordinary
+open `CFile` handles and task current-directory references are not
+globally tracked, so callers must close files and change drives before
+teardown. A live file-backed device prevents deletion of its backing device.
+
+`DskCacheInvalidate` and `DskChg` ensure initialization, clear applicable
+cached state, refresh removable ATAPI metadata, and reset the current
+directory to the root on disk change. The read-only override is respected.
+Complete removable-media failure/retry behavior remains unverified.
+
+## File-backed RedSea devices
+
+`Adam/ABlkDev/Mount.cpp` translates `MountFile` and `Unmount`, including
+the default `.ISO.C` extension. `Kernel/BlkDev/DskAddDev.cpp` initializes
+read-only image devices on M–P and writable image devices on Q–S. Both
+use the 88-sector RedSea offset and a fixed contiguous extent. The
+writable path creates the backing file, formats its RedSea volume and
+writes the ISO descriptor and El Torito prefix before publishing the device.
+The backing stream, name and cluster buffer belong to Adam; device locking
+forwards to the backing device. `DskCFile.cpp`, `DskBlk.cpp` and
+`FileSysRedSea.cpp` share bounded device I/O for RAM and writable images.
+
+The implementation accepts contiguous RedSea and FAT32 backing files on
+RAM, ATA, and nested image devices. FAT32 requires the contiguous `.C`
+attribute. Read-only optical backing uses ATAPI medium-removal prevention
+until the last direct image dependency is detached. A bounded dependency
+walk checks every ancestor's extent, access mode and forwarded lock before
+performing I/O. Nested writes pass authorization through the immediate
+child at each hop; unrelated backing mutations and teardown are rejected.
+Multiple read-only mounts may coexist, while a writable child requires
+exclusive access to its immediate backing device. Closing its owned stream
+directly raises `File`. These restrictions are broader than the reference's
+lifetime rules. Invalid mount requests return zero and invalid raw I/O
+returns false where the reference may throw. Occupied-slot replacement
+remains restricted.
+
+Writable mounting validates geometry before allocating and saves an existing
+backing file before replacement. A failed staging operation attempts to
+remove its new extent or restore the saved file; restoration requires enough
+memory and working storage. Persistent hardware I/O errors have no guaranteed
+transactional rollback.
+
+`Adam/Opt/Boot/DskISORedSea.cpp` now follows the mounted writable-image
+workflow: calculate the tree's extent, mount the image, call `CopyTree`,
+refresh its descriptors, patch stage-one boot data in place, and detach it.
+The native `RedSeaISO9660` ABI also updates descriptors on supported
+writable media. The builder retains padding for the shifted stage-two
+read. Root relocation outside the builder and explicit formatting does not
+yet update the ISO descriptor. General nonlocal exception recovery during
+copying, direct RAM mutation, arbitrary open streams, SMP, and failure to
+release or externally forced replacement of optical media remain limitations.
+
+## Initial optimizer passes
+
+`Compiler/OptPass012.cpp` implements the constant simplification and
+immediate-operation parts of `OptPass012.HC`. The parser already constructs
+typed, indexed expression trees, so the pass operates on their links instead
+of reconstructing the reference's postfix queue. `BackC.cpp::COCCompile`
+runs the optimizer before sizing and emitting either JIT or AOT code.
+The emitter handles `IC_ADD_CONST`, `IC_SUB_CONST`, `IC_SHL_CONST`, and
+`IC_SHR_CONST` using the reference opcode identifiers.
+
+Integer operations preserve the existing 64-bit intermediate semantics;
+constant division faults remain executable. Immediate multiplication and
+unsigned division by powers of two use shifts. Constant branches retain
+evaluation order and comparison-chain links. Binary64 folding is limited to
+supported comparisons, bitwise operations, conversions, and arithmetic that
+does not depend on rounding precision; other operations still use the existing
+x87 emitter. Dynamic signed division strength reduction still needs
+reference validation.
+
+## Frame operand allocation
+
+`PrsVar.cpp` and `PrsStmt.cpp` recognize `reg`, `noreg`, and named
+register hints on local and parameter declarations. The parser retains the
+hint in `CMemberLst.reg`. Static variables remain in memory.
+
+`OptPass3.cpp` scores direct accesses to eight-byte integer and pointer
+frame members. It gives explicit R12 through R15 requests priority, then
+allocates hinted and frequently used members. R12 and R13 are preferred
+for nonpointer members. The selected registers appear in the member
+records and `CHashFun.used_reg_mask`; the dereference nodes carry the
+actual register operands for the emitter.
+
+`BackC.cpp` keeps existing frame offsets and saves the assigned registers
+in the prologue. It emits direct register loads, assignments, compound
+assignments and prefix/postfix updates. Calls synchronize the frame
+slots after argument evaluation and reload them after returning. The
+epilogue restores the saved registers in reverse order; the call
+alignment calculation includes the extra stack slots.
+
+The allocation is conservative. Narrow values, floating-point values,
+aggregates, arrays, static storage, `noreg` members and unsupported named
+registers stay in memory. A frame address that escapes a direct typed
+member access disables allocation for the entire function, since HolyC
+pointer arithmetic can reach neighboring frame slots. Functions with
+inline assembly, try/catch, known context transfers, subroutine control
+flow, label addresses, explicit flag reads or variadic arguments use
+the existing memory lowering. The pass does not
+yet reproduce the reference's full register pool, stack layout,
+operand-location tracking or clobber metadata. Arbitrary frame aliases
+fabricated through externally supplied addresses remain outside the
+verified behavior.
+
+## Address and right-operand lowering
+
+`OptPass4.cpp` annotates scalar dereferences with an x86-64 base, optional
+index, scale and signed displacement. It folds the indexed expression
+tree without removing or duplicating evaluation of its dynamic operands.
+`BackLib.cpp` selects ModR/M, SIB, REX and displacement fields, including
+the special RBP, R13, RSP and R12 cases. Typed loads sign- or zero-extend
+narrow integers, and stores write only the destination width. Floating
+loads and stores retain the raw binary64 representation.
+
+`BackC.cpp` consumes these annotations for direct frame loads, stores,
+compound assignments and increments. For a dynamic destination it captures
+the address before evaluating the right operand, then reads the current
+destination value for a compound update. Ordinary pointer increments use
+the full pointee size rather than truncating the immediate to eight bits.
+For a class pointer directly updated inside an arrow expression,
+`PrsExp.cpp` preserves the reference's one-byte stride: the reference's
+`PrsUnaryModifier` changes the class on the update before its emission.
+The prefix and postfix forms of both increment and decrement were checked
+for packed three-byte and 136-byte classes. Standalone updates and direct
+scalar and pointer-pointer dereferences retain their full stride.
+
+`OptPass5.cpp` selects sign-extended immediate, promoted register and simple
+64-bit frame-memory operands for integer addition, subtraction,
+multiplication, bitwise operations and comparisons. Frame-memory operands
+are read after the left subtree. Comparison chains and flag-sensitive
+functions retain the existing lowering. These are selected portions of
+the reference `OptPass4.HC`, `OptPass5.HC` and `BackLib.HC`, adapted to
+the indexed IR. Full operand allocation, variable shifts and division
+operand selection, complex memory operands, instruction scheduling and
+reference machine-code parity remain incomplete.
+
+## Stack temporaries and branch layout
+
+`OptPass6.cpp` implements the single R9 temporary from the reference
+`OptPass6Lag` for selected integer binary expressions. It checks the
+evaluated right subtree, including folded address operands. The emitter
+tracks whether R9 is live: nested expressions use the stack while the
+slot is occupied. Before evaluating an ordinary call's arguments or
+indirect target, it spills a live R9 and includes the spill in stack
+alignment; it restores the slot after call cleanup. Inline assembly,
+variadic functions, flag observation and nonlocal control flow disable
+selection. Function metadata records the additional used and clobbered
+register bit without clearing other bits. The full register-lifetime
+model and selection of more reference operand forms remain incomplete.
+
+`OptPass789A.cpp` selects rel8 branches from recorded branch ends and
+label offsets. The backend first measures all branches in their near
+forms, then repeats layout for up to 32 rounds, monotonically selecting
+short jumps and conditions. Forward targets move with the shortened
+branch; backward candidates account for the branch's own size reduction.
+The final emitter checks signed displacement ranges and total code size
+before publication. Inline assembly and opaque code addresses retain the
+near layout; subroutine calls and switch-table branches are not relaxed.
+The reference's other late optimization and instruction selection work
+remains incomplete.
+
+## Backend instruction selection and templates
+
+`CompilerB.hpp` contains the shared code emitter. `BackA.cpp` and
+`BackB.cpp` implement integer binary operations, compound assignments,
+unary instructions and min/max selection; `BackFA.cpp` and `BackFB.cpp`
+implement floating binary operations and template selection. `BackC.cpp`
+coordinates expression and statement emission. The module copies bounded,
+position-independent instruction sequences from `Templates.asm`, derived
+from Terry A. Davis's public-domain `Compiler/Templates.HC`. The base
+template table includes floating increment, decrement, remainder,
+comparisons, string length, TSC, sign and unary math; not every entry or
+reference template variant is selected by the current backend.
+
+Fourteen additional typed internal functions cover sign, absolute value,
+unsigned square and min/max, bit scans, Boolean conversion, uppercase,
+TSC, floating square/absolute value, tangent and arctangent. The parser
+resolves their signatures and inserts needed numeric conversions.
+Exact constant folding leaves rounding-sensitive and exceptional floating
+cases for execution. `CExts.cpp` resolves register-ABI exports, including
+`SYS_POW`, whose RDX/RAX calling convention is implemented in
+`Kernel/KMathA.asm`. AOT uses a named import rather than embedding a host
+address; the compiler no longer imports `__unholyos_sysv.F64PowerBits`.
+
+The bit-operation, swap, unsigned remainder and port-I/O families add
+eighteen typed intrinsic signatures from `Kernel/KernelB.HH`.
+`BackB.cpp` emits memory bit instructions with the reference's immediate
+operand widths and lock prefix, width-specific swaps, `DIV` with quotient
+writeback, and immediate or DX-based port accesses. `BackC.cpp` preserves
+right-to-left operand evaluation and stack alignment while lowering these
+operations. `PrsStmt.cpp` evaluates `_intern` opcode expressions and creates
+typed function records for implemented intrinsic opcodes. These records
+hold an opcode rather than a machine-code address, so `AOTDel` does not
+free it. Unsupported opcodes, wrong arities and variadic or array arguments
+are rejected. Full reference intrinsic declarations and operand-selection
+parity remain incomplete.
+
+## Original Adam math
+
+`Adam/AMath.HC` is an unchanged reference source. `Kernel/KMathA.asm`
+provides its missing exponential and logarithmic operations and related
+rounding, sign, power and x87 control entries using the HolyC stack-call
+ABI. `Kernel/KLoad.cpp` exports the assembly labels and public aliases;
+`Compiler/AsmInit.cpp` registers their typed headers and the two-member
+`Complex` class. The class occupies 16 bytes with binary64 members at
+offsets 0 and 8. The native compiler processes the original math file in
+the JIT and AOT test media and in the ordinary Adam startup namespace;
+the full original startup sequence remains pending. The tested scope
+and reference comparison are in [Boot.md](Boot.md).
+
+## Original Adam task reporting
+
+`Adam/TaskRep.HC` uses the unchanged recursive report from the pinned
+reference. `Kernel/MultiProc.cpp` initializes the CPU-record pointer and
+active CPU count for core zero. `Kernel/KLoad.cpp` exports both public
+names and their reference system-symbol names. The compiler resolves
+their typed global aliases through the kernel export table. Typed
+`Raw` and `IsRaw` declarations and `DOCF_NO_CURSOR` allow a guest to
+capture the original report with its DolDoc formatting intact.
+The public `Kill` API executes the command generated by the original
+report, preserves protected tasks, and uses the existing scheduler's
+task-deletion path. Additional processor initialization, activation of
+graphical Kill links and the complete original Adam startup remain pending.
+
+## Adam source namespace
+
+`Adam/MakeAdam.cpp` compiles the three unchanged original source files
+before graphics contexts and user tasks are created. It owns their JIT
+functions and typed symbols in Adam's heaps. The shared compiler class
+table is chained above the kernel export table, preserving the raw
+exports needed by module relocations. The idle task and new child tasks
+inherit the published namespace. If an include is absent or compilation
+fails, the private tables and generated code are released and the
+startup gate prevents publication of the desktop. This is a limited
+native bridge, not execution of the original startup project.
+
+`Compiler/CMisc.cpp` implements `Option` and `GetOption` on the active
+compiler context. `OPTf_NO_REG_VAR` disables automatic local-register
+and expression-stack register selection in the current backend. Other
+option bits are stored, but not all their reference effects are implemented.
+`Kernel/KHashB.cpp` implements the same-table purge of superseded raw
+exports and invalid entries without modifying inherited tables.
+
+## Document trees
+
+`Adam/DolDoc/DocTree.cpp` follows the reference tree paths and relative
+indent records. It finds existing branches, creates nested missing branches,
+rewrites and appends formatted text, and reads and writes the DolDoc files
+through the ordinary filesystem. `DocClipBoard.cpp` copies inclusive
+entry ranges with owned payloads and cuts ranges without deleting the
+document sentinel. The native `ExeDoc` attaches a root document to a
+compiler context, executes it through the normal statement compiler and
+restores the context and document lock on failure. Branch execution copies
+the selected range before compiling it and releases the original document
+lock before executing the copy.
+
+## Registry
+
+`Adam/ARegistry.cpp` follows `Adam/ARegistry.HC` for the cached
+`~/Registry.HC.Z` document, branch defaults, execution, counts, writes, and
+appends. The document belongs to Adam's heap. `Kernel/KMain.cpp` initializes
+it after DolDoc is available and before spawning the user terminals, at
+the registry stage of the reference's `StartOS.HC`. The compiler exposes
+the registry document pointer, message flags array, and version fields with
+their HolyC types. The guest stores the two F64 version values as their
+64-bit representations on the C++ side.
+
+`RegDft` releases the document lock before dispatching an Adam entry and
+reacquires it to save. A caller waiting for Adam then allows Adam to enter
+the registry. `Kernel/Job.cpp` uses its existing execute job and
+`JobResGet` to wait and reap the result. `RegWrite` and `RegAppend` share
+the DolDoc tree writers.
+
+## Once startup
+
+`Adam/ARegistry.cpp` follows the `AOnce`, `Once`, drive variants, flush
+functions, and `OnceExe` in `Adam/ARegistry.HC`. The drive variants hold
+the document lock through the temporary drive change and restore the
+original drive after writing. `OnceExe` runs the Adam branch through
+Adam's job queue before running the user branch in the caller. When a
+user entry throws, it clears both branches, sets both run-level bits,
+and propagates the same exception to the caller.
+
+`HomeSys.cpp` queues `Cd;#include "Once";` after tiling the user
+terminals when a Once script exists. As in `HomeSys.HC`, this goes
+through `XTalk` in `Kernel/Job.cpp`. `Kernel/KeyDev.cpp` forwards the
+input filter's output as key messages to the terminal, where HolyC
+compiles and executes the command. Adam posts the input without waiting
+and can service the resulting job as soon as it enters server mode.
+The startup lookup uses the first terminal's directory and the same
+file search as the compiler, preserving Adam's working directory.
+The native stock startup test DVD includes Terry A. Davis's original
+`Once.HC` at the root and all thirteen `Misc/Tour/*.IN` files. The live
+DVD prompt and the tour entry menu run through the original scripts.
+The first chapter runs through the help pane and modifier-key holds.
+The key-description pane, installer wizard, and remaining chapters
+still need work.
+
+`Compiler/CMain.cpp` runs the compiled file before forwarding the caller's
+arguments to its last declared function. `Compiler/CMisc.asm` bridges
+the reference `_LAST_FUN` stack call to the current compiler module's
+native code. It copies the argument slots in order and restores the
+native frame after the HolyC function returns. The `2` entry points
+propagate compiler and runtime exceptions.
+
+`Kernel/Job.cpp` follows `InStr`, `InFile`, `In`, and the `XTalk` variants
+in `Kernel/Job.HC`. `InFile` carries the caller's current drive and
+directory into the input filter before including the script. A call
+from inside the filter executes there, so nested scripts and input text
+reach the same terminal.
+
+`Adam/InFile.cpp` follows the key, character, print, view, and mouse
+procedures in `Adam/InFile.HC`. It sends accepted keys back through
+`Msg` and uses the existing DolDoc menu for the wrong-key prompt.
+`InGetChar` sizes its prompt for the caller's argument count so a long
+list fits. It receives the HolyC inline `argv` without a fixed
+argument, as does `InUntilChar`. `InSetMs` uses the graphics line
+walker and the mouse state from `Kernel/SerialDev/Mouse.HC`.
+`Kernel/SerialDev/Keyboard.cpp` shares `Char2KeyName` between
+the character prompt and `ScanCode2KeyName`. `Kernel/KUtils.asm`
+exports TempleOS's locked bit assignment as `_LBEQU` and returns
+the previous bit.
+
+`Kernel/KLoad.cpp` exports `SYS_BOOT_SRC` for the typed `U32 sys_boot_src`
+alias used by `Once.HC`. `Adam/Training.cpp` follows `TipOfDay` in
+`Adam/Training.HC`. It uses the same random draw and selects the same
+star-delimited DolDoc section. Counting the sections first avoids the
+reference's unbounded traversal for a file with no tips. The copy skips
+error entries and preserves the remaining DolDoc entries and links.
+
+## Keyboard output hooks and key maps
+
+`Kernel/KeyDev.cpp` follows `Kernel/KeyDev.HC` for the priority-ordered
+output chain and the `KeyDescSet` and `CtrlAltCBSet` tables. A hook can
+replace itself at the same priority. The output path looks up the next
+priority again after a callback so a removed entry is never used after
+the callback returns. The input-filter and raw hooks are registered at
+kernel startup. DolDoc joins the chain from `Adam/DolDoc/MakeDoc.cpp`.
+
+`Adam/Training.cpp` builds `KeyMap` by querying the live hooks with
+`SCF_KEY_DESC`, sorting the results, and linking to guest callback
+source when it is available. `DocGet` temporarily enables description
+messages while the editor waits for ordinary keys. `DocPutKey`
+describes the editor actions currently implemented and leaves the
+document untouched during those requests.
+
+`Kernel/SerialDev/Keyboard.cpp` dispatches registered Ctrl-Alt handlers
+from the staged PS/2 decoder. Native interrupt-time dispatch remains
+pending. The current built-ins register Break, the auxiliary font, and
+both zoom directions. The rest of the reference default registrations,
+source descriptions for additional editor commands, and the editor's
+key-map popup macro still need work.
+
+`Adam/AutoComplete/ACTask.cpp` follows `ACTask`, `ACTaskCtrl`, and
+`ACTaskAlt` in `Adam/AutoComplete/ACTask.HC`. The task waits for the
+reference keyboard and mouse idle interval, follows input filters to the
+underlying task, and queries the focused task's descriptions through
+`KeyMapFamily`. It renders registered Ctrl-Alt actions through
+`KeyMapCtrlAltFamily`. The regular pane displays Terry A. Davis's
+unchanged `Doc/StandBy.DD`. A task-end callback clears the shared task
+pointer so `AutoComplete(ON)` can start another pane after shutdown.
+
+`ACInit.cpp` follows `ACMainFileLstTraverse`, `ACSingleFileAdd`, and
+`ACHashAdd` in `ACInit.HC`. It walks the requested text-file mask in
+cluster order, indexes case-sensitive words from expanded file contents,
+and counts repeated words in the 32-byte `CHashAC` records.
+`HomeSys.cpp` runs the reference startup mask after queuing `Once` on
+media that include `Doc/StandBy.DD.Z`. The regular boot image lets the
+user start the pane and choose a file mask with `ACInit(mask)`.
+
+`ACPutChoices` scans the active DolDoc line, finds the prefix before
+the cursor, and ranks up to ten matching words by hit count.
+`ACFill.cpp` follows `ACFillIn` and `ACMan` in `ACFill.HC`.
+`DocPutKey` uses Ctrl-F1 through Ctrl-F10 to insert the selected
+suffix through the task input queue. Ctrl-Shift with those keys
+looks up the selected symbol's source link.
+
+The regular and stock DVDs carry the pinned `ACWords.DATA` and
+`ACDefs.DATA` byte for byte before packaging. Terry A. Davis credits
+Project Gutenberg for the Webster dictionary in [Credits](../Doc/Credits.DD).
+`ACDWordsLoad` expands the word list and installs its case-folded hash
+entries. The loader accepts entries without a marker, as the original
+does. `ACDWordPtAt` searches the original word bytes and distinguishes the
+word marker from the same byte in a block index. Definition lookup reads
+up to two 16 KiB blocks from the uncompressed definition file and clips
+the final read to the file extent.
+
+The source checkout's word list has 1,238,691 bytes. The pinned DVD
+expands its word list to 1,253,930 bytes. Both load 95,293 words.
+The UnholyOS DVD packages definitions uncompressed so they are available
+in a live session. The reference test expands the original DVD archive
+to a scratch RAM drive and sets that drive as the popup tasks' home.
+
+`ACFill.cpp` provides the HolyC definition and popup calls. A typed
+`acd` global exposes the original packed 114-byte record. Ctrl-0 through Ctrl-9
+insert the dictionary suffixes and Ctrl-Shift with those keys opens
+definitions. `EdLinkCvt` and `Ed` handle `DN:` links with an optional
+definition number. Writable-media preparation moves to the uncompressed
+name as in TempleOS. `ACProgressTask` shows `Uncompressing Dictionary`
+on writable drives other than RAM. It measures the change in
+`blkdev.write_cnt` against the archive's expanded block count.
+`ACInit` reads the header on the caller's drive before starting the task
+and joins the task after `Move` so the bar clears if the write ends early.
+
+`ACDictGen.cpp` follows the standalone `Adam/AutoComplete/ACDictGen.HC`
+program. The HolyC command `ACDictGen` runs in the current directory so it
+can use `DICTIONARY.DD` on a writable drive. The original script changes to
+its own source directory first. Both stages retain the original tag lists,
+case-insensitive duplicate handling, definition markers and little-endian
+16 KiB block indexes. The port bounds each parsed entry before writing it.
+It reports a failed output write before printing that file's size.
+The compiler exposes `CDoc.head`, `CDocEntryBase` queue fields, `LstMatch`
+with its default flags, and `QSortI64` with its HolyC callback signature.
+The unchanged script also runs in UnholyOS. See the paired small-fixture
+and full-corpus results in [Boot.md](Boot.md#generating-the-webster-dictionary).
+
+`ACTask.cpp` follows the link activation in `Adam/AutoComplete/ACTask.HC`.
+After the 333 ms sleep and the Escape check, the task sends a space to
+the selected link and resets the document cursor to the entry-list head.
+`Adam/WinMgr.cpp` retries cursor placement for a press held inside the
+document while preserving the button transitions used by window controls.
+`Adam/DolDoc/DocRun.cpp` dispatches the left and right macros through
+`PopUp`, `InStr`, or `In`, following `Adam/DolDoc/DocRun.HC`.
+
+The pane clears its document with `DocClear` and fits the content when shown.
+TempleOS calls `DocRst` and handles minimum-window sizing during
+every document recalculation.
+
+## Popup tasks and document menus
+
+`Adam/DolDoc/DocPopUp.cpp` follows `PopUp1`, `PopUp2`, `PopUpOk`,
+and `PopUpCancelOk` from `Adam/DolDoc/DocPopUp.HC`. The buttons and
+optional header and footer are placed in a document passed to `PopUpMenu`.
+
+`Adam/DolDoc/DocPutKey.cpp` dispatches F1 and Shift-F1 to `Ed` using
+the same Help Index and About TempleOS paths as `DocPutKey.HC`.
+`Ed` and `PopUpEd` live in `DocEd.cpp`. `DocLink.cpp` resolves
+file, plain-text, in-memory, and symbol-source links and restores the
+caller's working directory when the editor returns. `DocFind.cpp`
+supplies the one-based line, tag search, and named-anchor operations.
+`DocTerm.cpp` opens file links through the reference left-click
+callback. Raw-mode editing, the right-click terminal file menu,
+undo, generated help indexes, address, and Bible links
+remain pending.
+
+`Kernel/Job.cpp` follows `Kernel/Job.HC` for `PopUp` and `PopUpPrint`.
+The servant enters `SrvCmdLine` and runs the standard execute job.
+A modal call records its child in `popup_task` and suspends the caller
+until the servant returns the job result. The asynchronous form exits
+the servant when the job completes. `HomeSys.cpp` establishes the
+servant's viewport before the window manager draws it.
+
+`Adam/DolDoc/DocForm.cpp` runs the document editor, returns the
+selected entry's action result, and restarts the menu when an accepted
+entry has no action. It follows `DocMenu`, `PopUpMenu` and `PopUpForm`
+in `DocForm.HC`. The popup restores the caller's document window
+association after the servant is reaped. `DocEd.cpp` uses a checked
+HolyC call around `View` so it can restore the editor's state when a
+task-end callback unwinds the input loop.
+
+`DocPlain.cpp` keeps literal numeric fields on its direct parser path
+and uses the HolyC compiler for integer expressions in other fields.
+This follows the expression evaluation of `PrsDollarCmd` and lets
+button actions reference the calling task's defines.
+`Adam/ARegistry.cpp` uses the original checkbox and OKAY button text.
+`RegOneTimePopUp` saves the system message flags when the user elects
+to suppress the message.
+
+## Install registration
+
+`Adam/InsReg.cpp` follows `Adam/InsReg.HC`. The three registration calls
+use the original form, drive override, and `Adam/InsReg` registry branch.
+`Kernel/KernelA.hpp` preserves the packed `CInsReg` layout from
+`Kernel/KernelA.HH`. The compiler's native class registration supplies
+the same four DolDoc format strings. `Kernel/KHashB.cpp` marks the
+generated defines public and updates their help metadata when the
+registry code invokes `HashPublic`.
+
+`Kernel/KMain.cpp` loads the two choice lists after `MakeAdam` and writes
+the unregistered defaults only if the registry replay leaves the record
+unregistered. These calls stand in for the `MakeAdam.HC` include and the
+`InsUnreg` call in `StartOS.HC` during the current native boot sequence.
+
+## Original Adam memory inspection
+
+`Adam/AMem.HC` is preserved from the pinned reference. `CmpHeapData`
+registers the non-debug `CMemUnused`, `CMemUsed`, `CMemBlk`, `CBlkPool`
+and complete `CHeapCtrl` layouts, including the zero-width aliases and
+typed free-list arrays. The inspection functions operate on the native
+allocator's actual queues and counters. Their original bare assembly
+and locked bit operations preserve interrupt state and caller-held
+locks. `test-adam-mem` runs JIT and AOT probes at 512 and 3072 MiB.
+The debug heap layout and concurrent SMP behavior remain unimplemented.
+
+## Adam CPU report and server loop
+
+`Adam/CPURep.cpp` follows `CCPURep`, `MPCPURep` and `CPURep` in
+Terry A. Davis's `Adam/CPURep.HC`. The short report reads the calibrated
+TSC frequency. The detailed report starts a worker for each initialized
+CPU, samples yields and TSC cycles while the caller sleeps for two
+seconds, and calculates rates and averages from those samples.
+`Kernel/KUtils.asm` adapts the public Boolean argument and the worker
+entry to the HolyC stack ABI.
+
+The report uses the reference's packed completion record. It explicitly
+parents the workers to the reporting task so task teardown stops the
+workers before their caller's stack and heap are reclaimed. The reference
+uses the scheduler's default parent. The completion word holds 64 worker
+bits. UnholyOS initializes only CPU 0, and multicore reporting remains
+unverified.
+
+`Kernel/KMain.cpp` enters `SrvTaskContCpp` after starting the terminals
+and sets `RLF_ADAM_SERVER` at the point corresponding to `KMain` in
+`Kernel/KMain.HC`. Adam can now accept execution jobs and lets
+`Kernel/Sched.asm` decide when no runnable task needs the CPU. Earlier
+boot exits still use the fallback halt loop.
+The compiler publishes the typed `adam_task` pointer as declared in
+`Kernel/KernelC.HH`, using the existing kernel address.
+
+## Adam device reports
+
+`Adam/DevInfo.cpp` follows the active `PCILookUpSingle`,
+`PCILookUpDevs`, `PCIRep`, `MemBIOSRep` and `MemPageRep` functions
+in Terry A. Davis's `Adam/DevInfo.HC`. The database conversion
+utility is commented out in the reference.
+
+PCI enumeration uses the BIOS bus count and the byte and word calls
+from `Kernel/PCIBIOS.HC`. The report reads the pinned
+`Misc/PCIDevices.DD` as plain DolDoc, with tab entries preserved.
+The reference identifies pcidatabase.com as the database source.
+The reference inserts records as it finds them. UnholyOS allocates the
+records and names in Adam's data heap and publishes the queue after the
+scan succeeds. The host ISO tool compresses the unchanged database to
+the reference disc path `::/Misc/PCIDevices.DD.Z`.
+
+`MemBIOSRep` reads the 32-bit device range queue and the BIOS E801 and
+E820 handoff records. `MemPageRep` reads the mapping size, page counts,
+table bases and heap bounds recorded by the kernel. NASM keeps the
+current 32-bit page-table base fields used by the bootstrap, and the
+report widens them for display. The boot path uses 2 MiB pages. The
+three public report names use the HolyC calling convention through
+`Kernel/KUtils.asm`.
+
 ## Remaining structural work
 
 `Kernel/KMain.cpp` contains `SysGlblsInit`, `TimersInit`, and `KMainCpp`, in the relative definition order of their reference counterparts. `KMainCpp` calls `BootProbe` after the window manager starts and before user startup. The standard and startup-test ISOs use the same kernel, so both retain that verification call. Earlier reports now cover the kernel state before compiler loading and the loaded compiler image; the opcode-resource probe runs before the module entry. These reports remain in `Linux/BootProbe.cpp`. [Source structure verification](SourceStructureVerification.md) records the earlier layout review; the compiler load cutover requires its own runtime evidence in [Boot.md](Boot.md).
@@ -1589,9 +2352,8 @@ and reproduced native-import coverage.
 The [development milestones](Development.md) define completion in the required order: full rewrite, full compatibility, bootstrap, then self-hosting. Host GCC or Clang and NASM support the current development builds.
 
 The guest's `RedSeaISO` follows the sizing and directory-copy steps from
-`Adam/Opt/Boot/DskISORedSea.HC` and `Adam/ABlkDev/ADskA.HC`. The current
-`CopyTree2` works on the ISO's private RedSea RAM volume. The reference
-uses `BDT_ISO_FILE_WRITE` and the general `CopyTree` path. UnholyOS
+`Adam/Opt/Boot/DskISORedSea.HC` and `Adam/ABlkDev/ADskA.HC`, using
+`BDT_ISO_FILE_WRITE` and the general `CopyTree` path. UnholyOS
 reserves a spare DVD sector when a stage-two file is supplied because the
 shifted read can extend beyond that file's last RedSea block. The loader
 is the NASM `BootDVD.BIN` embedded by `DskISORedSea.asm`.

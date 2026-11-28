@@ -191,6 +191,35 @@ extern "C" uint8_t ScanCode2CharCpp(int64_t sc)
   return code < 0x50 ? table[code] : 0;
 }
 
+extern "C" char *Char2KeyNameCpp(int64_t ch, uint8_t include_ctrl)
+{
+  char buf[16]{};
+  const char *name = buf;
+  if (0 <= ch && ch <= ' ') {
+    switch (ch) {
+    case '\n': name = "ENTER"; break;
+    case CH_BACKSPACE: name = "BACKSPACE"; break;
+    case '\t': name = "TAB"; break;
+    case CH_ESC: name = "ESC"; break;
+    case CH_SHIFT_ESC: name = "SHIFT_ESC"; break;
+    case 0:
+    case 29:
+    case 30: break;
+    case CH_SHIFT_SPACE: name = "SHIFT_SPACE"; break;
+    case ' ': name = "SPACE"; break;
+    default:
+      if (include_ctrl)
+        StrCpyCpp(buf, "CTRL ");
+      buf[StrLen(buf)] = ch - 1 + 'a';
+      break;
+    }
+  } else if (' ' < ch && ch <= UINT8_MAX &&
+             (char_bmp_printable[ch / 32] & (1U << (ch % 32)))) {
+    buf[0] = ch;
+  }
+  return StrNew(name, CurrentTask()->data_heap);
+}
+
 extern "C" char *ScanCode2KeyNameCpp(int64_t sc)
 {
   char buf[32]{};
@@ -205,40 +234,9 @@ extern "C" char *ScanCode2KeyNameCpp(int64_t sc)
     append("      ");
 
   if (auto ch = ScanCode2CharCpp(sc & 255)) {
-    const char *name = nullptr;
-    switch (ch) {
-    case '\n':
-      name = "ENTER";
-      break;
-    case CH_BACKSPACE:
-      name = "BACKSPACE";
-      break;
-    case '\t':
-      name = "TAB";
-      break;
-    case CH_ESC:
-      name = "ESC";
-      break;
-    case CH_SHIFT_ESC:
-      name = "SHIFT_ESC";
-      break;
-    case CH_SHIFT_SPACE:
-      name = "SHIFT_SPACE";
-      break;
-    case ' ':
-      name = "SPACE";
-      break;
-    case 29:
-    case 30:
-      name = "";
-      break;
-    }
-    if (name)
-      append(name);
-    else if (ch < ' ')
-      buf[StrLen(buf)] = ch - 1 + 'a';
-    else if (char_bmp_printable[ch / 32] & (1U << (ch % 32)))
-      buf[StrLen(buf)] = ch;
+    auto *st = Char2KeyNameCpp(ch, false);
+    append(st);
+    Free(st);
   } else {
     constexpr struct
     {
@@ -272,7 +270,7 @@ extern "C" char *ScanCode2KeyNameCpp(int64_t sc)
         {0x57, "F11"},
         {0x58, "F12"},
         {SC_GUI, "WINDOWS"},
-        {0xAA, "PRTSCRN1"},
+        {SC_PRTSCRN1, "PRTSCRN1"},
         {0xB7, "PRTSCRN2"},
     };
     for (const auto &key : keys)
@@ -338,12 +336,6 @@ static uint64_t KbdBuildSC(uint8_t raw_byte, uint8_t &last_raw_byte,
     }
     if ((flags & (SCF_CTRL | SCF_ALT)) == (SCF_CTRL | SCF_ALT)) {
       auto ch = ScanCode2CharCpp(code);
-      if (ch == 'c' && new_key)
-        CtrlAltC(sc | flags);
-      if (ch == 'f')
-        CtrlAltF(sc | flags);
-      if (ch == 'z' && sys_winmgr_task)
-        CtrlAltZ(sc | flags);
       if (code == 1 || code == 0x0F || ('a' <= ch && ch <= 'z'))
         new_key = 0;
     }
@@ -424,6 +416,9 @@ static void KbdHndlr()
     }
   }
   kbd.scan_code = sc;
+  if (!(sc & SCF_KEY_UP) &&
+      (sc & (SCF_CTRL | SCF_ALT)) == (SCF_CTRL | SCF_ALT))
+    KbdCtrlAltKey(sc);
 }
 
 static void KbdMsgsQue()

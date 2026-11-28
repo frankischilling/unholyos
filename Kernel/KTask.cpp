@@ -3,6 +3,7 @@
 
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 void UserStartUp();
+void SrvStartUp();
 
 bool CmpCall(CCmpCtrl &cc, const uint8_t *machine, uint64_t &result)
 {
@@ -65,8 +66,8 @@ static void UserTaskCont()
       break;
     DocUnlock(*doc);
     DocBottomCpp(doc);
-    if (result.exception) {
-      uint64_t tag = result.exception;
+    if (result.exception || result.parse_error) {
+      uint64_t tag = result.exception ? result.exception : COMPILER_ERROR;
       PrintCpp("Except:%c\n", 1, &tag);
     } else
       PutS("Syntax Error\n");
@@ -98,6 +99,13 @@ extern "C" [[noreturn]] void SrvTaskContCpp()
     _YIELD();
     SetRFlags(flags);
   }
+}
+
+extern "C" [[noreturn]] void SrvCmdLineCpp(int64_t)
+{
+  CurrentTask()->win_inhibit = WIG_USER_TASK_DFT;
+  SrvStartUp();
+  SrvTaskContCpp();
 }
 
 static int64_t sys_num_spawned_tasks;
@@ -204,6 +212,23 @@ bool KillTask(CTask *task, bool wait)
   return true;
 }
 
+extern "C" uint64_t KillCpp(CTask *task, uint8_t wait, uint8_t just_break)
+{
+  if (!TaskValidateCpp(task))
+    return false;
+  if (!just_break)
+    return KillTask(task, wait);
+  // The reference Break branch acts on the caller when the supplied task
+  // differs from Fs. For Fs it schedules the Ctrl-Alt-C path instead.
+  if (task != CurrentTask()) {
+    BreakCpp();
+    return false;
+  }
+  sys_focus_task = task;
+  __atomic_fetch_or(&sys_ctrl_alt_flags, 1U << 1, __ATOMIC_RELAXED);
+  return true;
+}
+
 extern "C" uint64_t SuspendCpp(CTask *task, uint8_t state)
 {
   if (!task)
@@ -303,6 +328,15 @@ extern "C" CTask *TaskEnd()
     return task;
   }
 
+  auto *parent = task->parent_task;
+  if (parent && parent->popup_task == task) {
+    parent->popup_task = nullptr;
+    KillTask(parent, false);
+    return parent;
+  }
+
+  DrvsReleaseCpp();
+  BlkDevsReleaseCpp();
   auto *child_head = reinterpret_cast<CTask *>(
       reinterpret_cast<uintptr_t>(&task->next_child_task) -
       offsetof(CTask, next_sibling_task));

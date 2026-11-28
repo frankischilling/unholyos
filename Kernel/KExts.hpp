@@ -22,9 +22,10 @@ struct CCompilerImports
   decltype(&::LexRaw) LexRaw;
   decltype(&::LexExpression2Bin) LexExpression2Bin;
   decltype(&::ExeFile) ExeFile;
+  decltype(&::LexExceptReport) LexExceptReport;
 };
 
-static_assert(sizeof(CCompilerImports) == 128);
+static_assert(sizeof(CCompilerImports) == 136);
 static_assert(offsetof(CCompilerImports, AsmHashLoad) == 0);
 static_assert(offsetof(CCompilerImports, LexStmt2Bin) == 8);
 static_assert(offsetof(CCompilerImports, ExePutS) == 16);
@@ -41,9 +42,11 @@ static_assert(offsetof(CCompilerImports, LexAttachDoc) == 96);
 static_assert(offsetof(CCompilerImports, LexRaw) == 104);
 static_assert(offsetof(CCompilerImports, LexExpression2Bin) == 112);
 static_assert(offsetof(CCompilerImports, ExeFile) == 120);
+static_assert(offsetof(CCompilerImports, LexExceptReport) == 128);
 static_assert(sizeof(CExeResult) == 24 && offsetof(CExeResult, value) == 0 &&
               offsetof(CExeResult, exception) == 8 &&
-              offsetof(CExeResult, okay) == 16);
+              offsetof(CExeResult, okay) == 16 &&
+              offsetof(CExeResult, parse_error) == 17);
 
 extern "C" const CCompilerImports *compiler_imports;
 bool CompilerImportsPublish(const CCompilerImports &imports);

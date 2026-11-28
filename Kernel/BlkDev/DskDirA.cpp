@@ -1,6 +1,23 @@
 #include "../KernelB.hpp"
 
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
+extern "C" void PrintErrCpp(const char *fmt,int64_t argc,const uint64_t *argv,
+                            const uintptr_t *rbp);
+
+extern "C" uint64_t DirNewCpp(CDrv *dv,const char *cur_dir,CDirEntry *entry,
+                               uint8_t free_old_chain)
+{
+  DrvChkCpp(dv,true);
+  switch (dv->fs_type) {
+    case FSt_REDSEA:
+      return RedSeaDirNewCpp(dv,cur_dir,entry,free_old_chain);
+    case FSt_FAT32:
+      return FAT32DirNewCpp(dv,cur_dir,entry,free_old_chain);
+    default:
+      PrintErrCpp("File System Not Supported\n",0,nullptr,nullptr);
+      return false;
+  }
+}
 
 extern "C" void DirEntryDelCpp(CDirEntry *entry)
 {
@@ -12,9 +29,11 @@ extern "C" void DirEntryDelCpp(CDirEntry *entry)
 
 extern "C" void DirEntryDel2Cpp(CDirEntry *entry)
 {
-  if (entry)
+  if (entry) {
+    Free(entry->full_name);
     Free(reinterpret_cast<void *>(entry->user_data));
-  DirEntryDelCpp(entry);
+    Free(entry);
+  }
 }
 
 static void DirTreeDel(CDirEntry *entry, bool free_data)
@@ -56,15 +75,16 @@ static int64_t DirEntryCompareName(const char *a, bool da, const char *b,
   if (da != db)
     return db - da;
   const char *ext_a = FileExtDot(a), *ext_b = FileExtDot(b);
-  auto ext_cmp = StrCmpCpp(reinterpret_cast<const uint8_t *>(ext_a ? ext_a+1 : ""),
-                           reinterpret_cast<const uint8_t *>(ext_b ? ext_b+1 : ""));
+  auto ext_cmp = StrCmpCpp(
+      reinterpret_cast<const uint8_t *>(ext_a ? ext_a + 1 : ""),
+      reinterpret_cast<const uint8_t *>(ext_b ? ext_b + 1 : ""));
   if (ext_cmp)
     return ext_cmp;
   size_t len_a = ext_a ? size_t(ext_a - a) : StrLen(a);
   size_t len_b = ext_b ? size_t(ext_b - b) : StrLen(b);
   for (size_t i = 0; i < len_a && i < len_b; i++)
     if (a[i] != b[i])
-      return uint8_t(a[i]) - uint8_t(b[i]);
+      return uint8_t(a[i]) > uint8_t(b[i]) ? 1 : -1;
   return (len_a > len_b) - (len_a < len_b);
 }
 
@@ -74,22 +94,30 @@ int64_t DirEntryCompareName(const CRedSeaDirEntry &a, const CRedSeaDirEntry &b)
                              b.attr & RS_ATTR_DIR);
 }
 
+extern "C" int64_t DirEntryCompareNameCpp(const CDirEntry *a, const CDirEntry *b)
+{
+  return DirEntryCompareName(a->name, a->attr & RS_ATTR_DIR, b->name,
+                             b->attr & RS_ATTR_DIR);
+}
+
+extern "C" int64_t DirEntryCompareClusCpp(const CDirEntry *a, const CDirEntry *b)
+{
+  return int64_t(uint64_t(a->clus) - uint64_t(b->clus));
+}
+
 static int64_t DirEntryCompareNameI64(int64_t a, int64_t b)
 {
-  auto *first = reinterpret_cast<const CDirEntry *>(a);
-  auto *second = reinterpret_cast<const CDirEntry *>(b);
-  return DirEntryCompareName(first->name, first->attr & RS_ATTR_DIR,
-                             second->name, second->attr & RS_ATTR_DIR);
+  return DirEntryCompareNameCpp(reinterpret_cast<const CDirEntry *>(a),
+                                reinterpret_cast<const CDirEntry *>(b));
 }
 
-static int64_t DirEntryCompareClus(int64_t a, int64_t b)
+static int64_t DirEntryCompareClusI64(int64_t a, int64_t b)
 {
-  auto x = reinterpret_cast<const CDirEntry *>(a)->clus;
-  auto y = reinterpret_cast<const CDirEntry *>(b)->clus;
-  return (x > y) - (x < y);
+  return DirEntryCompareClusCpp(reinterpret_cast<const CDirEntry *>(a),
+                                reinterpret_cast<const CDirEntry *>(b));
 }
 
-bool DirFilesSort(CDirEntry *&first, bool by_cluster)
+static bool DirFilesSortKey(CDirEntry *&first, int64_t key)
 {
   int64_t count = 0;
   for (auto *entry = first; entry; entry = entry->next)
@@ -102,8 +130,14 @@ bool DirFilesSort(CDirEntry *&first, bool by_cluster)
     int64_t i = 0;
     for (auto *entry = first; entry; entry = entry->next)
       buf[i++] = reinterpret_cast<int64_t>(entry);
-    QSortI64Native(buf, count,
-                   by_cluster ? DirEntryCompareClus : DirEntryCompareNameI64);
+    switch (key) {
+      case 0:
+        QSortI64Native(buf, count, DirEntryCompareNameI64);
+        break;
+      case 1:
+        QSortI64Native(buf, count, DirEntryCompareClusI64);
+        break;
+    }
     auto **link = &first;
     for (i = 0; i < count; i++) {
       *link = reinterpret_cast<CDirEntry *>(buf[i]);
@@ -113,9 +147,19 @@ bool DirFilesSort(CDirEntry *&first, bool by_cluster)
     Free(buf);
   }
   for (auto *entry = first; entry; entry = entry->next)
-    if (!DirFilesSort(entry->sub, by_cluster))
+    if (!DirFilesSortKey(entry->sub, key))
       return false;
   return true;
+}
+
+bool DirFilesSort(CDirEntry *&first, bool by_cluster)
+{
+  return DirFilesSortKey(first, by_cluster ? 1 : 0);
+}
+
+extern "C" void DirFilesSortCpp(CDirEntry **first, int64_t key)
+{
+  DirFilesSortKey(*first, key);
 }
 
 static CDirEntry **DirFilesFlatten(CDirEntry **tail, CDirEntry *entry,
@@ -129,8 +173,6 @@ static CDirEntry **DirFilesFlatten(CDirEntry **tail, CDirEntry *entry,
     } else {
       *tail = entry;
       tail = &entry->next;
-      if (flags & FUF_JUST_FILES)
-        entry->parent = nullptr;
       tail = DirFilesFlatten(tail, entry->sub, flags);
       entry->sub = nullptr;
     }
@@ -139,9 +181,18 @@ static CDirEntry **DirFilesFlatten(CDirEntry **tail, CDirEntry *entry,
   return tail;
 }
 
+extern "C" CDirEntry *DirFilesFlattenCpp(CDirEntry *entry, CDirEntry **res,
+                                         uint64_t flags)
+{
+  auto **tail = DirFilesFlatten(res, entry, flags);
+  *tail = nullptr;
+  // CDirEntry.next is the first member; HolyC returns the final link slot.
+  return reinterpret_cast<CDirEntry *>(tail);
+}
+
 void DirFilesFlatten(CDirEntry *&first, uint64_t flags)
 {
-  *DirFilesFlatten(&first, first, flags) = nullptr;
+  DirFilesFlattenCpp(first, &first, flags);
 }
 
 extern "C" void PutFileLinkCpp(const char *filename, const char *full_name,

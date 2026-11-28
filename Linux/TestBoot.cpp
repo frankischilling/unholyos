@@ -1,4 +1,5 @@
 #include "BootMedia.hpp"
+#include "../Kernel/KernelA.hpp"
 
 #include <algorithm>
 #include <array>
@@ -35,6 +36,8 @@ constexpr std::string_view COMPILER_BIND_FAILURE_MARKER =
     "UnholyOS: Could not bind compiler imports\r\n";
 constexpr std::string_view COMPILER_INIT_FAILURE_MARKER =
     "UnholyOS: Could not initialize compiler module\r\n";
+constexpr std::string_view ADAM_SOURCE_FAILURE_MARKER =
+    "UnholyOS: Could not load Adam sources\r\n";
 
 enum class CBootPhase
 {
@@ -45,7 +48,8 @@ enum class CBootPhase
   CompilerInvalidExport,
   CompilerUnresolvedImport,
   OpcodeUnavailable,
-  OpcodeInvalid
+  OpcodeInvalid,
+  AdamSourceFailed
 };
 
 static bool CompilerLoaded(CBootPhase phase)
@@ -57,11 +61,18 @@ static bool CompilerLoaded(CBootPhase phase)
 static bool CompilerBound(CBootPhase phase)
 {
   return phase == CBootPhase::Desktop || phase == CBootPhase::OpcodeUnavailable ||
-         phase == CBootPhase::OpcodeInvalid;
+         phase == CBootPhase::OpcodeInvalid || phase == CBootPhase::AdamSourceFailed;
+}
+
+static bool CompilerInitialized(CBootPhase phase)
+{
+  return phase == CBootPhase::Desktop || phase == CBootPhase::AdamSourceFailed;
 }
 
 static std::string_view CompilerFailureMarker(CBootPhase phase)
 {
+  if (phase == CBootPhase::AdamSourceFailed)
+    return ADAM_SOURCE_FAILURE_MARKER;
   if (!CompilerLoaded(phase))
     return COMPILER_FAILURE_MARKER;
   return CompilerBound(phase) ? COMPILER_INIT_FAILURE_MARKER
@@ -100,8 +111,11 @@ static std::string_view ProgramOutput(std::string_view serial, const char *path,
 static void CheckProgramOutput(std::string_view serial, const char *path,
                                std::string_view expected, char checks = '3')
 {
-  Check(ProgramOutput(serial, path, checks) == expected,
-        "Native HolyC source output differed from TempleOS");
+  const auto actual=ProgramOutput(serial,path,checks);
+  if (actual!=expected)
+    throw std::runtime_error(std::string("Native HolyC source output differed for ")+
+                             path+"\nExpected:\n"+std::string(expected)+
+                             "\nActual:\n"+std::string(actual));
 }
 
 struct CBootMedia
@@ -126,11 +140,13 @@ constexpr std::string_view compiler_native_names[]{"AsmHashLoad",
                                                    "LexAttachDoc",
                                                    "LexRaw",
                                                    "LexExpression2Bin",
-                                                   "ExeFile"};
+                                                   "ExeFile",
+                                                   "LexExceptReport"};
 constexpr std::string_view compiler_public_names[]{
-    "Cmp",         "ExePutS",   "ExeFile",        "StreamExePrint",
+    "Cmp", "ExePutS", "ExePrint", "ExeFile", "RunFile", "ExePutS2",
+    "ExePrint2", "ExeFile2", "RunFile2", "_LAST_FUN", "LastFun", "StreamExePrint",
     "StreamPrint", "StreamDir", "MemberMetaData", "MemberMetaFind",
-    "MemberFind"};
+    "MemberFind", "U", "Ui", "Un", "Option", "GetOption"};
 constexpr std::string_view compiler_status_name =
     "__unholyos_compiler.CInitStatus";
 constexpr std::string_view compiler_types_name = "internal_types_table";
@@ -393,8 +409,14 @@ static Bytes VerifyCompilerMedia(const Bytes &disc, uint64_t root,
       Check(record.type == 16 && export_names.insert(record.name).second,
             "Compiler exports must be unique and relative");
     }
-  Check(native_imports == 45 && data_imports == 30 &&
-            import_names.contains("__unholyos_sysv.DefineLstLoadCpp"),
+  Check(native_imports == 48 && data_imports == 33 &&
+            import_names.contains("__unholyos_sysv.AdamErrCpp") &&
+            import_names.contains("__unholyos_sysv.DefineLstLoadCpp") &&
+            import_names.contains("__unholyos_sysv.FixSetCpp") &&
+            import_names.contains("__unholyos_sysv.IsRawCpp") &&
+            import_names.contains("__unholyos_sysv.PutFileLinkCpp") &&
+            import_names.contains("char_bmp_displayable") &&
+            !import_names.contains("__unholyos_sysv.F64PowerBits"),
         "Compiler native or data import contract differs");
   std::set<std::string> expected_exports{std::string(compiler_status_name),
                                          std::string(compiler_types_name)};
@@ -416,11 +438,18 @@ static Bytes VerifyCompilerMedia(const Bytes &disc, uint64_t root,
 }
 
 static void VerifyHostModuleMedia(const fs::path &iso, const fs::path &module,
-                                  const char *name = "HostModuleProbe.BIN")
+                                  const char *name = "HostModuleProbe.BIN",
+                                  const char *directory = nullptr)
 {
   constexpr size_t blk = 512, redsea = 88 * blk;
   const auto disc = FileRead(iso), expected = FileRead(module);
-  const auto root = ReadLE(disc, redsea + 24, 8);
+  auto root = ReadLE(disc, redsea + 24, 8);
+  if (directory)
+    for (const auto &part : fs::path(directory)) {
+      const auto dir = FindRedSeaEntry(disc, root, part.string());
+      Check(ReadLE(disc, dir, 2) & 0x10, "Expected media directory");
+      root = ReadLE(disc, dir + 40, 8);
+    }
   const auto entry = FindRedSeaEntry(disc, root, name);
   const auto start = ReadLE(disc, entry + 40, 8);
   const auto size = ReadLE(disc, entry + 48, 8);
@@ -594,7 +623,8 @@ public:
         execlp(qemu, qemu, "-machine", machine, "-cpu", "qemu64", "-m", memory,
                "-boot", "d", "-cdrom", image.c_str(), "-drive", ata.c_str(),
                "-display", "none", "-monitor", "none", "-serial", serial.c_str(),
-               "-qmp", "stdio", "-debugcon", debug.c_str(), "-no-reboot",
+               "-qmp", "stdio", "-debugcon", debug.c_str(), "-gdb",
+               "tcp:127.0.0.1:45362", "-no-reboot",
                static_cast<char *>(nullptr));
         _exit(127);
       }
@@ -753,9 +783,28 @@ private:
   int sock;
 };
 
-static uint64_t VerifyHandoff(const std::string &output,
+template <size_t Count>
+static std::array<uint64_t, Count> ReadPhysical(CMonitor &vm, uint64_t addr,
+                                                char width = 'g')
+{
+  std::ostringstream command;
+  command << "xp /" << Count << width << "x 0x" << std::hex << addr;
+  std::string reply = vm.Hmp(command.str());
+  const std::regex hex(R"(0x([0-9a-f]+))");
+  std::array<uint64_t, Count> values;
+  auto token = std::sregex_iterator(reply.begin(), reply.end(), hex);
+  for (auto &value : values) {
+    Check(token != std::sregex_iterator(), "QEMU physical memory read failed");
+    value = std::stoull((*token)[1].str(), nullptr, 16);
+    ++token;
+  }
+  Check(token == std::sregex_iterator(), "QEMU physical memory read overflow");
+  return values;
+}
+
+static uint64_t VerifyHandoff(CMonitor &vm, const std::string &output,
                               const CBootMedia &media,
-                              const std::string &registers)
+                              const std::string &registers, bool desktop)
 {
   const std::regex handoff(
       R"(DVD LBA (0x[0-9a-f]+), source (0x[0-9a-f]+), shift (0x[0-9a-f]+), )"
@@ -787,28 +836,15 @@ static uint64_t VerifyHandoff(const std::string &output,
         "QEMU registers disagree with kernel long mode handoff");
   Check(registers.find("GS =0060 0000000000100200") != std::string::npos,
         "GS does not point to the bootstrap CPU");
-  Check(registers.find("FS =0060 0000000000100300") != std::string::npos,
-        "FS does not point to Adam");
+  constexpr uint64_t boot_cpu_idle_task = 0x100200 + 0x40;
+  const auto expected_task =
+      desktop ? ReadPhysical<1>(vm, boot_cpu_idle_task)[0] : 0x100300;
+  Check(expected_task && std::regex_search(registers, match,
+                                          std::regex(R"(FS =0060 ([0-9a-f]+))")) &&
+            std::stoull(match[1].str(), nullptr, 16) == expected_task,
+        desktop ? "Idle FS does not point to the bootstrap CPU's idle task"
+                : "FS does not point to Adam before server startup");
   return heap;
-}
-
-template <size_t Count>
-static std::array<uint64_t, Count> ReadPhysical(CMonitor &vm, uint64_t addr,
-                                                char width = 'g')
-{
-  std::ostringstream command;
-  command << "xp /" << Count << width << "x 0x" << std::hex << addr;
-  std::string reply = vm.Hmp(command.str());
-  const std::regex hex(R"(0x([0-9a-f]+))");
-  std::array<uint64_t, Count> values;
-  auto token = std::sregex_iterator(reply.begin(), reply.end(), hex);
-  for (auto &value : values) {
-    Check(token != std::sregex_iterator(), "QEMU physical memory read failed");
-    value = std::stoull((*token)[1].str(), nullptr, 16);
-    ++token;
-  }
-  Check(token == std::sregex_iterator(), "QEMU physical memory read overflow");
-  return values;
 }
 
 struct CBootSymbols
@@ -836,33 +872,39 @@ static std::string ReadGuestName(CMonitor &vm, uint64_t address)
 
 static CBootSymbols ReadBootSymbols(CMonitor &vm)
 {
-  const auto table = ReadPhysical<1>(vm, 0x100300 + 0x3D0)[0];
-  const auto header = ReadPhysical<4>(vm, table);
-  Check(header[1] == 1023 && !header[2] && header[3],
-        "Invalid boot hash table during compiler validation");
   CBootSymbols symbols;
-  std::set<uint64_t> seen;
-  for (size_t i = 0; i < 1024; i += 64) {
-    const auto buckets = ReadPhysical<64>(vm, header[3] + i * 8);
-    for (auto address : buckets)
-      while (address) {
-        Check(address >= 16 && seen.size() < 8192 && seen.insert(address).second,
-              "Invalid compiler symbol chain");
-        const auto entry = ReadPhysical<3>(vm, address);
-        const auto type = uint32_t(entry[2]) & 0x1FFFF;
-        if (type == 1 || type == 2 || type == 0x4000) {
-          const auto name = ReadGuestName(vm, entry[1]);
-          if (type == 1) {
-            symbols.exports.emplace(name, ReadPhysical<1>(vm, address + 64)[0]);
-            ++symbols.export_counts[name];
-          } else if (type == 0x4000) {
-            symbols.modules.emplace(name, ReadPhysical<1>(vm, address + 24)[0]);
-            ++symbols.module_counts[name];
-          } else
-            symbols.imports[name].push_back(address);
+  std::set<uint64_t> seen, tables;
+  auto table = ReadPhysical<1>(vm, 0x100300 + 0x3D0)[0];
+  Check(table, "Missing boot hash table");
+  while (table) {
+    Check(table >= 16 && tables.size() < 16 && tables.insert(table).second,
+          "Invalid or cyclic boot hash table chain");
+    const auto header = ReadPhysical<4>(vm, table);
+    Check(header[1] == 1023 && !header[2] && header[3],
+          "Invalid boot hash table during compiler validation");
+    for (size_t i = 0; i < 1024; i += 64) {
+      const auto buckets = ReadPhysical<64>(vm, header[3] + i * 8);
+      for (auto address : buckets)
+        while (address) {
+          Check(address >= 16 && seen.size() < 8192 && seen.insert(address).second,
+                "Invalid compiler symbol chain");
+          const auto entry = ReadPhysical<3>(vm, address);
+          const auto type = uint32_t(entry[2]) & 0x1FFFF;
+          if (type == 1 || type == 2 || type == 0x4000) {
+            const auto name = ReadGuestName(vm, entry[1]);
+            if (type == 1) {
+              symbols.exports.emplace(name, ReadPhysical<1>(vm, address + 64)[0]);
+              ++symbols.export_counts[name];
+            } else if (type == 0x4000) {
+              symbols.modules.emplace(name, ReadPhysical<1>(vm, address + 24)[0]);
+              ++symbols.module_counts[name];
+            } else
+              symbols.imports[name].push_back(address);
+          }
+          address = entry[0];
         }
-        address = entry[0];
-      }
+    }
+    table = header[0];
   }
   return symbols;
 }
@@ -923,7 +965,7 @@ struct CCompilerState
 {
   uint64_t code_used = 0, data_used = 0;
   uint64_t payload_begin = 0, payload_end = 0;
-  bool init_started = false;
+  bool init_started = false, initialized = false;
   std::string unresolved;
 };
 
@@ -951,7 +993,8 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
   const auto level = symbols.exports.find("SYS_RUN_LEVEL");
   Check(level != symbols.exports.end(), "Missing live compiler run level");
   Check(ReadPhysical<1>(vm, level->second, 'w')[0] ==
-            (phase == CBootPhase::Desktop ? 0x32FFu : 0x2FFu),
+            (phase == CBootPhase::Desktop ? 0x4B2FFu
+             : CompilerInitialized(phase) ? 0x12FFu : 0x2FFu),
         "Compiler run level was published before successful initialization");
   std::smatch match;
   Check(std::regex_search(output, match,
@@ -1078,12 +1121,12 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
             status->second >= base && status->second <= image + patch - 8 &&
             ReadLE(media.compiler, status->second - image, 8) == 0,
         "Compiler initialization status is outside zeroed module storage");
-  const auto expected_status = phase == CBootPhase::Desktop ? uint64_t{1}
+  const auto expected_status = CompilerInitialized(phase) ? uint64_t{1}
                                : CompilerBound(phase) ? UINT64_MAX : 0;
   Check(ReadPhysical<1>(vm, status->second)[0] == expected_status,
         "Compiler initialization status or rejected-entry execution differs");
   if (bindings) {
-    const auto targets = ReadPhysical<16>(vm, bindings);
+    const auto targets = ReadPhysical<std::size(compiler_native_names)>(vm, bindings);
     for (size_t i = 0; i < std::size(compiler_native_names); ++i) {
       const auto found = symbols.exports.find(
           "__unholyos_sysv." + std::string(compiler_native_names[i]));
@@ -1112,6 +1155,7 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
   result.payload_begin = base;
   result.payload_end = image + patch;
   result.init_started = CompilerBound(phase);
+  result.initialized = CompilerInitialized(phase);
   result.unresolved = unresolved;
   std::cout << "Verified compiler module " << size << " bytes, " << records.size()
             << " patch records, imports " << (bindings ? 16 : 0)
@@ -1554,6 +1598,10 @@ constexpr CDefineList adam_defines[]{
      10},
     {"DD_OS_NAME_VERSION", "UnholyOS\0", 1}};
 
+constexpr CDefineList ins_reg_lists[]{
+    {"ST_HOST_OSES", "Other\0Native\0Linux\0Windows\0", 4},
+    {"ST_HOST_VMS", "Other\0Native\0VMware\0QEMU\0VirtualBox\0", 5}};
+
 template <size_t Count>
 constexpr std::array<uint64_t, 3>
 DefineListTotals(const CDefineList (&lists)[Count])
@@ -1591,7 +1639,8 @@ static bool GuestBytesEqual(CMonitor &vm, uint64_t address,
 
 static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
                                     uint64_t owner, uint64_t &graphics,
-                                    uint64_t &winmgr_slot, bool desktop,
+                                    uint64_t &winmgr_slot, uint64_t &disk,
+                                    uint64_t &key_device,
                                     const CCompilerState &compiler)
 {
   uint64_t used = 0, count = 0;
@@ -1670,7 +1719,7 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           Check(system_list || compiler_list || adam_list,
                 "Unexpected boot definition");
           Check(system_list ||
-                    (compiler_list ? compiler.init_started : desktop),
+                    (compiler_list ? compiler.init_started : compiler.initialized),
                 "Definition was created before its initialization phase");
           const auto &expected = system_list     ? *system_define
                                  : compiler_list ? *compiler_define
@@ -1739,12 +1788,19 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           graphics = ReadPhysical<1>(vm, addr + 64)[0];
         if (type == 0x08000001 && str == "sys_winmgr_task")
           winmgr_slot = ReadPhysical<1>(vm, addr + 64)[0];
+        if (type == 0x08000001 && str == "keydev")
+          key_device = ReadPhysical<1>(vm, addr + 64)[0];
+        if (type == 0x08000001 && str == "blkdev") {
+          Check(!disk, "Duplicate boot block device symbol");
+          disk = ReadPhysical<1>(vm, addr + 64)[0];
+        }
         used += entry[1] + name[1];
         addr = entry[2];
       }
     }
   }
-  Check(kernel && hash_del && hash_src && put_str && graphics && winmgr_slot,
+  Check(kernel && hash_del && hash_src && put_str && graphics && winmgr_slot &&
+            disk && key_device,
         "Missing boot symbols");
   Check(std::all_of(system_seen.begin(), system_seen.end(),
                     [](bool seen) { return seen; }) &&
@@ -1756,8 +1812,8 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           compiler_define_used == (compiler.init_started ? 5360u : 0u),
       "Compiler definitions or their allocation total differ by startup phase");
   Check(std::all_of(adam_seen.begin(), adam_seen.end(),
-                    [&](bool seen) { return seen == desktop; }) &&
-            adam_define_used == (desktop ? 560u : 0u),
+                    [&](bool seen) { return seen == compiler.initialized; }) &&
+            adam_define_used == (compiler.initialized ? 560u : 0u),
         "Adam definitions or their allocation total differ by startup phase");
   std::cout << "Verified system definitions " << std::size(system_defines)
             << ", heap bytes " << system_define_used << '\n';
@@ -1765,7 +1821,7 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
             << (compiler.init_started ? std::size(compiler_defines) : 0)
             << ", heap bytes " << compiler_define_used << '\n';
   std::cout << "Verified Adam definitions "
-            << (desktop ? std::size(adam_defines) : 0) << ", heap bytes "
+            << (compiler.initialized ? std::size(adam_defines) : 0) << ", heap bytes "
             << adam_define_used << '\n';
   return used;
 }
@@ -1810,11 +1866,10 @@ static CTestHeap VerifyHeap(CMonitor &vm, uint64_t heap, uint64_t pool,
   return result;
 }
 
-static void VerifyTaskCompilerRecords(CMonitor &vm, uint64_t task,
-                                      uint64_t code_heap, uint64_t data_heap,
-                                      const CTestHeap &code,
-                                      const CTestHeap &data,
-                                      uint64_t inherited_table, bool terminal)
+static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
+                                   uint64_t code_heap, uint64_t data_heap,
+                                   const CTestHeap &code, const CTestHeap &data,
+                                   uint64_t inherited_table)
 {
   auto contains = [](const BlockRanges &ranges, uint64_t address,
                      uint64_t bytes) {
@@ -1838,54 +1893,14 @@ static void VerifyTaskCompilerRecords(CMonitor &vm, uint64_t task,
     allocation(header[3], 1024 * 8, data_heap, data.ranges);
     return header;
   };
-  auto read_name = [&](uint64_t address) {
-    Check(address >= 16 && contains(data.ranges, address - 16, 16),
-          "Startup compiler name is outside its data heap");
-    const auto header = ReadPhysical<2>(vm, address - 16);
-    Check(header[0] == data_heap && header[1] >= 24 && header[1] <= 64 &&
-              !(header[1] & 7) &&
-              contains(data.ranges, address - 16, header[1]),
-          "Invalid startup compiler name allocation");
-    std::string name;
-    bool ended = false;
-    for (uint64_t offset = 0; offset < header[1] - 16 && !ended; offset += 8) {
-      auto word = ReadPhysical<1>(vm, address + offset)[0];
-      for (unsigned byte = 0; byte < 8; ++byte, word >>= 8) {
-        if (!(word & 255)) {
-          ended = true;
-          break;
-        }
-        name.push_back(char(word));
-      }
-    }
-    Check(ended && !name.empty() &&
-              CompilerAllocationSize(name.size() + 1) == header[1],
-          "Unterminated startup compiler name or incorrect allocation size");
-    return name;
-  };
-  struct CRecordMembers
-  {
-    uint64_t address, first, last;
-    uint32_t count;
-    std::string name;
-    bool callbacks;
-  };
-  std::vector<CRecordMembers> owners;
-  std::set<uint64_t> class_types;
-  const auto table = table_header(ReadPhysical<1>(vm, task + 0x3D0)[0]);
-  if (!terminal) {
-    Check(table[0] == inherited_table && !code.used && !code.alloced,
-          "Nonterminal startup task allocated compiler class records");
-    return;
-  }
-  Check(table[0] != inherited_table,
-        "Startup terminal has no owned compiler class table");
-  const auto classes = table_header(table[0]);
+  const auto classes = table_header(class_table);
   Check(classes[0] == inherited_table,
         "Startup class table inherited the wrong symbols");
   constexpr std::string_view views[]{"U16", "I16", "U32", "I32", "U64", "I64"};
-  constexpr std::string_view records[]{"CCntsGlbls",
+  constexpr std::string_view records[]{"Complex",
+                                       "CCntsGlbls",
                                        "CHash",
+                                       "CHashGeneric",
                                        "CHashSrcSym",
                                        "CHashDefineStr",
                                        "CHashTable",
@@ -1897,8 +1912,12 @@ static void VerifyTaskCompilerRecords(CMonitor &vm, uint64_t task,
                                        "CJob",
                                        "CJobCtrl",
                                        "CDoc",
+                                       "CDocEntryBase",
                                        "CDocEntry",
                                        "CDocBin",
+                                       "CEdFileName",
+                                       "CInsReg",
+                                       "CProgress",
                                        "CQue",
                                        "CFifoU8",
                                        "CFifoI64",
@@ -1908,12 +1927,21 @@ static void VerifyTaskCompilerRecords(CMonitor &vm, uint64_t task,
                                        "CDirEntry",
                                        "CDirContext",
                                        "CDrv",
+                                       "CFreeLst",
                                        "CBlkDev",
                                        "CFile",
                                        "CBlkDevGlbls",
+                                       "CCacheBlk",
                                        "CExcept",
+                                       "CMemUnused",
+                                       "CMemUsed",
+                                       "CMemBlk",
+                                       "CBlkPool",
                                        "CHeapCtrl",
                                        "CKbdStateGlbls",
+                                       "CKeyDevEntry",
+                                       "CKeyDevGlbls",
+                                       "CAutoCompleteDictGlbls",
                                        "CTextGlbls",
                                        "CD3I64",
                                        "CD3",
@@ -1944,7 +1972,7 @@ static void VerifyTaskCompilerRecords(CMonitor &vm, uint64_t task,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 81);
+  static_assert(class_count == 96);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -1966,10 +1994,30 @@ static void VerifyTaskCompilerRecords(CMonitor &vm, uint64_t task,
         const auto type = uint32_t(entry[2]);
         if ((type & 0x1FFFF) == 0x10 || (type & 0x1FFFF) == 0x20) {
           allocation(address, 5 * 128, code_heap, code.ranges);
-          const auto name = read_name(entry[1]);
+          Check(entry[1] >= 16 && contains(data.ranges, entry[1] - 16, 16),
+                "Startup class name is outside its data heap");
+          const auto name_header = ReadPhysical<2>(vm, entry[1] - 16);
+          Check(name_header[0] == data_heap && name_header[1] >= 24 &&
+                    name_header[1] <= 64 && !(name_header[1] & 7) &&
+                    contains(data.ranges, entry[1] - 16, name_header[1]),
+                "Invalid startup class name allocation");
+          std::string name;
+          bool ended = false;
+          for (uint64_t offset = 0; offset < name_header[1] - 16 && !ended;
+               offset += 8) {
+            auto word = ReadPhysical<1>(vm, entry[1] + offset)[0];
+            for (unsigned byte = 0; byte < 8; ++byte, word >>= 8) {
+              if (!(word & 255)) {
+                ended = true;
+                break;
+              }
+              name.push_back(char(word));
+            }
+          }
           const auto found = expected.find(name);
-          Check(found != expected.end() && found->second == type,
-                "Unexpected, duplicated or mistyped startup class name");
+          Check(ended && found != expected.end() && found->second == type &&
+                    CompilerAllocationSize(name.size() + 1) == name_header[1],
+                ("Unexpected, duplicated or mistyped startup class " + name).c_str());
           uint64_t hash = 0;
           for (unsigned char ch : name)
             hash = std::rotl(hash, 1) + ch;
@@ -1977,6 +2025,10 @@ static void VerifyTaskCompilerRecords(CMonitor &vm, uint64_t task,
           Check((hash & 1023) == bucket + i,
                 "Startup class is in the wrong hash bucket");
           const auto block = ReadPhysical<80>(vm, address);
+          if (name == "CProgress")
+            Check(block[8] == 80, "Startup CProgress record has the wrong size");
+          if (name == "CDocEntryBase")
+            Check(block[8] == 88, "Startup CDocEntryBase record has the wrong size");
           Check(((block[10] >> 32) & 255) == 0,
                 "Startup class base has pointer stars");
           for (uint64_t stars = 1; stars <= 4; ++stars) {
@@ -1988,10 +2040,6 @@ static void VerifyTaskCompilerRecords(CMonitor &vm, uint64_t task,
                              block.begin() + stars * 16),
                   "Startup class pointer companion differs");
           }
-          for (uint64_t stars = 0; stars <= 4; ++stars)
-            class_types.insert(address + stars * 128);
-          owners.push_back(
-              {address, block[11], block[13], uint32_t(block[10]), name, true});
           expected.erase(found);
           used += CompilerAllocationSize(5 * 128);
         }
@@ -1999,239 +2047,323 @@ static void VerifyTaskCompilerRecords(CMonitor &vm, uint64_t task,
       }
   }
   Check(expected.empty() && used == class_count * 656,
-        "Startup terminal class records are incomplete");
-  constexpr std::string_view function_names =
-      "Print MStrPrint StrPrint CatPrint CAlloc MAlloc Now Struct2Date "
-      "Date2Struct YearStartDate DayOfWeek FirstDayOfMon LastDayOfMon "
-      "FirstDayOfYear LastDayOfYear Cd IsDir Dir DirCur PutDirLink FilesFind "
-      "FileFind Load FileRead FileWrite Let2Drv BlkRead Fmt BlkWrite FSize "
-      "BlkDevNextFreeSlot BlkDevAdd Let2Drv FOpen FClose FBlkRead FBlkWrite "
-      "FileAttr CopySingle Del Copy Move CopyTree DelTree DirMk ScanFlags "
-      "FilesFindMatch DirEntryDel DirEntryDel2 DirTreeDel DirTreeDel2 "
-      "DirContextNew DirContextDel Str2I64 Str2F64 Str2Date StrScan SysTry "
-      "SysUntry throw Caller PutExcept Break BreakLock BreakUnlock YorN Free "
-      "MSize MSize2 HashFind HashVal MemberFind MemberMetaData MemberMetaFind "
-      "StrNew "
-      "MStrUtil ScaleIndent Spaces2Tabs StrFind StrFirstOcc StrFirstRem "
-      "StrICmp "
-      "StrIMatch StrLastOcc StrLastRem StrMatch StrNCmp StrNICmp StrOcc "
-      "StrUtil "
-      "Tabs2Spaces StrCpy StrLen QueInit QueIns QueInsRev QueRem FifoU8New "
-      "FifoU8Del FifoU8Ins FifoU8Rem FifoU8Peek FifoU8Flush FifoU8Cnt "
-      "FifoI64New FifoI64Del FifoI64Ins FifoI64Rem FifoI64Peek FifoI64Flush "
-      "FifoI64Cnt StrCmp MemCmp MemCpy MemSet MemSetU8 MemSetU16 MemSetU32 "
-      "MemSetI64 PutHex PutChars PutS tS Busy SleepUntil Sleep Fs Gs ChkPtr "
-      "ClassRep2 ClassRep ClassRepD GetRFlags Cos MaxI64 MinI64 Sin SqrI64 "
-      "Sqrt "
-      "ToI64 ToF64 JobDel TaskRstAwaitingMsg TaskExe TaskText TaskMsg "
-      "JobResScan JobResGet TaskWait PostMsg PostMsgWait Msg JobsHndlr "
-      "SrvTaskCont FlushMsgs Char2ScanCode ScanCode2Char KbdTypeMatic GridInit "
-      "MsSet GrPaletteColorSet GrPaletteColorGet GrPaletteGet GrPaletteSet "
-      "GrScaleZoom WinHorz WinVert WinRefocus WinToTop WinFocus WinTileHorz "
-      "WinTileVert WinMax WinBorder WinScrollNull WinScrollRestore "
-      "CtrlFindUnique CtrlInside WinScrollsInit ViewAnglesNew ViewAnglesDel "
-      "AutoComplete MenuSubEntryFind MenuEntryFind MenuNew MenuFile MenuDel "
-      "MenuPush MenuFilePush MenuPop ScanCode2KeyName SettingsPush SettingsPop "
-      "WinZBufUpdate TextChar TextLenStr TextLenAttrStr TextLenAttr TextPrint "
-      "TextRect TextBorder DocNew DocRead DocSave DocType Type DocPut "
-      "DocDisplay DocBorder DocDel DocRecalc DocMax DocDataFmt DocDataScan "
-      "DocForm DocEd DocFormFwd DocFormBwd View HomeSet ToUpper StrCpy Define "
-      "DefineLoad DefinePrint DefineCnt DefineSub DefineLstLoad DefineMatch "
-      "Color2Str Str2ColorU16 Str2ColorU32 DocPutKey DocTermNew DocGetKey "
-      "DocScanLine GetStr GetI64 GetF64 GetDate GetS UserCmdLine DocLock "
-      "DocUnlock DocBottom DocClear DocCursor DocHighlightCursor DocScroll "
-      "DocEntryRun DocPrint DrawStdMs PaletteSetStd ClampI64 SignI64 Clamp Min "
-      "Max Pow10I64 FloorU64 CeilU64 RoundI64 FloorI64 CeilI64 RandI16 RandU16 "
-      "RandI32 RandU32 RandI64 RandU64 Rand Seed IsPixCovered0 GrPlot0 GrPeek0 "
-      "GrBlot GrRect GrRectB GrClamp GrPlot GrFillCircle GrPlot3B GrPlot3 "
-      "SpriteSize DC2Sprite Sprite3 Sprite3B GrBlot3 GrHLine GrVLine "
-      "GrFillTri0 "
-      "GrFillPoly3 GrRect3 GrBorder GrArrow3 GrPutChar GrPrint PressAKey "
-      "DCSymmetrySet DCSymmetry3Set DCReflect DocSprite Sprite GrPeek "
-      "GrFloodFill GrFloodFill3 GrLine GrLine3 Circle Ellipse GrCircle "
-      "GrEllipse GrCircle3 GrEllipse3 Arg Line RegPoly GrRegPoly GrRegPoly3 "
-      "Bezier2 BSpline2 Gr2Bezier Gr2Bezier3 Gr2BSpline Gr2BSpline3 Bezier3 "
-      "BSpline3 Gr3Bezier Gr3Bezier3 Gr3BSpline Gr3BSpline3 D3I32Dist "
-      "D3I32DistSqr D3I32NormSqr DCThickScale ClipLine Mat4x4MulXYZ "
-      "DCTransform "
-      "Mat4x4IdentEqu Mat4x4IdentNew Mat4x4NormSqr65536 DCMat4x4Set DCLighting "
-      "DCFill DCClear DCRst DCExtentsInit DCAlias DCNew DCDel DCSize "
-      "DCDepthBufRst DCDepthBufAlloc DCCopy DCMono DCColorChg DCSave DCLoad "
-      "GRWrite GRRead DCExt DCDiff DocGR DCScrnCapture GRScrnCaptureRead "
-      "GRScrnCaptureWrite D3I32Norm Mat4x4MulMat4x4Equ Mat4x4MulMat4x4New "
-      "Mat4x4Equ Mat4x4RotX Mat4x4RotY Mat4x4RotZ Mat4x4Scale "
-      "Mat4x4TranslationEqu Mat4x4TranslationAdd Refresh Mat4x4New PutKey "
-      "ScanChar ScanKey GetKey GetChar ScanMsg GetMsg Yield Spawn Exit "
-      "TaskValidate Suspend IsSuspended TaskQueIns TaskQueRem SingleUser "
-      "IsSingleUser Ona2Freq Freq2Ona Snd ScrnCast SndRst SndTaskEndCB tM Beat "
-      "MusicSetOctave MusicSetMeter MusicSetNoteLen Note2Ona Ona2Note "
-      "Ona2Octave Play MusicSettingsRst SndShift AUWrite Beep Mute IsMute Call "
-      "StreamPrint StreamDir StreamExePrint RedSeaISO Cmp ExeFile ExePutS";
-  std::multiset<std::string> expected_functions;
-  std::istringstream declarations{std::string(function_names)};
-  for (std::string name; declarations >> name;)
-    expected_functions.insert(name);
-  constexpr size_t function_count = 424;
-  Check(expected_functions.size() == function_count,
-        "Invalid startup function declaration inventory");
-  constexpr struct
-  {
-    const char *name;
-    uint32_t args;
-  } callbacks[]{{"CDocEntry.left_cb", 2},
-                {"CDocEntry.right_cb", 2},
-                {"CDocEntry.tag_cb", 3},
-                {"CDoc.left_click_link", 2},
-                {"CDoc.right_click_link", 2},
-                {"CDoc.user_put_key", 4},
-                {"CGrGlbls.fp_final_scrn_update", 1},
-                {"CGrGlbls.fp_draw_ms", 3},
-                {"CGrGlbls.fp_draw_grab_ms", 4},
-                {"CDC.transform", 4},
-                {"CTask.draw_it", 2},
-                {"CTask.task_end_cb", 0},
-                {"CTaskSettings.draw_it", 2},
-                {"CTaskSettings.task_end_cb", 0},
-                {"CCtrl.update_derived_vals", 1},
-                {"CCtrl.draw_it", 2},
-                {"CCtrl.inside_ctrl", 3},
-                {"CCtrl.left_click", 4},
-                {"CCtrl.right_click", 4},
-                {"CCtrl.wheel_chg", 2},
-                {"CCPU.profiler_timer_irq", 1},
-                {"Circle.fp_plot", 4},
-                {"Ellipse.fp_plot", 4},
-                {"Line.fp_plot", 4},
-                {"RegPoly.fp_plot", 4},
-                {"Bezier2.fp_plot", 4},
-                {"BSpline2.fp_plot", 4},
-                {"Bezier3.fp_plot", 4},
-                {"BSpline3.fp_plot", 4}};
-  static_assert(std::size(callbacks) == 29);
-  std::map<std::string, uint32_t> expected_callbacks;
-  for (const auto &callback : callbacks)
-    expected_callbacks.emplace(callback.name, callback.args);
-  std::set<uint64_t> function_blocks;
-  uint64_t function_used = 0;
-  auto function_record = [&](uint64_t address, const std::string &name,
-                             bool named, uint32_t args) {
-    constexpr uint64_t bytes = 5 * 168, charged = bytes + 16;
-    Check(
-        address >= 16 && contains(code.ranges, address - 16, charged) &&
-            function_blocks.insert(address).second,
-        ("Startup function block is repeated or outside its code heap: " + name)
-            .c_str());
-    const auto memory = ReadPhysical<107>(vm, address - 16);
-    Check(memory[0] == code_heap && memory[1] == charged,
-          ("Startup function block has the wrong allocation or owner: " + name)
-              .c_str());
-    const auto block = std::span(memory).subspan(2);
-    const auto type = uint32_t(block[2]);
-    const auto flags = uint16_t(block[10] >> 48);
-    Check(type == (named ? 0x01000040u : 0x40u) &&
-              ((block[10] >> 32) & 0xFFFF) == (10u << 8) && !block[3] &&
-              !block[4] && !block[5] && !block[7] && !block[8] && !block[9] &&
-              !block[14] && !block[15] && class_types.contains(block[16]) &&
-              !(block[17] >> 32) && !block[18] && !block[20] &&
-              uint32_t(block[10]) == uint32_t(block[17]) &&
-              (named ? (flags & 0x2000) && !(flags & 0xFFF)
-                     : flags == 0x8000 && !block[0] && !block[1] && !block[6] &&
-                           !block[19] && block[17] == args),
-          ("Startup function base fields differ: " + name).c_str());
-    if (named) {
-      Check(read_name(block[1]) == name,
-            "Startup function hash and allocation names differ");
-      if (block[6])
-        read_name(block[6]);
-    }
-    for (uint64_t stars = 1; stars <= 4; ++stars) {
-      std::array<uint64_t, 21> companion{};
-      companion[2] = 0x40;
-      companion[8] = 8;
-      companion[10] = (stars << 32) | (10ULL << 40);
-      Check(std::equal(companion.begin(), companion.end(),
-                       block.begin() + stars * 21),
-            ("Startup function pointer companion differs: " + name).c_str());
-    }
-    owners.push_back(
-        {address, block[11], block[13], uint32_t(block[10]), name, named});
-    function_used += charged;
-  };
-  for (uint64_t bucket = 0; bucket < 1024; bucket += 64) {
-    const auto entries = ReadPhysical<64>(vm, table[3] + bucket * 8);
-    for (size_t i = 0; i < entries.size(); ++i)
-      for (auto address = entries[i]; address;) {
-        Check(seen.size() < 2048 && seen.insert(address).second &&
-                  (contains(code.ranges, address, 24) ||
-                   contains(data.ranges, address, 24)),
-              "Invalid or repeated startup function hash entry");
-        const auto entry = ReadPhysical<3>(vm, address);
-        if ((uint32_t(entry[2]) & 0x1FFFF) == 0x40) {
-          const auto name = read_name(entry[1]);
-          const auto found = expected_functions.find(name);
-          Check(found != expected_functions.end(),
-                "Unexpected or duplicated startup function declaration");
-          uint64_t hash = 0;
-          for (unsigned char ch : name)
-            hash = std::rotl(hash, 1) + ch;
-          hash += (hash >> 16) + ((hash >> 15) & 1);
-          Check((hash & 1023) == bucket + i,
-                "Startup function is in the wrong hash bucket");
-          function_record(address, name, true, 0);
-          expected_functions.erase(found);
-        }
-        address = entry[0];
-      }
-  }
-  Check(expected_functions.empty() && function_blocks.size() == function_count,
-        "Startup terminal function declarations are incomplete");
-  std::set<uint64_t> members;
-  for (size_t owner_index = 0; owner_index < owners.size(); ++owner_index) {
-    const auto owner = owners[owner_index];
-    Check(owner.count <= 512, "Startup compiler member count is unbounded");
-    uint64_t count = 0, tail = owner.address + 88;
-    for (auto address = owner.first; address;) {
-      Check(address >= 16 && contains(data.ranges, address - 16, 160) &&
-                count < owner.count && members.size() < 8192 &&
-                members.insert(address).second,
-            "Invalid or repeated startup compiler member");
-      const auto memory = ReadPhysical<20>(vm, address - 16);
-      Check(memory[0] == data_heap && memory[1] == 160,
-            "Startup compiler member has the wrong allocation or owner");
-      const auto member = std::span(memory).subspan(2);
-      Check(class_types.contains(member[6]) && class_types.contains(member[7]),
-            "Startup compiler member uses an unowned class");
-      if ((member[9] >> 32) & 8) {
-        Check(owner.callbacks && member[17] >= 168,
-              "Unexpected nested startup callback or missing function pointer");
-        const auto name = owner.name + "." + read_name(member[5]);
-        const auto found = expected_callbacks.find(name);
-        Check(found != expected_callbacks.end(),
-              "Unexpected or duplicated startup callback signature");
-        function_record(member[17] - 168, name, false, found->second);
-        expected_callbacks.erase(found);
-      } else
-        Check(!member[17], "Noncallback startup member owns a function record");
-      ++count;
-      tail = address;
-      address = member[0];
-    }
-    Check(count == owner.count && tail == owner.last,
-          ("Startup compiler member count or tail differs: " + owner.name)
-              .c_str());
-  }
-  const auto total_functions = function_count + std::size(callbacks);
-  Check(expected_callbacks.empty() &&
-            function_blocks.size() == total_functions &&
-            function_used == total_functions * 856 &&
-            code.used == used + function_used,
-        "Startup terminal code usage differs from its owned compiler records");
-  std::cout << "Verified startup function records " << function_count
-            << ", callback signatures " << std::size(callbacks)
-            << ", code heap bytes " << function_used << '\n';
-  std::cout << "Verified startup class records " << class_count
+        "Adam class usage differs from its owned class records");
+  std::cout << "Verified Adam startup class records " << class_count
             << ", code heap bytes " << used << '\n';
 }
+
+// Count the persistent compiler graph from actual allocation headers rather
+// than using the guest's reported startup delta as the expected total.
+class CAdamSourceAllocations
+{
+public:
+  CAdamSourceAllocations(CMonitor &vm, const fs::path &dir,
+                         uint64_t code_owner, uint64_t data_owner,
+                         const CTestHeap &code, const CTestHeap &data)
+      : vm(vm), dir(dir), owners{code_owner, data_owner},
+        heaps{&code, &data}
+  {
+  }
+
+  std::array<uint64_t, 2> Verify(uint64_t table, uint64_t classes,
+                                 uint64_t kernel)
+  {
+    VerifyTable(table, classes, false);
+    VerifyTable(classes, kernel, true);
+    Check(sources.size() == 25, "Missing original Adam startup functions");
+    Check(registration_defines.size() == 4, "Missing install registration defines");
+    std::cout << "Verified Adam source functions " << sources.size()
+              << ", owned code allocations " << used[0]
+              << ", owned data allocations " << used[1] << '\n';
+    return used;
+  }
+
+private:
+  CMonitor &vm;
+  const fs::path &dir;
+  uint64_t owners[2];
+  const CTestHeap *heaps[2];
+  std::array<uint64_t, 2> used{};
+  std::map<uint64_t, uint64_t> allocations;
+  std::map<uint64_t, Bytes> snapshots;
+  std::set<std::string> sources;
+  std::set<std::string> registration_defines;
+
+  static bool Contains(const std::pair<uint64_t, uint64_t> &range,
+                       uint64_t address, uint64_t size)
+  {
+    return address >= range.first && address <= range.second &&
+           size <= range.second - address;
+  }
+
+  template <size_t N> std::array<uint64_t, N> Read(uint64_t address)
+  {
+    for (auto *heap : heaps)
+      for (auto range : heap->ranges)
+        if (Contains(range, address, N * 8)) {
+          if (range.second - range.first >= 16 * 1024 * 1024)
+            return ReadPhysical<N>(vm, address);
+          auto it = snapshots.find(range.first);
+          if (it == snapshots.end())
+            it = snapshots.emplace(range.first, CaptureCompilerMemory(
+                vm, dir / "adam-heap-block.bin", range.first,
+                range.second - range.first)).first;
+          std::array<uint64_t, N> words{};
+          for (size_t i = 0; i < N; ++i)
+            words[i] = ReadLE(it->second, address - range.first + i * 8, 8);
+          return words;
+        }
+    throw std::runtime_error("Adam metadata points outside its heaps");
+  }
+
+  uint64_t Allocation(uint64_t address, unsigned kind, uint64_t requested = 0)
+  {
+    Check(address >= 16 && !(address & 7), "Invalid Adam allocation address");
+    const auto head = address - 16;
+    const auto header = Read<2>(head);
+    const auto size = header[1];
+    if (!(header[0] == owners[kind] && size >= 16 && !(size & 7) &&
+          size < 16 * 1024 * 1024 &&
+          (!requested || size == CompilerAllocationSize(requested)) &&
+          std::any_of(heaps[kind]->ranges.begin(), heaps[kind]->ranges.end(),
+                      [&](auto range) { return Contains(range, head, size); }))) {
+      std::ostringstream message;
+      message << "Adam allocation 0x" << std::hex << address << " owner 0x"
+              << header[0] << " expected 0x" << owners[kind] << std::dec
+              << ", size " << size << ", requested " << requested;
+      throw std::runtime_error(message.str());
+    }
+    auto next = allocations.lower_bound(head);
+    Check((next == allocations.end() || size <= next->first - head) &&
+              (next == allocations.begin() ||
+               std::prev(next)->second <= head),
+          "Repeated or overlapping Adam startup allocation");
+    allocations.emplace_hint(next, head, head + size);
+    used[kind] += size;
+    return size - 16;
+  }
+
+  void String(uint64_t address)
+  {
+    if (!address)
+      return;
+    const auto size = Allocation(address, 1);
+    bool ended = false;
+    for (uint64_t i = 0; i < size && !ended; i += 8) {
+      auto word = Read<1>(address + i)[0];
+      for (unsigned b = 0; b < 8; ++b, word >>= 8)
+        if (!(word & 255)) {
+          ended = true;
+          break;
+        }
+    }
+    Check(ended, "Unterminated Adam startup string");
+  }
+
+  void Dimensions(uint64_t address)
+  {
+    while (address) {
+      Allocation(address, 1, 24);
+      address = Read<3>(address)[0];
+    }
+  }
+
+  void Members(uint64_t address, unsigned depth)
+  {
+    Check(depth < 16, "Recursive Adam callback metadata");
+    while (address) {
+      Allocation(address, 1, 144);
+      const auto member = Read<18>(address);
+      String(member[5]);
+      Dimensions(member[12]);
+      const auto flags = uint16_t(member[9] >> 32);
+      if (flags & 4)
+        String(member[16]);
+      if (flags & 8)
+        Callback(member[17], depth + 1);
+      if (flags & 64)
+        Allocation(member[15], 1);
+      for (auto meta = member[8]; meta;) {
+        Allocation(meta, 1, 32);
+        const auto record = Read<4>(meta);
+        String(record[1]);
+        if (record[2] & 1)
+          String(record[3]);
+        meta = record[0];
+      }
+      address = member[0];
+    }
+  }
+
+  void Callback(uint64_t pointer, unsigned depth)
+  {
+    Check(pointer >= 168, "Missing Adam callback metadata");
+    const auto stars = uint8_t(Read<1>(pointer + 80)[0] >> 32);
+    Check(stars && stars <= 4 && pointer >= stars * 168,
+          "Invalid Adam callback pointer companion");
+    const auto base = pointer - stars * 168;
+    FunctionRecord(base);
+    const auto fun = Read<21>(base);
+    Check((fun[2] & 0x1FFFF) == 0x40 && !fun[19],
+          "Invalid Adam callback signature");
+    Members(fun[11], depth);
+  }
+
+  void FunctionRecord(uint64_t address)
+  {
+    Allocation(address, 0, 5 * 168);
+    for (uint64_t stars = 1; stars <= 4; ++stars) {
+      const auto pointer = Read<21>(address + stars * 168);
+      Check(pointer[2] == 0x40 && pointer[8] == 8 &&
+                pointer[10] == ((10ULL << 40) | (stars << 32)),
+            "Invalid Adam function pointer companion");
+      for (size_t i = 0; i < pointer.size(); ++i)
+        if (i != 2 && i != 8 && i != 10)
+          Check(!pointer[i], "Unexpected Adam function companion storage");
+    }
+  }
+
+  void SourceFunction(const std::string &name,
+                      const std::array<uint64_t, 21> &fun)
+  {
+    static const std::map<std::string, std::string_view> expected{
+        {"R2P", "AMath"}, {"P2R", "AMath"}, {"Wrap", "AMath"},
+        {"DistSqrI64", "AMath"}, {"ASin", "AMath"}, {"ACos", "AMath"},
+        {"Sinh", "AMath"}, {"Cosh", "AMath"}, {"CAdd", "AMath"},
+        {"CSub", "AMath"}, {"CMul", "AMath"}, {"CDiv", "AMath"},
+        {"CScale", "AMath"}, {"CCopy", "AMath"}, {"CEqu", "AMath"},
+        {"CPoly", "AMath"}, {"TaskMemAlloced", "AMem"},
+        {"TaskMemUsed", "AMem"}, {"HeapRep", "AMem"},
+        {"IsInHeapCtrl", "AMem"}, {"HeapCtrlWalk", "AMem"},
+        {"IsInHeap", "AMem"}, {"HeapWalk", "AMem"},
+        {"TaskRepTask", "TaskRep"}, {"TaskRep", "TaskRep"}};
+    auto it = expected.find(name);
+    Check(it != expected.end() && sources.insert(name).second,
+          "Unexpected or duplicate original Adam function");
+    const auto link = ReadGuestName(vm, fun[3]);
+    Check(link.starts_with("FL:") &&
+              link.find("/Adam/" + std::string(it->second) + ".HC,") !=
+                  std::string::npos &&
+              !(uint16_t(fun[10] >> 48) & 0x3001) &&
+              bool(fun[2] & 0x01000000) == (name != "TaskRepTask"),
+          "Adam function did not retain its original source and definition");
+    Allocation(fun[19], 0);
+  }
+
+  void InstallRegistrationDefine(const std::array<uint64_t, 11> &def)
+  {
+    String(def[3]);
+    String(def[4]);
+    const auto name = ReadGuestName(vm, def[1]);
+    Check(registration_defines.insert(name).second,
+          ("Duplicate install registration define " + name).c_str());
+    const auto list = std::find_if(std::begin(ins_reg_lists), std::end(ins_reg_lists),
+                                   [&](const auto &item) { return item.name == name; });
+    if (list != std::end(ins_reg_lists)) {
+      Check(uint32_t(def[2]) == 4 && def[10] == list->count && !def[4] &&
+                ReadGuestName(vm, def[3]) == "AD:0x0",
+            ("Invalid install registration list " + name).c_str());
+      Allocation(def[8], 1, list->data.size());
+      Allocation(def[9], 1, list->count * sizeof(uint64_t));
+      const auto literal = Read<1>(def[9])[0];
+      Check(GuestBytesEqual(vm, def[8], list->data) &&
+                GuestBytesEqual(vm, literal, list->data),
+            "Install registration list bytes differ");
+      for (size_t i = 0, offset = 0; i < list->count; ++i) {
+        Check(Read<1>(def[9] + i * sizeof(uint64_t))[0] == literal + offset,
+              "Install registration list offset differs");
+        offset = list->data.find('\0', offset) + 1;
+      }
+      return;
+    }
+
+    String(def[8]);
+    const auto idx = ReadGuestName(vm, def[4]);
+    const auto link = ReadGuestName(vm, def[3]);
+    const auto value = ReadGuestName(vm, def[8]);
+    Check((name == "INS_REG_PERSONAL_INITIALS" || name == "INS_REG_MACHINE_NUM") &&
+              uint32_t(def[2]) == 0x01000004 && def[10] == UINT64_MAX && !def[9] &&
+              idx == "Registry/Install Registration" &&
+              link.starts_with("FL:~/Tmp.DD.Z,") &&
+              value == (name == "INS_REG_MACHINE_NUM" ? "0" : "\"\""),
+          ("Invalid startup registration define " + name).c_str());
+  }
+
+  void VerifyTable(uint64_t table, uint64_t parent, bool classes)
+  {
+    Allocation(table, 1, 32);
+    const auto header = Read<4>(table);
+    Check(header[0] == parent && header[1] == 1023 && !header[2],
+          "Adam startup namespace inherited the wrong table");
+    Allocation(header[3], 1, 1024 * 8);
+    for (size_t i = 0; i < 1024; i += 64) {
+      const auto buckets = Read<64>(header[3] + i * 8);
+      for (auto address : buckets)
+        while (address) {
+          const auto entry = Read<3>(address);
+          const auto type = uint32_t(entry[2]) & 0x1FFFF;
+          if (type == 0x10 || type == 0x20) {
+            Check(classes, "Adam source table unexpectedly owns a class");
+            Allocation(address, 0, 5 * 128);
+            const auto cls = Read<16>(address);
+            String(cls[1]);
+            String(cls[3]);
+            String(cls[4]);
+            String(cls[6]);
+            Check(!cls[5] && !cls[7], "Unexpected Adam class relocation metadata");
+            Members(cls[11], 0);
+          } else if (type == 0x40) {
+            Check(!classes, "Typed function in the wrong Adam table");
+            FunctionRecord(address);
+            const auto fun = Read<21>(address);
+            String(fun[1]);
+            String(fun[3]);
+            String(fun[4]);
+            String(fun[6]);
+            Check(!fun[5] && !fun[7] && !fun[20],
+                  "Unexpected Adam function relocation metadata");
+            Members(fun[11], 0);
+            if (fun[3])
+              SourceFunction(ReadGuestName(vm, fun[1]), fun);
+            else
+              Check((uint16_t(fun[10] >> 48) & 0x2000) && fun[19],
+                    "Adam runtime header is not bound");
+          } else if (type == 8) {
+            Check(!classes, "Typed global in the wrong Adam table");
+            Allocation(address, 1, 136);
+            const auto var = Read<17>(address);
+            String(var[1]);
+            String(var[3]);
+            String(var[4]);
+            String(var[6]);
+            Check(!var[5] && !var[7] && (var[9] & 16),
+                  "Adam runtime global is not a native alias");
+            Dimensions(var[12]);
+            if (var[11])
+              Callback(var[11], 0);
+          } else if (type == 4) {
+            Allocation(address, 1, 88);
+            const auto def = Read<11>(address);
+            String(def[1]);
+            Check(!def[5] && !def[6] && !def[7],
+                  "Unexpected Adam define relocation metadata");
+            if (classes) {
+              String(def[8]);
+              Check(!def[3] && !def[4] && !def[9] && def[10] == UINT64_MAX,
+                    "Unexpected compiler namespace definition");
+            } else
+              InstallRegistrationDefine(def);
+          } else {
+            Check(classes && (type == 1 || type == 0x200),
+                  "Unexpected Adam namespace entry type");
+            Allocation(address, 1, type == 1 ? 72 : 48);
+            String(entry[1]);
+          }
+          address = entry[0];
+        }
+    }
+  }
+};
 
 static void VerifyCoverage(BlockRanges blocks, const BlockRanges &ranges)
 {
@@ -2382,11 +2514,209 @@ static uint64_t VerifyGraphicsContexts(CMonitor &vm, uint64_t graphics,
   return used;
 }
 
-static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
+static uint64_t VerifyDiskCache(CMonitor &vm, uint64_t disk, uint64_t owner,
+                                uint64_t pool_bytes, const BlockRanges &ranges)
+{
+  constexpr uint64_t scale_limit = 2ULL * 1024 * 1024 * 1024,
+                     block_size = 512, cache_record = 560, cache_header = 48,
+                     buckets = 0x2000;
+  const uint64_t request =
+      pool_bytes >= scale_limit
+          ? 0x40000
+          : 2048 + (0x40000 - 2048) * pool_bytes / scale_limit;
+  const auto cache = ReadPhysical<4>(vm, disk + 40);
+  if (request < 0x2000) {
+    Check(cache == std::array<uint64_t, 4>{},
+          "Unexpected disk cache allocation below the initialization threshold");
+    return 0;
+  }
+  const std::array<uint64_t, 3> sizes{
+      CompilerAllocationSize(request), CompilerAllocationSize(cache_header),
+      CompilerAllocationSize(buckets * 2 * 8)};
+  BlockRanges allocations;
+  for (size_t i = 0; i < sizes.size(); ++i) {
+    const uint64_t ptr = cache[i], size = sizes[i];
+    Check(ptr >= 16 && !(ptr & 7) &&
+              std::any_of(ranges.begin(), ranges.end(), [&](const auto &range) {
+                return ptr - 16 >= range.first && ptr - 16 <= range.second &&
+                       size <= range.second - (ptr - 16);
+              }) &&
+              ReadPhysical<2>(vm, ptr - 16) ==
+                  std::array<uint64_t, 2>{owner, size},
+          "Invalid boot disk cache allocation or owner");
+    allocations.emplace_back(ptr - 16, ptr - 16 + size);
+  }
+  std::sort(allocations.begin(), allocations.end());
+  Check(allocations[0].second <= allocations[1].first &&
+            allocations[1].second <= allocations[2].first,
+        "Overlapping boot disk cache allocations");
+  const uint64_t count = (sizes[0] - 16) / cache_record;
+  Check(count && cache[3] == count * block_size,
+        "Invalid boot disk cache capacity");
+  auto valid_entry = [&](uint64_t ptr) {
+    return ptr >= cache[0] && ptr - cache[0] < count * cache_record &&
+           (ptr - cache[0]) % cache_record == 0;
+  };
+  const auto links = ReadPhysical<2>(vm, cache[1]);
+  Check(valid_entry(links[0]) && valid_entry(links[1]) &&
+            ReadPhysical<1>(vm, links[0] + 8)[0] == cache[1] &&
+            ReadPhysical<1>(vm, links[1])[0] == cache[1],
+        "Invalid boot disk cache LRU sentinel");
+  const uint64_t used = sizes[0] + sizes[1] + sizes[2];
+  std::cout << "Verified disk cache " << cache[3] << " bytes, heap bytes "
+            << used << '\n';
+  return used;
+}
+
+static uint64_t VerifyDriveSectorCaches(CMonitor &vm, uint64_t disk,
+                                         uint64_t owner,
+                                         const BlockRanges &ranges)
+{
+  constexpr uint64_t drive_count = 26, drive_size = 160, sector_size = 512;
+  const auto drives = ReadPhysical<1>(vm, disk + 88)[0];
+  const auto boot_drive = ReadPhysical<1>(vm, 0x100368)[0];
+  auto allocation = [&](uint64_t ptr, uint64_t bytes) {
+    const auto size = CompilerAllocationSize(bytes);
+    Check(ptr >= 16 && !(ptr & 7) &&
+              std::any_of(ranges.begin(), ranges.end(), [&](const auto &range) {
+                return ptr - 16 >= range.first && ptr - 16 <= range.second &&
+                       size <= range.second - (ptr - 16);
+              }) &&
+              ReadPhysical<2>(vm, ptr - 16) ==
+                  std::array<uint64_t, 2>{owner, size},
+          "Invalid boot drive or FAT sector cache allocation");
+    return size;
+  };
+  allocation(drives, drive_count * drive_size);
+  uint64_t used = 0, mounted = 0;
+  for (uint64_t i = 0; i < drive_count; ++i) {
+    const auto addr = drives + i * drive_size;
+    const auto drv = ReadPhysical<18>(vm, addr);
+    if (uint32_t(drv[1]) != 0x56535644) {
+      Check(!drv[17], "Unmounted drive retains a FAT sector allocation");
+      continue;
+    }
+    // The fixed-area boot tests have no attached writable IDE disk.
+    Check(addr == boot_drive && (drv[1] >> 48) == 1 &&
+              drv[6] == drv[7] && drv[6] > drv[2] &&
+              drv[9] >= drv[6] && !drv[15] &&
+              drv[16] <= drv[9] - drv[6],
+          "Unexpected mounted drive or dirty boot FAT sector cache");
+    used += allocation(drv[17], sector_size);
+    ++mounted;
+  }
+  Check(mounted == (boot_drive ? 1u : 0u),
+        "Missing boot drive FAT sector cache");
+  std::cout << "Verified mounted drive sector caches " << mounted
+            << ", heap bytes " << used << '\n';
+  return used;
+}
+
+static uint64_t VerifyRegistryHeap(CMonitor &vm, uint64_t owner, uint64_t adam)
+{
+  const auto symbols = ReadBootSymbols(vm);
+  const auto doc = ReadPhysical<1>(vm, symbols.exports.at("sys_registry_doc"))[0];
+  Check(ReadPhysical<1>(vm, doc + offsetof(CDoc, doc_signature), 'w')[0] ==
+            DOC_SIGNATURE_VAL &&
+        ReadPhysical<1>(vm, doc + offsetof(CDoc, mem_task))[0] == adam,
+        "Missing Adam registry document");
+  auto used = VerifyCompilerAllocation(vm, doc, owner, sizeof(CDoc));
+  used += VerifyCompilerAllocation(
+      vm, ReadPhysical<1>(vm, doc + offsetof(CDoc, find_replace))[0], owner,
+      sizeof(CEdFindText));
+  used += VerifyCompilerAllocation(
+      vm, ReadPhysical<1>(vm, doc + offsetof(CDoc, dollar_buf))[0], owner, 84);
+
+  const auto head = doc + offsetof(CDoc, head);
+  auto last = head;
+  auto entry = ReadPhysical<1>(vm, head)[0];
+  std::set<std::string> trees;
+  for (unsigned count = 0; entry != head; count++) {
+    Check(count < 64 && entry >= 16, "Invalid registry entry list");
+    auto links = ReadPhysical<4>(vm, entry);
+    Check(links[1] == last, "Invalid registry back link");
+    const auto type = uint8_t(links[3]);
+    const auto flags = ReadPhysical<1>(vm, entry + offsetof(CDocEntryBase, de_flags))[0];
+    const bool extended = type == DOCT_TREE || type == DOCT_INDENT;
+    used += VerifyCompilerAllocation(vm, entry, owner,
+        extended ? sizeof(CDocEntry) : sizeof(CDocEntryBase));
+    if (links[2]) {
+      Check(flags & DOCEF_TAG, "Unexpected registry tag");
+      const auto tag = ReadGuestName(vm, links[2]);
+      used += VerifyCompilerAllocation(vm, links[2], owner, tag.size() + 1);
+      if (type == DOCT_TREE)
+        Check(tag.size() >= 3 && trees.insert(tag.substr(3)).second,
+              ("Invalid or duplicate default registry branch " + tag).c_str());
+    }
+    last = entry;
+    entry = links[0];
+  }
+  Check(trees == std::set<std::string>{"Adam", "InsReg", "SysMsgFlags", "SysRegVer"} &&
+            ReadPhysical<2>(vm, head)[1] == last,
+        "Missing default registry branches");
+  return used;
+}
+
+static uint64_t VerifyKeyDevHeap(CMonitor &vm, uint64_t head, uint64_t owner,
+                                  bool adam_initialized)
+{
+  const auto fields = ReadPhysical<11>(vm, head);
+  const auto callbacks = fields[6], normal = fields[9], shifted = fields[10];
+  uint64_t used = 0;
+  for (auto table : {callbacks, normal, shifted})
+    used += VerifyCompilerAllocation(vm, table, owner, 26 * sizeof(uint64_t));
+
+  Check(fields[7] == (1 << ('C' - 'A')), "Invalid Ctrl-Alt interrupt flags");
+  auto handlers = ReadPhysical<26>(vm, callbacks);
+  auto no_shift = ReadPhysical<26>(vm, normal);
+  auto with_shift = ReadPhysical<26>(vm, shifted);
+  for (unsigned i = 0; i < 26; ++i) {
+    std::string_view desc, shift_desc;
+    switch ('A' + i) {
+    case 'C': desc = "Cmd /Break Execution"; break;
+    case 'F': desc = "Cmd /Toggle Aux Font"; break;
+    case 'Z':
+      if (adam_initialized) {
+        desc = "Cmd /Zoom In";
+        shift_desc = "Cmd /Zoom Out";
+      }
+      break;
+    }
+    Check(bool(handlers[i]) == !desc.empty(), "Unexpected Ctrl-Alt callback");
+    for (const auto &[address, expected] :
+         {std::pair{no_shift[i], desc}, std::pair{with_shift[i], shift_desc}}) {
+      Check(bool(address) == !expected.empty(), "Unexpected Ctrl-Alt description");
+      if (address) {
+        Check(ReadGuestName(vm, address) == expected, "Wrong Ctrl-Alt description");
+        used += VerifyCompilerAllocation(vm, address, owner, expected.size() + 1);
+      }
+    }
+  }
+
+  const size_t count = adam_initialized ? 3 : 2;
+  constexpr uint64_t priorities[]{0x40000000, 0x60000000, 0x80000000};
+  uint64_t entry = fields[0], last = head;
+  for (size_t i = 0; i < count; ++i) {
+    Check(entry != head, "Missing key device entry");
+    used += VerifyCompilerAllocation(vm, entry, owner, sizeof(CKeyDevEntry));
+    auto record = ReadPhysical<6>(vm, entry);
+    Check(record[1] == last && record[2] == priorities[i] &&
+              record[3] == (i == 2 ? KDF_HAS_DESCS : 0) &&
+              record[4] && record[5],
+          "Invalid key device entry");
+    last = entry;
+    entry = record[0];
+  }
+  Check(entry == head && fields[1] == last, "Invalid key device list");
+  return used;
+}
+
+static void VerifyPools(CMonitor &vm, const fs::path &dir,
+                        uint64_t heap, uint64_t ram_end,
                         const std::string &output, uint64_t range_bytes,
-                        uint64_t symbol_used,
+                        uint64_t symbol_used, uint64_t key_device_used,
                         const std::vector<CTestE820> &e820, uint64_t idle,
-                        uint64_t graphics, uint64_t winmgr, uint64_t left,
+                        uint64_t graphics, uint64_t disk, uint64_t winmgr, uint64_t left,
                         uint64_t right, bool desktop,
                         const CCompilerState &compiler)
 {
@@ -2425,17 +2755,27 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   Check(adam_heaps == std::array<uint64_t, 2>{adam_hc, expected_data_hc},
         "Invalid Adam heap selection");
   const uint64_t srv = adam + 0x3D8;
-  const auto waiting = ReadPhysical<2>(vm, srv);
-  Check(waiting[0] > 16 && waiting[0] != srv && waiting[0] == waiting[1],
-        "Missing the initial mouse position message");
-  auto initial = ReadPhysical<14>(vm, waiting[0]);
-  Check(initial[0] == srv && initial[1] == srv && initial[2] == srv &&
-            initial[3] == 1 && initial[5] == 4 && initial[9] == 320 &&
-            initial[10] == 240 && !initial[13],
-        "Invalid initial mouse position message");
-  auto allocation = ReadPhysical<2>(vm, waiting[0] - 16);
-  Check(allocation[0] == expected_data_hc && allocation[1] == 0x80,
-        "Invalid mouse message allocation");
+  const auto queues = ReadPhysical<4>(vm, srv);
+  uint64_t initial_message_used = 0;
+  if (desktop) {
+    constexpr uint64_t idle_and_awaiting = (1 << 3) | (1 << 9);
+    Check(queues == std::array<uint64_t, 4>{srv, srv, srv + 16, srv + 16} &&
+              (ReadPhysical<1>(vm, adam + 0x18)[0] & idle_and_awaiting) ==
+                  idle_and_awaiting,
+          "Adam did not flush its startup message and wait for jobs");
+  } else {
+    Check(queues[0] > 16 && queues[0] != srv && queues[0] == queues[1],
+          "Missing the initial mouse position message");
+    auto initial = ReadPhysical<14>(vm, queues[0]);
+    Check(initial[0] == srv && initial[1] == srv && initial[2] == srv &&
+              initial[3] == 1 && initial[5] == 4 && initial[9] == 320 &&
+              initial[10] == 240 && !initial[13],
+          "Invalid initial mouse position message");
+    auto allocation = ReadPhysical<2>(vm, queues[0] - 16);
+    Check(allocation[0] == expected_data_hc && allocation[1] == 0x80,
+          "Invalid mouse message allocation");
+    initial_message_used = allocation[1];
+  }
   uint64_t graphics_used = 0;
   if (desktop)
     graphics_used = VerifyGraphicsContexts(vm, graphics, expected_data_hc, true);
@@ -2444,8 +2784,11 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
               ReadPhysical<10>(vm, graphics + 10408) == std::array<uint64_t, 10>{},
           "Compiler failure allocated Adam graphics state");
   }
-  // Compiler startup keeps the shared assembler table in Adam's heap.
-  const uint64_t asm_hash_used = desktop ? 0x10518 : 0;
+  // Compiler startup keeps the shared assembler dictionary and both decoder
+  // indices in Adam's data heap. OpCodes.DD has 923 non-alias forms, of which
+  // 908 lack IEF_NOT_IN_64_BIT.
+  const uint64_t asm_hash_used = compiler.initialized ? 0x10518 +
+      CompilerAllocationSize(923 * 8) + CompilerAllocationSize(908 * 8) : 0;
   std::smatch raw_screen;
   Check(std::regex_search(output,raw_screen,
                          std::regex(R"(raw screen (0x[0-9a-f]+))")),
@@ -2459,12 +2802,41 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   // byte buffers, and one 32 KiB scan-code buffer, including heap headers.
   constexpr uint64_t fifo_used = 5 * (32 + 16) + 2 * (8 + 16) +
                                  2 * (9 * page - 24) + 65 * page - 24;
-  const uint64_t boot_used = range_bytes + late_used + symbol_used +
-                             drive_used + allocation[1] + graphics_used +
-                             asm_hash_used + raw_used + fifo_used + compiler.data_used;
   auto code = VerifyHeap(vm, adam_hc, code_pool, adam);
-  uint64_t code_used = 0x42840 + fault_used + compiler.code_used +
-                       (pool ? 0x5E8 : boot_used);
+  auto data = pool ? VerifyHeap(vm, expected_data_hc, pool, adam) : CTestHeap{};
+  const auto adam_table = ReadPhysical<1>(vm, adam + 0x3D0)[0];
+  const auto kernel_table = ram_end - 0x248;
+  std::array<uint64_t, 2> source_used{};
+  if (desktop) {
+    const auto classes = ReadPhysical<1>(vm, adam_table)[0];
+    Check(adam_table != kernel_table && classes != kernel_table &&
+              classes != adam_table, "Missing Adam startup namespaces");
+    VerifyAdamClassRecords(vm, classes, adam_hc, expected_data_hc, code,
+                           pool ? data : code, kernel_table);
+    CAdamSourceAllocations graph(vm, dir, adam_hc, expected_data_hc,
+                                 code, pool ? data : code);
+    source_used = graph.Verify(adam_table, classes, kernel_table);
+  } else
+    Check(adam_table == kernel_table, "Compiler failure published Adam sources");
+  const uint64_t code_bytes = ram_end - heap + limit - code_base;
+  const uint64_t cache_used =
+      VerifyDiskCache(vm, disk, expected_data_hc, pool ? data_bytes : code_bytes,
+                      pool ? data.ranges : code.ranges);
+  const uint64_t sector_cache_used =
+      VerifyDriveSectorCaches(vm, disk, expected_data_hc,
+                              pool ? data.ranges : code.ranges);
+  const uint64_t registry_used =
+      desktop ? VerifyRegistryHeap(vm, expected_data_hc, adam) : 0;
+  const uint64_t boot_used = range_bytes + late_used + symbol_used +
+                             drive_used + initial_message_used + graphics_used +
+                             asm_hash_used + raw_used + fifo_used + key_device_used +
+                             compiler.data_used + cache_used + sector_cache_used +
+                             source_used[1] + registry_used;
+  // Default registration executes four statements with inline string data.
+  // The compiler retains the StrCpy, two HashPublic, and Print allocations.
+  const uint64_t registry_code_used = desktop ? 64 + 88 + 88 + 96 : 0;
+  uint64_t code_used = 0x42840 + fault_used + compiler.code_used + source_used[0] +
+                       registry_code_used + (pool ? 0x5E8 : boot_used);
   uint64_t data_used = boot_used, data_alloced = 0;
   BlockRanges data_used_ranges;
   for (auto task : {idle, winmgr, left, right}) {
@@ -2478,6 +2850,12 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
               (heaps[0] != heaps[1]) == bool(pool),
           "Startup task or heap has the wrong owner");
     auto task_code = VerifyHeap(vm, heaps[0], code_pool, task);
+    const auto task_table = ReadPhysical<1>(vm, task + 0x3D0)[0];
+    const auto task_header = ReadPhysical<4>(vm, task_table);
+    VerifyCompilerAllocation(vm, task_table, heaps[1], 32);
+    VerifyCompilerAllocation(vm, task_header[3], heaps[1], 1024 * 8);
+    Check(task_header[0] == adam_table && task_header[1] == 1023 &&
+              !task_header[2], "Startup task did not inherit Adam's namespace");
     code_used += task_allocation[1];
     code.alloced += task_code.alloced;
     code.ranges.insert(code.ranges.end(), task_code.ranges.begin(),
@@ -2488,9 +2866,8 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
       Check(data_hc[0] == expected_data_hc &&
                 task_data.alloced > 256 * 1024,
             "Invalid startup task data heap usage");
-      VerifyTaskCompilerRecords(vm, task, heaps[0], heaps[1], task_code,
-                                task_data, ReadPhysical<1>(vm, adam + 0x3D0)[0],
-                                task == left || task == right);
+      Check(!task_code.used && !task_code.alloced,
+            "Startup task allocated duplicate compiler class records");
       data_used += code_hc[1] + data_hc[1];
       data_alloced += task_data.alloced;
       data_used_ranges.insert(data_used_ranges.end(), task_data.ranges.begin(),
@@ -2504,7 +2881,6 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   if (code.used != code_used)
     throw std::runtime_error("Adam code heap used " + std::to_string(code.used) +
                              " bytes, expected " + std::to_string(code_used));
-  uint64_t code_bytes = ram_end - heap + limit - code_base;
   Check(ReadPhysical<4>(vm, code_pool) ==
             std::array<uint64_t, 4>{0, code_bytes, code.alloced, code_base},
         "Invalid code block pool");
@@ -2520,7 +2896,6 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
   VerifyCoverage(std::move(code.ranges), {{heap, ram_end}, {code_base, limit}});
 
   if (pool) {
-    auto data = VerifyHeap(vm, expected_data_hc, pool, adam);
     Check(data.used == data_used, "Invalid Adam data heap usage");
     data.ranges.insert(data.ranges.end(), data_used_ranges.begin(),
                        data_used_ranges.end());
@@ -2551,7 +2926,7 @@ static void VerifyPools(CMonitor &vm, uint64_t heap, uint64_t ram_end,
         "Incorrect heap limit or data pool");
 }
 
-static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
+static void VerifyFixedArea(CMonitor &vm, const fs::path &dir, uint64_t heap,
                             const std::string &registers,
                             const std::string &output, bool desktop,
                             const CCompilerState &compiler)
@@ -2565,10 +2940,12 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
   const auto e820 = ReadE820(vm);
   uint64_t range_bytes = VerifyDeviceRanges(vm, output, e820);
   uint64_t owner = ReadPhysical<1>(vm, adam + 0x28)[0];
-  uint64_t graphics = 0, winmgr_slot = 0;
+  uint64_t graphics = 0, winmgr_slot = 0, disk = 0, key_device = 0;
   uint64_t symbol_used =
       VerifyKernelSymbols(vm, top + 0x28, owner, graphics, winmgr_slot,
-                           desktop, compiler);
+                           disk, key_device, compiler);
+  const uint64_t key_device_used =
+      VerifyKeyDevHeap(vm, key_device, owner, compiler.initialized);
   uint64_t winmgr = ReadPhysical<1>(vm, winmgr_slot)[0];
   uint64_t left = 0, right = 0;
   if (desktop) {
@@ -2614,8 +2991,9 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
             ReadPhysical<3>(vm, idle + 0x78) == std::array<uint64_t, 3>{adam, idle, idle} &&
             ReadPhysical<1>(vm, idle + 0x1A8)[0] == boot_cpu,
         "Invalid idle task record");
-  VerifyPools(vm, heap, ram_end, output, range_bytes, symbol_used, e820, idle,
-              graphics, winmgr, left, right, desktop, compiler);
+  VerifyPools(vm, dir, heap, ram_end, output, range_bytes, symbol_used,
+              key_device_used, e820, idle, graphics, disk, winmgr, left, right,
+              desktop, compiler);
 
   constexpr uint64_t task_alloced = 0x44800;
   uint64_t used_block = ram_end - task_alloced;
@@ -2624,7 +3002,8 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
             ReadPhysical<1>(vm, adam + 8)[0] == 0x0052F3FF536B7354,
         "Invalid Adam task header");
   auto saved = ReadPhysical<2>(vm, adam + 0x120);
-  Check((saved[0] & 0x200) && saved[1] > stk + 24 && saved[1] <= top &&
+  Check(bool(saved[0] & 0x200) == !desktop && saved[1] > stk + 24 &&
+            saved[1] <= top &&
             ReadPhysical<1>(vm, adam + 0x310)[0] == stk &&
             ReadPhysical<3>(vm, stk) ==
                 std::array<uint64_t, 3>{0, top - stk - 24, 0},
@@ -2633,7 +3012,19 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
   Check(std::regex_search(registers, match, std::regex(R"(RSP=([0-9a-f]+))")),
         "Missing kernel stack pointer");
   uint64_t rsp = std::stoull(match[1].str(), nullptr, 16);
-  Check(rsp > stk + 24 && rsp <= top, "Kernel is not running on Adam's stack");
+  if (desktop) {
+    const auto idle_stk = ReadPhysical<1>(vm, idle + 0x310)[0];
+    Check(idle_stk > 16, "Missing idle task stack");
+    const auto idle_header = ReadPhysical<3>(vm, idle_stk);
+    const auto allocation = ReadPhysical<2>(vm, idle_stk - 16);
+    const auto data_heap = ReadPhysical<1>(vm, idle + 0x28)[0];
+    Check(idle_header[0] == 0 && idle_header[1] >= 0x40000 &&
+              idle_header[2] == 0 &&
+              allocation == std::array<uint64_t, 2>{data_heap, idle_header[1] + 40} &&
+              rsp == idle_stk + 24 + idle_header[1],
+          "Halted CPU is not on the idle task's stack");
+  } else
+    Check(rsp > stk + 24 && rsp <= top, "Kernel is not running on Adam's stack");
 
   uint64_t cur_dir = ram_end - 0x260, fpu = ram_end - 0x210;
   uint64_t hash = ram_end - 0x248;
@@ -2643,13 +3034,14 @@ static void VerifyFixedArea(CMonitor &vm, uint64_t heap,
   Check(ReadPhysical<1>(vm, adam + 0x1B0)[0] == fpu &&
             ReadPhysical<1>(vm, fpu, 'h')[0] == 0x37F,
         "Invalid Adam FPU image");
-  Check(ReadPhysical<1>(vm, adam + 0x3D0)[0] == hash &&
+  const auto adam_hash = ReadPhysical<1>(vm, adam + 0x3D0)[0];
+  Check((adam_hash != hash) == desktop &&
             ReadPhysical<4>(vm, hash) ==
                 std::array<uint64_t, 4>{0, 1023, 0, top + 0x28},
         "Invalid Adam hash table");
 
   auto idle_hash = ReadPhysical<1>(vm, idle + 0x3D0)[0];
-  Check(ReadPhysical<1>(vm, idle_hash)[0] == hash,
+  Check(ReadPhysical<1>(vm, idle_hash)[0] == adam_hash,
         "Idle task does not inherit Adam's hash table");
   std::vector<uint64_t> slots;
   for (auto cached = ReadPhysical<1>(vm, owner + 0x98)[0]; cached;) {
@@ -3020,6 +3412,7 @@ static void DriveDigits(CMonitor &vm, const fs::path &dir,
 }
 
 #include "TestStrings.hpp"
+#include "TestFileBackedRedSea.hpp"
 #include "TestCharacterGraphics.hpp"
 
 constexpr std::string_view host_module_output =
@@ -3197,9 +3590,164 @@ const std::string function_records_aot_output =
     function_records_module_output +
     "FR AOT compile 0\nFR AOT load 1\nFR AOT DONE\n";
 const CTextProbe function_records_reference_probes[]{
-    function_records_probes[0],
+    {"function-records", "/FunctionRecordsProbe.HC", "", "FR heaps ", "FR DONE",
+     function_records_source_output, {}, false, "B:/FunctionRecordsProbe.HC"},
     {"function-records-aot", "/FunctionRecordsAOTProbe.HC", "", "FR heaps ",
      "FR AOT DONE", function_records_aot_output}};
+constexpr CTextProbe function_records_layout_probes[]{
+    {"function-records-layout", "/FunctionRecordLayoutProbe.HC", "",
+     "FR layout 840", "FR layout DONE",
+     "FR layout 840 856 1 F\nFR layout 840 856 1 F\nFR layout DONE\n", {}, true}};
+
+constexpr CTextProbe list_utilities_probes[]{
+    {"list-utilities", "/ListUtilitiesProbe.HC", "", "LU linked ", "LU DONE",
+     "LU linked 7F\nLU queue 7F\nLU DONE\n"}};
+
+constexpr CTextProbe optimizer_probes[]{
+    {"optimizer", "/OptimizerProbe.HC", "", "Optimizer probe ",
+     "Optimizer probe ", "Optimizer probe 3FF\n", {}, true}};
+constexpr CTextProbe optimizer_aot_probes[]{
+    {"optimizer-aot", "/OptimizerAOTProbe.HC", "", "Optimizer AOT compile ",
+     "Optimizer AOT load ",
+     "Optimizer AOT compile 0\nOptimizer probe 3FF\nOptimizer AOT load 1\n",
+     {}, true}};
+
+constexpr CTextProbe register_allocation_probes[]{
+    {"register-allocation", "/RegisterAllocationProbe.HC", "",
+     "Register allocation ", "Register allocation ",
+     "Register allocation 7F\n", {}, true},
+    {"register-allocation-native", "/RegisterAllocationNativeProbe.HC", "",
+     "Register allocation native ", "Register allocation native ",
+     "Register allocation native 3F\n", {}, true}};
+constexpr CTextProbe register_allocation_aot_probes[]{
+    {"register-allocation-aot", "/RegisterAllocationAOTProbe.HC", "",
+     "Register AOT compile ", "Register AOT load ",
+     "Register AOT compile 0\nRegister allocation 7F\nRegister AOT load 1\n",
+     {}, true}};
+
+constexpr CTextProbe address_fold_probes[]{
+    {"address-fold", "/AddressFoldProbe.HC", "",
+     "Address fold ", "Address fold ", "Address fold 3FFFF\n", {}, true},
+    {"address-fold-native", "/AddressFoldNativeProbe.HC", "",
+     "Address fold native ", "Address fold native ",
+     "Address fold native FFF\n", {}, true}};
+constexpr CTextProbe address_fold_aot_probes[]{
+    {"address-fold-aot", "/AddressFoldAOTProbe.HC", "",
+     "Address fold AOT compile ", "Address fold AOT load ",
+     "Address fold AOT compile 0\nAddress fold 3FFFF\nAddress fold AOT load 1\n",
+     {}, true}};
+
+constexpr CTextProbe backend_probes[]{
+    {"backend","/BackendProbe.HC","","Backend probe ","Backend probe ",
+     "Backend probe 7FFFFF\n",{},true},
+    {"backend-native","/BackendNativeProbe.HC","","Backend native ","Backend native ",
+     "Backend native 7FF\n",{},true}};
+constexpr CTextProbe backend_aot_probes[]{
+    {"backend-aot","/BackendAOTProbe.HC","","Backend AOT compile ","Backend AOT load ",
+     "Backend AOT compile 0\nBackend probe 7FFFFF\nBackend AOT load 1\n",{},true}};
+
+constexpr CTextProbe adam_math_probes[]{
+    {"adam-math","/AdamMathProbe.HC","","Adam math ","Adam math ",
+     "Adam math 1FFF\n",{},true}};
+constexpr CTextProbe adam_math_aot_probes[]{
+    {"adam-math-aot","/AdamMathAOTProbe.HC","","Adam math AOT compile ","Adam math AOT load ",
+     "Adam math AOT compile 0\nAdam math 1FFF\nAdam math AOT load 1\n",{},true}};
+
+constexpr CTextProbe adam_mem_probes[]{
+    {"adam-mem","/AdamMemProbe.HC","","Adam memory ","Adam memory ",
+     "Adam memory FFF\n",{},true}};
+constexpr CTextProbe adam_mem_aot_probes[]{
+    {"adam-mem-aot","/AdamMemAOTProbe.HC","","Adam memory AOT compile ","Adam memory AOT load ",
+     "Adam memory AOT compile 0\nTask can't HeapRep on self.\nTask can't HeapRep on self.\nAdam memory FFF\nAdam memory AOT load 1\n",{},true}};
+
+constexpr CTextProbe adam_task_probes[]{
+    {"adam-task","/AdamTaskProbe.HC","","Adam tasks ","Adam tasks ",
+     "Adam tasks FF\n",{},true}};
+constexpr CTextProbe adam_task_aot_probes[]{
+    {"adam-task-aot","/AdamTaskAOTProbe.HC","","Adam tasks AOT compile ","Adam tasks AOT load ",
+     "Adam tasks AOT compile 0\nAdam tasks FF\nAdam tasks AOT load 1\n",{},true}};
+
+constexpr CTextProbe adam_startup_probes[]{
+    {"adam-startup","/AdamStartupProbe.HC","","Adam startup ","Adam startup ",
+     "Adam startup FF\n",{},true}};
+
+constexpr CTextProbe doc_tree_probes[]{
+    {"doc-tree","/DocTreeProbe.HC","","Tree disk ","Doc tree ",
+     "Tree disk 0 1 61 1 73\nDoc tree 3FF\n",{},true}};
+constexpr CTextProbe doc_tree_aot_probes[]{
+    {"doc-tree-aot","/DocTreeAOTProbe.HC","","Tree disk ","Tree AOT done",
+     "Tree disk 0 1 61 1 73\nDoc tree 3FF\nTree AOT done\n",{},true}};
+
+constexpr CTextProbe registry_probes[]{
+    {"registry","/RegistryProbe.HC","","High Score:","Registry probe ",
+     "High Score:1.23000\nVal:1234\nRegistry probe 7F flags 123\n",{},true}};
+constexpr CTextProbe registry_reference_probes[]{
+    {"registry","/RegistryProbe.HC","","High Score:","Registry probe ",
+     "High Score:1.23000\nVal:1234\nRegistry probe 7F flags 0\n",{},true}};
+
+constexpr CTextProbe once_probes[]{
+    {"once", "/OnceProbe.HC", "", "Once probe ", "Once probe ",
+     "Once probe FF\n", {}, true}};
+
+constexpr CTextProbe popup_probes[]{
+    {"popup-menus", "/PopupProbe.HC", "", "Popup probe ", "Popup probe ",
+     "Popup probe 1FF\n", {}, true}};
+
+constexpr CTextProbe ins_reg_probes[]{
+    {"ins-reg", "/InsRegProbe.HC", "", "InsReg probe ", "InsReg probe ",
+     "InsReg probe 7F\n", {}, true}};
+constexpr CTextProbe startup_exec_probes[]{
+    {"startup-exec", "/StartupExecProbe.HC", "", "Startup exec ", "Startup exec ",
+     "Startup exec 3F input F\n", {}, true}};
+
+constexpr CTextProbe dev_info_probes[]{
+    {"dev-info", "/DevInfoProbe.HC", "", "Device reports ", "Device reports ",
+     "Device reports 3FF\n", {}, true}};
+
+constexpr CTextProbe cpu_rep_probes[]{
+    {"cpu-rep", "/CPURepProbe.HC", "", "CPU reports ", "CPU reports ",
+     "CPU reports FF\n", {}, true}};
+
+constexpr CTextProbe uasm_probes[]{
+    {"uasm","/UAsmProbe.HC","","UAsm probe ","UAsm probe ",
+     "UAsm probe FFF\n",{},true},
+    {"uasm-native","/UAsmNativeProbe.HC","","UAsm native ","UAsm native ",
+     "UAsm native 3F\n",{},true}};
+constexpr CTextProbe uasm_aot_probes[]{
+    {"uasm-aot","/UAsmAOTProbe.HC","","UAsm AOT compile ","UAsm AOT load ",
+     "UAsm AOT compile 0\nUAsm probe FFF\nUAsm AOT load 1\n",{},true}};
+
+constexpr CTextProbe storage_services_probes[]{
+    {"drive-services", "/DriveServicesProbe.HC", "", "Drive services ",
+     "Drive services ", "Drive services 7FF\n", {}, true},
+    {"path-names", "/PathNamesProbe.HC", "", "Path names ",
+     "Path names ", "Path names 1FFF\n", {}, true},
+    {"directory-services", "/DirectoryServicesProbe.HC", "", "Directory services ",
+     "Directory services ", "Directory services FFF\n", {}, true}};
+
+constexpr CTextProbe cluster_entry_probes[]{
+    {"cluster-entry", "/ClusterEntryProbe.HC", "", "Cluster entry ",
+     "Cluster entry ", "Cluster entry FFF\n", {}, true}};
+
+constexpr CTextProbe fat_cluster_probes[]{
+    {"fat32-cluster", "/Fat32ClusterProbe.HC", "", "FAT32 cluster entry ",
+     "FAT32 cluster entry ", "FAT32 cluster entry 7FF\n", {}, true}};
+
+constexpr CTextProbe disk_cache_probes[]{
+    {"disk-cache", "/DiskCacheProbe.HC", "", "Disk cache ",
+     "Disk cache ", "Disk cache 3FFFF\n", {}, true}};
+constexpr std::string_view storage_lifecycle_exceptions[]{"BlkDev", "Drv", "Drv"};
+constexpr CTextProbe storage_lifecycle_probes[]{
+    {"storage-lifecycle", "/StorageLifecycleProbe.HC", "", "Storage lifecycle ",
+     "Storage lifecycle ", "Storage lifecycle 1FFF\n", {}, true},
+    {"storage-lifecycle-native", "/StorageLifecycleNativeProbe.HC", "", "Storage lifecycle native ",
+     "Storage lifecycle native ", "Storage lifecycle native 1F\n", storage_lifecycle_exceptions, true}};
+
+constexpr CTextProbe fat_sector_cache_probes[]{
+    {"fat-sector-cache", "/FatSectorCacheProbe.HC", "", "FAT sector cache ",
+     "FAT sector cache ", "FAT sector cache FF 3FF\n", {}, true},
+    {"fat-sector-native", "/FatSectorCacheNativeProbe.HC", "",
+     "FAT sector native ", "FAT sector native ", "FAT sector native 3F\n", {}, true}};
 
 static void CheckBootProbeOrder(const std::string &serial,
                                 std::span<const char *const> paths)
@@ -3781,7 +4329,7 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   keys({"3", "8", "semicolon", "left", "left", "delete", "2", "right", "ret"});
   wait_text("ans=0x00000020=32");
   keys({"x", "semicolon", "ret"});
-  wait_text("Syntax Error");
+  wait_text("Undefined identifier at");
   keys({"shift-apostrophe", "shift-2", "equal", "shift-5", "s", "backslash",
         "n", "shift-apostrophe", "comma", "shift-g", "e", "t", "shift-s", "t",
         "r", "shift-9", "shift-0", "semicolon", "ret"});
@@ -4267,6 +4815,8 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   auto vert = ReadPhysical<1>(vm, horz)[0];
   const auto doc = ReadPhysical<1>(vm, left + put_doc)[0];
   const auto refresh_count = guest_state("winmgr", left);
+  // KernelA.hpp: CSema is 128 bytes; SEMA_REFRESH_IN_PROGRESS is 8.
+  const auto refresh_flags = guest_state("sys_semas", left) + 8 * 128;
   const auto vert_state = ReadPhysical<1>(vm, vert + 0x68)[0];
   auto wait_scroll = [&](auto ready, const char *error) {
     for (unsigned i = 0; i < 80; ++i) {
@@ -4306,6 +4856,31 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
              std::array<uint64_t, 2>{uint64_t(x), uint64_t(y)};
     }, "Guest mouse did not reach the scrollbar target");
   };
+  auto check_scroll_window = [&](const char *error) {
+    // DrawCtrls temporarily expands the task bounds to draw on its border.
+    // A released thumb and a completed refresh counter do not prevent the
+    // next refresh from being in progress at the instant of a memory read.
+    // Pause the guest and accept the first snapshot outside GrUpdateScrn;
+    // do not wait for the expected geometry (a real resize must fail).
+    for (unsigned i = 0; i < 80; ++i) {
+      vm.Command(R"({"execute":"stop"})");
+      const bool refreshing = ReadPhysical<1>(vm, refresh_flags)[0] & 1;
+      const auto geometry = ReadPhysical<4>(vm, left + win_left);
+      vm.Command(R"({"execute":"cont"})");
+      if (!refreshing) {
+        if (geometry != scroll_window) {
+          std::ostringstream detail;
+          detail << error << "; expected 4,27,5,18, got " << geometry[0]
+                 << ',' << geometry[1] << ',' << geometry[2] << ',' << geometry[3];
+          throw std::runtime_error(detail.str());
+        }
+        return;
+      }
+      std::this_thread::sleep_for(10ms);
+    }
+    throw std::runtime_error("Could not sample scrollbar geometry outside a refresh");
+  };
+  check_scroll_window("The scrollbar window did not start at the requested size");
   wait_view(top_line, 48, "The scrollbar document did not start at its end");
   MouseButton(vm, "wheel-up", true);
   MouseButton(vm, "wheel-up", false);
@@ -4341,8 +4916,7 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   MouseButton(vm, "left", false);
   wait_button(false);
   wait_mem(vert + ctrl_flags, 7, "The vertical thumb did not release");
-  Check(ReadPhysical<4>(vm, left + win_left) == scroll_window,
-        "The vertical thumb resized the window");
+  check_scroll_window("The vertical thumb resized the window");
 
   wait_refresh();
   grab_thumb(horz);
@@ -4355,8 +4929,7 @@ static void DriveUserTask(CMonitor &vm, const fs::path &dir,
   wait_mem(horz + ctrl_flags, 7, "The horizontal thumb did not release");
   wait_text("27 ABC", false, 1, 5, 4, 120);
   wait_view(line_start, 0, "The cursor did not restore the viewport");
-  Check(ReadPhysical<4>(vm, left + win_left) == scroll_window,
-        "The horizontal thumb resized the window");
+  check_scroll_window("The horizontal thumb resized the window");
   key("q");
   std::cout << "Scrollbar thumbs and wheel scrolled the terminal document\n";
 }
@@ -4796,6 +5369,7 @@ constexpr std::string_view file_operations_output =
     "Copying B:/Ops/A.TXT to B:/Pick/A.TXT\n"
     "Copying B:/Pick/A.TXT to B:/Pick/R.TXT\n"
     "Del A.TXT\n"
+    "Make Directory:Clone\n"
     "Make Directory:B:/Clone/Empty\n"
     "Make Directory:B:/Clone/Sub\n"
     "Make Directory:B:/Clone/Sub/Deep\n"
@@ -4805,6 +5379,7 @@ constexpr std::string_view file_operations_output =
     "Copying B:/Ops/B.BIN to B:/Clone/B.BIN\n"
     "Copying B:/Ops/A.TXT to B:/Clone/A.TXT\n"
     "tree count 9\n"
+    "Make Directory:Txt\n"
     "Make Directory:B:/Txt/Empty\n"
     "Make Directory:B:/Txt/Sub\n"
     "Make Directory:B:/Txt/Sub/Deep\n"
@@ -5405,7 +5980,24 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
                            const fs::path &kernel, const char *memory,
                            const std::string &output)
 {
-  CheckProgramOutput(output, "/RedSeaISOProbe.HC", "ISO probe 1 1 0 0 0\n", '1');
+  auto report=ProgramOutput(output,"/RedSeaISOProbe.HC",'1');
+  constexpr std::string_view result="ISO probe 1 1 0 0 0\n";
+  Check(report.ends_with(result),"Guest ISO builder result differed");
+  report.remove_suffix(result.size());
+  size_t copied=0;
+  while (!report.empty()) {
+    auto end=report.find('\n');
+    Check(end!=std::string_view::npos,"Incomplete ISO copy diagnostic");
+    auto line=report.substr(0,end);
+    if (line.starts_with("Copying ")) {
+      Check(line.find(" to Q:/")!=std::string_view::npos,
+            "ISO copy did not target mounted writable image");
+      copied++;
+    } else
+      Check(line.starts_with("Make Directory:"),"Unexpected ISO copy diagnostic");
+    report.remove_prefix(end+1);
+  }
+  Check(copied>0,"Guest ISO builder did not copy through mounted image");
   auto image = CaptureGuestFile(vm, dir, output, "GuestBuild.ISO.C");
   auto media = VerifyMedia(image, kernel);
   auto original = VerifyMedia(source, kernel);
@@ -5462,9 +6054,11 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckProgramOutput(boot, "/VariadicPtrProbe.BIN.Z", variadic_ptr_output, '1');
     CheckProgramOutput(boot, "/DocFrame.HC", doc_frame_output, '1');
     CheckProgramOutput(boot, "/DocButton.HC", doc_button_output, '1');
-    CheckProgramOutput(boot, "/DirectoryProbe.HC", "Directory probe 1FF\n",
+    CheckProgramOutput(boot, "/DirectoryProbe.HC",
+                       "Make Directory:DirProbe\nMake Directory:Sub\nDirectory probe 1FF\n",
                        '1');
-    CheckProgramOutput(boot, "/DirContextProbe.HC", "Dir context FF\n", '1');
+    CheckProgramOutput(boot, "/DirContextProbe.HC",
+                       "Make Directory:DirScope\nMake Directory:Nested\nDir context FF\n", '1');
     CheckProgramOutput(boot, "/FileStreamProbe.HC", "File stream probe 3FF\n", '1');
     CheckProgramOutput(boot, "/FileCopyProbe.HC", file_copy_output, '1');
     CheckProgramOutput(boot, "/Doc/QueueProbe.HC", "Queue probe FF\n", '1');
@@ -5503,7 +6097,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckFontText(boot);
     auto registers = StopAtIdle(rebuilt);
     rebuilt.ResetDeadline(60s);
-    VerifyHandoff(boot, media, registers);
+    VerifyHandoff(rebuilt, boot, media, registers, true);
     VerifyBootDrive(rebuilt, boot, media, true, false);
     VerifyCompiler(rebuilt, reboot, boot, media, CBootPhase::Desktop);
     rebuilt.Command(R"({"execute":"cont"})");
@@ -5557,14 +6151,19 @@ static void TestBoot(const char *qemu, const fs::path &iso,
             "Compiler failure reported completed startup");
     }
     for (auto marker : {COMPILER_FAILURE_MARKER, COMPILER_BIND_FAILURE_MARKER,
-                         COMPILER_INIT_FAILURE_MARKER})
+                         COMPILER_INIT_FAILURE_MARKER, ADAM_SOURCE_FAILURE_MARKER})
       Check((output.find(marker) != std::string::npos) ==
                 (!desktop && marker == CompilerFailureMarker(phase)),
             "Compiler stopped at the wrong startup phase");
-    uint64_t heap = VerifyHandoff(output, media, registers);
+    if (phase == CBootPhase::AdamSourceFailed)
+      Check(output.find("UnholyOS: Adam source ready") == std::string::npos &&
+                output.find("UnholyOS: Adam source failed /Adam/TaskRep.HC\r\n") != std::string::npos &&
+                output.find("UnholyOS: Adam source rollback, code bytes 0x0000000000000000, data bytes 0x0000000000000000\r\n") != std::string::npos,
+            "Failed Adam startup did not discard its private source namespace");
+    uint64_t heap = VerifyHandoff(vm, output, media, registers, desktop);
     const auto compiler = VerifyCompiler(vm, dir, output, media, phase);
     if (!startup)
-      VerifyFixedArea(vm, heap, registers, output, desktop, compiler);
+      VerifyFixedArea(vm, dir, heap, registers, output, desktop, compiler);
     VerifyUncachedAlias(vm, output);
     VerifyKernelGlobals(vm, output);
     VerifyInterrupts(vm, output, registers, startup, desktop);
@@ -5612,9 +6211,11 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                          '1');
       CheckProgramOutput(output, "/DocFrame.HC", doc_frame_output, '1');
       CheckProgramOutput(output, "/DocButton.HC", doc_button_output, '1');
-      CheckProgramOutput(output, "/DirectoryProbe.HC", "Directory probe 1FF\n",
+      CheckProgramOutput(output, "/DirectoryProbe.HC",
+                         "Make Directory:DirProbe\nMake Directory:Sub\nDirectory probe 1FF\n",
                          '1');
-      CheckProgramOutput(output, "/DirContextProbe.HC", "Dir context FF\n",
+      CheckProgramOutput(output, "/DirContextProbe.HC",
+                         "Make Directory:DirScope\nMake Directory:Nested\nDir context FF\n",
                          '1');
       CheckProgramOutput(output, "/FileStreamProbe.HC", "File stream probe 3FF\n",
                          '1');
@@ -5835,7 +6436,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
             "The native HolyC compiler runtime probe did not pass all checks");
       auto isolated = output.find("UnholyOS: AOT symbols isolated");
       Check(output.find("cmp compile 0\n") != std::string::npos &&
-                output.find("cmp reject 1\n") != std::string::npos &&
+                output.find("cmp reject 2\n") != std::string::npos &&
                 output.find("cmp print 0\n") != std::string::npos &&
                 isolated != std::string::npos &&
                 output.find("UnholyOS: AOT source map") != std::string::npos &&
@@ -6105,6 +6706,10 @@ static void TestCompilerFailures(const char *qemu, const fs::path &iso,
   const auto opcode_entry = FindRedSeaEntry(original, compiler_dir, "OpCodes.DD");
   const auto module_start = ReadLE(original, module_entry + 40, 8) * 512;
   const auto opcode_start = ReadLE(original, opcode_entry + 40, 8) * 512;
+  const auto adam_entry = FindRedSeaEntry(original, media.root, "Adam");
+  const auto adam_dir = ReadLE(original, adam_entry + 40, 8);
+  const auto taskrep_entry = FindRedSeaEntry(original, adam_dir, "TaskRep.HC");
+  const auto taskrep_start = ReadLE(original, taskrep_entry + 40, 8) * 512;
   struct CCase
   {
     const char *name;
@@ -6117,14 +6722,28 @@ static void TestCompilerFailures(const char *qemu, const fs::path &iso,
       {"invalid-export", CBootPhase::CompilerInvalidExport},
       {"unresolved-import", CBootPhase::CompilerUnresolvedImport},
       {"missing-opcodes", CBootPhase::OpcodeUnavailable},
-      {"malformed-opcodes", CBootPhase::OpcodeInvalid}};
+      {"malformed-opcodes", CBootPhase::OpcodeInvalid},
+      {"missing-adam-source", CBootPhase::AdamSourceFailed},
+      {"malformed-adam-source", CBootPhase::AdamSourceFailed}};
   char path[] = "/tmp/unholyos-compiler-failures-XXXXXX";
   Check(mkdtemp(path), "Cannot create compiler failure-test directory");
   const fs::path dir = path;
   try {
     for (const auto &test : cases) {
       auto image = original;
-      if (test.phase == CBootPhase::CompilerUnavailable ||
+      if (test.phase == CBootPhase::AdamSourceFailed) {
+        if (std::string_view(test.name) == "missing-adam-source") {
+          constexpr std::string_view name = "Unavailable.HC";
+          std::fill(image.begin() + taskrep_entry + 2,
+                    image.begin() + taskrep_entry + 40, 0);
+          std::copy(name.begin(), name.end(), image.begin() + taskrep_entry + 2);
+        } else {
+          // Preserve the extent and the earlier successful source files.
+          constexpr std::string_view malformed = "U0 AdamBad( {";
+          std::copy(malformed.begin(), malformed.end(), image.begin() + taskrep_start);
+          image[taskrep_start + malformed.size()] = 0;
+        }
+      } else if (test.phase == CBootPhase::CompilerUnavailable ||
           test.phase == CBootPhase::OpcodeUnavailable) {
         const auto entry = test.phase == CBootPhase::CompilerUnavailable
                                ? module_entry : opcode_entry;
@@ -6209,8 +6828,263 @@ static void VerifyDatabaseRecords(const Bytes &disk)
   Check(actual == expected, "Database record bytes differ from saved forms");
 }
 
+static void TestKernelCfgBoot(const char *qemu,const fs::path &iso,
+                              const fs::path &disk,std::string_view profile,
+                              const char *memory,const fs::path &dir)
+{
+  bool text=profile=="text",alt=profile=="alt";
+  Check(text || alt || profile=="default","Unknown kernel configuration profile");
+  fs::create_directories(dir);
+  auto serial=dir/"serial.log";
+  CMonitor vm(qemu,iso,dir,"pc",memory,false,disk);
+  vm.Connect();
+  vm.ResetDeadline(90s);
+  constexpr std::string_view text_marker=
+      "UnholyOS: text mode kernel ready; graphical Adam startup disabled";
+  auto output=vm.WaitSerial(serial,text?text_marker:BOOT_MARKER);
+  auto require=[&](std::string_view marker) {
+    if (output.find(marker)==std::string::npos)
+      throw std::runtime_error("Missing kernel configuration evidence: "+
+                               std::string(marker));
+  };
+  require("UnholyOS: kernel cfg checks 0x00000000000000ff");
+  require(text?"VGA 0x0000000000000000, rows 0x0000000000000019":
+               "VGA 0x0000000000000001, rows 0x000000000000003c");
+  if (alt) {
+    require("mem flag/value 0x0000000000000001/0x000000000000006b");
+    require("heap flag/value 0x0000000000000001/0x00000000000000a5");
+    require("var flag/value 0x0000000000000001/0x000000000000003c");
+    require("var bytes 0x000000003c3c3c3c");
+    require("boot 0x0000000000000055, HD 0x0000000000000044, mounted HD 0x0000000000000001");
+    require("home U:/Account, cache request 0x0000000000008000, cache bytes 0x0000000000007600");
+  } else if (text) {
+    require("mem flag/value 0x0000000000000001/0x0000000000000000");
+    require("heap flag/value 0x0000000000000001/0x0000000000000000");
+    require("var flag/value 0x0000000000000001/0x0000000000000000");
+    require("var bytes 0x0000000000000000");
+    require("boot 0x0000000000000056, HD 0x0000000000000044, mounted HD 0x0000000000000000");
+    require("home V:/Home, cache request 0x0000000000000000, cache bytes 0x0000000000000000");
+    require("raw screen 0x0000000000000000");
+    Check(output.find(BOOT_MARKER)==std::string::npos &&
+          output.find("UnholyOS: text base ")==std::string::npos,
+          "Text mode started the graphical desktop");
+    auto registers=StopAtIdle(vm);
+    std::smatch flags;
+    Check(std::regex_search(registers,flags,std::regex(R"(RFL=([0-9a-f]+))")) &&
+          !(std::stoull(flags[1].str(),nullptr,16)&0x200),
+          "Text mode did not stop with interrupts disabled");
+    constexpr std::string_view message=
+        "Text mode: kernel ready; graphical Adam startup disabled";
+    auto cells=ReadPhysical<message.size()>(vm,0xB8000,'h');
+    for (size_t i=0;i<message.size();i++)
+      Check((cells[i]&0xFF)==uint8_t(message[i]),
+            "Text-mode status does not match VGA text memory");
+  } else {
+    require("mem flag/value 0x0000000000000000/0x0000000000000000");
+    require("heap flag/value 0x0000000000000000/0x0000000000000000");
+    require("var flag/value 0x0000000000000000/0x0000000000000000");
+    require("boot 0x0000000000000054, HD 0x0000000000000043, mounted HD 0x0000000000000001");
+    require("home T:/Home");
+    if (std::string_view(memory)=="512")
+      require("cache request 0x0000000000010370");
+  }
+  if (!text) {
+    require("UnholyOS: text base ");
+    Check(output.find("Could not start the user task")==std::string::npos,
+          "Graphical startup failed");
+  }
+  vm.ResetDeadline(10s);
+  vm.Quit();
+  std::cout << "Kernel configuration " << profile << ", " << memory
+            << " MiB: passed\n" << output;
+}
+
 int main(int argc, char **argv)
 {
+  std::string_view mode = argc > 1 ? argv[1] : "";
+  if ((argc == 4 || argc == 5) && mode == "--stock-once") {
+    char path[] = "/tmp/unholyos-stock-once-XXXXXX";
+    if (argc == 4 && !mkdtemp(path))
+      return 1;
+    const fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
+    try {
+      VerifyHostModuleMedia(argv[3], "Once.HC", "Once.HC");
+      VerifyHostModuleMedia(argv[3], "Linux/Fixtures/InputTrainingProbe.HC",
+                            "InputTrainingProbe.HC");
+      VerifyHostModuleMedia(argv[3], "Linux/Fixtures/FileEditorProbe.HC",
+                            "FileEditorProbe.HC");
+      VerifyHostModuleMedia(argv[3], "Linux/Fixtures/DictionaryProbe.HC",
+                            "DictionaryProbe.HC");
+      for (auto file : {"Tips.DD", "Customize.DD", "HelpIndex.DD", "AboutTempleOS.DD",
+                        "Welcome.DD", "DemoIndex.DD", "CmdLineOverview.DD", "Credits.DD"})
+        VerifyHostModuleMedia(argv[3], fs::path("Doc") / file, file, "Doc");
+      for (char part : std::string_view("0123456789ABC")) {
+        std::string file = "Tour";
+        if (part != '0')
+          file += part;
+        file += ".IN";
+        VerifyHostModuleMedia(argv[3], fs::path("Misc/Tour") / file,
+                              file.c_str(), "Misc/Tour");
+      }
+      for (auto stock : {CStockStartup::Decline, CStockStartup::Tour}) {
+        const auto run = dir / (stock == CStockStartup::Decline ? "decline" : "tour");
+        fs::create_directories(run);
+        CMonitor vm(argv[2], argv[3], run, "pc", "512", false);
+        vm.Connect();
+        DriveCharacterGraphics(vm, run, vm.Boot(run / "serial.log"), false,
+                               false, false, false, false, false, false,
+                               false, false, {}, {}, 0x20000000, {}, stock);
+        vm.Quit();
+      }
+      if (argc == 4)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
+  if ((argc == 4 || argc == 5) &&
+      (mode == "--doc-tree" || mode == "--doc-tree-reference" ||
+       mode == "--doc-tree-aot" || mode == "--registry" ||
+       mode == "--registry-reference" || mode == "--once" ||
+       mode == "--once-reference" || mode == "--popup-menus" ||
+       mode == "--popup-menus-reference" || mode == "--ins-reg" ||
+       mode == "--ins-reg-reference" || mode == "--startup-exec" ||
+       mode == "--startup-exec-reference" || mode == "--training-input-reference" ||
+       mode == "--file-editor-reference" || mode == "--key-map" ||
+       mode == "--key-map-reference" || mode == "--dictionary-reference" ||
+       mode == "--progress" || mode == "--progress-reference")) {
+    const bool reference = mode.ends_with("-reference");
+    const bool aot = mode.ends_with("-aot");
+    const bool registry = mode.starts_with("--registry");
+    const bool once = mode.starts_with("--once");
+    const bool popup = mode.starts_with("--popup-menus");
+    const bool ins_reg = mode.starts_with("--ins-reg");
+    const bool startup_exec = mode.starts_with("--startup-exec");
+    const bool key_map = mode.starts_with("--key-map");
+    const bool progress = mode.starts_with("--progress");
+    char path[] = "/tmp/unholyos-document-XXXXXX";
+    if (argc == 4 && !mkdtemp(path))
+      return 1;
+    const fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      if (!reference && progress) {
+        VerifyHostModuleMedia(argv[3], "Demo/Progress.HC", "Progress.HC", "Demo");
+      } else if (!reference && popup) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/PopupProbe.HC",
+                              "PopupProbe.HC");
+        VerifyHostModuleMedia(argv[3], "Demo/DolDoc/MenuBttn.HC",
+                              "MenuBttn.HC", "Demo/DolDoc");
+      } else if (!reference && ins_reg) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/InsRegProbe.HC",
+                              "InsRegProbe.HC");
+      } else if (!reference && startup_exec) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/StartupExecProbe.HC",
+                              "StartupExecProbe.HC");
+      } else if (!reference && key_map) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/KeyMapProbe.HC",
+                              "KeyMapProbe.HC");
+      } else if (!reference && once) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/OnceProbe.HC",
+                              "OnceProbe.HC");
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/OnceHome.HC",
+                              "Once.HC", "Home");
+      } else if (!reference && registry) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/RegistryProbe.HC",
+                              "RegistryProbe.HC");
+        VerifyHostModuleMedia(argv[3], "Demo/RegistryDemo.HC",
+                              "RegistryDemo.HC", "Demo");
+      } else if (!reference) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/DocTreeProbe.HC",
+                              "DocTreeProbe.HC");
+        if (aot)
+          VerifyHostModuleMedia(argv[3], "Linux/Fixtures/DocTreeAOTProbe.HC",
+                                "DocTreeAOTProbe.HC");
+      }
+      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
+      vm.Connect();
+      std::span<const CTextProbe> probes = doc_tree_probes;
+      if (registry)
+        probes = reference ? registry_reference_probes : registry_probes;
+      else if (once)
+        probes = once_probes;
+      else if (popup)
+        probes = popup_probes;
+      else if (ins_reg)
+        probes = ins_reg_probes;
+      else if (startup_exec)
+        probes = startup_exec_probes;
+      else if (mode == "--training-input-reference")
+        probes = training_input_probes;
+      else if (mode == "--file-editor-reference")
+        probes = file_editor_probes;
+      else if (key_map)
+        probes = key_map_probes;
+      else if (mode == "--dictionary-reference")
+        probes = dictionary_probes;
+      else if (aot)
+        probes = doc_tree_aot_probes;
+      DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
+                             reference, false, false, false, false, false,
+                             false, false, false, probes, {}, 0x20000000,
+                             once && !reference ? "Once startup 2A 2 2" : "",
+                             CStockStartup::None, progress ? CDesktopTest::Progress
+                                                           : CDesktopTest::None);
+      vm.Quit();
+      if (argc == 4)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
+  if ((argc == 4 || argc == 5) &&
+      (mode == "--adam-startup" || mode == "--adam-startup-reference" ||
+       mode == "--dev-info" || mode == "--dev-info-reference" ||
+       mode == "--cpu-rep" || mode == "--cpu-rep-reference")) {
+    const bool reference = mode.ends_with("-reference");
+    std::span<const CTextProbe> probes = adam_startup_probes;
+    if (mode.starts_with("--dev-info"))
+      probes = dev_info_probes;
+    else if (mode.starts_with("--cpu-rep"))
+      probes = cpu_rep_probes;
+    const auto &probe = probes.front();
+    char path[] = "/tmp/unholyos-adam-startup-XXXXXX";
+    if (argc == 4 && !mkdtemp(path))
+      return 1;
+    const fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      if (!reference)
+        VerifyHostModuleMedia(argv[3], std::string("Linux/Fixtures") + probe.source,
+                              probe.source + 1);
+      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
+      vm.Connect();
+      DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
+                             reference, false, false, false, false, false,
+                             false, false, false, probes);
+      vm.Quit();
+      if (argc == 4)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
+  if (argc==8 && std::string_view(argv[1])=="--kernel-cfg") {
+    try {
+      TestKernelCfgBoot(argv[2],argv[3],argv[4],argv[5],argv[6],
+                        fs::absolute(argv[7]));
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n';
+      return 1;
+    }
+  }
   if (argc == 5 && std::string_view(argv[1]) == "--compiler-failures") {
     try {
       TestCompilerFailures(argv[2], argv[3], argv[4]);
@@ -6342,6 +7216,123 @@ int main(int argc, char **argv)
       return 1;
     }
   }
+  if ((argc == 5 || argc == 6) &&
+      (mode == "--dictionary-install" || mode == "--dictionary-install-reference")) {
+    const bool reference = mode.ends_with("-reference");
+    char path[] = "/tmp/unholyos-dictionary-install-XXXXXX";
+    if (argc == 5 && !mkdtemp(path))
+      return 1;
+    const auto dir = argc == 6 ? fs::absolute(argv[5]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      const auto original = FileRead(argv[4]);
+      const auto disk = dir / "owned.img";
+      fs::copy_file(argv[4], disk);
+      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, disk, true, reference);
+      vm.Connect();
+      DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
+                             reference, false, false, false, false, false,
+                             false, false, false, {}, {}, 0x20000000, {},
+                             CStockStartup::None, CDesktopTest::DictionaryInstall);
+      vm.Quit();
+      const auto written = FileRead(disk);
+      constexpr size_t fat1 = 2080 * 512, fat2 = 2593 * 512, fat_bytes = 513 * 512;
+      Check(written.size() == original.size() && written != original,
+            "The dictionary did not reach the scratch disk");
+      Check(written.size() >= fat2 + fat_bytes &&
+                std::equal(written.begin() + fat1, written.begin() + fat2,
+                           written.begin() + fat2),
+            "The dictionary disk FAT mirrors differ");
+      Check(FileRead(argv[4]) == original, "The dictionary disk fixture was modified");
+      if (argc == 5)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
+  if ((argc == 5 || argc == 6) &&
+      (mode == "--dictionary-generator" || mode == "--dictionary-generator-check" ||
+       mode == "--dictionary-generator-reference" || mode == "--dictionary-generator-reference-check" ||
+       mode == "--dictionary-generator-holyc" || mode == "--dictionary-generator-holyc-check")) {
+    const bool reference = mode.starts_with("--dictionary-generator-reference");
+    char path[] = "/tmp/unholyos-dictionary-generator-XXXXXX";
+    if (argc == 5 && !mkdtemp(path))
+      return 1;
+    const auto dir = argc == 6 ? fs::absolute(argv[5]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      CMonitor vm(argv[2], argv[3], dir, "pc", "1536", false, argv[4], false, reference);
+      vm.Connect();
+      const auto test = mode.starts_with("--dictionary-generator-holyc")
+                            ? CDesktopTest::DictionaryGeneratorHolyC
+                            : CDesktopTest::DictionaryGenerator;
+      DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
+                             reference, false, false, false, false, false,
+                             false, false, false, {}, {}, 0x60000000, {},
+                             CStockStartup::None, test);
+      vm.Quit();
+      if (mode.ends_with("-check")) {
+        // Captured from the unmodified generator on the pinned TempleOS DVD.
+        const auto terminal = ReadText(dir / "generator-terminal.txt");
+        Check(terminal.find("Largest Entry :63") != std::string::npos &&
+                  terminal.find("Word Count    :5") != std::string::npos,
+              "The dictionary generator diagnostics differ from TempleOS");
+        const struct {
+          const char *name;
+          size_t size;
+          uint64_t hash;
+        } expected[]{
+            {"DICTIONARY2.DD", 475, 0x700e401cd58283eaULL},
+            {"ACDefs.DATA", 233, 0x23620a3dec91e945ULL},
+            {"ACWords.DATA", 40, 0xd1bbb700dc38302bULL}};
+        for (const auto &file : expected) {
+          const auto bytes = FileRead(dir / file.name);
+          uint64_t hash = 14695981039346656037ULL;
+          for (auto ch : bytes)
+            hash = (hash ^ ch) * 1099511628211ULL;
+          if (bytes.size() != file.size || hash != file.hash)
+            throw std::runtime_error(std::string(file.name) + " differs from TempleOS");
+        }
+        std::cout << "All three dictionary generator fixture outputs match TempleOS\n";
+      }
+      if (argc == 5)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
+  if ((argc == 4 || argc == 5) &&
+      (mode == "--menu-diagnostic" || mode == "--menu-diagnostic-reference" ||
+       mode == "--compiler-diagnostic" || mode == "--compiler-diagnostic-reference")) {
+    const bool reference = mode.ends_with("-reference");
+    const auto diagnostic = mode.starts_with("--menu-diagnostic")
+                                ? CDesktopTest::MenuDiagnostic
+                                : CDesktopTest::CompilerDiagnostic;
+    char path[] = "/tmp/unholyos-diagnostic-XXXXXX";
+    if (argc == 4 && !mkdtemp(path))
+      return 1;
+    const auto dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
+      vm.Connect();
+      DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
+                             reference, false, false, false, false, false,
+                             false, false, false, {}, {}, 0x20000000, {},
+                             CStockStartup::None, diagnostic);
+      vm.Quit();
+      if (argc == 4)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
   if ((argc==5 || argc==6) &&
       (std::string_view(argv[1])=="--database-persistent" ||
        std::string_view(argv[1])=="--database-persistent-reference")) {
@@ -6385,6 +7376,83 @@ int main(int argc, char **argv)
       return 1;
     }
   }
+  if ((argc==5 || argc==6) &&
+      (std::string_view(argv[1])=="--fat32-image" ||
+       std::string_view(argv[1])=="--fat32-image-reference")) {
+    bool reference=std::string_view(argv[1]).ends_with("-reference");
+    char path[]="/tmp/unholyos-fat32-image-XXXXXX";
+    if (argc==5 && !mkdtemp(path)) return 1;
+    fs::path dir=argc==6?fs::absolute(argv[5]):fs::path(path);
+    try {
+      fs::create_directories(dir);
+      auto original=FileRead(argv[4]);
+      auto disk=dir/"owned.img";
+      fs::copy_file(argv[4],disk);
+      if (!reference)
+        VerifyHostModuleMedia(argv[3],"Linux/Fixtures/Fat32ImageProbe.HC",
+                              "Fat32ImageProbe.HC");
+      for (unsigned pass=0;pass<2;pass++) {
+        auto run=dir/(pass?"reboot":"write");
+        fs::create_directory(run);
+        CMonitor vm(argv[2],argv[3],run,"pc","512",false,disk,true,reference);
+        vm.Connect();
+        if (reference)
+          DriveCharacterGraphics(vm,run,"",true,false,false,false,false,false,
+                                 false,false,false,
+                                 std::span<const CTextProbe>(fat32_image_probes).subspan(pass,1));
+        else
+          CheckBootSourceProbe(vm.Boot(run/"serial.log"),fat32_image_probes[pass],run);
+        vm.Quit();
+        Check(FileRead(disk)!=original,"FAT32 image did not reach disk");
+      }
+      Check(FileRead(argv[4])==original,"Original FAT32 image was modified");
+      if (argc==5) fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr<<error.what()<<'\n'<<"Evidence: "<<dir<<'\n';
+      return 1;
+    }
+  }
+  if ((argc==5 || argc==6) &&
+      (std::string_view(argv[1])=="--fat32-cluster" ||
+       std::string_view(argv[1])=="--fat32-cluster-reference" ||
+       std::string_view(argv[1])=="--fat-sector-cache" ||
+       std::string_view(argv[1])=="--fat-sector-cache-reference")) {
+    bool reference=std::string_view(argv[1]).ends_with("-reference");
+    bool sector_cache=std::string_view(argv[1]).starts_with("--fat-sector-cache");
+    std::span<const CTextProbe> probes=sector_cache
+        ? std::span<const CTextProbe>(fat_sector_cache_probes)
+        : std::span<const CTextProbe>(fat_cluster_probes);
+    char path[]="/tmp/unholyos-fat32-cluster-XXXXXX";
+    if (argc==5 && !mkdtemp(path)) return 1;
+    fs::path dir=argc==6 ? fs::absolute(argv[5]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      const auto original=sector_cache?FileRead(argv[4]):std::vector<uint8_t>{};
+      if (!reference)
+        for (const auto &probe:probes)
+          VerifyHostModuleMedia(argv[3],std::string("Linux/Fixtures")+probe.source,
+                                probe.source+1);
+      CMonitor vm(argv[2],argv[3],dir,"pc","512",false,argv[4],false,reference);
+      vm.Connect();
+      if (reference)
+        DriveCharacterGraphics(vm,dir,"",true,false,false,false,false,false,
+                               false,false,false,probes.first(1));
+      else {
+        auto boot=vm.Boot(dir/"serial.log");
+        for (const auto &probe:probes)
+          CheckBootSourceProbe(boot,probe,dir);
+      }
+      vm.Quit();
+      if (sector_cache)
+        Check(FileRead(argv[4])==original,"Original FAT32 snapshot was modified");
+      if (argc==5) fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
   if (argc==5 && (std::string_view(argv[1])=="--fat32-write" ||
                   std::string_view(argv[1])=="--fat32-stream" ||
                   std::string_view(argv[1])=="--fat32-tree" ||
@@ -6416,6 +7484,7 @@ int main(int argc, char **argv)
                    "Make Directory:C:/OPS/SUB/DEEP\nMake Directory:C:/OPS/EMPTY\n"
                    "Make Directory:C:/PICK\nCopying C:/OPS/A.TXT to C:/PICK/A.TXT\n"
                    "Copying C:/PICK/A.TXT to C:/PICK/R.TXT\nDel A.TXT\n"
+                   "Make Directory:CLONE\n"
                    "Make Directory:C:/CLONE/EMPTY\nMake Directory:C:/CLONE/SUB\n"
                    "Make Directory:C:/CLONE/SUB/DEEP\n"
                    "Copying C:/OPS/SUB/DEEP/D.TXT to C:/CLONE/SUB/DEEP/D.TXT\n"
@@ -6423,6 +7492,7 @@ int main(int argc, char **argv)
                    "Copying C:/OPS/SUB/C.TXT to C:/CLONE/SUB/C.TXT\n"
                    "Copying C:/OPS/B.BIN to C:/CLONE/B.BIN\n"
                    "Copying C:/OPS/A.TXT to C:/CLONE/A.TXT\n"
+                   "Make Directory:TXT\n"
                    "Make Directory:C:/TXT/EMPTY\nMake Directory:C:/TXT/SUB\n"
                    "Make Directory:C:/TXT/SUB/DEEP\n"
                    "Copying C:/OPS/SUB/DEEP/D.TXT to C:/TXT/SUB/DEEP/D.TXT\n"
@@ -6525,6 +7595,50 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--class-records-reference" ||
        std::string_view(argv[1]) == "--function-records" ||
        std::string_view(argv[1]) == "--function-records-reference" ||
+       std::string_view(argv[1]) == "--function-records-layout" ||
+       std::string_view(argv[1]) == "--function-records-layout-reference" ||
+       std::string_view(argv[1]) == "--list-utilities" ||
+       std::string_view(argv[1]) == "--list-utilities-reference" ||
+       std::string_view(argv[1]) == "--optimizer" ||
+       std::string_view(argv[1]) == "--optimizer-reference" ||
+       std::string_view(argv[1]) == "--optimizer-aot" ||
+       std::string_view(argv[1]) == "--register-allocation" ||
+       std::string_view(argv[1]) == "--register-allocation-reference" ||
+       std::string_view(argv[1]) == "--register-allocation-aot" ||
+       std::string_view(argv[1]) == "--address-fold" ||
+       std::string_view(argv[1]) == "--address-fold-reference" ||
+       std::string_view(argv[1]) == "--address-fold-aot" ||
+       std::string_view(argv[1]) == "--backend" ||
+       std::string_view(argv[1]) == "--backend-reference" ||
+       std::string_view(argv[1]) == "--backend-aot" ||
+       std::string_view(argv[1]) == "--adam-math" ||
+       std::string_view(argv[1]) == "--adam-math-reference" ||
+       std::string_view(argv[1]) == "--adam-math-aot" ||
+       std::string_view(argv[1]) == "--adam-mem" ||
+       std::string_view(argv[1]) == "--adam-mem-reference" ||
+       std::string_view(argv[1]) == "--adam-mem-aot" ||
+       std::string_view(argv[1]) == "--adam-mem-large" ||
+       std::string_view(argv[1]) == "--adam-mem-large-reference" ||
+       std::string_view(argv[1]) == "--adam-mem-large-aot" ||
+       std::string_view(argv[1]) == "--adam-task" ||
+       std::string_view(argv[1]) == "--adam-task-reference" ||
+       std::string_view(argv[1]) == "--adam-task-aot" ||
+       std::string_view(argv[1]) == "--uasm" ||
+       std::string_view(argv[1]) == "--uasm-reference" ||
+       std::string_view(argv[1]) == "--uasm-aot" ||
+       std::string_view(argv[1]) == "--storage-services" ||
+       std::string_view(argv[1]) == "--storage-services-reference" ||
+       std::string_view(argv[1]) == "--cluster-entry" ||
+       std::string_view(argv[1]) == "--cluster-entry-reference" ||
+       std::string_view(argv[1]) == "--disk-cache" ||
+       std::string_view(argv[1]) == "--disk-cache-reference" ||
+       std::string_view(argv[1]) == "--storage-lifecycle" ||
+       std::string_view(argv[1]) == "--storage-lifecycle-reference" ||
+       std::string_view(argv[1]) == "--file-backed-redsea" ||
+       std::string_view(argv[1]) == "--file-backed-redsea-reference" ||
+       std::string_view(argv[1]) == "--nested-redsea" ||
+       std::string_view(argv[1]) == "--nested-redsea-reference" ||
+       std::string_view(argv[1]) == "--optical-image" ||
        std::string_view(argv[1]) == "--assert-warning" ||
        std::string_view(argv[1]) == "--assert-warning-reference" ||
        std::string_view(argv[1]) == "--tic-tac-toe" ||
@@ -6572,10 +7686,50 @@ int main(int argc, char **argv)
     bool class_records_probe =
         std::string_view(argv[1]).starts_with("--class-records");
     bool function_records_probe =
-        std::string_view(argv[1]).starts_with("--function-records");
+        std::string_view(argv[1]) == "--function-records" ||
+        std::string_view(argv[1]) == "--function-records-reference";
+    bool function_records_layout_probe =
+        std::string_view(argv[1]).starts_with("--function-records-layout");
+    bool list_utilities_probe =
+        std::string_view(argv[1]).starts_with("--list-utilities");
+    bool optimizer_probe = std::string_view(argv[1]).starts_with("--optimizer");
+    bool optimizer_aot = std::string_view(argv[1]) == "--optimizer-aot";
+    bool register_allocation_probe =
+        std::string_view(argv[1]).starts_with("--register-allocation");
+    bool register_allocation_aot =
+        std::string_view(argv[1]) == "--register-allocation-aot";
+    bool address_fold_probe=std::string_view(argv[1]).starts_with("--address-fold");
+    bool address_fold_aot=std::string_view(argv[1])=="--address-fold-aot";
+    bool backend_probe=std::string_view(argv[1]).starts_with("--backend");
+    bool backend_aot=std::string_view(argv[1])=="--backend-aot";
+    bool adam_math_probe=std::string_view(argv[1]).starts_with("--adam-math");
+    bool adam_math_aot=std::string_view(argv[1])=="--adam-math-aot";
+    bool adam_mem_probe=std::string_view(argv[1]).starts_with("--adam-mem");
+    bool adam_mem_aot=adam_mem_probe && std::string_view(argv[1]).ends_with("-aot");
+    bool adam_mem_large=std::string_view(argv[1]).starts_with("--adam-mem-large");
+    bool adam_task_probe=std::string_view(argv[1]).starts_with("--adam-task");
+    bool adam_task_aot=std::string_view(argv[1])=="--adam-task-aot";
+    bool uasm_probe=std::string_view(argv[1]).starts_with("--uasm");
+    bool uasm_aot=std::string_view(argv[1])=="--uasm-aot";
+    bool storage_services_probe =
+        std::string_view(argv[1]).starts_with("--storage-services");
+    bool cluster_entry_probe =
+        std::string_view(argv[1]).starts_with("--cluster-entry");
+    bool disk_cache_probe =
+        std::string_view(argv[1]).starts_with("--disk-cache");
+    bool storage_lifecycle_probe =
+        std::string_view(argv[1]).starts_with("--storage-lifecycle");
+    bool file_backed_redsea_probe =
+        std::string_view(argv[1]).starts_with("--file-backed-redsea");
+    bool nested_redsea_probe =
+        std::string_view(argv[1]).starts_with("--nested-redsea");
+    bool optical_image_probe = std::string_view(argv[1]) == "--optical-image";
     const bool source_probe = compiler_defines_probe || string_defines_probe ||
                               system_defines_probe || color_conversions_probe ||
-                              format_missing_args_probe || class_records_probe;
+                              format_missing_args_probe || class_records_probe ||
+                              list_utilities_probe || storage_services_probe ||
+                              cluster_entry_probe || disk_cache_probe || storage_lifecycle_probe ||
+                              file_backed_redsea_probe || nested_redsea_probe || optical_image_probe || optimizer_probe || register_allocation_probe || address_fold_probe || backend_probe || uasm_probe || adam_math_probe || adam_mem_probe || adam_task_probe;
     std::span<const CTextProbe> text_probes;
     if (math)
       text_probes = math_probes;
@@ -6601,26 +7755,123 @@ int main(int argc, char **argv)
       text_probes = class_records_probes;
     else if (function_records_probe)
       text_probes = function_records_probes;
+    else if (function_records_layout_probe)
+      text_probes = function_records_layout_probes;
+    else if (list_utilities_probe)
+      text_probes = list_utilities_probes;
+    else if (optimizer_probe)
+      text_probes = optimizer_aot ? std::span<const CTextProbe>(optimizer_aot_probes)
+                                 : std::span<const CTextProbe>(optimizer_probes);
+    else if (register_allocation_probe)
+      text_probes = register_allocation_aot
+          ? std::span<const CTextProbe>(register_allocation_aot_probes)
+          : std::span<const CTextProbe>(register_allocation_probes);
+    else if (address_fold_probe)
+      text_probes=address_fold_aot
+          ? std::span<const CTextProbe>(address_fold_aot_probes)
+          : std::span<const CTextProbe>(address_fold_probes);
+    else if (backend_probe)
+      text_probes=backend_aot?std::span<const CTextProbe>(backend_aot_probes):
+                             std::span<const CTextProbe>(backend_probes);
+    else if (adam_math_probe)
+      text_probes=adam_math_aot?std::span<const CTextProbe>(adam_math_aot_probes):
+                               std::span<const CTextProbe>(adam_math_probes);
+    else if (adam_mem_probe)
+      text_probes=adam_mem_aot?std::span<const CTextProbe>(adam_mem_aot_probes):
+                              std::span<const CTextProbe>(adam_mem_probes);
+    else if (adam_task_probe)
+      text_probes=adam_task_aot?std::span<const CTextProbe>(adam_task_aot_probes):
+                               std::span<const CTextProbe>(adam_task_probes);
+    else if (uasm_probe)
+      text_probes=uasm_aot?std::span<const CTextProbe>(uasm_aot_probes):
+                          std::span<const CTextProbe>(uasm_probes);
+    else if (storage_services_probe)
+      text_probes = storage_services_probes;
+    else if (cluster_entry_probe)
+      text_probes = cluster_entry_probes;
+    else if (disk_cache_probe)
+      text_probes = disk_cache_probes;
+    else if (storage_lifecycle_probe)
+      text_probes = storage_lifecycle_probes;
+    else if (file_backed_redsea_probe)
+      text_probes = file_backed_redsea_probes;
+    else if (nested_redsea_probe)
+      text_probes = nested_redsea_probes;
+    else if (optical_image_probe)
+      text_probes = optical_image_probes;
     bool reference = std::string_view(argv[1]).ends_with("-reference");
+    if (storage_lifecycle_probe && reference)
+      text_probes=text_probes.first(1);
+    if (file_backed_redsea_probe && reference)
+      text_probes=text_probes.first(2);
+    if (nested_redsea_probe && reference)
+      text_probes=text_probes.first(2);
+    if (register_allocation_probe && reference)
+      text_probes=text_probes.first(1);
+    if (address_fold_probe && reference)
+      text_probes=text_probes.first(1);
+    if (backend_probe && reference)
+      text_probes=text_probes.first(1);
+    if (uasm_probe && reference)
+      text_probes=text_probes.first(1);
     char path[] = "/tmp/unholyos-interactive-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       fs::create_directories(dir);
-      if ((source_probe || internal_types_probe || function_records_probe) &&
+      if (character && !reference)
+        VerifyHostModuleMedia(argv[3],"Linux/Fixtures/CharPanObserver.HC",
+                              "CharPanObserver.HC");
+      if ((source_probe || internal_types_probe || function_records_probe ||
+           function_records_layout_probe) &&
           !reference) {
-        const auto &probe = text_probes[0];
-        VerifyHostModuleMedia(argv[3],
-                              std::string("Linux/Fixtures") + probe.source,
-                              probe.source + 1);
+        const auto sources = function_records_probe ? text_probes.first(1) : text_probes;
+        for (const auto &probe:sources)
+          VerifyHostModuleMedia(argv[3],
+                                std::string("Linux/Fixtures") + probe.source,
+                                probe.source + 1);
+        if (optimizer_aot)
+          VerifyHostModuleMedia(argv[3], "Linux/Fixtures/OptimizerProbe.HC",
+                                "OptimizerProbe.HC");
+        if (register_allocation_aot)
+          VerifyHostModuleMedia(argv[3],
+                                "Linux/Fixtures/RegisterAllocationProbe.HC",
+                                "RegisterAllocationProbe.HC");
+        if (address_fold_aot)
+          VerifyHostModuleMedia(argv[3],"Linux/Fixtures/AddressFoldProbe.HC",
+                                "AddressFoldProbe.HC");
+        if (backend_aot)
+          VerifyHostModuleMedia(argv[3],"Linux/Fixtures/BackendProbe.HC",
+                                "BackendProbe.HC");
+        if (adam_math_aot)
+          VerifyHostModuleMedia(argv[3],"Linux/Fixtures/AdamMathProbe.HC",
+                                "AdamMathProbe.HC");
+        if (adam_math_probe)
+          VerifyHostModuleMedia(argv[3],"Adam/AMath.HC","AMath.HC","Adam");
+        if (adam_mem_aot)
+          VerifyHostModuleMedia(argv[3],"Linux/Fixtures/AdamMemProbe.HC",
+                                "AdamMemProbe.HC");
+        if (adam_mem_probe)
+          VerifyHostModuleMedia(argv[3],"Adam/AMem.HC","AMem.HC","Adam");
+        if (adam_task_probe) {
+          VerifyHostModuleMedia(argv[3],"Adam/AMem.HC","AMem.HC","Adam");
+          VerifyHostModuleMedia(argv[3],"Adam/TaskRep.HC","TaskRep.HC","Adam");
+        }
+        if (adam_task_aot)
+          VerifyHostModuleMedia(argv[3],"Linux/Fixtures/AdamTaskProbe.HC",
+                                "AdamTaskProbe.HC");
+        if (uasm_aot)
+          VerifyHostModuleMedia(argv[3],"Linux/Fixtures/UAsmProbe.HC",
+                                "UAsmProbe.HC");
       }
-      const bool separate_heaps = class_records_probe || function_records_probe;
-      const char *memory = separate_heaps ? "3072" : "512";
+      const bool large_memory = class_records_probe || function_records_probe ||
+                                function_records_layout_probe || adam_mem_large;
+      const char *memory = large_memory ? "3072" : "512";
       CMonitor vm(argv[2], argv[3], dir, "pc", memory, false, {}, false,
                   reference);
       vm.Connect();
-      if (!text_probes.empty() && !reference) {
+      if (!text_probes.empty() && !reference && !function_records_layout_probe) {
         auto output = assert_warning
                           ? vm.WaitSerial(dir / "serial.log",
                                           "UnholyOS: finished "
@@ -6628,7 +7879,8 @@ int main(int argc, char **argv)
                                           "0x0000000000000001\r\n")
                           : vm.Boot(dir / "serial.log");
         if (source_probe) {
-          CheckBootSourceProbe(output, text_probes[0], dir);
+          for (const auto &probe:text_probes)
+            CheckBootSourceProbe(output, probe, dir);
           if (class_records_probe)
             CheckClassRecordRecovery(output);
         } else if (function_records_probe) {
@@ -6637,8 +7889,7 @@ int main(int argc, char **argv)
           const char *paths[]{text_probes[0].source, text_probes[1].source};
           CheckBootProbeOrder(output, paths);
           CaptureGuestFile(vm, dir, output, "FunctionRecordsProbe.BIN.Z");
-          std::cout
-              << "Function records matched in source and loaded AOT code\n";
+          std::cout << "Function records matched in source and loaded AOT code\n";
         } else {
           RecordTextProbes(output, text_probes, dir);
           if (assert_warning) {
@@ -6656,20 +7907,21 @@ int main(int argc, char **argv)
             std::cout << "Text probe sources and compiled modules matched\n";
           }
         }
-      } else if ((internal_types_probe || function_records_probe) &&
-                 reference) {
-        const CModuleFile source[]{{fs::absolute(std::string("Linux/Fixtures") +
-                                                 text_probes[0].source),
-                                    text_probes[0].source + 1,
-                                    function_records_probe
-                                        ? "function-records-source"
-                                        : "internal-types-source"}};
-        const std::span<const CTextProbe> probes =
-            function_records_probe ? function_records_reference_probes
-                                   : internal_types_reference_probes;
+      } else if (internal_types_probe && reference) {
+        const CModuleFile source[]{
+            {fs::absolute("Linux/Fixtures/InternalTypesProbe.HC"),
+             "InternalTypesProbe.HC", "internal-types-source"}};
         DriveCharacterGraphics(vm, dir, "", true, false, false, false, false,
-                               false, false, false, false, probes, source,
-                               separate_heaps ? 0xC0000000ULL : 0x20000000ULL);
+                               false, false, false, false,
+                               internal_types_reference_probes, source);
+      } else if (function_records_probe && reference) {
+        const CModuleFile source[]{
+            {fs::absolute("Linux/Fixtures/FunctionRecordsProbe.HC"),
+             "FunctionRecordsProbe.HC", "function-records-source"}};
+        DriveCharacterGraphics(vm, dir, "", true, false, false, false, false,
+                               false, false, false, false,
+                               function_records_reference_probes, source,
+                               0xC0000000ULL);
       } else if (character || tic || breaks || screen_capture || spline ||
                  flood_fill || blot || sprite_flood || music_demo ||
                  !text_probes.empty())
@@ -6677,7 +7929,7 @@ int main(int argc, char **argv)
             vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
             tic, breaks, screen_capture, spline, flood_fill, blot, sprite_flood,
             music_demo, text_probes, {},
-            separate_heaps && reference ? 0xC0000000ULL : 0x20000000ULL);
+            large_memory ? 0xC0000000ULL : 0x20000000ULL);
       else
         DriveDataBase(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"), reference,
                       std::string_view(argv[1]) == "--form");
@@ -6715,7 +7967,8 @@ int main(int argc, char **argv)
         CheckProgramOutput(output,"/AtaWriteRejectProbe.HC","ATA reject probe 1F\n",'1');
         Check(output.find("UnholyOS: ATA partial sectors 0x0000000000000001\r\n")!=std::string::npos,
               "ATA partial sector write or restore failed");
-        CheckProgramOutput(output,"/Fat32RejectProbe.HC","FAT32 reject probe 1F\n",'1');
+        CheckProgramOutput(output,"/Fat32RejectProbe.HC",
+                           "Make Directory:C:/NEW\nFAT32 reject probe 1F\n",'1');
         vm.Quit();
         Check(FileRead(disk)==expected,"ATA disk bytes differed from expected image");
       }
@@ -6749,8 +8002,9 @@ int main(int argc, char **argv)
             "fat metadata FRAG.BIN 5 2501 20 02/29/24 12:34:56\n"
             "fat entry SUB 1024\n"
             "fat entry LongNameExample.txt 333\n"
-            "FAT32 read probe FFF\n",'1');
-        CheckProgramOutput(output,"/Fat32RejectProbe.HC","FAT32 reject probe 1F\n",'1');
+            "FAT32 read probe 1FFF\n",'1');
+        CheckProgramOutput(output,"/Fat32RejectProbe.HC",
+                           "Make Directory:C:/NEW\nFAT32 reject probe 1F\n",'1');
       }
       vm.Command(R"({"execute":"quit"})");
       std::cout<<(invalid?"Verified FAT32 invalid geometry refusal\n":
@@ -6762,8 +8016,10 @@ int main(int argc, char **argv)
       return 1;
     }
   }
-  if ((argc == 4 || argc == 5) && std::string_view(argv[1]) == "--digits") {
-    char path[] = "/tmp/unholyos-digits-XXXXXX";
+  if ((argc == 4 || argc == 5) &&
+      (std::string_view(argv[1]) == "--digits" ||
+       std::string_view(argv[1]) == "--user-task")) {
+    char path[] = "/tmp/unholyos-user-task-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
     fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
@@ -6772,7 +8028,10 @@ int main(int argc, char **argv)
       CMonitor vm(argv[2], argv[3], dir, "pc", "512", false);
       vm.Connect();
       auto output = vm.Boot(dir / "serial.log");
-      DriveDigits(vm, dir, output);
+      if (std::string_view(argv[1]) == "--digits")
+        DriveDigits(vm, dir, output);
+      else
+        DriveUserTask(vm, dir, output);
       vm.Command(R"({"execute":"quit"})");
       if (argc == 4)
         fs::remove_all(dir);
@@ -6803,8 +8062,53 @@ int main(int argc, char **argv)
               << " --internal-types[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --class-records[-reference] qemu image.iso [capture-dir]\n"
-              << "       " << argv[0]
               << " --function-records[-reference] qemu image.iso [capture-dir]\n"
+              << " --function-records-layout[-reference] qemu image.iso [capture-dir]\n"
+              << " --list-utilities[-reference] qemu image.iso [capture-dir]\n"
+              << " --optimizer[-reference] qemu image.iso [capture-dir]\n"
+              << " --optimizer-aot qemu image.iso [capture-dir]\n"
+              << " --register-allocation[-reference] qemu image.iso [capture-dir]\n"
+              << " --register-allocation-aot qemu image.iso [capture-dir]\n"
+              << " --address-fold[-reference] qemu image.iso [capture-dir]\n"
+              << " --address-fold-aot qemu image.iso [capture-dir]\n"
+              << " --backend[-reference] qemu image.iso [capture-dir]\n"
+              << " --backend-aot qemu image.iso [capture-dir]\n"
+              << " --adam-math qemu image.iso [capture-dir]\n"
+              << " --adam-math-reference qemu image.iso [capture-dir]\n"
+              << " --adam-math-aot qemu image.iso [capture-dir]\n"
+              << " --adam-mem qemu image.iso [capture-dir]\n"
+              << " --adam-mem-reference qemu image.iso [capture-dir]\n"
+              << " --adam-mem-aot qemu image.iso [capture-dir]\n"
+              << " --adam-mem-large[-reference|-aot] qemu image.iso [capture-dir]\n"
+              << " --adam-task[-reference|-aot] qemu image.iso [capture-dir]\n"
+              << " --dev-info[-reference] qemu image.iso [capture-dir]\n"
+              << " --cpu-rep[-reference] qemu image.iso [capture-dir]\n"
+              << " --registry[-reference] qemu image.iso [capture-dir]\n"
+              << " --once[-reference] qemu image.iso [capture-dir]\n"
+              << " --popup-menus[-reference] qemu image.iso [capture-dir]\n"
+              << " --ins-reg[-reference] qemu image.iso [capture-dir]\n"
+              << " --startup-exec[-reference] qemu image.iso [capture-dir]\n"
+              << " --training-input-reference qemu image.iso [capture-dir]\n"
+              << " --file-editor-reference qemu image.iso [capture-dir]\n"
+              << " --key-map[-reference] qemu image.iso [capture-dir]\n"
+              << " --dictionary-reference qemu image.iso [capture-dir]\n"
+              << " --dictionary-install[-reference] qemu image.iso disk.img [capture-dir]\n"
+              << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"
+              << " --menu-diagnostic[-reference] qemu image.iso [capture-dir]\n"
+              << " --compiler-diagnostic[-reference] qemu image.iso [capture-dir]\n"
+              << " --stock-once qemu image.iso [capture-dir]\n"
+              << " --uasm[-reference] qemu image.iso [capture-dir]\n"
+              << " --uasm-aot qemu image.iso [capture-dir]\n"
+              << " --storage-services[-reference] qemu image.iso [capture-dir]\n"
+              << " --cluster-entry[-reference] qemu image.iso [capture-dir]\n"
+              << " --disk-cache[-reference] qemu image.iso [capture-dir]\n"
+              << " --storage-lifecycle[-reference] qemu image.iso [capture-dir]\n"
+              << " --file-backed-redsea[-reference] qemu image.iso [capture-dir]\n"
+              << " --nested-redsea[-reference] qemu image.iso [capture-dir]\n"
+              << " --optical-image qemu image.iso [capture-dir]\n"
+              << " --fat32-image[-reference] qemu image.iso disk.img [capture-dir]\n"
+              << " --fat32-cluster[-reference] qemu image.iso disk.img [capture-dir]\n"
+              << " --fat-sector-cache[-reference] qemu image.iso disk.img [capture-dir]\n"
               << "       " << argv[0]
               << " --host-module[-reference] qemu image.iso module.BIN [capture-dir]\n"
               << "       " << argv[0]
@@ -6819,6 +8123,8 @@ int main(int argc, char **argv)
               << " --load-pass2[-reference] qemu image.iso consumer.BIN provider.BIN [capture-dir]\n"
               << "       " << argv[0]
               << " --digits qemu image.iso [capture-dir]\n"
+              << "       " << argv[0]
+              << " --user-task qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --character-graphics[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0] << " --music[-reference] qemu image.iso [capture-dir]\n"

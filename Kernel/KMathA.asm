@@ -1,9 +1,11 @@
 GLOBAL Pow10Bits
 GLOBAL F64MulBits,F64DivBits,F64AddBits,F64Log10Bits,F64Log2Bits,F64ToI64,F64FromI64
 GLOBAL I64MulF64Bits,F64SqrtBits,F64SinBits,F64CosBits
-GLOBAL F64PowerBits
+GLOBAL F64PowerBits,SYS_POW
 GLOBAL F64ArgBits
 GLOBAL F64CompareBits
+GLOBAL _SIGN,_ROUND,_TRUNC,_FLOOR,_CEIL,_POW,_POW10,_EXP,_LOG10,_LOG2,_LN
+GLOBAL _FLDCW,_FSTCW,_FSTSW,_FCLEX
 
 SECTION .text
 BITS 64
@@ -165,6 +167,18 @@ I64MulF64Bits:
 	ADD	RSP,8
 	RET
 
+; Reference register ABI: RAX = RDX raised to RAX. Preserve the
+; caller's RDI and RSI when entering the existing SysV implementation.
+SYS_POW:
+  PUSH RDI
+  PUSH RSI
+  MOV RDI,RDX
+  MOV RSI,RAX
+  CALL F64PowerBits
+  POP RSI
+  POP RDI
+  RET
+
 F64PowerBits:
 	TEST	RSI,RSI
 	JNZ	.again
@@ -213,6 +227,121 @@ F64PowerBits:
 	FLDCW	WORD [RSP+16]
 	MOV	RAX,[RSP]
 	ADD	RSP,24
+	RET
+
+; HolyC stack-call entries from Terry A. Davis's public-domain KMathA.HC.
+; Floating-point results are returned as binary64 bits in RAX.
+_SIGN:
+	FLD	QWORD [RSP+8]
+	FTST
+	FSTSW	AX
+	FFREE	ST0
+	FINCSTP
+	MOV	DX,AX
+	XOR	EAX,EAX
+	BT	DX,14
+	JC	.done
+	MOV	RAX,0x3FF0000000000000
+	BT	DX,8
+	JNC	.done
+	MOV	RAX,0xBFF0000000000000
+.done:
+	RET	8
+
+%macro F64_ROUND 2
+%1:
+	SUB	RSP,8
+	FSTCW	WORD [RSP]
+	MOV	AX,[RSP]
+	AND	AX,~0x0C00
+	OR	AX,%2
+	MOV	[RSP+2],AX
+	FLDCW	WORD [RSP+2]
+	FLD	QWORD [RSP+16]
+	FRNDINT
+	FSTP	QWORD [RSP+16]
+	MOV	RAX,[RSP+16]
+	FLDCW	WORD [RSP]
+	ADD	RSP,8
+	RET	8
+%endmacro
+
+F64_ROUND _ROUND,0
+F64_ROUND _TRUNC,0x0C00
+F64_ROUND _FLOOR,0x0400
+F64_ROUND _CEIL,0x0800
+
+_POW:
+	MOV	RDX,[RSP+8]
+	MOV	RAX,[RSP+16]
+	CALL	SYS_POW
+	RET	16
+
+; Preserve the reference's truncating control word and intermediate
+; binary64 stores instead of substituting a host libm operation.
+%macro F64_EXP 2
+%1:
+	SUB	RSP,16
+	FSTCW	WORD [RSP]
+	MOV	AX,[RSP]
+	OR	AX,0x0C00
+	MOV	[RSP+2],AX
+	FLDCW	WORD [RSP+2]
+	%2
+	FLD	QWORD [RSP+24]
+	FMULP	ST1,ST0
+	FST	QWORD [RSP+24]
+	FRNDINT
+	FLD	QWORD [RSP+24]
+	FSUBRP	ST1,ST0
+	F2XM1
+	FLD1
+	FADDP	ST1,ST0
+	FSTP	QWORD [RSP+8]
+	FLD	QWORD [RSP+24]
+	FLD	QWORD [RSP+8]
+	FSCALE
+	FSTP	QWORD [RSP+8]
+	FFREE	ST0
+	FINCSTP
+	FLDCW	WORD [RSP]
+	MOV	RAX,[RSP+8]
+	ADD	RSP,16
+	RET	8
+%endmacro
+
+F64_EXP _POW10,FLDL2T
+F64_EXP _EXP,FLDL2E
+
+%macro F64_LOG 2
+%1:
+	%2
+	FLD	QWORD [RSP+8]
+	FYL2X
+	FSTP	QWORD [RSP+8]
+	MOV	RAX,[RSP+8]
+	RET	8
+%endmacro
+
+F64_LOG _LOG10,FLDLG2
+F64_LOG _LOG2,FLD1
+F64_LOG _LN,FLDLN2
+
+_FLDCW:
+	FLDCW	WORD [RSP+8]
+	RET	8
+_FSTCW:
+	SUB	RSP,8
+	FSTCW	WORD [RSP]
+	MOVZX	EAX,WORD [RSP]
+	ADD	RSP,8
+	RET
+_FSTSW:
+	XOR	EAX,EAX
+	FSTSW	AX
+	RET
+_FCLEX:
+	FCLEX
 	RET
 
 SECTION .note.GNU-stack noalloc noexec nowrite progbits

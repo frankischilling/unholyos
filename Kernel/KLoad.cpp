@@ -52,15 +52,21 @@ static_assert(offsetof(CLoadedModule, image) == 0 &&
 
 extern "C" {
 void CallModuleMain(const uint8_t *entry);
+void ACDictGenHC();
 char *DirFileCpp(const char *dirname, const char *name, const char *extension);
 CDocEntryBase *DocPutLineCpp(CDoc *doc, CDocEntryBase *entry);
+void AdamErrCpp(const char *fmt, int64_t argc, const uint64_t *argv);
+void FixSetCpp(const char *filename, int64_t line);
 char *ExtChgCpp(const char *name, const char *ext);
 uint64_t F64PowerBits(uint64_t base, uint64_t exponent);
+void SYS_POW();
+void _SIGN(),_ROUND(),_TRUNC(),_FLOOR(),_CEIL(),_POW(),_POW10(),_EXP();
+void _LOG10(),_LOG2(),_LN(),_FLDCW(),_FSTCW(),_FSTSW(),_FCLEX();
 uint64_t I64MulF64Bits(int64_t value, uint64_t scale);
 void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
                  const uintptr_t *frame);
-void _BEQU(), _CALL(), _CLAMP_I64();
+void _BEQU(), _LBEQU(), _CALL(), _CLAMP_I64();
 void _MEMCPY(), _MEMSET(), _MEMSET_U16(), _MEMSET_U32(), _MEMSET_I64(), _MEMCMP();
 void _MALLOC(), _FREE(), _MHEAP_CTRL(), _MSIZE(), _MSIZE2();
 void CAllocHC(), MAllocIdentHC(), StrNewHC(), AStrNewHC();
@@ -72,7 +78,8 @@ void MStrUtilHC();
 void _HASH_ADD(), _HASH_ADD_AFTER(), _HASH_FIND(), _HASH_SINGLE_TABLE_FIND();
 void HashTableNewHC(), HashTypeNumHC(), CeilU64HC(), Pow10I64HC();
 void ClampHC(), MinHC(), MaxHC(), FloorU64HC(), RoundI64HC(), FloorI64HC(), CeilI64HC();
-void LinkedLstDelHC(), LinkedLstSizeHC(), QueDelHC();
+void LinkedLstDelHC(), LinkedLstCopyHC(), LinkedLstCntHC(), LinkedLstSizeHC();
+void QueDelHC(), QueCopyHC(), QueCntHC(), QueSizeHC();
 void QueVectU8NewHC(), QueVectU8PutHC(), QueVectU8GetHC(), QueVectU8DelHC();
 void FifoU8NewHC(), FifoU8DelHC(), FifoU8InsHC(), FifoU8RemHC();
 void FifoU8PeekHC(), FifoU8FlushHC(), FifoU8CntHC();
@@ -89,12 +96,80 @@ void DocMaxHC(), DocDataFmtHC(), DocDataScanHC();
 void DocFormHC(), DocEdHC(), DocFormFwdHC(), DocFormBwdHC(), ViewHC(),
     HomeSetHC(), ToUpperHC();
 void ExtChgHC(), ExtDftHC();
-void RedSeaISOHC();
+void FileExtDotHC();
+void FileExtRemHC();
+void IsDotZHC();
+void IsDotCHC();
+void FileNameChkHC();
+void ToggleZorNotZHC();
+void FileNameTmpTxtHC();
+void CFileNameToHC();
+void Name2DirClusHC();
+void Name2ParentDirClusHC();
+void Cd2DirEntryHC();
+void DirEntryCompareNameHC();
+void DirEntryCompareClusHC();
+void DirFilesSortHC();
+void DirFilesFlattenHC();
+void FilesFind2HC();
+void DrvLockHC();
+void DrvUnlockHC();
+void DrvsReleaseHC();
+void BlkDevLockHC();
+void BlkDevUnlockHC();
+void BlkDevInitHC();
+void BlkDevsReleaseHC();
+void DskCacheInitHC();
+void DskCacheAddHC();
+void DskCacheInvalidate2HC();
+void RCacheHC();
+void DrvMakeFreeSlotHC();
+void DrvNextFreeLetHC();
+void DrvChkHC();
+void DrvFATBlkAllocHC();
+void DrvEnableHC();
+void DrvDelHC();
+void DrvBlkDevDelHC();
+void BlkDevDelHC();
+void DskCacheInvalidateHC();
+void DskChgHC();
+void DrvFATBlkCleanHC();
+void DrvFATBlkSetHC();
+void Drv2LetHC();
+void Let2LetHC();
+void Let2BlkDevTypeHC();
+void DrvIsWritableHC();
+void DrvMapHC();
+void DrvHC();
+void DrvSerialNumHC();
+void DrvModelNumHC();
+void DrvTextAttrGetHC();
+void DrvRepHC();
+void BlkDevChkHC();
+void Let2BlkDevHC();
+void UnmountHC(),MountFileHC();
+void RedSeaISOHC(),RedSeaISO9660HC();
 void FileWriteHC(), BlkDevNextFreeSlotHC(), BlkDevAddHC(), Let2DrvHC();
 void FSizeHC(), FOpenHC(), FCloseHC(), FBlkReadHC(), FBlkWriteHC();
 void FileAttrHC(), CopySingleHC();
 void DelHC(),CopyHC(),MoveHC(),CopyTreeHC(),DelTreeHC(),DirMkHC(),ScanFlagsHC();
 void BlkReadHC(), BlkWriteHC();
+void ClusNumNextHC();
+void Clus2BlkHC();
+void ClusBlkReadHC();
+void ClusReadHC();
+void ClusBlkWriteHC();
+void ClusWriteHC();
+void ClusAllocHC();
+void FAT32AllocClusHC();
+void FAT32AllocContiguousClusHC();
+void FAT32FreeClusHC();
+void RedSeaAllocClusHC();
+void RedSeaFreeClusHC();
+void RedSeaFreeFreeLstHC(),RedSeaFreeLstBuildHC(),RedSeaValidateHC(),RedSeaFmtHC();
+void FAT32DirNewHC();
+void RedSeaDirNewHC();
+void DirNewHC();
 void FmtHC();
 void SysTryHC(), SysUntryHC(), ThrowHC(), CallerHC(), PutExceptHC(), YorNHC();
 void BreakHC(), BreakLockHC(), BreakUnlockHC();
@@ -107,8 +182,11 @@ void DefineSubHC(), DefineMatchHC();
 void DefineHC(), DefineLoadHC(), DefineCntHC(), DefinePrintHC();
 void Color2StrHC(), Str2ColorU16HC(), Str2ColorU32HC();
 void HashValHC(), HashDelHC(), HashTableDelHC(), HashSrcFileSetHC();
+void HashPublicHC();
+void HashTablePurgeHC(), KillHC();
 void SpawnHC(), TaskValidateHC(), SuspendHC(), IsSuspendedHC();
 void TaskQueInsHC(), TaskQueRemHC(), SingleUserHC(), IsSingleUserHC();
+void ProgressBarsRstHC();
 void _TASK_END_NOW();
 void JobDelHC(),TaskRstAwaitingMsgHC(),TaskExeHC(),TaskTextHC();
 void TaskMsgHC(),JobResScanHC(),JobResGetHC(),TaskWaitHC();
@@ -116,6 +194,7 @@ void PostMsgHC(),PostMsgWaitHC(),MsgHC(),JobsHndlrHC();
 void SrvTaskContHC(),ScanMsgHC(),FlushMsgsHC(),GetMsgHC();
 void InputFilterTaskHC();
 void Char2ScanCodeHC(),ScanCode2CharHC(),KbdTypeMaticHC(),PutKeyHC();
+void KeyDescSetHC(),KeyDevAddHC(),KeyDevRemHC(),CtrlAltCBSetHC();
 void GridInitHC(),MsSetHC();
 void GrPaletteColorSetHC(),GrPaletteColorGetHC();
 void GrPaletteGetHC(),GrPaletteSetHC(),PaletteSetStdHC();
@@ -167,6 +246,20 @@ void _HASH_REM_DEL(), SysSymImportsResolveHC(), LoadPass2HC(), LoadHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
     DocWriteHC();
 void DocReadHC(), DocTypeHC(), TypeHC();
+void KeyMapHC(),TipOfDayHC();
+void DocCutHC(), DocCopyHC(), DocTreeFindHC(), DocTreeFFindHC(), DocTreeMakeHC();
+void DocTreeWriteHC(), DocTreeAppendHC(), DocTreeFWriteHC(), DocTreeFAppendHC();
+void DocTreeWriteJoinHC(), DocTreeAppendJoinHC(), ExeDocHC(), DocTreeExeHC(),
+    DocTreeFExeHC();
+void RegDftHC(), RegExeHC(), RegWriteHC(), RegCntHC(), RegAppendHC(), AdamHC();
+void InsRegHC(), InsReregHC(), InsUnregHC();
+void AOnceFlushHC(), OnceFlushHC(), AOnceHC(), OnceHC(), AOnceDrvHC(),
+    OnceDrvHC(), OnceExeHC(), XTalkHC();
+void XTalkWaitHC(), InStrHC(), InFileHC(), InHC(), XTalkStrHC(), XTalkStrWaitHC();
+void InGetStrHC(), InPrintHC(), InGetKeyHC(), InGetCharHC(), InUntilKeyHC(),
+     InUntilCharHC(), InViewHC(), InSetMsHC();
+void DocMenuHC(), PopUpMenuHC(), PopUpFormHC(), PopUpHC(), PopUpPrintHC(),
+    SrvCmdLineHC(), OneTimePopUpHC(), RegOneTimePopUpHC();
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
 void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC(), DocPutKeyHC();
 void DocLockHC(), DocUnlockHC(), DocEntryRunHC(), DocBottomHC(), DocClearHC(), NowHC();
@@ -179,7 +272,10 @@ void WinHorzHC(), WinVertHC(), TextCharHC(), TextLenStrHC(), TextLenAttrHC(),
 void WinRefocusHC(), WinToTopHC(), WinFocusHC(), WinTileHorzHC(), WinTileVertHC(), WinMaxHC();
 void WinScrollNullHC(), WinScrollRestoreHC();
 void CtrlFindUniqueHC(), CtrlInsideHC(), WinScrollsInitHC();
-void ViewAnglesNewHC(), ViewAnglesDelHC(), D3I32NormHC(), AutoCompleteHC();
+void ViewAnglesNewHC(), ViewAnglesDelHC(), D3I32NormHC(), AutoCompleteHC(),
+     ACInitHC();
+void ACDWordsLoadHC(), ACDWordPtAtHC(), ACDDefGetHC(), ACDDefsGetHC(),
+     ACDDefsPutHC(), ACDPopUpDefHC();
 void MenuSubEntryFindHC();
 void MenuEntryFindHC();
 void MenuNewHC();
@@ -188,10 +284,14 @@ void MenuDelHC();
 void MenuPushHC();
 void MenuFilePushHC();
 void MenuPopHC();
-void ScanCode2KeyNameHC();
+void Char2KeyNameHC(), ScanCode2KeyNameHC(), PopUp1HC(), PopUpOkHC();
+void PopUp2HC(), PopUpCancelOkHC(), EdHC(), PopUpEdHC(), DocEntryLinkHC(),
+     EdLinkCvtHC(), DocGoToLineHC(), DocFindHC(), DocAnchorFindHC(), DocCenterHC(),
+     DocCollapseHC();
 void WinBorderHC(), SettingsPushHC(), SettingsPopHC();
 void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
 void RawHC(), DbgModeHC(), IsDbgModeHC();
+void CPURepHC(), PCIRepHC(), MemBIOSRepHC(), MemPageRepHC();
 void tSHC(), BusyHC(), SleepUntilHC(), SleepHC(), Ona2FreqHC(), Freq2OnaHC();
 void SndHC(), ScrnCastHC(), SndRstHC(), BeepHC(), MuteHC(), IsMuteHC();
 void SndShiftHC(), AUWriteHC();
@@ -553,6 +653,7 @@ bool LoadCompilerImports(CLoadedModule &module, const int64_t *&status)
   COMPILER_BIND(LexRaw);
   COMPILER_BIND(LexExpression2Bin);
   COMPILER_BIND(ExeFile);
+  COMPILER_BIND(LexExceptReport);
 #undef COMPILER_BIND
 
   auto address = CompilerExport(module, "__unholyos_compiler.CInitStatus",
@@ -765,11 +866,17 @@ bool LoadKernel(CTask &task)
   };
   static const CKernelExport exports[]{
       {"SYS_COMPILE_TIME", reinterpret_cast<uintptr_t>(SYS_COMPILE_TIME)},
+      {"SYS_CPU_STRUCTS", reinterpret_cast<uintptr_t>(&cpu_structs)},
+      {"SYS_MP_CNT", reinterpret_cast<uintptr_t>(&mp_cnt)},
+      {"cpu_structs", reinterpret_cast<uintptr_t>(&cpu_structs)},
+      {"mp_cnt", reinterpret_cast<uintptr_t>(&mp_cnt)},
       {"cnts", reinterpret_cast<uintptr_t>(&cnts)},
       {"local_time_offset", reinterpret_cast<uintptr_t>(&local_time_offset)},
       {"mon_start_days1", reinterpret_cast<uintptr_t>(mon_start_days1)},
       {"mon_start_days2", reinterpret_cast<uintptr_t>(mon_start_days2)},
       {"kbd", reinterpret_cast<uintptr_t>(&kbd)},
+      {"keydev", reinterpret_cast<uintptr_t>(&keydev)},
+      {"acd", reinterpret_cast<uintptr_t>(&acd)},
       {"text", reinterpret_cast<uintptr_t>(&text)},
       {"ms", reinterpret_cast<uintptr_t>(&ms)},
       {"ms_hard", reinterpret_cast<uintptr_t>(&ms_hard)},
@@ -786,14 +893,55 @@ bool LoadKernel(CTask &task)
       {"scrncast", reinterpret_cast<uintptr_t>(&scrncast)},
       {"music", reinterpret_cast<uintptr_t>(&music)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
+      {"SYS_BOOT_SRC", reinterpret_cast<uintptr_t>(&SYS_BOOT_SRC)},
       {"SYS_RUN_LEVEL", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
+      {"sys_run_level", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
+      {"SYS_MEM_INIT_FLAG", reinterpret_cast<uintptr_t>(&sys_mem_init_flag)},
+      {"SYS_MEM_INIT_VAL", reinterpret_cast<uintptr_t>(&sys_mem_init_val)},
+      {"SYS_HEAP_INIT_FLAG", reinterpret_cast<uintptr_t>(&sys_heap_init_flag)},
+      {"SYS_HEAP_INIT_VAL", reinterpret_cast<uintptr_t>(&sys_heap_init_val)},
       {"SYS_VAR_INIT_FLAG", reinterpret_cast<uintptr_t>(&sys_var_init_flag)},
       {"SYS_VAR_INIT_VAL", reinterpret_cast<uintptr_t>(&sys_var_init_val)},
       {"adam_task", reinterpret_cast<uintptr_t>(&adam_task)},
+      {"sys_os_version", reinterpret_cast<uintptr_t>(&sys_os_version)},
+      {"SYS_PROGRESSES", reinterpret_cast<uintptr_t>(sys_progresses)},
+      {"sys_progresses", reinterpret_cast<uintptr_t>(sys_progresses)},
+#define PROGRESS_EXPORTS(num, i)                                               \
+  {"SYS_PROGRESS" #num, reinterpret_cast<uintptr_t>(&sys_progresses[i].val)},  \
+      {"SYS_PROGRESS" #num "_MAX",                                             \
+       reinterpret_cast<uintptr_t>(&sys_progresses[i].max)},                   \
+      {"SYS_PROGRESS" #num "_T0",                                              \
+       reinterpret_cast<uintptr_t>(&sys_progresses[i].t0)},                    \
+      {"SYS_PROGRESS" #num "_TF",                                              \
+       reinterpret_cast<uintptr_t>(&sys_progresses[i].tf)},                    \
+      {"SYS_PROGRESS" #num "_DESC",                                            \
+       reinterpret_cast<uintptr_t>(sys_progresses[i].desc)},                   \
+      {"progress" #num, reinterpret_cast<uintptr_t>(&sys_progresses[i].val)},  \
+      {"progress" #num "_max",                                                 \
+       reinterpret_cast<uintptr_t>(&sys_progresses[i].max)},                   \
+      {"progress" #num "_t0",                                                  \
+       reinterpret_cast<uintptr_t>(&sys_progresses[i].t0)},                    \
+      {"progress" #num "_tf",                                                  \
+       reinterpret_cast<uintptr_t>(&sys_progresses[i].tf)},                    \
+      {"progress" #num "_desc",                                                \
+       reinterpret_cast<uintptr_t>(sys_progresses[i].desc)}
+      PROGRESS_EXPORTS(1, 0),
+      PROGRESS_EXPORTS(2, 1),
+      PROGRESS_EXPORTS(3, 2),
+      PROGRESS_EXPORTS(4, 3),
+#undef PROGRESS_EXPORTS
+      {"sys_registry_doc", reinterpret_cast<uintptr_t>(&sys_registry_doc)},
+      {"sys_msg_flags", reinterpret_cast<uintptr_t>(sys_msg_flags)},
+      {"registry_version", reinterpret_cast<uintptr_t>(&registry_version)},
+      {"ins_reg", reinterpret_cast<uintptr_t>(&ins_reg)},
       {"blkdev", reinterpret_cast<uintptr_t>(&blkdev)},
+      {"blkdev_text_attr", reinterpret_cast<uintptr_t>(blkdev_text_attr)},
+      {"drv_text_attr", reinterpret_cast<uintptr_t>(drv_text_attr)},
       {"dbg", reinterpret_cast<uintptr_t>(&dbg)},
       {"sys_semas", reinterpret_cast<uintptr_t>(sys_semas)},
       {"_BEQU", reinterpret_cast<uintptr_t>(_BEQU)},
+      {"_LBEQU", reinterpret_cast<uintptr_t>(_LBEQU)},
+      {"LBEqu", reinterpret_cast<uintptr_t>(_LBEQU)},
       {"_CALL", reinterpret_cast<uintptr_t>(_CALL)},
       {"Call", reinterpret_cast<uintptr_t>(_CALL)},
       {"_CLAMP_I64", reinterpret_cast<uintptr_t>(_CLAMP_I64)},
@@ -861,7 +1009,11 @@ bool LoadKernel(CTask &task)
       {"HashVal", reinterpret_cast<uintptr_t>(HashValHC)},
       {"HashDel", reinterpret_cast<uintptr_t>(HashDelHC)},
       {"HashTableDel", reinterpret_cast<uintptr_t>(HashTableDelHC)},
+      {"HashTablePurge", reinterpret_cast<uintptr_t>(HashTablePurgeHC)},
+      {"HashAdd", reinterpret_cast<uintptr_t>(_HASH_ADD)},
+      {"HashSingleTableFind", reinterpret_cast<uintptr_t>(_HASH_SINGLE_TABLE_FIND)},
       {"HashSrcFileSet", reinterpret_cast<uintptr_t>(HashSrcFileSetHC)},
+      {"HashPublic", reinterpret_cast<uintptr_t>(HashPublicHC)},
       {"_HASH_REM_DEL", reinterpret_cast<uintptr_t>(_HASH_REM_DEL)},
       {"SysSymImportsResolve",
        reinterpret_cast<uintptr_t>(SysSymImportsResolveHC)},
@@ -877,8 +1029,13 @@ bool LoadKernel(CTask &task)
       {"FloorI64", reinterpret_cast<uintptr_t>(FloorI64HC)},
       {"CeilI64", reinterpret_cast<uintptr_t>(CeilI64HC)},
       {"LinkedLstDel", reinterpret_cast<uintptr_t>(LinkedLstDelHC)},
+      {"LinkedLstCopy", reinterpret_cast<uintptr_t>(LinkedLstCopyHC)},
+      {"LinkedLstCnt", reinterpret_cast<uintptr_t>(LinkedLstCntHC)},
       {"LinkedLstSize", reinterpret_cast<uintptr_t>(LinkedLstSizeHC)},
       {"QueDel", reinterpret_cast<uintptr_t>(QueDelHC)},
+      {"QueCopy", reinterpret_cast<uintptr_t>(QueCopyHC)},
+      {"QueCnt", reinterpret_cast<uintptr_t>(QueCntHC)},
+      {"QueSize", reinterpret_cast<uintptr_t>(QueSizeHC)},
       {"QueVectU8New", reinterpret_cast<uintptr_t>(QueVectU8NewHC)},
       {"QueVectU8Put", reinterpret_cast<uintptr_t>(QueVectU8PutHC)},
       {"QueVectU8Get", reinterpret_cast<uintptr_t>(QueVectU8GetHC)},
@@ -907,6 +1064,59 @@ bool LoadKernel(CTask &task)
       {"DirFile", reinterpret_cast<uintptr_t>(DirFileHC)},
       {"ExtChg", reinterpret_cast<uintptr_t>(ExtChgHC)},
       {"ExtDft", reinterpret_cast<uintptr_t>(ExtDftHC)},
+      {"FileExtDot", reinterpret_cast<uintptr_t>(FileExtDotHC)},
+      {"FileExtRem", reinterpret_cast<uintptr_t>(FileExtRemHC)},
+      {"IsDotZ", reinterpret_cast<uintptr_t>(IsDotZHC)},
+      {"IsDotC", reinterpret_cast<uintptr_t>(IsDotCHC)},
+      {"FileNameChk", reinterpret_cast<uintptr_t>(FileNameChkHC)},
+      {"ToggleZorNotZ", reinterpret_cast<uintptr_t>(ToggleZorNotZHC)},
+      {"FileNameTmpTxt", reinterpret_cast<uintptr_t>(FileNameTmpTxtHC)},
+      {"CFileNameTo", reinterpret_cast<uintptr_t>(CFileNameToHC)},
+      {"Name2DirClus", reinterpret_cast<uintptr_t>(Name2DirClusHC)},
+      {"Name2ParentDirClus", reinterpret_cast<uintptr_t>(Name2ParentDirClusHC)},
+      {"Cd2DirEntry", reinterpret_cast<uintptr_t>(Cd2DirEntryHC)},
+      {"DirEntryCompareName", reinterpret_cast<uintptr_t>(DirEntryCompareNameHC)},
+      {"DirEntryCompareClus", reinterpret_cast<uintptr_t>(DirEntryCompareClusHC)},
+      {"DirFilesSort", reinterpret_cast<uintptr_t>(DirFilesSortHC)},
+      {"DirFilesFlatten", reinterpret_cast<uintptr_t>(DirFilesFlattenHC)},
+      {"FilesFind2", reinterpret_cast<uintptr_t>(FilesFind2HC)},
+      {"DrvLock", reinterpret_cast<uintptr_t>(DrvLockHC)},
+      {"DrvUnlock", reinterpret_cast<uintptr_t>(DrvUnlockHC)},
+      {"DrvsRelease", reinterpret_cast<uintptr_t>(DrvsReleaseHC)},
+      {"BlkDevLock", reinterpret_cast<uintptr_t>(BlkDevLockHC)},
+      {"BlkDevUnlock", reinterpret_cast<uintptr_t>(BlkDevUnlockHC)},
+      {"BlkDevInit", reinterpret_cast<uintptr_t>(BlkDevInitHC)},
+      {"BlkDevsRelease", reinterpret_cast<uintptr_t>(BlkDevsReleaseHC)},
+      {"DskCacheInit", reinterpret_cast<uintptr_t>(DskCacheInitHC)},
+      {"DskCacheAdd", reinterpret_cast<uintptr_t>(DskCacheAddHC)},
+      {"DskCacheInvalidate2", reinterpret_cast<uintptr_t>(DskCacheInvalidate2HC)},
+      {"RCache", reinterpret_cast<uintptr_t>(RCacheHC)},
+      {"DrvMakeFreeSlot", reinterpret_cast<uintptr_t>(DrvMakeFreeSlotHC)},
+      {"DrvNextFreeLet", reinterpret_cast<uintptr_t>(DrvNextFreeLetHC)},
+      {"DrvChk", reinterpret_cast<uintptr_t>(DrvChkHC)},
+      {"DrvFATBlkAlloc", reinterpret_cast<uintptr_t>(DrvFATBlkAllocHC)},
+      {"DrvEnable", reinterpret_cast<uintptr_t>(DrvEnableHC)},
+      {"DrvDel", reinterpret_cast<uintptr_t>(DrvDelHC)},
+      {"DrvBlkDevDel", reinterpret_cast<uintptr_t>(DrvBlkDevDelHC)},
+      {"BlkDevDel", reinterpret_cast<uintptr_t>(BlkDevDelHC)},
+      {"DskCacheInvalidate", reinterpret_cast<uintptr_t>(DskCacheInvalidateHC)},
+      {"DskChg", reinterpret_cast<uintptr_t>(DskChgHC)},
+      {"DrvFATBlkClean", reinterpret_cast<uintptr_t>(DrvFATBlkCleanHC)},
+      {"DrvFATBlkSet", reinterpret_cast<uintptr_t>(DrvFATBlkSetHC)},
+      {"Drv2Let", reinterpret_cast<uintptr_t>(Drv2LetHC)},
+      {"Let2Let", reinterpret_cast<uintptr_t>(Let2LetHC)},
+      {"Let2BlkDevType", reinterpret_cast<uintptr_t>(Let2BlkDevTypeHC)},
+      {"DrvIsWritable", reinterpret_cast<uintptr_t>(DrvIsWritableHC)},
+      {"DrvMap", reinterpret_cast<uintptr_t>(DrvMapHC)},
+      {"Drv", reinterpret_cast<uintptr_t>(DrvHC)},
+      {"DrvSerialNum", reinterpret_cast<uintptr_t>(DrvSerialNumHC)},
+      {"DrvModelNum", reinterpret_cast<uintptr_t>(DrvModelNumHC)},
+      {"DrvTextAttrGet", reinterpret_cast<uintptr_t>(DrvTextAttrGetHC)},
+      {"DrvRep", reinterpret_cast<uintptr_t>(DrvRepHC)},
+      {"BlkDevChk", reinterpret_cast<uintptr_t>(BlkDevChkHC)},
+      {"Let2BlkDev", reinterpret_cast<uintptr_t>(Let2BlkDevHC)},
+      {"Unmount", reinterpret_cast<uintptr_t>(UnmountHC)},
+      {"MountFile", reinterpret_cast<uintptr_t>(MountFileHC)},
       {"Cd", reinterpret_cast<uintptr_t>(CdHC)},
       {"IsDir", reinterpret_cast<uintptr_t>(IsDirHC)},
       {"Dir", reinterpret_cast<uintptr_t>(DirHC)},
@@ -932,7 +1142,21 @@ bool LoadKernel(CTask &task)
       {"DocDataFmt", reinterpret_cast<uintptr_t>(DocDataFmtHC)},
       {"DocDataScan", reinterpret_cast<uintptr_t>(DocDataScanHC)},
       {"DocForm", reinterpret_cast<uintptr_t>(DocFormHC)},
+      {"DocMenu", reinterpret_cast<uintptr_t>(DocMenuHC)},
+      {"PopUpMenu", reinterpret_cast<uintptr_t>(PopUpMenuHC)},
+      {"PopUp1", reinterpret_cast<uintptr_t>(PopUp1HC)},
+      {"PopUp2", reinterpret_cast<uintptr_t>(PopUp2HC)},
+      {"PopUpOk", reinterpret_cast<uintptr_t>(PopUpOkHC)},
+      {"PopUpCancelOk", reinterpret_cast<uintptr_t>(PopUpCancelOkHC)},
+      {"PopUpForm", reinterpret_cast<uintptr_t>(PopUpFormHC)},
       {"DocEd", reinterpret_cast<uintptr_t>(DocEdHC)},
+      {"Ed", reinterpret_cast<uintptr_t>(EdHC)},
+      {"PopUpEd", reinterpret_cast<uintptr_t>(PopUpEdHC)},
+      {"DocEntryLink", reinterpret_cast<uintptr_t>(DocEntryLinkHC)},
+      {"EdLinkCvt", reinterpret_cast<uintptr_t>(EdLinkCvtHC)},
+      {"DocGoToLine", reinterpret_cast<uintptr_t>(DocGoToLineHC)},
+      {"DocFind", reinterpret_cast<uintptr_t>(DocFindHC)},
+      {"DocAnchorFind", reinterpret_cast<uintptr_t>(DocAnchorFindHC)},
       {"DocFormFwd", reinterpret_cast<uintptr_t>(DocFormFwdHC)},
       {"DocFormBwd", reinterpret_cast<uintptr_t>(DocFormBwdHC)},
       {"View", reinterpret_cast<uintptr_t>(ViewHC)},
@@ -954,11 +1178,31 @@ bool LoadKernel(CTask &task)
       {"DirMk", reinterpret_cast<uintptr_t>(DirMkHC)},
       {"ScanFlags", reinterpret_cast<uintptr_t>(ScanFlagsHC)},
       {"RedSeaISO", reinterpret_cast<uintptr_t>(RedSeaISOHC)},
+      {"RedSeaISO9660", reinterpret_cast<uintptr_t>(RedSeaISO9660HC)},
       {"BlkDevNextFreeSlot", reinterpret_cast<uintptr_t>(BlkDevNextFreeSlotHC)},
       {"BlkDevAdd", reinterpret_cast<uintptr_t>(BlkDevAddHC)},
       {"Let2Drv", reinterpret_cast<uintptr_t>(Let2DrvHC)},
       {"BlkRead", reinterpret_cast<uintptr_t>(BlkReadHC)},
       {"BlkWrite", reinterpret_cast<uintptr_t>(BlkWriteHC)},
+      {"ClusNumNext", reinterpret_cast<uintptr_t>(ClusNumNextHC)},
+      {"Clus2Blk", reinterpret_cast<uintptr_t>(Clus2BlkHC)},
+      {"ClusBlkRead", reinterpret_cast<uintptr_t>(ClusBlkReadHC)},
+      {"ClusRead", reinterpret_cast<uintptr_t>(ClusReadHC)},
+      {"ClusBlkWrite", reinterpret_cast<uintptr_t>(ClusBlkWriteHC)},
+      {"ClusWrite", reinterpret_cast<uintptr_t>(ClusWriteHC)},
+      {"ClusAlloc", reinterpret_cast<uintptr_t>(ClusAllocHC)},
+      {"FAT32AllocClus", reinterpret_cast<uintptr_t>(FAT32AllocClusHC)},
+      {"FAT32AllocContiguousClus", reinterpret_cast<uintptr_t>(FAT32AllocContiguousClusHC)},
+      {"FAT32FreeClus", reinterpret_cast<uintptr_t>(FAT32FreeClusHC)},
+      {"RedSeaAllocClus", reinterpret_cast<uintptr_t>(RedSeaAllocClusHC)},
+      {"RedSeaFreeClus", reinterpret_cast<uintptr_t>(RedSeaFreeClusHC)},
+      {"RedSeaFreeFreeLst", reinterpret_cast<uintptr_t>(RedSeaFreeFreeLstHC)},
+      {"RedSeaFreeLstBuild", reinterpret_cast<uintptr_t>(RedSeaFreeLstBuildHC)},
+      {"RedSeaValidate", reinterpret_cast<uintptr_t>(RedSeaValidateHC)},
+      {"RedSeaFmt", reinterpret_cast<uintptr_t>(RedSeaFmtHC)},
+      {"FAT32DirNew", reinterpret_cast<uintptr_t>(FAT32DirNewHC)},
+      {"RedSeaDirNew", reinterpret_cast<uintptr_t>(RedSeaDirNewHC)},
+      {"DirNew", reinterpret_cast<uintptr_t>(DirNewHC)},
       {"Fmt", reinterpret_cast<uintptr_t>(FmtHC)},
       {"SysTry", reinterpret_cast<uintptr_t>(SysTryHC)},
       {"SysUntry", reinterpret_cast<uintptr_t>(SysUntryHC)},
@@ -995,12 +1239,14 @@ bool LoadKernel(CTask &task)
       {"Spawn", reinterpret_cast<uintptr_t>(SpawnHC)},
       {"Exit", reinterpret_cast<uintptr_t>(Exit)},
       {"TaskValidate", reinterpret_cast<uintptr_t>(TaskValidateHC)},
+      {"Kill", reinterpret_cast<uintptr_t>(KillHC)},
       {"Suspend", reinterpret_cast<uintptr_t>(SuspendHC)},
       {"IsSuspended", reinterpret_cast<uintptr_t>(IsSuspendedHC)},
       {"TaskQueIns", reinterpret_cast<uintptr_t>(TaskQueInsHC)},
       {"TaskQueRem", reinterpret_cast<uintptr_t>(TaskQueRemHC)},
       {"SingleUser", reinterpret_cast<uintptr_t>(SingleUserHC)},
       {"IsSingleUser", reinterpret_cast<uintptr_t>(IsSingleUserHC)},
+      {"ProgressBarsRst", reinterpret_cast<uintptr_t>(ProgressBarsRstHC)},
       {"JobDel", reinterpret_cast<uintptr_t>(JobDelHC)},
       {"TaskRstAwaitingMsg", reinterpret_cast<uintptr_t>(TaskRstAwaitingMsgHC)},
       {"TaskExe", reinterpret_cast<uintptr_t>(TaskExeHC)},
@@ -1013,7 +1259,26 @@ bool LoadKernel(CTask &task)
       {"PostMsgWait", reinterpret_cast<uintptr_t>(PostMsgWaitHC)},
       {"Msg", reinterpret_cast<uintptr_t>(MsgHC)},
       {"JobsHndlr", reinterpret_cast<uintptr_t>(JobsHndlrHC)},
+      {"Adam", reinterpret_cast<uintptr_t>(AdamHC)},
+      {"XTalk", reinterpret_cast<uintptr_t>(XTalkHC)},
+      {"XTalkWait", reinterpret_cast<uintptr_t>(XTalkWaitHC)},
+      {"InStr", reinterpret_cast<uintptr_t>(InStrHC)},
+      {"InFile", reinterpret_cast<uintptr_t>(InFileHC)},
+      {"InGetStr", reinterpret_cast<uintptr_t>(InGetStrHC)},
+      {"InPrint", reinterpret_cast<uintptr_t>(InPrintHC)},
+      {"InGetKey", reinterpret_cast<uintptr_t>(InGetKeyHC)},
+      {"InGetChar", reinterpret_cast<uintptr_t>(InGetCharHC)},
+      {"InUntilKey", reinterpret_cast<uintptr_t>(InUntilKeyHC)},
+      {"InUntilChar", reinterpret_cast<uintptr_t>(InUntilCharHC)},
+      {"InView", reinterpret_cast<uintptr_t>(InViewHC)},
+      {"InSetMs", reinterpret_cast<uintptr_t>(InSetMsHC)},
+      {"In", reinterpret_cast<uintptr_t>(InHC)},
+      {"XTalkStr", reinterpret_cast<uintptr_t>(XTalkStrHC)},
+      {"XTalkStrWait", reinterpret_cast<uintptr_t>(XTalkStrWaitHC)},
       {"SrvTaskCont", reinterpret_cast<uintptr_t>(SrvTaskContHC)},
+      {"SrvCmdLine", reinterpret_cast<uintptr_t>(SrvCmdLineHC)},
+      {"PopUp", reinterpret_cast<uintptr_t>(PopUpHC)},
+      {"PopUpPrint", reinterpret_cast<uintptr_t>(PopUpPrintHC)},
       {"UserCmdLine", reinterpret_cast<uintptr_t>(UserCmdLineHC)},
       {"ScanMsg", reinterpret_cast<uintptr_t>(ScanMsgHC)},
       {"FlushMsgs", reinterpret_cast<uintptr_t>(FlushMsgsHC)},
@@ -1031,6 +1296,37 @@ bool LoadKernel(CTask &task)
       {"GrScaleZoom", reinterpret_cast<uintptr_t>(GrScaleZoomHC)},
       {"DrawStdMs", reinterpret_cast<uintptr_t>(DrawStdMsHC)},
       {"PaletteSetStd", reinterpret_cast<uintptr_t>(PaletteSetStdHC)},
+      {"SYS_POW", reinterpret_cast<uintptr_t>(SYS_POW)},
+      {"_SIGN", reinterpret_cast<uintptr_t>(_SIGN)},
+      {"Sign", reinterpret_cast<uintptr_t>(_SIGN)},
+      {"_ROUND", reinterpret_cast<uintptr_t>(_ROUND)},
+      {"Round", reinterpret_cast<uintptr_t>(_ROUND)},
+      {"_TRUNC", reinterpret_cast<uintptr_t>(_TRUNC)},
+      {"Trunc", reinterpret_cast<uintptr_t>(_TRUNC)},
+      {"_FLOOR", reinterpret_cast<uintptr_t>(_FLOOR)},
+      {"Floor", reinterpret_cast<uintptr_t>(_FLOOR)},
+      {"_CEIL", reinterpret_cast<uintptr_t>(_CEIL)},
+      {"Ceil", reinterpret_cast<uintptr_t>(_CEIL)},
+      {"_POW", reinterpret_cast<uintptr_t>(_POW)},
+      {"Pow", reinterpret_cast<uintptr_t>(_POW)},
+      {"_POW10", reinterpret_cast<uintptr_t>(_POW10)},
+      {"Pow10", reinterpret_cast<uintptr_t>(_POW10)},
+      {"_EXP", reinterpret_cast<uintptr_t>(_EXP)},
+      {"Exp", reinterpret_cast<uintptr_t>(_EXP)},
+      {"_LOG10", reinterpret_cast<uintptr_t>(_LOG10)},
+      {"Log10", reinterpret_cast<uintptr_t>(_LOG10)},
+      {"_LOG2", reinterpret_cast<uintptr_t>(_LOG2)},
+      {"Log2", reinterpret_cast<uintptr_t>(_LOG2)},
+      {"_LN", reinterpret_cast<uintptr_t>(_LN)},
+      {"Ln", reinterpret_cast<uintptr_t>(_LN)},
+      {"_FLDCW", reinterpret_cast<uintptr_t>(_FLDCW)},
+      {"Fldcw", reinterpret_cast<uintptr_t>(_FLDCW)},
+      {"_FSTCW", reinterpret_cast<uintptr_t>(_FSTCW)},
+      {"Fstcw", reinterpret_cast<uintptr_t>(_FSTCW)},
+      {"_FSTSW", reinterpret_cast<uintptr_t>(_FSTSW)},
+      {"Fstsw", reinterpret_cast<uintptr_t>(_FSTSW)},
+      {"_FCLEX", reinterpret_cast<uintptr_t>(_FCLEX)},
+      {"Fclex", reinterpret_cast<uintptr_t>(_FCLEX)},
       {"SignI64", reinterpret_cast<uintptr_t>(SignI64HC)},
       {"RandI16", reinterpret_cast<uintptr_t>(RandI16HC)},
       {"RandU16", reinterpret_cast<uintptr_t>(RandU16HC)},
@@ -1147,6 +1443,10 @@ bool LoadKernel(CTask &task)
       {"Refresh", reinterpret_cast<uintptr_t>(RefreshHC)},
       {"Mat4x4New", reinterpret_cast<uintptr_t>(Mat4x4NewHC)},
       {"PutKey", reinterpret_cast<uintptr_t>(PutKeyHC)},
+      {"KeyDescSet", reinterpret_cast<uintptr_t>(KeyDescSetHC)},
+      {"KeyDevAdd", reinterpret_cast<uintptr_t>(KeyDevAddHC)},
+      {"KeyDevRem", reinterpret_cast<uintptr_t>(KeyDevRemHC)},
+      {"CtrlAltCBSet", reinterpret_cast<uintptr_t>(CtrlAltCBSetHC)},
       {"ScanChar", reinterpret_cast<uintptr_t>(ScanCharHC)},
       {"ScanKey", reinterpret_cast<uintptr_t>(ScanKeyHC)},
       {"GetKey", reinterpret_cast<uintptr_t>(GetKeyHC)},
@@ -1181,6 +1481,10 @@ bool LoadKernel(CTask &task)
       {"Raw", reinterpret_cast<uintptr_t>(RawHC)},
       {"DbgMode", reinterpret_cast<uintptr_t>(DbgModeHC)},
       {"IsDbgMode", reinterpret_cast<uintptr_t>(IsDbgModeHC)},
+      {"CPURep", reinterpret_cast<uintptr_t>(CPURepHC)},
+      {"PCIRep", reinterpret_cast<uintptr_t>(PCIRepHC)},
+      {"MemBIOSRep", reinterpret_cast<uintptr_t>(MemBIOSRepHC)},
+      {"MemPageRep", reinterpret_cast<uintptr_t>(MemPageRepHC)},
       {"PutFileLink", reinterpret_cast<uintptr_t>(PutFileLinkHC)},
       {"PutSrcLink", reinterpret_cast<uintptr_t>(PutSrcLinkHC)},
       {"FixSet", reinterpret_cast<uintptr_t>(FixSetHC)},
@@ -1213,6 +1517,14 @@ bool LoadKernel(CTask &task)
       {"ViewAnglesNew", reinterpret_cast<uintptr_t>(ViewAnglesNewHC)},
       {"ViewAnglesDel", reinterpret_cast<uintptr_t>(ViewAnglesDelHC)},
       {"AutoComplete", reinterpret_cast<uintptr_t>(AutoCompleteHC)},
+      {"ACInit", reinterpret_cast<uintptr_t>(ACInitHC)},
+      {"ACDictGen", reinterpret_cast<uintptr_t>(ACDictGenHC)},
+      {"ACDWordsLoad", reinterpret_cast<uintptr_t>(ACDWordsLoadHC)},
+      {"ACDWordPtAt", reinterpret_cast<uintptr_t>(ACDWordPtAtHC)},
+      {"ACDDefGet", reinterpret_cast<uintptr_t>(ACDDefGetHC)},
+      {"ACDDefsGet", reinterpret_cast<uintptr_t>(ACDDefsGetHC)},
+      {"ACDDefsPut", reinterpret_cast<uintptr_t>(ACDDefsPutHC)},
+      {"ACDPopUpDef", reinterpret_cast<uintptr_t>(ACDPopUpDefHC)},
       {"MenuSubEntryFind", reinterpret_cast<uintptr_t>(MenuSubEntryFindHC)},
       {"MenuEntryFind", reinterpret_cast<uintptr_t>(MenuEntryFindHC)},
       {"MenuNew", reinterpret_cast<uintptr_t>(MenuNewHC)},
@@ -1221,6 +1533,7 @@ bool LoadKernel(CTask &task)
       {"MenuPush", reinterpret_cast<uintptr_t>(MenuPushHC)},
       {"MenuFilePush", reinterpret_cast<uintptr_t>(MenuFilePushHC)},
       {"MenuPop", reinterpret_cast<uintptr_t>(MenuPopHC)},
+      {"Char2KeyName", reinterpret_cast<uintptr_t>(Char2KeyNameHC)},
       {"ScanCode2KeyName", reinterpret_cast<uintptr_t>(ScanCode2KeyNameHC)},
       {"sys_cur_submenu_entry", reinterpret_cast<uintptr_t>(&sys_cur_submenu_entry)},
       {"SettingsPush", reinterpret_cast<uintptr_t>(SettingsPushHC)},
@@ -1249,6 +1562,8 @@ bool LoadKernel(CTask &task)
       {"DocUnlock", reinterpret_cast<uintptr_t>(DocUnlockHC)},
       {"DocEntryRun", reinterpret_cast<uintptr_t>(DocEntryRunHC)},
       {"DocBottom", reinterpret_cast<uintptr_t>(DocBottomHC)},
+      {"DocCenter", reinterpret_cast<uintptr_t>(DocCenterHC)},
+      {"DocCollapse", reinterpret_cast<uintptr_t>(DocCollapseHC)},
       {"DocClear", reinterpret_cast<uintptr_t>(DocClearHC)},
       {"DocCursor", reinterpret_cast<uintptr_t>(DocCursorHC)},
       {"DocHighlightCursor", reinterpret_cast<uintptr_t>(DocHighlightCursorHC)},
@@ -1269,8 +1584,41 @@ bool LoadKernel(CTask &task)
       {"DocSave", reinterpret_cast<uintptr_t>(DocSaveHC)},
       {"DocWrite", reinterpret_cast<uintptr_t>(DocWriteHC)},
       {"DocRead", reinterpret_cast<uintptr_t>(DocReadHC)},
+      {"DocCut", reinterpret_cast<uintptr_t>(DocCutHC)},
+      {"DocCopy", reinterpret_cast<uintptr_t>(DocCopyHC)},
+      {"DocTreeFind", reinterpret_cast<uintptr_t>(DocTreeFindHC)},
+      {"DocTreeFFind", reinterpret_cast<uintptr_t>(DocTreeFFindHC)},
+      {"DocTreeMake", reinterpret_cast<uintptr_t>(DocTreeMakeHC)},
+      {"DocTreeWrite", reinterpret_cast<uintptr_t>(DocTreeWriteHC)},
+      {"DocTreeAppend", reinterpret_cast<uintptr_t>(DocTreeAppendHC)},
+      {"DocTreeFWrite", reinterpret_cast<uintptr_t>(DocTreeFWriteHC)},
+      {"DocTreeFAppend", reinterpret_cast<uintptr_t>(DocTreeFAppendHC)},
+      {"DocTreeWriteJoin", reinterpret_cast<uintptr_t>(DocTreeWriteJoinHC)},
+      {"DocTreeAppendJoin", reinterpret_cast<uintptr_t>(DocTreeAppendJoinHC)},
+      {"ExeDoc", reinterpret_cast<uintptr_t>(ExeDocHC)},
+      {"DocTreeExe", reinterpret_cast<uintptr_t>(DocTreeExeHC)},
+      {"DocTreeFExe", reinterpret_cast<uintptr_t>(DocTreeFExeHC)},
+      {"RegDft", reinterpret_cast<uintptr_t>(RegDftHC)},
+      {"RegExe", reinterpret_cast<uintptr_t>(RegExeHC)},
+      {"RegWrite", reinterpret_cast<uintptr_t>(RegWriteHC)},
+      {"RegCnt", reinterpret_cast<uintptr_t>(RegCntHC)},
+      {"RegAppend", reinterpret_cast<uintptr_t>(RegAppendHC)},
+      {"AOnceFlush", reinterpret_cast<uintptr_t>(AOnceFlushHC)},
+      {"OnceFlush", reinterpret_cast<uintptr_t>(OnceFlushHC)},
+      {"AOnce", reinterpret_cast<uintptr_t>(AOnceHC)},
+      {"Once", reinterpret_cast<uintptr_t>(OnceHC)},
+      {"AOnceDrv", reinterpret_cast<uintptr_t>(AOnceDrvHC)},
+      {"OnceDrv", reinterpret_cast<uintptr_t>(OnceDrvHC)},
+      {"OnceExe", reinterpret_cast<uintptr_t>(OnceExeHC)},
+      {"OneTimePopUp", reinterpret_cast<uintptr_t>(OneTimePopUpHC)},
+      {"RegOneTimePopUp", reinterpret_cast<uintptr_t>(RegOneTimePopUpHC)},
+      {"InsReg", reinterpret_cast<uintptr_t>(InsRegHC)},
+      {"InsRereg", reinterpret_cast<uintptr_t>(InsReregHC)},
+      {"InsUnreg", reinterpret_cast<uintptr_t>(InsUnregHC)},
       {"DocType", reinterpret_cast<uintptr_t>(DocTypeHC)},
       {"Type", reinterpret_cast<uintptr_t>(TypeHC)},
+      {"KeyMap", reinterpret_cast<uintptr_t>(KeyMapHC)},
+      {"TipOfDay", reinterpret_cast<uintptr_t>(TipOfDayHC)},
       {"DocPrint", reinterpret_cast<uintptr_t>(DocPrintHC)},
       {"Doc2PlainText", reinterpret_cast<uintptr_t>(Doc2PlainTextHC)},
       {"DocBinsValidate", reinterpret_cast<uintptr_t>(DocBinsValidateHC)},
@@ -1304,6 +1652,7 @@ bool LoadKernel(CTask &task)
        reinterpret_cast<uintptr_t>(char_bmp_safe_dollar)},
       {"char_bmp_non_eol", reinterpret_cast<uintptr_t>(char_bmp_non_eol)},
       // System V entries used by host-built C++ modules.
+      {"__unholyos_sysv.AdamErrCpp", reinterpret_cast<uintptr_t>(AdamErrCpp)},
       {"__unholyos_sysv.CAlloc", reinterpret_cast<uintptr_t>(CAlloc)},
       {"__unholyos_sysv.CmpCall", reinterpret_cast<uintptr_t>(CmpCall)},
       {"__unholyos_sysv.DefineLstLoadCpp",
@@ -1328,6 +1677,7 @@ bool LoadKernel(CTask &task)
       {"__unholyos_sysv.FileReadCpp", reinterpret_cast<uintptr_t>(FileReadCpp)},
       {"__unholyos_sysv.FileWriteCpp",
        reinterpret_cast<uintptr_t>(FileWriteCpp)},
+      {"__unholyos_sysv.FixSetCpp", reinterpret_cast<uintptr_t>(FixSetCpp)},
       {"__unholyos_sysv.Free", reinterpret_cast<uintptr_t>(Free)},
       {"__unholyos_sysv.GetStrCpp", reinterpret_cast<uintptr_t>(GetStrCpp)},
       {"__unholyos_sysv.HashAdd", reinterpret_cast<uintptr_t>(HashAdd)},
@@ -1344,6 +1694,7 @@ bool LoadKernel(CTask &task)
        reinterpret_cast<uintptr_t>(HashTableNew)},
       {"__unholyos_sysv.I64MulF64Bits",
        reinterpret_cast<uintptr_t>(I64MulF64Bits)},
+      {"__unholyos_sysv.IsRawCpp", reinterpret_cast<uintptr_t>(IsRawCpp)},
       {"__unholyos_sysv.LinkedLstDelCpp",
        reinterpret_cast<uintptr_t>(LinkedLstDelCpp)},
       {"__unholyos_sysv.LstMatchCpp", reinterpret_cast<uintptr_t>(LstMatchCpp)},
@@ -1355,6 +1706,7 @@ bool LoadKernel(CTask &task)
       {"__unholyos_sysv.PrintErrCpp", reinterpret_cast<uintptr_t>(PrintErrCpp)},
       {"__unholyos_sysv.PrintWarnCpp",
        reinterpret_cast<uintptr_t>(PrintWarnCpp)},
+      {"__unholyos_sysv.PutFileLinkCpp", reinterpret_cast<uintptr_t>(PutFileLinkCpp)},
       {"__unholyos_sysv.PutS", reinterpret_cast<uintptr_t>(PutS)},
       {"__unholyos_sysv.RaiseHolyC", reinterpret_cast<uintptr_t>(RaiseHolyC)},
       {"__unholyos_sysv.RethrowHolyC",

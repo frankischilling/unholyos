@@ -1,0 +1,6 @@
+$TR+C,"Adam"$
+$ID,2$$TR+C,"SysMsgFlags"$
+$ID,2$sys_msg_flags[0]=123;
+$ID,-2$$TR+C,"SysRegVer"$
+$ID,2$registry_version=4.0;
+$ID,-2$$ID,-2$

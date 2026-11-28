@@ -429,7 +429,8 @@ qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom build/gcc/unhol
 
 The guest copies files already present in the source tree. Rebuilding the
 kernel and loader from source inside the guest still requires the guest
-toolchain. The file-backed ISO device and persistent disc writes are pending.
+toolchain. File-backed devices are covered separately below; this builder
+still uses a temporary RAM volume.
 
 ## Reference
 
@@ -1004,19 +1005,23 @@ first eight path cells; the captures also include the VGA framebuffer.
 Run the native regression with QEMU 8.2.2, PC, `qemu64` and 512 MiB:
 
 ```sh
-make -j4 BUILD=build/character-check
-make BUILD=build/character-check build/character-check/Linux/TestBoot
+make -j4 BUILD=build/character-check build/character-check/character-graphics-test.iso \
+  build/character-check/Linux/TestBoot
 build/character-check/Linux/TestBoot --character-graphics qemu-system-x86_64 \
-  build/character-check/unholyos.iso build/character-check/native
+  build/character-check/character-graphics-test.iso build/character-check/native
 ```
 
 To replay against the pinned distribution, invoke the same driver from
 the repository root with `--character-graphics-reference` and the
 reference ISO. It declines installation and the tour, obtains the text
 layer address from the guest's debug port, and uses GDB on local port
-45362 to copy the exact memory-set probe bytes into a guest allocation.
-The original demos execute from the reference DVD. The normal test uses
-QMP over a private socket pair and does not require GDB.
+45362 to copy the exact memory-set and CharDemo observer probe bytes into
+guest allocations. The native test ISO packages the same observer, and
+the driver checks its source bytes before booting. The observer records
+subcell pan transitions during guest refreshes independently of host
+sampling latency. The original demos run unmodified; the production ISO
+does not include the observer. The normal test uses QMP over a private
+socket pair and does not require GDB.
 
 This covers the tested keyboard, mouse, text-layer and cleanup paths,
 not every map boundary, maze shape, menu action, animation timing, or
@@ -1817,6 +1822,23 @@ build/Linux/TestBoot --music-precision-reference qemu-system-x86_64 \
 Playback uses the actual PIT speaker and task sleep. It is tested on
 one CPU; waveform fidelity, exact wall-clock durations, SMP music
 semaphores, and the remaining sound and media APIs are not established.
+
+## Wallpaper progress bars
+
+The boot and startup-test ISOs include Terry A. Davis's original
+`Demo/Progress.HC`. Its pinned source has SHA-256
+`416986ef1bb29e81b5da753ab5fc27b42f01404c10d7eb092fdef02dd93e142e`.
+The test verifies that the first named progress fields address the
+`CProgress` record, presses a key for each of the four display phases,
+and samples the rendered VGA bar. It checks that the counter and its
+maximum clear after each phase. The final assembly loop must update
+the same counter and return it to zero.
+
+```sh
+make -j4 test-progress
+build/Linux/TestBoot --progress-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/progress-reference
+```
 
 ## Screen capture
 
@@ -2710,8 +2732,9 @@ about how the pinned system handles deliberately corrupted media.
 
 Source review establishes the corresponding compiler load boundary.
 The current `CInitCpp` calls `CmpLoadDefines` before `AsmHashLoad`; the
-reference's `CmpFillTables`, `cmp.ic_nop` setup, and `UAsmHashLoad` steps
-remain incomplete. Adam remains linked into the kernel,
+reference's `CmpFillTables` and `cmp.ic_nop` setup remain incomplete.
+`AsmHashLoad` now initializes the disassembler's opcode views before
+publishing the dictionary. Adam remains linked into the kernel,
 and complete `StartOS.HC`/`Adam/MakeAdam.HC` execution still needs work.
 The guest ISO builder copies existing files, including this compiler
 module. Rebuilding C++20, HolyC, and assembly components entirely in
@@ -3398,17 +3421,14 @@ one `UnholyOS: class record recovery checks 0x00000000000000ff` line after
 the source completion and before normal boot completion. This is a native
 recovery regression, separate from the common reference trace.
 
-The class increment at `86f3b694dbf3b5a18eff46938fd9788be4cd4239`
-added a native startup walk of each terminal's owned class table.
+The native startup verifier also walks each terminal's owned class table.
 It requires the 17 primitive names, six integer views, and 58 runtime
 classes, with no duplicates. Each class block must belong to that task's
 code heap and contain the four complete pointer companions. The 81 blocks
-charge 656 bytes each. At that revision, they accounted for the terminal's
-entire code-heap used count of 53,136 bytes. Names and tables remained
-data-owned; idle and window-manager tasks required empty code heaps.
-The check retained the existing full pool-coverage and startup-stack
-verification. See [Compiler function records](#compiler-function-records)
-for the subsequent function allocations and combined code-heap total.
+charge 656 bytes each, so the terminal's code-heap used count must equal
+53,136 bytes. Names and tables remain data-owned; idle and window-manager
+tasks require empty code heaps. This checks the allocation change within
+the existing full pool-coverage and startup-stack verification.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
@@ -3451,8 +3471,8 @@ terminal screen, and PPM are retained in `build/class-records-reference`,
 with the log at the same stem. The upload address was `0xacfade28`, above
 the transport's previous 512 MiB limit. The shared reader now checks
 each address and complete extent against the configured 3 GiB bound for
-this mode; modes without an override retain the 512 MiB default. The
-entire readback must equal the fixture plus its terminating NUL.
+this mode; other modes retain their 512 MiB default. The entire readback
+must equal the fixture plus its terminating NUL.
 
 The separate reference checkout was verified clean through the Git Human
 Workflow helper before and after execution at
@@ -3469,6 +3489,22 @@ recovery check. The pull request records the exact tested commit and the
 GCC and Clang CI results.
 
 ## Compiler function records
+
+`FunctionRecordLayoutProbe.HC` checks a named function and a class member
+with a callback signature. QEMU 8.2.2 uses `pc`, `qemu64`, 3 GiB of memory,
+and one CPU for both guests. Each record lives on its task's code heap,
+has 840 bytes of payload and a total allocation of 856 bytes, and exposes
+all four pointer companions. Both guests print `FR layout 840 856 1 F`
+for each record.
+
+```sh
+make -j4 test-function-records
+build/Linux/TestBoot --function-records-layout-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/function-records-layout-reference
+```
+
+The remaining captures in this section are from the original draft at
+`631bd38`. The source and AOT fixture keeps its original bytes.
 
 The GCC and Clang native builds execute `FunctionRecordsProbe.HC` as source
 and as a guest-built TOSB module. Its record checks follow Terry A. Davis's
@@ -3598,6 +3634,1093 @@ cd build/function-records-audit/heap-check-gcc-inputs
 
 `make test` includes `test-function-records`. The full regression and
 matched reference source/AOT comparison remain pending for this increment.
+
+## Linked lists and queues
+
+`ListUtilitiesProbe.HC` exercises Terry A. Davis's
+`Kernel/KDataTypes.HC` functions against the pinned TempleOS guest and
+UnholyOS. Both native builds and the reference produced the same trace:
+
+```text
+LU linked 7F
+LU queue 7F
+LU DONE
+```
+
+The fourteen checks cover empty lists and queues, counts, allocator-inclusive
+sizes, independent copies of differently sized nodes and the queue head,
+payload bytes, forward and backward links, default and explicit task
+arguments, and the original heap usage after deletion. The copied
+allocations remain independent of the source nodes. Allocation exhaustion
+and arbitrary invalid pointers were not compared.
+
+The source is 3,774 bytes with SHA-256
+`01bd183df0ca08c7077ee790d11a541346a76c0f4c2f11cd31ce86ec7df76b0a`.
+The reference upload readback contains those same bytes followed by a
+single NUL. The common 33-byte trace hashes to
+`812db9506769aefa07535a2aa53483a6ee88973dd18d1d32a3fc8820cb6b782c`.
+
+```sh
+make -j4 all test-list-utilities
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 all test-list-utilities
+build/Linux/TestBoot --list-utilities-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/list-utilities-reference
+```
+
+The local Clang build used the installed Clang 20.1.2 executable by its
+absolute path. GCC 13.3.0, NASM 2.16.01 and QEMU 8.2.2 were used.
+The driver booted each ISO with `-machine pc -cpu qemu64 -m 512 -boot d
+-cdrom <iso> -display none -monitor none -qmp stdio -no-reboot`, with a
+serial capture and the reference's additional debug console and GDB
+connection for fixture upload. Both native tests reached the kernel and
+completed the HolyC probe. The reference returned to its empty
+`T:/Home>` prompt. The native images are
+`build/list-utilities-test.iso` and `build/clang/list-utilities-test.iso`.
+The standard ISOs also built successfully. The focused test runs as part
+of `make test`.
+
+## Drive, filename and directory services
+
+The storage-service fixture suite uses the pinned TempleOS reference and
+the native GCC and Clang guests. Each executed all three HolyC files in
+order, yielding the same result lines:
+
+```text
+Drive services 7FF
+Path names 1FFF
+Directory services FFF
+```
+
+The 36 checks cover drive letter aliases, type and signature validation,
+remapping, drive selection, writable checks, default arguments, color
+tables, model/serial extraction, record layouts, extensions, filename
+validation, relative and absolute paths, compressed suffixes, cluster
+and parent lookup, recursive sorting and flattening, and tree ownership.
+The ATAPI record is absent in both guests. The separate native FAT32
+read probe checks actual ATA identity retention and reports `1FFF`.
+The reference uses the original system-export addresses through typed
+function pointers where a private symbol has no typed public declaration.
+
+| Fixture | Source bytes | SHA-256 |
+| --- | ---: | --- |
+| `DriveServicesProbe.HC` | 3271 | `f2515f32bb67979e4e8b4bb753270c07e485ad8a71d7e37d624ecec2252451f3` |
+| `PathNamesProbe.HC` | 4310 | `14811e705d987fe4e7bb85ecc3e4b243da2d172f3f80bd68881a803c9567ab53` |
+| `DirectoryServicesProbe.HC` | 4637 | `6a22ddc4c755e60e4ddacaa2b47163aca70833fd9dc70eedc9a90bf38730eb6a` |
+
+The reference driver verifies each uploaded source plus its terminating
+NUL. The native driver verifies the packaged bytes and source execution
+cleanup. The three concatenated result lines hash to
+`6ef87324f669c7c1f70779085bbda35479402497e0ae217c4fe64539e4c793cd`.
+The comparison checks the result lines, not the preceding directory
+creation and deletion diagnostics; full serial and terminal captures
+are retained in the evidence directories.
+
+```sh
+make -j4 all test-storage-services
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 all test-storage-services
+build/Linux/TestBoot --storage-services-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/storage-reference-verified
+```
+
+GCC 13.3.0, Clang 20.1.2, NASM 2.16.01 and QEMU 8.2.2 were used.
+The local Clang build used the installed Clang 20 executable by its
+path. Both native images built and booted with the same `pc`, `qemu64`,
+512 MiB, one-vCPU DVD boot configuration as the reference. The reference
+ISO hashes to `3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+Evidence is in `build/storage-native-probes-final`,
+`build/storage-native-clang-verified` and `build/storage-reference-verified`.
+`make test` includes the new focused suite and existing filesystem
+regressions. The drive report's full interactive rendering, removable
+media handling, lock and cache semantics remain unverified.
+
+## Cluster and directory-entry services
+
+The two cluster fixtures execute the same HolyC source in native GCC and
+Clang guests and in the pinned TempleOS reference. All three produce:
+
+```text
+Cluster entry FFF
+FAT32 cluster entry 7FF
+```
+
+The 23 checks cover RedSea extent allocation and bitmap updates,
+cluster-to-block arithmetic, partial reads and writes, FAT32 fragmented
+chain traversal, contiguous allocation and extension, both FAT copies,
+directory publication, preserving and releasing replaced chains,
+directory growth and cleanup. The fixtures verify the false return from
+successful `DirNew` calls and check the resulting entries and data.
+
+| Fixture | Source bytes | SHA-256 |
+| --- | ---: | --- |
+| `ClusterEntryProbe.HC` | 3191 | `fd1f576517e47692ff203a77d4db96210413e0852994e8629ec67f0d961c27a6` |
+| `Fat32ClusterProbe.HC` | 3145 | `baea41761247bc90c17f1f98c11708b1a0ce9757062eb91118fae715b41146c0` |
+
+The FAT32 fixture mounts the primary IDE disk if it is not already
+mounted, and uses a disposable QEMU snapshot of the generated writable
+image (SHA-256
+`9e458aed28c8cddcada016e182a64135a07b086bdd351de9ddf91a60bc55568e`).
+The reference upload is checked byte-for-byte including the terminating
+NUL, and native execution checks the packaged source and cleanup.
+
+```sh
+make -j4 test-cluster-entry
+make -j4 BUILD=build/clang CXX=clang++-20 test-cluster-entry
+build/Linux/TestBoot --cluster-entry-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/cluster-reference
+build/Linux/TestBoot --fat32-cluster-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/fat32-writable.img \
+  build/fat32-cluster-reference-mounted
+```
+
+The focused native and reference runs used QEMU 8.2.2, `pc`, `qemu64`,
+512 MiB and one vCPU. The native builds used GCC 13.3.0 and Clang 20.1.2.
+The focused tests are included in `make test`. They cover supported
+operations, not full equivalence under device errors or concurrent access.
+
+## Block cache and task-owned drive locks
+
+The pinned reference DVD configuration sizes the cache with
+`Scale2Mem(2048,0x40000)`. Native boot allocates the controller,
+block records and compact hash table from Adam's data heap. The
+focused fixture runs unchanged in all three guests:
+
+```text
+Disk cache 3FFFF
+```
+
+The 18 checks cover the disable threshold, record layout and actual
+allocator capacity, hash collisions, per-drive invalidation,
+prefix/suffix hits, LRU eviction and replacement, read/write caching,
+lock reentry, reset, explicit release and release after a contending
+child task exits. They also check I/O while the caller retains a
+drive lock. The fixture is 8915 bytes (SHA-256
+`b275dc8283a514ee9cf6e807c4f836ee5bd48a16daa0f59ac7351b0740ecd6a2`).
+The reference read-back includes the terminating NUL, and native
+execution checks the packaged source.
+
+```sh
+make -j4 test-disk-cache
+make -j4 BUILD=build/clang CXX=clang++-20 test-disk-cache
+build/Linux/TestBoot --disk-cache-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/cache-reference-final
+```
+
+The focused runs use GCC 13.3.0, Clang 20.1.2, NASM 2.16.01 and
+QEMU 8.2.2 with `pc`, `qemu64`, 512 MiB and one vCPU. The reference
+ISO hashes to `3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+See [Source layout](SourceLayout.md) for the remaining cache,
+locking and device lifecycle differences.
+
+## Persistent FAT and RedSea bitmap sectors
+
+`FatSectorCacheProbe.HC` runs unchanged on native GCC, native Clang
+and the pinned reference. Its 18 checks cover 512-byte sector
+contents, the 4095/4096 bitmap and 127/128 FAT entry boundaries,
+selector 0/1/3 flushes, same-index copy selection, and physical
+visibility of allocation/free operations. `FatSectorCacheNativeProbe.HC`
+adds six native-only checks of buffer stability, raw-write coherence,
+mirror isolation and refusal to overwrite pending dirty data. Both
+native toolchains report:
+
+```text
+FAT sector cache FF 3FF
+FAT sector native 3F
+```
+
+The reference runs only the shared fixture. The tests use the same
+disposable writable FAT32 disk (SHA-256
+`9e458aed28c8cddcada016e182a64135a07b086bdd351de9ddf91a60bc55568e`)
+and an isolated RAM drive. They verify that the source disk image is
+unchanged. Native fixture sizes are 7880 and 2340 bytes, with SHA-256
+`293fe9579abf84ec6e751b34a7315ea8f2ede13ba48df3a2cd5801d2e2ecf453`
+and `bf7c12870a24e78a2da98dde24280be211df869dfb1a2108267c31fb10a21969`.
+The boot physical verifier also checks each mounted drive's cache
+allocation (528 bytes including allocator overhead), its heap owner
+and clean initial sector state.
+
+```sh
+make -j4 test-fat-sector-cache
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-fat-sector-cache
+build/Linux/TestBoot --fat-sector-cache-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/fat32-writable.img build/fat-sector-reference
+```
+
+GCC 13.3.0 and Clang 20.1.2 run under QEMU 8.2.2, `pc`, `qemu64`,
+512 MiB, one vCPU. See [Source layout](SourceLayout.md) for native
+protective differences and remaining lifecycle work.
+
+## Drive and block device lifecycle
+
+The same `StorageLifecycleProbe.HC` runs under native GCC, native
+Clang and the pinned reference, with 13 matching checks:
+
+```text
+Storage lifecycle 1FFF
+```
+
+The checks cover enabling and disabling a drive, raw access while
+disabled, cache invalidation, disk change, drive and block device
+deletion and slot reuse. `StorageLifecycleNativeProbe.HC` adds five
+native protection checks, including exact `BlkDev`, `Drv`, `Drv`
+exception diagnostics, alias cleanup and preservation of borrowed RAM:
+
+```text
+Storage lifecycle native 1F
+```
+
+Native media verifies both packaged fixtures (3144 and 1650 bytes).
+The shared fixture SHA-256 is
+`783f77690f39103a479c8b0f09a40046880b379f4ca658e8c2dd67c749d08b46`;
+the native fixture SHA-256 is
+`d067d180aee74d187499f9f0b0bdae0334af533574ad8ac3140a324fc12545b1`.
+
+```sh
+make -j4 test-storage-lifecycle
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-storage-lifecycle
+build/Linux/TestBoot --storage-lifecycle-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/lifecycle-reference
+```
+
+All three focused runs exited successfully with GCC 13.3.0, Clang
+20.1.2 and QEMU 8.2.2, `pc`, `qemu64`, 512 MiB and one vCPU.
+These checks do not establish safe teardown with arbitrary open streams;
+file-backed device lifetime is tested separately below.
+
+## File-backed RedSea mounts
+
+Two unchanged HolyC probes run on both UnholyOS and the pinned TempleOS
+distribution: `FileBackedRedSeaProbe.HC` (3868 bytes) and
+`FileBackedRedSeaWriteProbe.HC` (5155 bytes). They exercise default filename
+resolution, image geometry, contiguous reads, creation and formatting of
+a writable image, file and directory mutations, raw block writes and
+unmount/remount persistence. The results match:
+
+```text
+File backed RedSea 1FF
+File backed RedSea write 7FF
+```
+
+`FileBackedRedSeaNativeProbe.HC` (4257 bytes) adds eleven checks for native
+lifetime and cache safeguards, including `File`, `Drv`, `BlkDev` and `Drv`
+exception diagnostics:
+
+```text
+File backed RedSea native 7FF
+```
+
+The shared fixtures have SHA-256 hashes
+`bf04f3147fa7d39bc2b3e42637e34bb508e651500ba942ab535565e78ae9092f`
+and `d84ed801d391010fd7b68540d5d47108ec3ba8e3f3678ea9393998bfe8c086ce`;
+the native fixture hash is
+`d7de607b6cf91227eccd3396e66fd626cc748705704fc322361af1bede77f1b5`.
+
+```sh
+make -j8 test-file-backed-redsea test-storage-lifecycle test-cluster-entry test-disk-cache test-fat-sector-cache
+build/Linux/TestBoot --file-backed-redsea-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/file-backed-reference
+```
+
+The local GCC 13.3.0 and reference runs passed with NASM 2.16.01 and
+QEMU 8.2.2, `pc`, `qemu64`, 512 MiB and one vCPU. The native boot media
+is `build/file-backed-redsea-test.iso`. The fixtures establish the tested
+RAM-backed image operations, not FAT32-backed image or full lifecycle
+parity. See [Source layout](SourceLayout.md) for remaining differences.
+
+## Typed optimizer passes
+
+`OptimizerProbe.HC` (1247 bytes, SHA-256
+`71a710366fe1334a75cff1685137061f7a7ac78bf17b3413d31a56d259771524`)
+exercises integer and binary64 constant arithmetic, immediate operations,
+signed and unsigned shifts, chained comparisons, short-circuit branches,
+side effects, narrow arithmetic and pointer indexing. Both native compiler
+builds and the pinned reference produced `Optimizer probe 3FF`.
+
+The separate `OptimizerAOTProbe.HC` guest compiles the same source and loads
+the resulting module without first executing its JIT definitions. GCC and
+Clang both produced:
+
+```text
+Optimizer AOT compile 0
+Optimizer probe 3FF
+Optimizer AOT load 1
+```
+
+The host intermediate-code probe checks 43 transformations and retained
+operations under each toolchain. The existing expression and function probes
+retain their recorded result hashes; the unmodified `ClassMeta.HC` also runs.
+
+```sh
+make -j6 test-optimizer
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-optimizer
+build/Linux/TestBoot --optimizer-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/optimizer-reference
+```
+
+The source comparison uses QEMU 8.2.2, `pc`, `qemu64`, 512 MiB and one vCPU.
+Native AOT execution is tested separately; reference AOT and instruction-byte
+parity are not established by these checks. See [Source layout](SourceLayout.md)
+for unimplemented optimizer stages.
+
+## Register allocation
+
+`RegisterAllocationProbe.HC` (1778 bytes, SHA-256
+`3fb705984de08bcdc055fc2d235aaae8f8fac77bf449931855af9ddbe7ba7936`)
+checks register hints, default arguments, nested calls, escaped frame
+addresses, register pressure, try/catch and static storage. The pinned
+reference and both native compiler builds produced `Register allocation 7F`
+under QEMU 8.2.2, `pc`, `qemu64`, 512 MiB and one vCPU.
+
+The native-only probe checks allocated member records and register masks,
+distinct preserved registers, named R15, `noreg`, address escape,
+arithmetic across calls and a store to a neighboring frame slot through
+an escaped pointer. Both native builds produced `Register allocation native 3F`.
+The host pass probe passed 30 checks with GCC and Clang.
+
+The separate AOT guest compiles and loads the shared source in a fresh
+session. Both native builds produced:
+
+```text
+Register AOT compile 0
+Register allocation 7F
+Register AOT load 1
+```
+
+```sh
+make -j6 test-register-allocation
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-register-allocation
+build/Linux/TestBoot --register-allocation-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/register-allocation-reference
+```
+
+The tests check execution and native allocation metadata, not reference
+instruction bytes or the reference's complete register allocation policy.
+
+## Address and right-operand lowering
+
+`AddressFoldProbe.HC` (6151 bytes, SHA-256
+`e293aae6b82fb08827218659b949de44908897270de9e5ac925788830db79789`)
+checks signed and unsigned scaled loads, packed member displacements,
+width-correct stores, compound-assignment evaluation order, frame updates,
+comparison chains, immediate ranges and pointer increments. The initial
+reference result exposed the one-byte stride for a class-pointer update
+directly followed by an arrow. The expanded fixture tests all four arrow
+forms, as well as ordinary full-stride updates and direct dereferences.
+The pinned reference and both native builds produced `Address fold FFFF`
+under QEMU 8.2.2, `pc`, `qemu64`, 512 MiB and one vCPU.
+
+The native probe checks emitted memory and arithmetic encodings and
+produced `Address fold native 1FF` in both builds. The host pass probe
+passed 122 checks with GCC and Clang. Both native AOT runs produced:
+
+```text
+Address fold AOT compile 0
+Address fold FFFF
+Address fold AOT load 1
+```
+
+```sh
+make -j6 test-address-fold
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-address-fold
+build/Linux/TestBoot --address-fold-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/address-fold-reference
+```
+
+These checks establish the selected behavior and native encodings, not
+reference instruction-byte equivalence or reference AOT execution.
+
+## Stack temporary and short branch lowering
+
+The extended `AddressFoldProbe.HC` (7378 bytes, SHA-256
+`b8faebce0c77d760cdd244be0fc073b14436afe27d04b0573150ae2a4c987c01`)
+adds nested integer operands, calls, division and shifts, plus forward,
+backward and distant branches. The pinned reference and both native
+builds produced `Address fold 3FFFF` with the same QEMU configuration
+as the preceding tests. The native probe checks R9 save instructions,
+used and clobbered register masks, call fallback, short conditional and
+backward jumps, and a conditional branch outside rel8 range. Both native
+builds produced `Address fold native FFF`.
+
+The host tests passed 86 stack-temporary checks, 115 branch-layout checks
+and the existing 122 operand-lowering checks with GCC and Clang. The
+native AOT runs each compiled with result 0, produced `Address fold 3FFFF`
+and loaded with result 1.
+
+```sh
+make -j6 test-opt-pass6 test-branch-layout test-address-fold
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 \
+  test-opt-pass6 test-branch-layout test-address-fold
+build/Linux/TestBoot --address-fold-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/branch-reference
+```
+
+The earlier fixture hash and masks above identify the previous optimizer
+batch, not the expanded source. These tests do not establish full reference
+register allocation, branch selection, or instruction-byte equivalence.
+
+## Backend intrinsics and call-aware spilling
+
+The shared `BackendProbe.HC` (3533 bytes, SHA-256
+`f130781b9fb9c8ca35a15f6ce9319586cb2b60eacb24005c18b96e4d3920caff`)
+produced `Backend probe 1FFFF` on pinned TempleOS and in both native JIT
+builds. It covers integer and floating intrinsics, conversions, argument
+evaluation order, nested direct and indirect calls, x87 stack balance,
+and positive, negative, fractional and zero power operands. The reference
+lexer encodes `6.25` as `4019000000000001`, whereas `Sqr(-2.5)` produces
+`4019000000000000`; the fixture asserts both rather than replacing exact
+comparisons with a tolerance.
+
+Both native builds produced `Backend native FF`, verifying typed internal
+metadata (including forwarded unsigned classes), instruction signatures and
+an indirect call that deliberately clobbers R9. Native AOT compiled with
+result 0, produced `Backend probe 1FFFF` and loaded with result 1. The
+power operation imports `SYS_POW` by name. The updated host constant-fold
+probe passed 61 checks and the stack-temporary probe passed 89 checks.
+
+```sh
+make -j6 test-backend test-opt-pass012 test-opt-pass6 test-address-fold
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 \
+  test-backend test-opt-pass012 test-opt-pass6 test-address-fold
+build/Linux/TestBoot --backend-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/backend-reference
+```
+
+The boot media contract now requires 44 native imports and 32 data imports
+and explicitly rejects the removed native power import. These checks do not
+establish full instruction-byte parity, complete reference spilling, or
+cross-OS AOT loading.
+
+The expanded intrinsic fixture is 6698 bytes, with SHA-256
+`522ab9a386d4381c9475802dac582778a44d31cd81b4a230b959ef4aafefac6b`.
+The same reference command now produces `Backend probe 7FFFFF` on the
+pinned TempleOS ISO and both native JIT builds. The additional checks
+cover previous-bit results and memory changes for locked and unlocked
+bit operations across word boundaries, all four swap widths, unsigned
+division with quotient writeback, serial scratch-register I/O, PCI
+configuration reads, and explicit `_intern` aliases. The native probe
+produces `Backend native 7FF`, including lock prefixes, immediate bit
+instructions, unsigned division and immediate/variable port encodings.
+Both native AOT runs produce compile result 0, the expanded shared mask
+and load result 1. AOT cleanup excludes internal opcode declarations
+from machine-code deallocation. These tests use a single QEMU CPU;
+they do not establish SMP atomicity, every hardware port behavior, or
+all reference register and memory operand selections.
+
+## Disassembler initialization and entry points
+
+The shared `UAsmProbe.HC` (1640 bytes, SHA-256
+`7c16e3ad3a7b70eb8687accb9eb6f3e11409a5e07d7a1fddb660630c06deb797`)
+produces `UAsm probe FFF` on the pinned reference and in both native JIT
+builds. Its twelve checks compare decoded text, instruction lengths,
+branch destinations and the full line's byte display. They include REX
+registers, SIB, signed immediate formatting, RIP-relative addressing,
+stack instructions and x87 operations.
+
+The native companion produces `UAsm native 3F`, checking unknown-opcode
+progress, operand-size prefixes, 64-bit immediates, instruction-count and
+byte-range walks, and a truncated encoding at the byte-range limit. The
+guest AOT fixture compiles with result 0, produces `UAsm probe FFF` and
+loads with result 1, exercising the public compiler-module symbol binding.
+
+```sh
+make -j6 test-uasm
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-uasm
+build/Linux/TestBoot --uasm-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/uasm-reference
+```
+
+The compiler loader contract now includes `Ui`, `U` and `Un` among its
+twelve public HolyC entry points. The reference comparison covers the
+selected 64-bit encodings only. It does not establish complete decoder,
+formatting, source-link or debugger parity, or compatibility for every
+16/32-bit instruction. `Un` deliberately bounds decoding by the given
+byte range, including at a partial final instruction.
+
+## Original Adam math source
+
+`Adam/AMath.HC` is preserved byte-for-byte from the pinned reference
+(2593 bytes, SHA-256
+`1dee3be762957b408b784061410349f6e9197d49744fa1ed0e0ac3b4ca7784c3`).
+The test media place it at its original path. `AdamMathProbe.HC`
+includes it and exercises coordinate conversion, optional outputs,
+angle wrapping, inverse trigonometry, hyperbolic functions, complex
+arithmetic and polynomials, rounding and x87 control-word restoration.
+The original inverse-trigonometric endpoint behavior is retained.
+
+The shared probe (2271 bytes, SHA-256
+`fde2f46aef0f3d51ba102b6763b7cee20af3c88456d4f35116d4364621089f48`)
+produces `Adam math 1FFF` in GCC and Clang JIT builds and on the pinned
+TempleOS distribution. Both native AOT builds produce compile result 0,
+the same mask, and load result 1.
+
+```sh
+make -j6 test-adam-math
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-adam-math
+build/Linux/TestBoot --adam-math-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/adam-math-reference
+```
+
+This validates the selected math behavior and the original source's
+execution, not the entire `MakeAdam.HC` startup or every exceptional
+floating-point input.
+
+## Original Adam memory inspection
+
+`Adam/AMem.HC` retains the original 4216 bytes, SHA-256
+`d5300ea10cf53f5d8f4a382828e8beb9c7ab5e4cb05e49134b8f38b496bd2b1a`.
+The host verifies these bytes in both test ISOs. The shared
+`AdamMemProbe.HC` (2406 bytes, SHA-256
+`6f925070f7488d6ec713d98830c964e9a017b26e45f9a63bea73953baa3d8eb1`)
+checks heap layouts, task allocation and usage accounting, real
+free-list traversal, membership before and after allocation,
+caller-held locks, interrupt-state preservation, invalid task
+rejection, and allocations in both task heaps. At 512 and 3072 MiB,
+the reference and both native JIT builds produce `Adam memory FFF`.
+Both native AOT builds at both sizes compile with result 0, produce
+the same mask and load with result 1.
+
+```sh
+make -j6 test-adam-mem
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-adam-mem
+build/Linux/TestBoot --adam-mem-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/adam-mem-reference
+build/Linux/TestBoot --adam-mem-large-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/adam-mem-large-reference
+```
+
+Run the reference probes serially because the reference GDB injection
+uses a shared port. These checks cover the non-debug heap layout on
+one CPU; they do not establish remote `HeapRep` presentation, debug
+heap integrity checking, or SMP allocator parity.
+
+## Original Adam task reporting
+
+`Adam/TaskRep.HC` retains its original 814 bytes (SHA-256
+`1a3ab2132d3ec547604ee743e7c505c97057998be1470a5e43ac61add77ddfa8`).
+The probe includes the unchanged memory and task-report sources.
+It spawns a parent and child, saves the report from a real DolDoc,
+checks CPU ownership, task ordering, the child address in its Kill
+link, actual allocation and flag values, restoration of the interrupt
+flag, and eventual task cleanup.
+
+`AdamTaskProbe.HC` (1771 bytes, SHA-256
+`cf95cff0c4304f1bde4ebfa7929dc0594a4f16c8f2e6f6774ebcea2f80011f36`)
+produces `Adam tasks FF` in GCC and Clang native JIT builds and on
+the pinned TempleOS distribution. Both AOT builds compile with result
+0, report the same mask and load with result 1. The host verifies
+the original source bytes inside the test media.
+
+```sh
+make -j6 test-adam-task
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-adam-task
+build/Linux/TestBoot --adam-task-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/adam-task-reference
+```
+
+This exercises single-CPU task reporting, not SMP initialization or
+graphical activation of the interactive Kill links.
+
+## Adam startup source ownership
+
+The standard DVD now contains the original `AMath.HC`, `AMem.HC` and
+`TaskRep.HC` files. The native boot bridge compiles them before desktop
+initialization. Host boot inspection walks the Adam-owned namespace and
+its parent tables, checks the 88 compiler class records, identifies all
+25 original function definitions and source links, and accounts for the
+live metadata and machine-code allocations independently of the guest's
+reported totals. Child task tables must inherit the shared namespace.
+
+`AdamStartupProbe.HC` runs in a normal terminal without including those
+files again. It checks inherited source functions, task heap accounting,
+compiler option state and the no-register option, same-table symbol
+purging, protected task rejection and execution of the Kill command
+from the original report. The GCC build and pinned reference both
+reported `Adam startup FF`.
+
+```sh
+make test-adam-startup
+build/Linux/TestBoot --adam-startup-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/adam-startup-reference
+```
+
+The GCC compiler failure matrix also tests a missing and a malformed
+`TaskRep.HC` after compiling the earlier two sources. Both variants retain
+the compiler run level, discard the private startup namespace and leave
+no additional live code or data allocations. Neither reaches Adam
+graphics or terminal initialization. The original complete `StartOS.HC`
+and `MakeAdam.HC` project sequence has not yet been executed.
+
+## DolDoc tree services
+
+`DocTreeProbe.HC` runs in an ordinary terminal and in a freshly compiled
+guest AOT module. It checks nested tree lookup and creation, replacement
+and append, independent sibling contents, inclusive copy and cut,
+recursive lock ownership, execution after a caught Break, and in-memory
+modification without a write on read-only media. It also writes a tree
+to a RedSea RAM drive, reopens it, appends a second expression and checks
+the actual saved bytes and execution results. The native GCC and Clang
+builds produce:
+
+```text
+Tree disk 0 1 61 1 73
+Doc tree 3FF
+```
+
+The AOT runner reports `Tree AOT done` after a successful guest compile
+and load. The pinned reference produced the same disk results and `3FF`
+mask in its terminal. The first reference capture failed before executing
+the fixture; a fresh VM completed it successfully. Full regression is
+required before this batch is merged.
+
+```sh
+make test-doc-tree
+make BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-doc-tree
+build/Linux/TestBoot --doc-tree-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/doc-tree-reference
+```
+
+## Registry startup and demo
+
+Adam opens `~/Registry.HC.Z` and executes its `Adam` branch before the
+user terminals start. The packaged `Demo/RegistryDemo.HC` is Terry A.
+Davis's original file from TempleOS revision
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`. It prints
+`High Score:1.23000` and `Val:1234` on its first run in both guests.
+The probe then reads back the incremented value and tests branch defaults,
+counts, replacement, append, execution in Adam, and saving and reopening
+a compressed registry on a writable RedSea RAM drive.
+
+The native test ISO boots with a read-only registry containing version
+4.0 and message flags 123. The check requires the cached version to
+match the running OS and the saved flags to survive initialization.
+The pinned distribution starts with no registry file and flags 0.
+Both guests report `Registry probe 7F` with their respective starting flags.
+
+```sh
+make -j4 test-registry
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-registry
+build/Linux/TestBoot --registry-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/registry-reference
+```
+
+The harness boots `build/registry-test.iso` or the pinned DVD with QEMU
+8.2.2 using `-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>` and
+the default single CPU. It runs the source through the guest terminal.
+The builds use GCC 13.3.0 or Clang 20.1.2 and NASM 2.16.01.
+
+## Once queues and first terminal startup
+
+The native test DVD contains a prepared `Home/Once.HC` and a compressed
+registry with two queued entries. The first terminal executes that
+script through `XTalk`. The Adam entry sets a flag to 21 in the Adam
+task. The user entry sees that value and changes it to 42 in its own
+task. The terminal reports `Once startup 2A 2 2`. The two counts show
+the emptied branches. On a normal boot, the first terminal looks for
+the script in the home directory and its parents.
+
+The shared `OnceProbe.HC` creates a temporary registry on a writable
+RedSea RAM drive. It checks replacement before the run-level bits
+are set, subsequent append, drive override and restoration, Adam and
+user task identity, repeat execution after a flush, and propagation of
+a thrown exception after both branches are cleared. The native GCC
+and Clang builds and the pinned TempleOS guest report `Once probe FF`.
+
+```sh
+make -j4 test-once
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-once
+build/Linux/TestBoot --once-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/once-reference
+```
+
+The harness boots `build/once-test.iso` or the pinned DVD with QEMU
+8.2.2 using `-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`
+and the default single CPU. The configured home-script boot check
+runs on the native test DVD. The pinned run checks the shared queue
+operations.
+
+## Startup file execution and input
+
+`StartupExecProbe.HC` checks formatted execution, `LastFun`, extension
+lookup and argument order in `RunFile` and `RunFile2`, and the two ways
+the execution calls handle Break. The same probe also runs a nested
+`InStr`, includes a relative `.IN` file from a RAM drive, and submits a
+command through the terminal input queue. GCC, Clang, and pinned
+TempleOS report `Startup exec 3F input F` and return to the prompt.
+
+```sh
+make -j4 test-startup-exec test-once
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-startup-exec test-once
+build/Linux/TestBoot --startup-exec-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/startup-exec-reference
+```
+
+The harness uses QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512`
+and the default single CPU for `build/startup-exec-test.iso` and the
+pinned DVD.
+
+## Stock DVD startup
+
+`make test-stock-once` boots `build/stock-once-test.iso` twice. One run
+declines installation and the tour, opens Help Index with F1, and
+opens About TempleOS from inside it with Shift-F1. The other declines
+installation, selects the original first tour chapter, opens the help
+pane, performs the six modifier-key holds, and returns to the tour
+menu and then the home prompt. Both runs start with Terry A. Davis's
+unmodified `Once.HC` from the DVD root. The harness checks the bytes of
+the startup script, the startup and help documents, and all thirteen
+tour scripts against the pinned sources included in the checkout.
+
+The test uses QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512 -boot d`
+and the default single CPU. GCC and Clang both pass. The same prompts
+and tour menu were captured on the pinned TempleOS DVD in that VM
+configuration. These runs cover declining the installer and opening and
+closing the tour menu. The test also runs `Seed(12345);TipOfDay;` on
+the unmodified `Tips.DD` and checks the same tip about switching between
+the standard and Cyrillic fonts that appears in the reference guest.
+The modifier key-description pane, the installer wizard, and the
+remaining tour chapters still need work.
+
+The stock startup files and documentation are by Terry A. Davis.
+`Once.HC` matches blob `d8b4d0d621ed6b3ee8d3d5001b5a00815d541461` and
+`Misc/Tour/Tour.IN` matches `abe48134532155e8be139c6c1a692db3acfe2738`
+at the pinned revision. [TempleOS credits](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Doc/Credits.DD)
+
+The same target runs `InputTrainingProbe.HC` after declining the tour.
+It checks the three wrong-key popups, the echoed string, replayed
+keyboard messages, formatted output, Esc from `InView`, and
+`InSetMs` at a fixed destination. The probe also checks the old bit
+and final value from `LBEqu` across two words. Both native builds
+and pinned TempleOS report `Training result FF` and return to the
+prompt.
+
+`FileEditorProbe.HC` checks one-based line selection, case-insensitive
+text search, case-sensitive anchors, and link conversion. The QEMU
+driver types into a plain-text document on a guest RAM drive. Esc writes
+the edited bytes and Shift-Esc discards the second edit. The driver
+follows a DolDoc link to Help Index and dismisses the non-text warning
+for a new filename. Both native builds and pinned TempleOS report
+`File editor 1FF`.
+
+```sh
+make -j4 test-stock-once
+build/Linux/TestBoot --training-input-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/training-input-reference
+build/Linux/TestBoot --file-editor-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/file-editor-reference
+```
+
+## Keyboard output hooks and key maps
+
+`make test-key-map` boots `build/key-map-test.iso` and runs
+`KeyMapProbe.HC`. The probe checks output-hook priority and replacement,
+character and string interception, and description queries against the
+editor and a separate task. It invokes a Ctrl-Alt-Q handler through the
+PS/2 keyboard, then checks the generated map for the guest hook and
+Ctrl-Alt descriptions. GCC, Clang, and pinned TempleOS report
+`Key map probe 7F`.
+
+```sh
+make -j4 test-key-map
+build/Linux/TestBoot --key-map-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/key-map-reference
+```
+
+The probe uses QEMU 8.2.2 with the PC machine, qemu64, 512 MiB, and one
+CPU. Additional editor bindings still need translation.
+
+## AutoComplete modifier pane
+
+`make test-stock-once` includes the original `Doc/StandBy.DD` by Terry A.
+Davis on the stock DVD image. The first chapter of the unchanged tour
+holds Ctrl-Alt and checks for the auxiliary-font and zoom-in descriptions.
+After release, it checks that StandBy returns. Ctrl-Alt-Shift displays
+the zoom-out description. The test then leaves the tour and checks that
+`AutoComplete(0)` closes the pane and `AutoComplete(1)` starts it again.
+These checks use the PS/2 keyboard and the rendered DolDoc text layer.
+
+```sh
+make -j4 test-stock-once
+build/Linux/TestBoot --stock-once qemu-system-x86_64 \
+  build/stock-once-test.iso build/stock-once-capture
+qemu-system-x86_64 -machine pc -cpu qemu64 -smp 1 -m 512 -boot d \
+  -cdrom build/stock-once-test.iso -serial stdio
+```
+
+Run `ACInit;` at the prompt on the regular boot image to start the pane.
+`ACInit(mask)` indexes words from the matching text files. The stock test
+uses a compressed file with repeated words and checks that the pane sorts
+matching words by frequency. Ctrl-F1 inserts the selected suffix into the
+live command line.
+
+The stock test also runs the HolyC dictionary probe, searches for
+`Albatros`, opens the first definition with Ctrl-Shift-0, and inserts
+the final `s` with Ctrl-0. It opens the numbered definition through
+`Ed("DN:Albatross,1")`. It then clicks System Keys Quick Guide in the
+StandBy pane with the PS/2 mouse, opens HelpIndex, and clicks Key Map.
+The test waits for `KeyMap Completed.` and closes both popups. The
+reference mode repeats these checks on the pinned TempleOS DVD.
+
+```sh
+make -j4 test-stock-once
+build/Linux/TestBoot --dictionary-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/dictionary-reference
+```
+
+The writable dictionary test gives both guests a private copy of the
+same FAT32 disk containing the compressed dictionary. It runs `ACInit`
+on that drive, tracks the `Uncompressing Dictionary` bar, and checks
+that `ACDefs.DATA.Z` is removed. It reads back the 26,124,337 definition
+bytes and checks the 95,293-word load.
+
+```sh
+make -j4 test-dictionary-install
+build/Linux/TestBoot --dictionary-install-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/dictionary-install.img \
+  build/dictionary-install-reference
+```
+
+### Generating the Webster dictionary
+
+`ACDictGen` reads `DICTIONARY.DD` in the current directory and writes
+`DICTIONARY2.DD` there. It writes `ACDefs.DATA` and `ACWords.DATA.Z` to
+`/Adam/AutoComplete` on that drive. Create that directory before running it.
+
+The comparison booted both guests with QEMU 8.2.2, `pc`, `qemu64`, 1536 MiB,
+and one CPU. The test gives each guest a snapshot of the same raw FAT32
+input disk and stages the input on a 128 MiB RedSea RAM drive. It compares
+the intermediate text, the definition stream, and the expanded word index.
+The small fixture covers hex escapes, dollar escaping, inline tags, empty
+heads, and case-insensitive sorting and duplicate handling. The comparison
+uses Terry A. Davis's unmodified `Adam/AutoComplete/ACDictGen.HC` from
+TempleOS revision `c26482bb6ad3f80106d28504ec5db3c6a360732c`. The regression
+checks both the C++ command and the unmodified HolyC program in UnholyOS
+against the captured TempleOS result.
+
+```sh
+make -j4 test-dictionary-generator
+build/Linux/TestBoot --dictionary-generator-reference-check qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/dictionary-generator.img \
+  build/dictionary-generator-reference
+```
+
+The full run used the archived 44,893,843-byte `DICTIONARY.TXT` as
+`DICTIONARY.DD`. Its SHA-256 is
+`0af00cba7414a5aa38cdc2186f958c82ea79decda1b48d8ba313d7ace42af74e`.
+The C++ generator and the unmodified HolyC script in UnholyOS both matched
+the TempleOS run byte for byte for the 44,785,771-byte intermediate, the
+26,381,073-byte definition stream, and the 1,253,930-byte expanded word index.
+Each reported 95,293 words and a largest entry of 12,031 bytes.
+[Archived dictionary input](https://archive.org/download/TerryADavis_TempleOS_Archive/docs/DICTIONARY.TXT)
+
+```sh
+make -j4 all build/Linux/TestBoot build/webster.img AC_GEN_DISK=build/webster.img \
+  AC_GEN_INPUT=/path/to/archived/DICTIONARY.DD
+build/Linux/TestBoot --dictionary-generator-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/webster.img build/webster-reference
+build/Linux/TestBoot --dictionary-generator qemu-system-x86_64 \
+  build/unholyos.iso build/webster.img build/webster-cpp
+build/Linux/TestBoot --dictionary-generator-holyc qemu-system-x86_64 \
+  build/unholyos.iso build/webster.img build/webster-holyc
+```
+
+## Popup menus and one-time notices
+
+`PopupProbe.HC` checks results from synchronous and asynchronous
+servants, parent focus restoration, menu selection and cancellation,
+form defaults, and interception of an ending popup task. It also
+checks the one-time notice's checkbox, cancellation, and registry
+update. The test uses a bit in the second word for the caller-owned
+notice and reads back the saved system flag through the registry's
+HolyC branch. GCC, Clang, and the pinned TempleOS guest each reported
+`Popup probe 1FF`.
+
+The test also drives Terry A. Davis's unmodified
+`Demo/DolDoc/MenuBttn.HC` from TempleOS revision
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`. It opens and navigates the
+frequency popup, then exits the demo through its Done button.
+The standard ISO includes the original file.
+
+```sh
+make -j4 test-popup-menus
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-popup-menus
+build/Linux/TestBoot --popup-menus-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/popup-menus-reference
+```
+
+The harness boots `build/popup-test.iso` or the pinned DVD with QEMU
+8.2.2 using `-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`
+and the default single CPU. It sends input through the VM keyboard
+and checks the terminal text and return to the prompt.
+
+The malformed-menu probe writes `A:/BadMenu.HC` to a scratch RedSea RAM
+drive and starts with a valid menu on the stack. Both guests report
+`Missing ';' at`, show the `}` token, and throw `Compiler`. The saved
+terminal DolDoc links to `FL:A:/BadMenu.HC,3` and shows the linked source line.
+The same active menu remains on the stack after the exception. Symbolic
+backtrace rendering depends on the guest's own symbol information.
+
+```sh
+make -j4 test-menu-diagnostic
+build/Linux/TestBoot --menu-diagnostic-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/menu-diagnostic-reference
+```
+
+## HolyC compiler diagnostics
+
+The compiler diagnostic test uses QEMU 8.2.2 with `pc`, `qemu64`, 512 MiB
+and one CPU for both guests. An unknown identifier typed at the prompt
+reports `Undefined identifier at` with the following `;` token, then
+returns to the prompt after `Compiler`.
+
+The test writes malformed input to a RedSea RAM drive. `ExeFile` reports
+the missing expression and enclosing parse error and returns zero.
+`ExeFile2` reports the same pair and raises `Compiler`. Both saved
+terminal documents link to the source line. Ahead-of-time `Cmp` reports
+both errors, repeats the source location, returns two, and leaves no
+BIN file. A valid expression then executes at the prompt.
+
+The failed-output check first declares a global with the internal type
+`I64i`, then assigns an unknown identifier. Both systems report two
+errors and zero output bytes. The native startup fixture keeps its
+`I64` spelling. TempleOS requires its type header for that spelling
+in a standalone AOT source.
+
+```sh
+make -j4 test-compiler-diagnostic
+build/Linux/TestBoot --compiler-diagnostic-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/compiler-diagnostic-reference
+```
+
+## Install registration
+
+`InsRegProbe.HC` checks the 33-byte `CInsReg` layout, the startup
+registry branch, the choices for host OS and VM, acceptance of the
+defaults, duplicate registration, cancellation, and unregistration.
+It also checks the public flag and help index on the machine number
+define written by the registry. GCC, Clang, and pinned TempleOS report
+`InsReg probe 7F`.
+
+The harness then drives the form through the VM keyboard. It selects
+Linux and QEMU, enters `ABC` and `4`, and checks the printed registration
+and both stored list values.
+
+```sh
+make -j4 test-ins-reg
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-ins-reg
+build/Linux/TestBoot --ins-reg-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/ins-reg-reference
+```
+
+The harness boots `build/ins-reg-test.iso` or the pinned DVD with QEMU
+8.2.2 using `-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>` and
+the default single CPU.
+
+A separate native check used `InsReg('C')` to save the branch to a copy
+of the FAT32 fixture while the home drive was `T:`. A cold boot configured
+with `C:/Home` replayed the registration before the terminal started.
+The live record held all four selected values, and replay left the disk
+bytes unchanged.
+
+## Adam device reports
+
+`DevInfoProbe.HC` calls `PCIRep`, `MemBIOSRep` and `MemPageRep` from
+the HolyC terminal and examines the saved DolDoc output. It checks the
+Intel host bridge and IDE controller names and class codes, DolDoc color
+commands, the `Unknown` fallback, repeated PCI output, the 32-bit device window, the
+E801 and E820 memory ranges, and all three page counts. The standard
+DVD ships the pinned `Misc/PCIDevices.DD` at its compressed path.
+
+```sh
+make -j2 test-dev-info
+make -j2 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-dev-info
+build/Linux/TestBoot --dev-info-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/dev-info-reference
+```
+
+GCC 13.3.0, Clang 20.1.2 and the pinned TempleOS distribution all
+reported `Device reports 3FF` with QEMU 8.2.2, `pc`, `qemu64`,
+512 MiB and one vCPU. In WSL, use a copy of the reference ISO on the
+Linux filesystem so the installer and tour prompts arrive in time
+for the harness. The run used the distribution with SHA-256
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+The probe covers the report fields above on that VM configuration.
+[Pinned device report source and database](https://github.com/cia-foundation/TempleOS/tree/c26482bb6ad3f80106d28504ec5db3c6a360732c)
+
+## Adam server and CPU report
+
+The pre-desktop boot report still shows run level `0x12ff`. After
+terminal startup, the live kernel reaches `0x432ff` with `RLF_DOC`
+and `RLF_ADAM_SERVER` set. Adam waits in the job server loop.
+The boot probe checks that the halted CPU's FS base and stack belong
+to its idle task after startup and to Adam on earlier failure paths.
+`CPURepProbe.HC` submits `17*23;` to `adam_task` and requires the
+completed job to return `391`.
+
+The probe also compares `CPURep;` and `CPURep(FALSE);` to the live CPU
+count and clock frequency. It runs `CPURep(TRUE);`, checks the two-second
+sample, and compares the single CPU's rates with the total and average.
+It checks the cycles per swap and nanoseconds per swap fields for positive
+values. The GCC, Clang, and pinned TempleOS runs all reported
+`CPU reports FF`.
+
+```sh
+make -j2 test-cpu-rep
+make -j2 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-cpu-rep
+build/Linux/TestBoot --cpu-rep-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/cpu-rep-reference
+```
+
+In QEMU 8.2.2 with `pc`, `qemu64`, 512 MiB and one vCPU,
+the report sampled 907 yields per second before the server handoff and
+587,454 in a later UnholyOS run after the change. A pinned TempleOS run
+sampled 929,489 yields per second. These are individual samples. The
+regression checks the job result and the report fields on one CPU.
+
+## Nested images, FAT32 backing, and mounted ISO generation
+
+The shared `NestedRedSeaProbe.HC`, `RedSeaFreeListProbe.HC`, and `Fat32ImageProbe.HC` fixtures run on
+both UnholyOS and the pinned TempleOS distribution. They cover nested
+writable images, forwarded locking, two levels of read-only remounts,
+contiguous FAT32 backing chains, raw write-through, and persistence of
+777-byte payloads. The FAT32 harness boots twice with the same temporary
+disk copy and checks that the source disk image remains unchanged.
+
+```text
+Nested RedSea 7F
+RedSea free list 7F
+FAT32 image 7F
+FAT32 image reboot 7
+```
+
+Native-only tests also cover nested boot-image
+creation and stage-one patching, failed allocation recovery, and guarded
+parent teardown. The optical test embeds a RedSea ISO in the test DVD,
+mounts it twice, compares reads, checks that disk change raises `Drv`
+while either mount is live, and verifies disk change after the last unmount.
+
+```text
+RedSea ISO image FF
+Nested RedSea native 7F
+Optical image 3F
+```
+
+```sh
+make -j6 test-nested-redsea test-fat32-image test-optical-image
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 \
+  test-nested-redsea test-fat32-image test-optical-image
+build/Linux/TestBoot --fat32-image-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/fat32-writable.img build/fat32-image-reference
+build/Linux/TestBoot --nested-redsea-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/nested-redsea-reference
+```
+
+The tests use QEMU 8.2.2, `pc`, `qemu64`, 512 MiB and one vCPU,
+with GCC 13.3.0 or Clang 20.1.2 and NASM 2.16.01. Native media are
+`build/nested-redsea-test.iso`, `build/fat32-image-test.iso`, and
+`build/optical-image-test.iso` (or the corresponding Clang build paths).
+The reference does not exercise the native lifetime safeguards or the
+UnholyOS-specific stage-one marker. See [Source layout](SourceLayout.md)
+for failure-path limits; the matching masks do not establish full storage
+parity.
 
 ## Subsystem map
 
