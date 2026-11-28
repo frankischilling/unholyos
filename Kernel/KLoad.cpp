@@ -183,6 +183,7 @@ void HashPublicHC();
 void HashTablePurgeHC(), KillHC();
 void SpawnHC(), TaskValidateHC(), SuspendHC(), IsSuspendedHC();
 void TaskQueInsHC(), TaskQueRemHC(), SingleUserHC(), IsSingleUserHC();
+void ProgressBarsRstHC();
 void _TASK_END_NOW();
 void JobDelHC(),TaskRstAwaitingMsgHC(),TaskExeHC(),TaskTextHC();
 void TaskMsgHC(),JobResScanHC(),JobResGetHC(),TaskWaitHC();
@@ -899,6 +900,32 @@ bool LoadKernel(CTask &task)
       {"SYS_VAR_INIT_VAL", reinterpret_cast<uintptr_t>(&sys_var_init_val)},
       {"adam_task", reinterpret_cast<uintptr_t>(&adam_task)},
       {"sys_os_version", reinterpret_cast<uintptr_t>(&sys_os_version)},
+      {"SYS_PROGRESSES", reinterpret_cast<uintptr_t>(sys_progresses)},
+      {"sys_progresses", reinterpret_cast<uintptr_t>(sys_progresses)},
+#define PROGRESS_EXPORTS(num, i)                                               \
+  {"SYS_PROGRESS" #num, reinterpret_cast<uintptr_t>(&sys_progresses[i].val)},  \
+      {"SYS_PROGRESS" #num "_MAX",                                             \
+       reinterpret_cast<uintptr_t>(&sys_progresses[i].max)},                   \
+      {"SYS_PROGRESS" #num "_T0",                                              \
+       reinterpret_cast<uintptr_t>(&sys_progresses[i].t0)},                    \
+      {"SYS_PROGRESS" #num "_TF",                                              \
+       reinterpret_cast<uintptr_t>(&sys_progresses[i].tf)},                    \
+      {"SYS_PROGRESS" #num "_DESC",                                            \
+       reinterpret_cast<uintptr_t>(sys_progresses[i].desc)},                   \
+      {"progress" #num, reinterpret_cast<uintptr_t>(&sys_progresses[i].val)},  \
+      {"progress" #num "_max",                                                 \
+       reinterpret_cast<uintptr_t>(&sys_progresses[i].max)},                   \
+      {"progress" #num "_t0",                                                  \
+       reinterpret_cast<uintptr_t>(&sys_progresses[i].t0)},                    \
+      {"progress" #num "_tf",                                                  \
+       reinterpret_cast<uintptr_t>(&sys_progresses[i].tf)},                    \
+      {"progress" #num "_desc",                                                \
+       reinterpret_cast<uintptr_t>(sys_progresses[i].desc)}
+      PROGRESS_EXPORTS(1, 0),
+      PROGRESS_EXPORTS(2, 1),
+      PROGRESS_EXPORTS(3, 2),
+      PROGRESS_EXPORTS(4, 3),
+#undef PROGRESS_EXPORTS
       {"sys_registry_doc", reinterpret_cast<uintptr_t>(&sys_registry_doc)},
       {"sys_msg_flags", reinterpret_cast<uintptr_t>(sys_msg_flags)},
       {"registry_version", reinterpret_cast<uintptr_t>(&registry_version)},
@@ -1215,6 +1242,7 @@ bool LoadKernel(CTask &task)
       {"TaskQueRem", reinterpret_cast<uintptr_t>(TaskQueRemHC)},
       {"SingleUser", reinterpret_cast<uintptr_t>(SingleUserHC)},
       {"IsSingleUser", reinterpret_cast<uintptr_t>(IsSingleUserHC)},
+      {"ProgressBarsRst", reinterpret_cast<uintptr_t>(ProgressBarsRstHC)},
       {"JobDel", reinterpret_cast<uintptr_t>(JobDelHC)},
       {"TaskRstAwaitingMsg", reinterpret_cast<uintptr_t>(TaskRstAwaitingMsgHC)},
       {"TaskExe", reinterpret_cast<uintptr_t>(TaskExeHC)},

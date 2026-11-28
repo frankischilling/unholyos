@@ -1,5 +1,6 @@
 #include "../Kernel/KernelB.hpp"
 #include "Gr/GrGlbls.hpp"
+#include "Gr/GrExt.hpp"
 #include "Menu.hpp"
 #include "Ctrls/CtrlsA.hpp"
 
@@ -7,6 +8,85 @@
 
 alignas(8) CWinMgrGlbls winmgr{0, 0, 0, std::bit_cast<uint64_t>(30000.0 / 1001),
                    0, 0, nullptr, false, false, false};
+
+extern "C" uint64_t RegWriteCpp(const char *path, const char *fmt, int64_t argc,
+                                const uint64_t *argv);
+
+void ProgressBarsRegTf(const char *path)
+{
+  if (!path)
+    return;
+  auto t = tSCpp();
+  uint64_t args[PROGRESS_BARS_NUM];
+  for (int64_t i = 0; i < PROGRESS_BARS_NUM; i++) {
+    auto t0 = sys_progresses[i].t0;
+    args[i] = t0 ? F64AddBits(t, t0 ^ (1ULL << 63)) : 0;
+  }
+  RegWriteCpp(path,
+              "progress1_tf=%0.3f;progress2_tf=%0.3f;\n"
+              "progress3_tf=%0.3f;progress4_tf=%0.3f;\n",
+              PROGRESS_BARS_NUM, args);
+}
+
+constexpr int64_t PROGRESS_BAR_HEIGHT = 20,
+                  PROGRESS_BAR_WIDTH = 3 * GR_WIDTH / 4;
+
+static void DrawProgressBars(CDC *dc)
+{
+  constexpr auto x = (GR_WIDTH - PROGRESS_BAR_WIDTH) / 2;
+  for (int64_t i = 0; i < PROGRESS_BARS_NUM; i++) {
+    const auto &progress = sys_progresses[i];
+    auto m = progress.max;
+    if (!m)
+      continue;
+    auto y = (GR_HEIGHT -
+              (PROGRESS_BARS_NUM * 2 - 1 - i * 4) * PROGRESS_BAR_HEIGHT) /
+             2;
+    dc->color = {{BLACK, 0}, {0, 0}};
+    GrRectCpp(dc, x, y, PROGRESS_BAR_WIDTH, PROGRESS_BAR_HEIGHT);
+
+    dc->color = {{LTGREEN, 0}, {0, 0}};
+    auto n = progress.val;
+    if (n > m)
+      n = m;
+    GrRectCpp(dc, x + 2, y + 2,
+              int64_t(uint64_t(n) * (PROGRESS_BAR_WIDTH - 4)) / m,
+              PROGRESS_BAR_HEIGHT - 4);
+
+    if (m > 1) {
+      dc->color = {{BLACK, 0}, {0, 0}};
+      auto k = m > 20 ? 20 : m;
+      for (int64_t j = 0; j < k; j++) {
+        auto tick = x + 1 + j * (PROGRESS_BAR_WIDTH - 4) / k;
+        GrLineCpp(dc, tick, y + 4, tick, y + PROGRESS_BAR_HEIGHT - 4, 1, 0);
+      }
+    }
+
+    dc->color = {{GREEN, 0}, {0, 0}};
+    const uint64_t values[]{uint64_t(n), uint64_t(m)};
+    char *st = *progress.desc ? StrNew(progress.desc, CurrentTask()->data_heap)
+                              : MStrPrintCpp("%d/%d", 2, values);
+    if (st && progress.t0) {
+      const uint64_t args[]{reinterpret_cast<uintptr_t>(st),
+                            F64AddBits(tSCpp(), progress.t0 ^ (1ULL << 63))};
+      auto *st2 = MStrPrintCpp("%s %fs", 2, args);
+      Free(st);
+      st = st2;
+    }
+    if (st && progress.tf) {
+      const uint64_t args[]{reinterpret_cast<uintptr_t>(st), progress.tf};
+      auto *st2 = MStrPrintCpp("%s/%fs", 2, args);
+      Free(st);
+      st = st2;
+    }
+    if (st) {
+      const uint64_t arg = reinterpret_cast<uintptr_t>(st);
+      GrPrintCpp(dc, (GR_WIDTH - FONT_WIDTH * StrLen(st)) / 2,
+                 y + (PROGRESS_BAR_HEIGHT - FONT_HEIGHT) / 2, "%s", 1, &arg);
+      Free(st);
+    }
+  }
+}
 
 extern "C" CTask *WinRefocusCpp(CTask *task)
 {
@@ -326,6 +406,8 @@ static void DrawMs(CDC *dc)
 
 extern "C" void WinFinalUpdateCpp(CDC *dc)
 {
+  if (SYS_RUN_LEVEL & RLF_VGA)
+    DrawProgressBars(dc);
   if (winmgr.show_menu)
     DrawMenu(dc);
   else

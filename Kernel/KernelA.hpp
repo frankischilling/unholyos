@@ -465,6 +465,17 @@ struct CD3I32
 };
 
 constexpr int64_t GR_WIDTH = 640, GR_HEIGHT = 480;
+
+constexpr int64_t PROGRESS_BARS_NUM = 4, PROGRESS_DESC_LEN = 64 - 8 - 8;
+struct CProgress
+{
+  int64_t val, max;
+  uint64_t t0, tf;
+  char desc[PROGRESS_DESC_LEN];
+};
+static_assert(sizeof(CProgress) == 80 && offsetof(CProgress, max) == 8 &&
+              offsetof(CProgress, t0) == 16 && offsetof(CProgress, tf) == 24 &&
+              offsetof(CProgress, desc) == 32);
 constexpr int64_t TEXT_COLS = 80, TEXT_ROWS = 60;
 constexpr int64_t GR_SCALE = int64_t{1} << 32;
 enum : uint32_t
