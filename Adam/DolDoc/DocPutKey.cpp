@@ -1,4 +1,12 @@
 #include "DolDoc.hpp"
+#include "../AutoComplete/AutoComplete.hpp"
+
+static bool DocACKey(int64_t ch, int64_t sc)
+{
+  auto key = uint8_t(sc);
+  return !ch && (sc & (SCF_CTRL | SCF_ALT)) == SCF_CTRL && SC_F1 <= key &&
+         key <= SC_F10;
+}
 
 static void DocKeyDescription(int64_t ch, int64_t sc)
 {
@@ -19,6 +27,8 @@ static void DocKeyDescription(int64_t ch, int64_t sc)
   }
   if (ch == CH_BACKSPACE && !shift)
     desc = "Char  /Back Space";
+  else if (DocACKey(ch, sc))
+    desc = shift ? "Cmd /Src Code of Sym" : "Edit/Autocomplete Sym";
   else if (!ch)
     switch (uint8_t(sc)) {
     case SC_F1:
@@ -53,6 +63,16 @@ extern "C" void DocPutKeyCpp(CDoc *doc, int64_t ch, int64_t sc)
     return;
   if (sc & SCF_KEY_DESC) {
     DocKeyDescription(ch, sc);
+    return;
+  }
+  if (DocACKey(ch, sc)) {
+    if (AutoCompleteCpp(true)) {
+      auto choice = uint8_t(sc) - SC_F1 + 1;
+      if (sc & SCF_SHIFT)
+        ACMan(choice, CurrentTask());
+      else
+        ACFillIn(choice);
+    }
     return;
   }
   if (!ch && uint8_t(sc) == SC_F1 &&

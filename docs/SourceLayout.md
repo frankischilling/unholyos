@@ -2057,15 +2057,25 @@ underlying task, and queries the focused task's descriptions through
 unchanged `Doc/StandBy.DD`. A task-end callback clears the shared task
 pointer so `AutoComplete(ON)` can start another pane after shutdown.
 
-`ACInit.cpp` initializes the word table and run-level bit, and
-`HomeSys.cpp` starts the pane after queuing `Once` on media that include
-`Doc/StandBy.DD.Z`. The regular boot image includes the document and
-starts the pane when the user runs `ACInit;` at the prompt. File-mask traversal and
-dictionary loading in `ACInit.HC`, the completion choices in
-`ACPutChoices`, and the pane's link selection behavior remain pending.
-The pane currently clears its document with `DocClear` and fits the
-content when shown. TempleOS calls `DocRst` and handles minimum-window
-sizing during every document recalculation.
+`ACInit.cpp` follows `ACMainFileLstTraverse`, `ACSingleFileAdd`, and
+`ACHashAdd` in `ACInit.HC`. It walks the requested text-file mask in
+cluster order, indexes case-sensitive words from expanded file contents,
+and counts repeated words in the 32-byte `CHashAC` records.
+`HomeSys.cpp` runs the reference startup mask after queuing `Once` on
+media that include `Doc/StandBy.DD.Z`. The regular boot image lets the
+user start the pane and choose a file mask with `ACInit(mask)`.
+
+`ACPutChoices` scans the active DolDoc line, finds the prefix before
+the cursor, and ranks up to ten matching words by hit count.
+`ACFill.cpp` follows `ACFillIn` and `ACMan` in `ACFill.HC`.
+`DocPutKey` uses Ctrl-F1 through Ctrl-F10 to insert the selected
+suffix through the task input queue. Ctrl-Shift with those keys
+looks up the selected symbol's source link.
+
+Dictionary loading and pane link selection remain pending. The pane
+clears its document with `DocClear` and fits the content when shown.
+TempleOS calls `DocRst` and handles minimum-window sizing during
+every document recalculation.
 
 ## Popup tasks and document menus
 

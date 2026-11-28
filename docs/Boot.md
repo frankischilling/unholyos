@@ -4282,7 +4282,11 @@ qemu-system-x86_64 -machine pc -cpu qemu64 -smp 1 -m 512 -boot d \
 ```
 
 Run `ACInit;` at the prompt on the regular boot image to start the pane.
-File indexing and word suggestions remain pending.
+`ACInit(mask)` indexes words from the matching text files. The stock test
+uses a compressed file with repeated words and checks that the pane sorts
+matching words by frequency. Ctrl-F1 inserts the selected suffix into the
+live command line. Dictionary definitions and dictionary suggestions
+remain pending.
 
 ## Popup menus and one-time notices
 
