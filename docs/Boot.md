@@ -4115,8 +4115,8 @@ The probe covers the report fields above on that VM configuration.
 The pre-desktop boot report still shows run level `0x12ff`. After
 terminal startup, the live kernel reaches `0x432ff` with `RLF_DOC`
 and `RLF_ADAM_SERVER` set. Adam waits in the job server loop.
-The boot probe checks that the halted CPU's FS base points to its
-idle task after startup and to Adam on the earlier boot failure paths.
+The boot probe checks that the halted CPU's FS base and stack belong
+to its idle task after startup and to Adam on earlier failure paths.
 `CPURepProbe.HC` submits `17*23;` to `adam_task` and requires the
 completed job to return `391`.
 

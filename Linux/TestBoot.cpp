@@ -2809,7 +2809,8 @@ static void VerifyFixedArea(CMonitor &vm, const fs::path &dir, uint64_t heap,
             ReadPhysical<1>(vm, adam + 8)[0] == 0x0052F3FF536B7354,
         "Invalid Adam task header");
   auto saved = ReadPhysical<2>(vm, adam + 0x120);
-  Check((saved[0] & 0x200) && saved[1] > stk + 24 && saved[1] <= top &&
+  Check(bool(saved[0] & 0x200) == !desktop && saved[1] > stk + 24 &&
+            saved[1] <= top &&
             ReadPhysical<1>(vm, adam + 0x310)[0] == stk &&
             ReadPhysical<3>(vm, stk) ==
                 std::array<uint64_t, 3>{0, top - stk - 24, 0},
@@ -2818,7 +2819,19 @@ static void VerifyFixedArea(CMonitor &vm, const fs::path &dir, uint64_t heap,
   Check(std::regex_search(registers, match, std::regex(R"(RSP=([0-9a-f]+))")),
         "Missing kernel stack pointer");
   uint64_t rsp = std::stoull(match[1].str(), nullptr, 16);
-  Check(rsp > stk + 24 && rsp <= top, "Kernel is not running on Adam's stack");
+  if (desktop) {
+    const auto idle_stk = ReadPhysical<1>(vm, idle + 0x310)[0];
+    Check(idle_stk > 16, "Missing idle task stack");
+    const auto idle_header = ReadPhysical<3>(vm, idle_stk);
+    const auto allocation = ReadPhysical<2>(vm, idle_stk - 16);
+    const auto data_heap = ReadPhysical<1>(vm, idle + 0x28)[0];
+    Check(idle_header[0] == 0 && idle_header[1] >= 0x40000 &&
+              idle_header[2] == 0 &&
+              allocation == std::array<uint64_t, 2>{data_heap, idle_header[1] + 40} &&
+              rsp == idle_stk + 24 + idle_header[1],
+          "Halted CPU is not on the idle task's stack");
+  } else
+    Check(rsp > stk + 24 && rsp <= top, "Kernel is not running on Adam's stack");
 
   uint64_t cur_dir = ram_end - 0x260, fpu = ram_end - 0x210;
   uint64_t hash = ram_end - 0x248;
