@@ -3,6 +3,7 @@
 
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 void UserStartUp();
+void SrvStartUp();
 
 bool CmpCall(CCmpCtrl &cc, const uint8_t *machine, uint64_t &result)
 {
@@ -98,6 +99,13 @@ extern "C" [[noreturn]] void SrvTaskContCpp()
     _YIELD();
     SetRFlags(flags);
   }
+}
+
+extern "C" [[noreturn]] void SrvCmdLineCpp(int64_t)
+{
+  CurrentTask()->win_inhibit = WIG_USER_TASK_DFT;
+  SrvStartUp();
+  SrvTaskContCpp();
 }
 
 static int64_t sys_num_spawned_tasks;
@@ -318,6 +326,13 @@ extern "C" CTask *TaskEnd()
     task->rip = reinterpret_cast<uintptr_t>(task->task_end_cb);
     task->task_end_cb = nullptr;
     return task;
+  }
+
+  auto *parent = task->parent_task;
+  if (parent && parent->popup_task == task) {
+    parent->popup_task = nullptr;
+    KillTask(parent, false);
+    return parent;
   }
 
   DrvsReleaseCpp();

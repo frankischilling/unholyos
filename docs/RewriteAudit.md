@@ -128,8 +128,9 @@ part of the full rewrite.
   implements the original branch defaults, execution, counts, writes,
   and appends. The Once queue uses the original branch and run-level
   transitions. The first user terminal runs the home script through
-  `XTalk`. The stock install prompt and tour, installer registration, and
-  one-time popups remain pending.
+  `XTalk`. The registry's one-time notice uses a modal servant and writes
+  the selected suppression bit. The stock install prompt and tour and
+  installer registration remain pending.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal
   and system tools in their respective reference subsystems.
 - Include the remaining applications, demos, documentation and assets,

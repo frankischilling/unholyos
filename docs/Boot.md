@@ -4174,6 +4174,35 @@ and the default single CPU. The configured home-script boot check
 runs on the native test DVD. The pinned run checks the shared queue
 operations. The stock install and tour script remains pending.
 
+## Popup menus and one-time notices
+
+`PopupProbe.HC` checks results from synchronous and asynchronous
+servants, parent focus restoration, menu selection and cancellation,
+form defaults, and interception of an ending popup task. It also
+checks the one-time notice's checkbox, cancellation, and registry
+update. The test uses a bit in the second word for the caller-owned
+notice and reads back the saved system flag through the registry's
+HolyC branch. GCC, Clang, and the pinned TempleOS guest each reported
+`Popup probe 1FF`.
+
+The test also drives Terry A. Davis's unmodified
+`Demo/DolDoc/MenuBttn.HC` from TempleOS revision
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`. It opens and navigates the
+frequency popup, then exits the demo through its Done button.
+The standard ISO includes the original file.
+
+```sh
+make -j4 test-popup-menus
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-popup-menus
+build/Linux/TestBoot --popup-menus-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/popup-menus-reference
+```
+
+The harness boots `build/popup-test.iso` or the pinned DVD with QEMU
+8.2.2 using `-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`
+and the default single CPU. It sends input through the VM keyboard
+and checks the terminal text and return to the prompt.
+
 ## Adam device reports
 
 `DevInfoProbe.HC` calls `PCIRep`, `MemBIOSRep` and `MemPageRep` from

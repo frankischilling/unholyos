@@ -1,5 +1,7 @@
 #include "DolDoc.hpp"
 
+extern "C" void ViewHC();
+
 extern "C" uint64_t ViewCpp()
 {
   int64_t ch;
@@ -70,7 +72,10 @@ extern "C" uint64_t DocEdCpp(CDoc *doc, int64_t dof_flags)
   WinZBufUpdateCpp();
   if (!(dof_flags & DOF_DONT_WINMGR_SYNC))
     RefreshCpp(2, true);
-  bool res = ViewCpp();
+  uint64_t accepted;
+  const bool okay = CallHolyC0Checked(
+      reinterpret_cast<const uint8_t *>(ViewHC), &accepted);
+  const bool res = okay && accepted;
   DocLock(*doc);
   if (res)
     for (auto *entry = doc->head.next; entry != &doc->head; entry = entry->next)
@@ -94,5 +99,7 @@ extern "C" uint64_t DocEdCpp(CDoc *doc, int64_t dof_flags)
     DocUnlock(*doc);
   DocDelCpp(border);
   WinZBufUpdateCpp();
+  if (!okay)
+    RethrowHolyC();
   return res;
 }

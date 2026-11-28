@@ -522,6 +522,27 @@ static void DriveCharacterGraphics(
         upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
       else
         cmd(std::string("ExeFile(\"::") + probe.source + "\");0;");
+      if (std::string_view(probe.name) == "popup-menus") {
+        wait_text("Menu Beta");
+        snapshot("popup-menu");
+        key("tab");
+        key("spc");
+        wait_text("Cancel menu");
+        key("shift-esc");
+        wait_text("Popup Value:");
+        key("esc");
+        wait_text("One-time probe");
+        snapshot("popup-checkbox");
+        key("spc");
+        key("tab");
+        key("spc");
+        wait_text("One-time cancel");
+        key("shift-esc");
+        wait_text("Registry Notice");
+        key("spc");
+        key("tab");
+        key("spc");
+      }
       const auto cells = wait(
           [&](const Cells &cells) {
             const auto screen = visible(cells);
@@ -601,6 +622,25 @@ static void DriveCharacterGraphics(
     }
     if (!failures.empty())
       throw std::runtime_error(failures);
+    if (std::string_view(text_probes.front().name) == "popup-menus") {
+      cmd(R"(ExeFile("::/Demo/DolDoc/MenuBttn.HC");0;)");
+      wait_text("Menu Demo");
+      key("tab");
+      key("spc");
+      wait_text("100 Hz");
+      snapshot("menu-button-demo");
+      key("tab");
+      key("spc");
+      wait([&](const Cells &cells) {
+        auto screen = visible(cells);
+        return screen.find("100 Hz") == std::string::npos &&
+               screen.find("Menu Demo") != std::string::npos;
+      }, "MenuBttn.HC did not return from the frequency popup");
+      key("end");
+      key("spc");
+      wait_text("T:/Home>");
+      std::cout << "MenuBttn.HC opened the frequency menu and returned to the prompt\n";
+    }
     return;
   }
   if (screen_capture) {
