@@ -138,6 +138,9 @@ constexpr CTextProbe god_doodle_probes[]{
 constexpr CTextProbe help_idx_probes[]{
     {"help-idx", "/HelpIdxProbe.HC", "", "Help index checks ", "Help index editor ",
      "Help index checks 3FF\nHelp index editor 1\n", {}, true}};
+constexpr CTextProbe source_map_probes[]{
+    {"source-map", "/SourceMapProbe.HC", "", "Source map checks ",
+     "Address map editor ", "Source map checks 3FF\nAddress map editor 1\n", {}, true}};
 constexpr CTextProbe dictionary_probes[]{
     {"dictionary", "/DictionaryProbe.HC", "", "Dictionary probe ",
      "Dictionary probe 3F", "Dictionary probe 3F\n", {}, true}};
@@ -1424,6 +1427,7 @@ static void DriveCharacterGraphics(
       const bool god_bible = std::string_view(probe.name) == "god-bible";
       const bool god_doodle = std::string_view(probe.name) == "god-doodle";
       const bool help_idx = std::string_view(probe.name) == "help-idx";
+      const bool source_map = std::string_view(probe.name) == "source-map";
       std::array<uint64_t, 3> mouse{};
       if (god_input || god_song) {
         cmd(R"("GIM %X %X %X\n",&ms.pos.x,&ms.lb,&ms.rb;)");
@@ -1431,7 +1435,23 @@ static void DriveCharacterGraphics(
       }
       if (reference && probe.reference_file)
         cmd(std::string("DocClear(,1);ExeFile2(\"") + probe.reference_file + "\");");
-      else if (help_idx) {
+      else if (source_map) {
+        if (reference) {
+          const auto source = fs::absolute(std::string("Linux/Fixtures") + probe.source);
+          upload(source, false, false);
+          cmd("FileWrite(\"B:/SourceMapProbe.HC\",cgprobe," +
+              std::to_string(fs::file_size(source)) + ");");
+        }
+        cmd(reference
+                ? R"hc(ExeFile2("B:/SourceMapProbe.HC");0;)hc"
+                : R"hc(ExeFile2("::/SourceMapProbe.HC");0;)hc");
+        cmd(reference
+                ? "MapProbeMain(TRUE);MapProbeOpen;0;"
+                : "MapProbeMain;MapProbeOpen;0;");
+        wait_text("x=x*5;");
+        snapshot("source-map-editor");
+        key("shift-esc");
+      } else if (help_idx) {
         if (reference) {
           const auto source = fs::absolute(std::string("Linux/Fixtures") + probe.source);
           upload(source, false, false);
@@ -1599,7 +1619,7 @@ static void DriveCharacterGraphics(
                 terminal_line(prompt_pos / 81) == prompt,
             "Reference probe did not return to an empty command prompt");
       bool timed = false;
-      const bool answer = !reference || help_idx ||
+      const bool answer = !reference || help_idx || source_map ||
                           std::string_view(probe.name) == "startup-exec";
       const std::regex timing(answer ? R"([0-9]+\.[0-9]{6}s ans=0x00000000=0)"
                                      : R"([0-9]+\.[0-9]{6}s)");

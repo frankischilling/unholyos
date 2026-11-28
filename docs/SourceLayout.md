@@ -58,9 +58,14 @@ isolated compilation and TOSB patch-table stages. The current compiler
 uses RIP-relative references within the module. It emits
 `IET_REL32_EXPORT` for public definitions, `IET_IMM_I64` for typed
 runtime calls, and `IET_MAIN` for top-level statements. The existing
-loader consumes those records. The map writer follows
-`MapFileWrite` in `Compiler/CHash.HC` and emits DolDoc source links.
-It has no binary debug line tables yet.
+loader consumes those records. `MapFileWrite` in `Compiler/CHash.cpp`
+stores DolDoc source links and binary `CDbgInfo` tables. `PrsLib.cpp`
+records lexer lines on intermediate code. `BackC.cpp` records addresses
+for the emitted statement nodes in the final pass. It stores code-heap
+addresses for JIT functions and payload offsets for AOT functions. The
+table starts at the function entry and ends with the code-size sentinel
+used by `Compiler/OptPass789A.HC`. Expression-level addresses and assembly
+source maps still need coverage.
 
 `Compiler/PrsStmt.cpp` follows `PrsFunJoin` and `PrsGlblVarLst` for
 typed declarations. The expression parser and back end retain the
@@ -2365,16 +2370,26 @@ file, plain-text, Bible verse, in-memory, and symbol-source links. It
 restores the caller's working directory when the editor returns. `DocFind.cpp`
 supplies the one-based line, tag search, and named-anchor operations.
 `DocTerm.cpp` opens file links through the reference left-click
-callback. Raw-mode editing, the right-click terminal file menu, undo,
-and code-address links remain pending.
+callback. `DocLink.cpp` evaluates the HolyC expression in an `AD:` link
+and passes the address and byte count to `SrcEdLink`. Raw-mode editing,
+the right-click terminal file menu, and undo remain pending.
 
 `Adam/AHash.cpp` follows `Who`, `HashDepthRep`, `DocHelpIdx`, and
 `PopUpHelpIndex` from `Adam/AHash.HC`. Help reports use topics and help
 files from the active symbol tables. They place the help file before the
 symbols in each topic and link symbols to their source. `HelpComment`
 reads the plain DolDoc source at the cursor position used by TempleOS's
-hidden editor task. Native header metadata and `MapFileLoad` remain
-incomplete. `HI:` links open these reports through `DocEd.cpp`.
+hidden editor task. Some native header metadata is still missing.
+`HI:` links open these reports through `DocEd.cpp`.
+
+`MapFileLoad` in `Adam/AHash.cpp` loads binary maps under the owning
+task's symbol table and relocates nonzero entries against the loaded
+module's payload. It preserves an existing line table when another map
+updates the symbol's source link. It rejects binary records whose line
+range would extend beyond the allocated data. `Kernel/FunSeg.cpp`
+exports `SrcLineNum`, `SrcFileName`, and `SrcEdLink`. Kernel and compiler
+maps for the host-built binaries and debugger searches across tasks are
+still pending.
 
 `Kernel/Job.cpp` follows `Kernel/Job.HC` for `PopUp` and `PopUpPrint`.
 The servant enters `SrvCmdLine` and runs the standard execute job.

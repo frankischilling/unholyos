@@ -852,6 +852,8 @@ static bool PrsFun(CCmpCtrl &cc, CHashClass &type, char *name,
   fun->cls.flags = flags | CF_EXTERN;
   fun->return_class = &type;
   HashSrcFileSetCpp(&cc, &symbol, 0);
+  const auto *fun_lex_file = cc.lex_include_stk;
+  const auto min_line = fun_lex_file->line_num;
   if (!PrsFunArgs(cc, *fun)) {
     HashDel(&symbol.hash);
     return false;
@@ -883,11 +885,20 @@ static bool PrsFun(CCmpCtrl &cc, CHashClass &type, char *name,
   auto *old_local = cc.htc.local_var_lst, *old_fun = cc.htc.fun;
   cc.htc.local_var_lst = cc.htc.fun = fun;
   CCodeCtrl coc;
+  coc.cmp = &cc;
   CPrsStmt ps(cc, coc);
   uint8_t *machine = nullptr;
   size_t size;
-  if (ps.Body())
+  if (ps.Body()) {
+    if (min_line > 0 && uint64_t(min_line) <= UINT32_MAX) {
+      coc.min_line = coc.max_line = min_line;
+      if (cc.lex_include_stk == fun_lex_file &&
+          cc.lex_include_stk->line_num > min_line &&
+          uint64_t(cc.lex_include_stk->line_num) <= UINT32_MAX)
+        coc.max_line = cc.lex_include_stk->line_num;
+    }
     machine = COCCompile(coc, NO_IC, ClassRawType(type), fun, aot, &size);
+  }
   cc.htc.local_var_lst = old_local;
   cc.htc.fun = old_fun;
   if (!machine) {

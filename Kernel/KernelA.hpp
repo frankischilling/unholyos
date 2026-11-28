@@ -591,7 +591,15 @@ static_assert(sizeof(CScrnCastGlbls) == 68 &&
 struct CDbgInfo
 {
   uint32_t min_line, max_line, body[1];
+
+  size_t Size() const
+  {
+    return min_line <= max_line
+        ? offsetof(CDbgInfo, body) + (size_t(max_line) - min_line + 2) * sizeof(uint32_t)
+        : 0;
+  }
 };
+static_assert(sizeof(CDbgInfo) == 12 && offsetof(CDbgInfo, body) == 8);
 
 struct CMPCrash;
 struct CFunSegCache;

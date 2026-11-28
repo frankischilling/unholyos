@@ -1,5 +1,6 @@
 #include "DolDoc.hpp"
 #include "../God/GodBible.hpp"
+#include "../../Compiler/CompilerA.hpp"
 
 extern "C" void DocEdHC(), DocEntryRunHC(), DocWriteHC();
 
@@ -140,9 +141,36 @@ extern "C" int64_t EdLinkCvtCpp(const char *link_st, char **_filename,
                                  edf_dof_flags)
                   : -1;
         filename2 = nullptr;
-      } else if (res == LK_ADDR)
-        res = -1;
+      }
       switch (res) {
+      case LK_ADDR: {
+        constexpr int64_t DFT_ADDR_LINK_BIN_SIZE = 64;
+        int64_t count = DFT_ADDR_LINK_BIN_SIZE;
+        if (auto *ptr = StrLastOccCpp(filename2,
+                                      reinterpret_cast<const uint8_t *>(","))) {
+          *ptr++ = 0;
+          count = Str2I64Cpp(ptr, 10, nullptr);
+        }
+        const uint64_t arg = reinterpret_cast<uintptr_t>(filename2);
+        auto *expr = MStrPrintCpp("%s;", 1, &arg);
+        res = -1;
+        filename2 = nullptr;
+        if (!expr)
+          break;
+        const auto result = ExePutS(expr, nullptr, 0);
+        Free(expr);
+        constexpr int64_t brk = 0x6B61657242; // Break
+        if (result.exception && result.exception != COMPILER_ERROR &&
+            result.exception != brk) {
+          Free(st);
+          RethrowHolyC();
+        }
+        if (auto *link = SrcEdLink(result.value, count)) {
+          res = EdLinkCvtCpp(link, &filename, &needle_str, &num, edf_dof_flags);
+          Free(link);
+        }
+        break;
+      }
       case LK_BIBLE_FIND: {
         if (auto *ptr = StrLastOccCpp(filename2,
                                       reinterpret_cast<const uint8_t *>(","))) {

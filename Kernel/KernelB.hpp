@@ -207,7 +207,9 @@ extern "C" char *CatPrintCpp(char *dst, const char *fmt, int64_t argc,
 extern "C" void PrintWarnCpp(const char *fmt, int64_t argc,
                              const uint64_t *argv, const uintptr_t *frame);
 const CHash *FunSegFind(uintptr_t addr, uint64_t &offset);
-char *SrcEdLink(uintptr_t addr, int64_t count);
+extern "C" int64_t SrcLineNumCpp(uintptr_t addr, int64_t count);
+extern "C" char *SrcFileNameCpp(uintptr_t addr, int64_t count, CTask *mem_task);
+extern "C" char *SrcEdLink(uintptr_t addr, int64_t count, CTask *mem_task = nullptr);
 int64_t YearStartDate(int64_t year);
 CDate Struct2Date(const CDateStruct &ds);
 int64_t DayOfWeek(int64_t date);

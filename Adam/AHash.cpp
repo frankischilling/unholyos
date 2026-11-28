@@ -376,3 +376,76 @@ extern "C" void PopUpHelpIndexCpp(const char *idx, CTask *parent)
     Free(buf);
   }
 }
+
+extern "C" void MapFileLoadCpp(const char *filename)
+{
+  auto *name = filename ? ExtDftCpp(filename, "MAP.Z") : nullptr;
+  if (!name)
+    return;
+  auto *task = CurrentTask();
+  auto *absname = FileNameAbs(name, *task);
+  auto *doc = DocReadCpp(name, 0);
+  Free(name);
+  uint64_t base = 0;
+  if (absname) {
+    FileExtRemCpp(absname, nullptr);
+    if (StrLen(absname) > 2 && absname[1] == ':')
+      if (auto *module =
+              HashSingleTableFind(absname + 2, task->hash_table, HTT_MODULE))
+        base = reinterpret_cast<CHashGeneric *>(module)->user_data0 +
+               sizeof(CBinFile);
+    Free(absname);
+  }
+  if (!doc)
+    return;
+  for (auto *entry = doc->head.next; entry != &doc->head; entry = entry->next) {
+    if (entry->Type() != DOCT_LINK)
+      continue;
+    auto *doc_e = reinterpret_cast<CDocEntry *>(entry);
+    const bool tagged = entry->tag && *entry->tag;
+    auto *link = entry->de_flags & DOCEF_AUX_STR ? doc_e->aux_str : nullptr;
+    auto *st = tagged || link ? MStrUtilCpp(tagged ? entry->tag : link,
+                                            SUF_REM_TRAILING, 0)
+                              : nullptr;
+    if (!st)
+      continue;
+    auto *sym = reinterpret_cast<CHashSrcSym *>(
+        HashSingleTableFind(st, task->hash_table, HTG_SRC_SYM));
+    Free(st);
+    if (!sym)
+      continue;
+    if (tagged) {
+      Free(const_cast<char *>(sym->src_link));
+      sym->src_link = link;
+      doc_e->aux_str = nullptr;
+      if (link && StrLen(link) >= 4 && link[2] == ':') {
+        if (link[3] == ':')
+          link[3] = blkdev.boot_drv_let;
+        else if (link[3] == '~')
+          link[3] = *blkdev.home_dir;
+      }
+    }
+    auto *bin = entry->de_flags & DOCEF_HAS_BIN ? doc_e->bin_data : nullptr;
+    if (!(sym->hash.type & (HTT_FUN | HTT_EXPORT_SYS_SYM)) || sym->dbg_info ||
+        !bin || !bin->data)
+      continue;
+    auto *dbg_info = reinterpret_cast<CDbgInfo *>(bin->data);
+    const auto size =
+        bin->size >= offsetof(CDbgInfo, body) && bin->size <= MSize(dbg_info)
+            ? dbg_info->Size()
+            : 0;
+    if (!size || size > bin->size) {
+      PrintCpp("Corrupt Map Entry\n", 0, nullptr);
+      continue;
+    }
+    bin->data = nullptr;
+    sym->dbg_info = dbg_info;
+    auto *body = reinterpret_cast<uint32_t *>(
+        reinterpret_cast<uint8_t *>(dbg_info) + offsetof(CDbgInfo, body));
+    for (size_t i = 0; i < (size - offsetof(CDbgInfo, body)) / sizeof(*body);
+         i++)
+      if (body[i])
+        body[i] += uint32_t(base);
+  }
+  DocDelCpp(doc);
+}

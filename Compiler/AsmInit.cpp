@@ -370,6 +370,7 @@ static bool CmpMemberData(CHashTable *table)
 {
   auto *hash = CmpKernelClass(table, "CHash", sizeof(CHash));
   auto *generic = CmpKernelClass(table, "CHashGeneric", sizeof(CHashGeneric));
+  auto *dbg_info = CmpKernelClass(table, "CDbgInfo", sizeof(CDbgInfo));
   auto *sym = CmpKernelClass(table, "CHashSrcSym", sizeof(CHashSrcSym));
   auto *define = CmpKernelClass(table, "CHashDefineStr", sizeof(CHashDefineStr));
   auto *ht = CmpKernelClass(table, "CHashTable", sizeof(CHashTable));
@@ -378,7 +379,8 @@ static bool CmpMemberData(CHashTable *table)
   auto *member = CmpKernelClass(table, "CMemberLst", sizeof(CMemberLst));
   auto *cls = CmpKernelClass(table, "CHashClass", sizeof(CHashClass));
   auto *fun = CmpKernelClass(table, "CHashFun", sizeof(CHashFun));
-  if (!hash || !generic || !sym || !define || !ht || !dim || !meta || !member || !cls || !fun)
+  if (!hash || !generic || !dbg_info || !sym || !define || !ht || !dim ||
+      !meta || !member || !cls || !fun)
     return false;
   generic->base_class = hash;
   sym->base_class = hash;
@@ -396,7 +398,7 @@ static bool CmpMemberData(CHashTable *table)
   {
     const char *name;
     CHashClass *record, *type;
-    size_t offset;
+    size_t offset, count = 0;
   } members[]{
       {"next", hash, hash + 1, offsetof(CHash, next)},
       {"str", hash, ptr, offsetof(CHash, str)},
@@ -407,9 +409,12 @@ static bool CmpMemberData(CHashTable *table)
       {"user_data2", generic, i64, offsetof(CHashGeneric, user_data2)},
       {"src_link", sym, ptr, offsetof(CHashSrcSym, src_link)},
       {"idx", sym, ptr, offsetof(CHashSrcSym, idx)},
-      {"dbg_info", sym, ptr, offsetof(CHashSrcSym, dbg_info)},
+      {"dbg_info", sym, dbg_info + 1, offsetof(CHashSrcSym, dbg_info)},
       {"import_name", sym, ptr, offsetof(CHashSrcSym, import_name)},
       {"ie_lst", sym, ptr, offsetof(CHashSrcSym, ie_lst)},
+      {"min_line", dbg_info, u32, offsetof(CDbgInfo, min_line)},
+      {"max_line", dbg_info, u32, offsetof(CDbgInfo, max_line)},
+      {"body", dbg_info, u32, offsetof(CDbgInfo, body), 1},
       {"data", define, ptr, offsetof(CHashDefineStr, data)},
       {"sub_idx", define, u8 + 2, offsetof(CHashDefineStr, sub_idx)},
       {"cnt", define, i64, offsetof(CHashDefineStr, cnt)},
@@ -465,9 +470,20 @@ static bool CmpMemberData(CHashTable *table)
   };
   for (const auto &field : members) {
     auto *name = StrNew(field.name, heap);
-    if (!name || !MemberAdd(*field.record, name, *field.type, field.offset)) {
+    auto *m = name ? MemberAdd(*field.record, name, *field.type, field.offset) : nullptr;
+    if (!m) {
       Free(name);
       return false;
+    }
+    if (field.count) {
+      auto *axis = reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return false;
+      axis->cnt = field.count;
+      axis->total_cnt = 1;
+      m->dim.next = axis;
+      m->dim.total_cnt = field.count;
+      m->size = field.count * field.type->size;
     }
   }
   return true;
@@ -2733,6 +2749,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
        {{"needle_str", U8Ptr}, {"haystack_table", HashTablePtr}, {"mask", I64},
         {"instance", I64, true, 1}}, "_HASH_FIND"},
       {"HashVal", I64, FF_RET1, {{"tmph", HashPtr}}},
+      {"HashRemDel", Bool, FF_RET1,
+       {{"tmph", HashPtr}, {"table", HashTablePtr}, {"instance", I64, true, 1}},
+       "_HASH_REM_DEL"},
       {"FramePtr", I64, FF_RET1, {{"name", U8Ptr}, {"task", TaskPtr, true}}},
       {"FramePtrAdd", HashGenericPtr, FF_RET1,
        {{"name", U8Ptr}, {"val", I64, true}, {"task", TaskPtr, true}}},
@@ -3086,6 +3105,12 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"HashDepthRep", I64, FF_RET1, {{"table", HashTablePtr, true}}},
       {"DocHelpIdx", U0, FF_RET1, {{"doc", DocPtr}, {"idx", U8Ptr}}},
       {"PopUpHelpIndex", U0, FF_RET1, {{"idx", U8Ptr}, {"parent", TaskPtr, true}}},
+      {"MapFileLoad", U0, FF_RET1, {{"filename", U8Ptr}}},
+      {"SrcLineNum", I64, FF_RET1, {{"addr", U8Ptr}, {"cnt", I64, true, 1}}},
+      {"SrcFileName", U8Ptr, FF_RET1,
+       {{"addr", U8Ptr}, {"cnt", I64, true, 1}, {"mem_task", TaskPtr, true}}},
+      {"SrcEdLink", U8Ptr, FF_RET1,
+       {{"addr", U8Ptr}, {"cnt", I64, true, 1}, {"mem_task", TaskPtr, true}}},
       {"AOnceFlush", U0, FF_RET1, {}},
       {"OnceFlush", U0, FF_RET1, {}},
       {"AOnce", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
@@ -3852,7 +3877,7 @@ static bool CmpFillHash(CHashTable *table)
       {"F64_MAX", "(0x7FEFFFFFFFFFFFFF(F64))"},
       {"HTT_CLASS", "0x10"}, {"HTT_INTERNAL_TYPE", "0x20"},
       {"HTT_FUN", "0x40"}, {"HTT_EXPORT_SYS_SYM", "0x01"},
-      {"HTT_FRAME_PTR", "0x10000"},
+      {"HTT_MODULE", "0x04000"}, {"HTT_FRAME_PTR", "0x10000"},
       {"SE_NOISE", "0"}, {"SE_SWEEP", "1"},
       {"HTT_INVALID", "0"}, {"HTT_GLBL_VAR", "0x08"},
       {"HTT_DEFINE_STR", "0x04"}, {"HTF_PUBLIC", "0x01000000"},

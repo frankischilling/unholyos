@@ -444,11 +444,16 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
 }
 
 static bool EmitBody(CCodeOut &out, CCodeCtrl &coc, CRawType type,
-                     unsigned stack_slots)
+                     unsigned stack_slots, uint32_t *lines, uint32_t base)
 {
   auto *code = coc.code;
   for (auto i = coc.first; i != NO_IC; i = code[i].next) {
     auto &node = code[i];
+    if (lines && node.line_num >= coc.min_line && node.line_num <= coc.max_line) {
+      auto &addr = lines[node.line_num - coc.min_line];
+      if (!addr)
+        addr = base + out.size;
+    }
     switch (node.code) {
     case IC_ASM:
       if (!out.Asm(*reinterpret_cast<CAsm *>(node.data)))
@@ -510,7 +515,8 @@ static bool EmitBody(CCodeOut &out, CCodeCtrl &coc, CRawType type,
 }
 
 static bool EmitFunction(CCodeOut &out, CCodeCtrl &coc, uint32_t root,
-                         CRawType type, const CHashFun *fun)
+                         CRawType type, const CHashFun *fun,
+                         uint32_t *lines = nullptr, uint32_t base = 0)
 {
   unsigned stack_slots = 0;
   if (fun) {
@@ -521,7 +527,7 @@ static bool EmitFunction(CCodeOut &out, CCodeCtrl &coc, uint32_t root,
     stack_slots = 1+out.LocalsEnter();
   }
   if (root == NO_IC) {
-    if (!EmitBody(out, coc, type, stack_slots))
+    if (!EmitBody(out, coc, type, stack_slots, lines, base))
       return false;
   } else {
     if (!Emit(out, coc.code, root, 0, stack_slots))
@@ -588,13 +594,33 @@ uint8_t *COCCompile(CCodeCtrl &coc, uint32_t root, CRawType type,
   auto *result = MAlloc(total_size, CurrentTask()->code_heap);
   if (!result)
     return nullptr;
+  CDbgInfo *dbg_info = nullptr;
+  uint32_t *lines = nullptr;
+  const uint32_t base = aot ? aot->size : reinterpret_cast<uintptr_t>(result);
+  if (fun && coc.min_line) {
+    const CDbgInfo info{coc.min_line, coc.max_line, {}};
+    dbg_info = reinterpret_cast<CDbgInfo *>(CAlloc(info.Size(), CurrentTask()->data_heap));
+    if (!dbg_info) {
+      Free(result);
+      return nullptr;
+    }
+    dbg_info->min_line = info.min_line;
+    dbg_info->max_line = info.max_line;
+    lines = reinterpret_cast<uint32_t *>(
+        reinterpret_cast<uint8_t *>(dbg_info) + offsetof(CDbgInfo, body));
+    lines[0] = base;
+    lines[info.max_line - info.min_line + size_t{1}] = base + total_size;
+  }
   CCodeOut out(result, aot, locals);
-  if (!EmitFunction(out, coc, root, type, fun) || out.failed ||
+  if (!EmitFunction(out, coc, root, type, fun, lines, base) || out.failed ||
       out.size!=size.size ||
       (coc.asm_first && !AsmPublish(*coc.asm_first, result))) {
+    Free(dbg_info);
     Free(result);
     return nullptr;
   }
+  if (dbg_info)
+    fun->cls.sym.dbg_info = dbg_info;
   if (coc.has_misc_data)
     for (uint32_t i = 0; i < coc.Count(); ++i) {
       const auto &node = coc.code[i];

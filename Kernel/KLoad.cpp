@@ -262,7 +262,8 @@ void GodSongStrHC(), GodSongHC();
 void GodBiblePassageHC(), BibleLine2VerseHC(), BookLinesHC(), BibleVerseHC();
 void BibleDocHC(), BibleViewHC();
 void GodDoodleSpriteHC(), GodDoodleHC();
-void WhoHC(), HashDepthRepHC(), DocHelpIdxHC(), PopUpHelpIndexHC();
+void WhoHC(), HashDepthRepHC(), DocHelpIdxHC(), PopUpHelpIndexHC(), MapFileLoadHC();
+void SrcLineNumHC(), SrcFileNameHC(), SrcEdLinkHC();
 void RegDftHC(), RegExeHC(), RegWriteHC(), RegCntHC(), RegAppendHC(), AdamHC();
 void InsRegHC(), InsReregHC(), InsUnregHC();
 void AOnceFlushHC(), OnceFlushHC(), AOnceHC(), OnceHC(), AOnceDrvHC(),
@@ -1040,6 +1041,7 @@ bool LoadKernel(CTask &task)
       {"FramePtrSet", reinterpret_cast<uintptr_t>(FramePtrSetHC)},
       {"FramePtrDel", reinterpret_cast<uintptr_t>(FramePtrDelHC)},
       {"_HASH_REM_DEL", reinterpret_cast<uintptr_t>(_HASH_REM_DEL)},
+      {"HashRemDel", reinterpret_cast<uintptr_t>(_HASH_REM_DEL)},
       {"SysSymImportsResolve",
        reinterpret_cast<uintptr_t>(SysSymImportsResolveHC)},
       {"LoadPass2", reinterpret_cast<uintptr_t>(LoadPass2HC)},
@@ -1523,6 +1525,9 @@ bool LoadKernel(CTask &task)
       {"MemBIOSRep", reinterpret_cast<uintptr_t>(MemBIOSRepHC)},
       {"MemPageRep", reinterpret_cast<uintptr_t>(MemPageRepHC)},
       {"PutFileLink", reinterpret_cast<uintptr_t>(PutFileLinkHC)},
+      {"SrcLineNum", reinterpret_cast<uintptr_t>(SrcLineNumHC)},
+      {"SrcFileName", reinterpret_cast<uintptr_t>(SrcFileNameHC)},
+      {"SrcEdLink", reinterpret_cast<uintptr_t>(SrcEdLinkHC)},
       {"PutSrcLink", reinterpret_cast<uintptr_t>(PutSrcLinkHC)},
       {"FixSet", reinterpret_cast<uintptr_t>(FixSetHC)},
       {"AdamErr", reinterpret_cast<uintptr_t>(AdamErrHC)},
@@ -1660,6 +1665,7 @@ bool LoadKernel(CTask &task)
       {"HashDepthRep", reinterpret_cast<uintptr_t>(HashDepthRepHC)},
       {"DocHelpIdx", reinterpret_cast<uintptr_t>(DocHelpIdxHC)},
       {"PopUpHelpIndex", reinterpret_cast<uintptr_t>(PopUpHelpIndexHC)},
+      {"MapFileLoad", reinterpret_cast<uintptr_t>(MapFileLoadHC)},
       {"AOnceFlush", reinterpret_cast<uintptr_t>(AOnceFlushHC)},
       {"OnceFlush", reinterpret_cast<uintptr_t>(OnceFlushHC)},
       {"AOnce", reinterpret_cast<uintptr_t>(AOnceHC)},
@@ -1756,6 +1762,7 @@ bool LoadKernel(CTask &task)
        reinterpret_cast<uintptr_t>(LinkedLstDelCpp)},
       {"__unholyos_sysv.LstMatchCpp", reinterpret_cast<uintptr_t>(LstMatchCpp)},
       {"__unholyos_sysv.MAlloc", reinterpret_cast<uintptr_t>(MAlloc)},
+      {"__unholyos_sysv.MSize", reinterpret_cast<uintptr_t>(MSize)},
       {"__unholyos_sysv.MStrPrintCpp",
        reinterpret_cast<uintptr_t>(MStrPrintCpp)},
       {"__unholyos_sysv.Pow10I64Cpp", reinterpret_cast<uintptr_t>(Pow10I64Cpp)},

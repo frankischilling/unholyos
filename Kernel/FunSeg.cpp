@@ -104,41 +104,55 @@ static bool HasMappedSource(const CDbgInfo &info, uintptr_t addr, int64_t count)
   return false;
 }
 
-char *SrcEdLink(uintptr_t addr, int64_t count)
+extern "C" int64_t SrcLineNumCpp(uintptr_t addr, int64_t count)
 {
   uint64_t offset;
-  auto *entry = FunSegFind(addr, offset);
-  auto *sym = reinterpret_cast<const CHashSrcSym *>(entry);
+  auto *sym = reinterpret_cast<const CHashSrcSym *>(FunSegFind(addr, offset));
+  if (!sym)
+    return -1;
+  if (auto *map = static_cast<const CDbgInfo *>(sym->dbg_info))
+    return LineFromMap(*map, addr, count);
+  if (!sym->src_link)
+    return -1;
+  const char *line = sym->src_link;
+  for (const char *ptr = line; *ptr; ptr++)
+    if (*ptr == ',')
+      line = ptr + 1;
+  return Str2I64Cpp(line, 10, nullptr);
+}
+
+extern "C" char *SrcFileNameCpp(uintptr_t addr, int64_t count, CTask *mem_task)
+{
+  uint64_t offset;
+  auto *sym = reinterpret_cast<const CHashSrcSym *>(FunSegFind(addr, offset));
   if (!sym || !sym->src_link)
     return nullptr;
-  const auto *map = static_cast<const CDbgInfo *>(sym->dbg_info);
-  if (map && !HasMappedSource(*map, addr, count))
-    return nullptr;
-  const char *name = sym->src_link;
-  for (const char *p = name; *p; p++)
-    if (*p == ':') {
-      name = p + 1;
-      break;
-    }
-  const char *end = name + StrLen(name), *comma = end;
-  for (const char *p = name; p < end; p++)
-    if (*p == ',')
-      comma = p;
-  auto *file = reinterpret_cast<char *>(
-      MAlloc(comma - name + 1, CurrentTask()->data_heap));
+  if (auto *map = static_cast<const CDbgInfo *>(sym->dbg_info))
+    if (!HasMappedSource(*map, addr, count))
+      return nullptr;
+  auto *file = StrNew(sym->src_link, MemTaskHeap(mem_task));
+  if (file) {
+    StrFirstRemCpp(file, reinterpret_cast<const uint8_t *>(":"), nullptr);
+    StrLastRemCpp(file, reinterpret_cast<const uint8_t *>(","), nullptr);
+  }
+  return file;
+}
+
+extern "C" char *SrcEdLink(uintptr_t addr, int64_t count, CTask *mem_task)
+{
+  auto *file = SrcFileNameCpp(addr, count, nullptr);
   if (!file)
     return nullptr;
-  MemCpy(file, name, comma - name);
-  file[comma - name] = 0;
-  int64_t line = map ? LineFromMap(*map, addr, count) : 0;
-  if (!map && comma < end) {
-    for (const char *p = comma + 1; p < end && *p >= '0' && *p <= '9'; p++)
-      line = static_cast<int64_t>(uint64_t(line) * 10 + *p - '0');
-  }
-  uint64_t args[]{reinterpret_cast<uintptr_t>(file),
-                  line > 0 ? uint64_t(line) : 1};
+  auto line = SrcLineNumCpp(addr, count);
+  const uint64_t args[]{reinterpret_cast<uintptr_t>(file),
+                        line > 0 ? uint64_t(line) : 1};
   auto *link = MStrPrintCpp("FL:%s,%d", 2, args);
   Free(file);
+  if (link && mem_task) {
+    auto *copy = StrNew(link, MemTaskHeap(mem_task));
+    Free(link);
+    link = copy;
+  }
   return link;
 }
 
