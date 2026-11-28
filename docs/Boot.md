@@ -4105,6 +4105,20 @@ from machine-code deallocation. These tests use a single QEMU CPU;
 they do not establish SMP atomicity, every hardware port behavior, or
 all reference register and memory operand selections.
 
+## Kernel bit-field helpers
+
+`BitFieldProbe.HC` checks `BFieldOrU32` and `BFieldExtU32` across byte and
+quadword boundaries, including overlap and extraction widths 0, 64, and
+65. It checks that `BEqu` sets and clears the target bit and returns its
+previous value. It expects `Bit field checks 3F`. Both guests use QEMU 8.2.2 with
+`pc`, `qemu64`, one CPU, and 512 MiB of memory.
+
+```sh
+make -j4 test-bit-field
+build/Linux/TestBoot --bit-field-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/bit-field-reference
+```
+
 ## Disassembler initialization and entry points
 
 The shared `UAsmProbe.HC` (1640 bytes, SHA-256
