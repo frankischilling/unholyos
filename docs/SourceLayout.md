@@ -419,8 +419,12 @@ reference return-value warnings and reports an unused explicit extern
 when its definition joins the current namespace. Class and union
 definitions use the same warning when completing an unused forward
 declaration, following `PrsClass` in `Compiler/PrsStmt.HC`. `Cmp` includes
-these warnings in its summary. Header mismatch and unused local variable
-diagnostics still need their reference parser bookkeeping.
+these warnings in its summary. Function headers follow `PrsFunJoin` and
+`LexLib.HC::MemberLstCmp` for return classes, parameter names and classes,
+and numeric and string defaults. The comparison uses the earlier argument
+count and the reference limit for variadic member lists. AOT compilation
+skips the runtime bindings that UnholyOS seeds in its compiler table.
+Unused local variable diagnostics still need their reference bookkeeping.
 
 The compiler also registers the 65-byte `CCntsGlbls` guest class
 from `Kernel/KernelA.HH`. Its typed `cnts` symbol aliases the

@@ -7331,7 +7331,8 @@ int main(int argc, char **argv)
     const auto dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       if (diagnostic == CDesktopTest::CompilerWarning && !reference)
-        for (const auto *source : {"CompilerWarningProbe.HC", "ForwardTypeWarningProbe.HC"})
+        for (const auto *source : {"CompilerWarningProbe.HC", "ForwardTypeWarningProbe.HC",
+                                   "HeaderWarningProbe.HC"})
           VerifyHostModuleMedia(argv[3], fs::path("Linux/Fixtures") / source, source);
       auto run = [&](const fs::path &capture, CDesktopTest test) {
         fs::create_directories(capture);
@@ -7348,8 +7349,10 @@ int main(int argc, char **argv)
       run(dir, diagnostic);
       if (diagnostic == CDesktopTest::CompilerDiagnostic)
         run(dir / "partial-cmp", CDesktopTest::CompilerCmpDiagnostic);
-      else if (diagnostic == CDesktopTest::CompilerWarning)
+      else if (diagnostic == CDesktopTest::CompilerWarning) {
         run(dir / "forward-types", CDesktopTest::CompilerForwardWarning);
+        run(dir / "function-headers", CDesktopTest::CompilerHeaderWarning);
+      }
       if (argc == 4)
         fs::remove_all(dir);
       return 0;
