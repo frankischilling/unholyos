@@ -31,7 +31,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Adam/DolDoc/DocNew.cpp Adam/DolDoc/DocDblBuf.cpp Adam/DolDoc/DocRecalc.cpp Adam/DolDoc/DocRecalcLib.cpp \
 	Adam/DolDoc/DocPlain.cpp Adam/DolDoc/DocBin.cpp Adam/DolDoc/DocPutS.cpp Adam/DolDoc/DocFile.cpp Adam/DolDoc/DocClipBoard.cpp Adam/DolDoc/DocTree.cpp \
 	Adam/DolDoc/DocChar.cpp Adam/DolDoc/DocPutKey.cpp Adam/DolDoc/DocRun.cpp \
-	Adam/DolDoc/DocGet.cpp Adam/DolDoc/DocForm.cpp Adam/DolDoc/DocEd.cpp Adam/DolDoc/DocPopUp.cpp Adam/DolDoc/DocTerm.cpp HomeSys.cpp \
+	Adam/DolDoc/DocGet.cpp Adam/DolDoc/DocForm.cpp Adam/DolDoc/DocEd.cpp Adam/DolDoc/DocFind.cpp Adam/DolDoc/DocLink.cpp Adam/DolDoc/DocPopUp.cpp Adam/DolDoc/DocTerm.cpp HomeSys.cpp \
 	Adam/ABlkDev/ADskA.cpp Adam/ABlkDev/Mount.cpp Adam/Opt/Boot/DskISORedSea.cpp Adam/MakeAdam.cpp
 GUEST_TEST_SRC := Linux/BootProbe.cpp
 COMPILER_ASM_SRC := Compiler/CExcept.asm Compiler/CMain.asm Compiler/CMisc.asm Compiler/LexLib.asm Compiler/Templates.asm
@@ -164,8 +164,10 @@ ONCE_BOOT := Linux/Fixtures/OnceBoot.DD
 ONCE_TEST_ISO := $(BUILD)/once-test.iso
 STOCK_ONCE_TEST_ISO := $(BUILD)/stock-once-test.iso
 INPUT_TRAINING_PROBE := Linux/Fixtures/InputTrainingProbe.HC
+FILE_EDITOR_PROBE := Linux/Fixtures/FileEditorProbe.HC
 STOCK_TOUR := $(wildcard Misc/Tour/*.IN)
 STARTUP_TIPS := Doc/Tips.DD Doc/Customize.DD
+HELP_DOCS := Doc/HelpIndex.DD Doc/AboutTempleOS.DD Doc/Welcome.DD Doc/DemoIndex.DD Doc/CmdLineOverview.DD Doc/Credits.DD
 POPUP_PROBE := Linux/Fixtures/PopupProbe.HC
 POPUP_DEMO := Demo/DolDoc/MenuBttn.HC
 POPUP_TEST_ISO := $(BUILD)/popup-test.iso
@@ -565,9 +567,9 @@ $(REGISTRY_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(REGISTRY_
 $(ONCE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(ONCE_PROBE) $(ONCE_HOME) $(ONCE_BOOT) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at Home/Registry.HC.Z $(ONCE_BOOT) --file-at Home/Once.HC $(ONCE_HOME) --file $(ONCE_PROBE)
 
-$(STOCK_ONCE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) Once.HC $(STARTUP_TIPS) $(STOCK_TOUR) $(INPUT_TRAINING_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
-	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file Once.HC --file $(INPUT_TRAINING_PROBE) \
-		$(foreach asset,$(STARTUP_TIPS) $(STOCK_TOUR),--file-at $(asset) $(asset))
+$(STOCK_ONCE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) Once.HC $(STARTUP_TIPS) $(HELP_DOCS) $(STOCK_TOUR) $(INPUT_TRAINING_PROBE) $(FILE_EDITOR_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file Once.HC --file $(INPUT_TRAINING_PROBE) --file $(FILE_EDITOR_PROBE) \
+		$(foreach asset,$(STARTUP_TIPS) $(HELP_DOCS) $(STOCK_TOUR),--file-at $(asset) $(asset))
 
 $(POPUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(POPUP_PROBE) $(POPUP_DEMO) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(POPUP_PROBE) --file-at $(POPUP_DEMO) $(POPUP_DEMO)
@@ -629,9 +631,9 @@ $(MUSIC_PRECISION_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(MUSIC_P
 $(STRINGS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STRINGS_PROBES) $(FILE_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(STRINGS_PROBES) $(FILE_WRITE_PROBE))
 
-$(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STARTUP_TIPS) $(PCI_DEV_FILE) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS) $(REGISTRY_DEMO)
+$(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STARTUP_TIPS) $(HELP_DOCS) $(PCI_DEV_FILE) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS) $(REGISTRY_DEMO)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at $(PCI_DEV_FILE).Z $(PCI_DEV_FILE) --dir Home \
-		$(foreach asset,$(STARTUP_TIPS) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS) $(REGISTRY_DEMO),--file-at $(asset) $(asset))
+		$(foreach asset,$(STARTUP_TIPS) $(HELP_DOCS) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS) $(REGISTRY_DEMO),--file-at $(asset) $(asset))
 
 $(CHARACTER_GRAPHICS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(GAME_DEMOS) $(CHARACTER_GRAPHICS_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(CHARACTER_GRAPHICS_PROBE) \

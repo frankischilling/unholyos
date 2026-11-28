@@ -86,6 +86,9 @@ constexpr CTextProbe music_precision_probes[]{
 constexpr CTextProbe training_input_probes[]{
     {"training-input", "/InputTrainingProbe.HC", "",
      "Training result ", "Training result FF", "Training result FF\n", {}, true}};
+constexpr CTextProbe file_editor_probes[]{
+    {"file-editor", "/FileEditorProbe.HC", "",
+     "File editor ", "File editor 1FF", "File editor 1FF\n", {}, true}};
 
 struct CModuleFile
 {
@@ -249,6 +252,28 @@ static void DriveCharacterGraphics(
     key("esc");
     wait_text("Training result FF");
   };
+  auto file_editor = [&] {
+    wait_text("EditorSave");
+    key("end");
+    key("q");
+    wait_text("EditorSaveq");
+    key("esc");
+    wait_text("Editor canceled write test");
+    wait_text("EditorSaveq");
+    key("end");
+    key("w");
+    wait_text("EditorSaveqw");
+    key("shift-esc");
+    wait_text("Open editor help");
+    key("spc");
+    wait_text("Keyboard Ctrls");
+    key("shift-esc");
+    wait_text("Open editor help");
+    key("shift-esc");
+    wait_text("Not Text File");
+    key("shift-esc");
+    wait_text("File editor 1FF");
+  };
   auto addresses = [&](std::string_view marker,
                        std::array<uint64_t, 3> sizes = {8, 8, 8}) {
     const std::regex pattern(std::string(marker) +
@@ -283,6 +308,16 @@ static void DriveCharacterGraphics(
       wait_text("T:/Home>");
       snapshot("live-prompt");
       std::cout << "Declined installation and tour on the stock Once script\n";
+      key("f1");
+      wait_text("Keyboard Ctrls");
+      snapshot("help-index");
+      key("shift-f1");
+      wait_text("Owner/President:");
+      snapshot("about");
+      key("shift-esc");
+      wait_text("Keyboard Ctrls");
+      key("shift-esc");
+      wait_text("T:/Home>");
       cmd("WinMax;DocClear(,1);Seed(12345);TipOfDay;");
       wait_text("* Use <CTRL-ALT-f> to toggle between Std Font and Cyrillic Font.");
       snapshot("tip-of-day");
@@ -291,6 +326,10 @@ static void DriveCharacterGraphics(
       training_input();
       snapshot("training-input");
       std::cout << "Training result FF\n";
+      cmd(R"(ExeFile2("::/FileEditorProbe.HC");0;)");
+      file_editor();
+      snapshot("file-editor");
+      std::cout << "File editor 1FF\n";
     } else {
       key("y");
       const auto menu = visible(wait_text("Part 12: Test Suite"));
@@ -299,6 +338,27 @@ static void DriveCharacterGraphics(
                 menu.find("Done") != std::string::npos,
             "The original tour menu is incomplete");
       snapshot("tour-menu");
+      key("spc");
+      wait_text("for the main help index.");
+      key("x");
+      wait_text("Press the <F1> key");
+      key("spc");
+      key("f1");
+      wait_text("Keyboard Ctrls");
+      wait_text("to abort and exit.");
+      snapshot("tour-help-index");
+      key("shift-esc");
+      constexpr const char *mods[]{"ctrl", "ctrl-shift", "alt", "alt-shift",
+                                    "ctrl-alt", "ctrl-alt-shift"};
+      constexpr const char *names[]{"CTRL", "CTRL SHIFT", "ALT", "ALT SHIFT",
+                                     "CTRL ALT", "CTRL ALT SHIFT"};
+      for (size_t i = 0; i < std::size(mods); i++) {
+        wait_text(std::string("hold the <") + names[i] + ">");
+        vm.Hmp(std::string("sendkey ") + mods[i] + " 1400");
+        std::this_thread::sleep_for(1575ms);
+      }
+      wait_text("TempleOS Tours");
+      snapshot("first-tour-complete");
       key("shift-esc");
       wait([&](const Cells &cells) {
         const auto screen = visible(cells);
@@ -307,7 +367,7 @@ static void DriveCharacterGraphics(
                screen.find("T:/Home>") != std::string::npos;
       }, "The stock tour did not return to the home prompt");
       snapshot("tour-exit");
-      std::cout << "Opened the original tour menu and returned to the prompt\n";
+      std::cout << "Completed the first tour chapter and returned to the prompt\n";
     }
     return;
   }
@@ -623,6 +683,8 @@ static void DriveCharacterGraphics(
       }
       if (std::string_view(probe.name) == "training-input")
         training_input();
+      if (std::string_view(probe.name) == "file-editor")
+        file_editor();
       const auto cells = wait(
           [&](const Cells &cells) {
             const auto screen = visible(cells);

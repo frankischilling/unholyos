@@ -1,6 +1,7 @@
 #include "DolDoc.hpp"
 
 extern "C" void ViewHC();
+extern "C" int64_t PopUpCpp(const char *src, CTask *parent, CTask **popup);
 
 extern "C" uint64_t ViewCpp()
 {
@@ -101,5 +102,34 @@ extern "C" uint64_t DocEdCpp(CDoc *doc, int64_t dof_flags)
   WinZBufUpdateCpp();
   if (!okay)
     RethrowHolyC();
+  return res;
+}
+
+extern "C" bool EdCpp(const char *link_st, int64_t edf_dof_flags)
+{
+  char *filename, *needle_str;
+  int64_t num;
+  const int64_t type = EdLinkCvtCpp(link_st, &filename, &needle_str, &num,
+                                    edf_dof_flags);
+  bool res = false;
+  if (type >= 0 && filename && !IsRawCpp()) {
+    const bool in_memory = LK_DOC <= type && type <= LK_DOC_LINE;
+    if ((edf_dof_flags & EDF_BAIL) || in_memory || FilesFindMatch(filename, FILEMASK_TXT) ||
+        PopUpCancelOkCpp("$RED$$BK,1$WARNING:$FG$$BK,0$ Not Text File\n\n", nullptr))
+      res = DocFileEd(type, filename, needle_str, &num, edf_dof_flags);
+  }
+  Free(filename);
+  Free(needle_str);
+  return res;
+}
+
+extern "C" int64_t PopUpEdCpp(const char *filename, CTask *parent, CTask **popup)
+{
+  const uint64_t arg = reinterpret_cast<uintptr_t>(filename);
+  auto *src = MStrPrintCpp("Ed(\"%Q\");", 1, &arg);
+  if (!src)
+    return 0;
+  const int64_t res = PopUpCpp(src, parent, popup);
+  Free(src);
   return res;
 }

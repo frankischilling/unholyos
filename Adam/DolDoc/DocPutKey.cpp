@@ -10,6 +10,11 @@ extern "C" void DocPutKeyCpp(CDoc *doc, int64_t ch, int64_t sc)
       CallHolyC4(doc->user_put_key, reinterpret_cast<uintptr_t>(doc),
                  reinterpret_cast<uintptr_t>(doc->user_put_data), ch, sc))
     return;
+  if (!ch && uint8_t(sc) == SC_F1 &&
+      !(sc & (SCF_CTRL | SCF_ALT | SCF_KEY_DESC))) {
+    EdCpp(sc & SCF_SHIFT ? "::/Doc/AboutTempleOS.DD.Z" : "::/Doc/HelpIndex.DD.Z", 0);
+    return;
+  }
   CDocLock lock(*doc);
   if (sc & (SCF_ALT | SCF_KEY_DESC))
     return;

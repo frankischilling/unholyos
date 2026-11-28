@@ -10,7 +10,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 69 | 7 |
 | `Compiler` | 33 | 33 | 0 |
-| `Adam` | 132 | 58 | 74 |
+| `Adam` | 132 | 60 | 72 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 24 | 179 |
 

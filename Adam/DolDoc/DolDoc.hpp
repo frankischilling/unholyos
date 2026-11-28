@@ -79,6 +79,12 @@ bool EdCharIns(CDoc &doc, int64_t ch, int64_t sc);
 extern "C" int64_t DocEntryRunCpp(CDoc *doc, CDocEntryBase *entry, uint8_t exited,
                                    int64_t *has_action);
 extern "C" void DocBottomCpp(CDoc *doc);
+extern "C" void DocCenterCpp(CDoc *doc, int64_t recalc_flags);
+extern "C" void DocCollapseCpp(uint8_t collapse, CDoc *doc);
+extern "C" bool DocGoToLineCpp(CDoc *doc, int64_t line_num);
+extern "C" bool DocFindCpp(CDoc *doc, int64_t start_line_num, const char *needle,
+                           int64_t match);
+extern "C" bool DocAnchorFindCpp(CDoc *doc, const char *needle);
 void DocDelToEntry(CDoc &doc, CDocEntryBase *clear_entry, bool clear_holds);
 bool DocDelToNum(CDoc &doc, int64_t count);
 CDocEntryBase *DocPutS(CDoc &doc, const char *src, size_t size,
@@ -93,8 +99,22 @@ void DocFormFwd(CDoc &doc, bool giveup = false);
 void DocFormBwd(CDoc &doc, bool giveup = false);
 bool DocFormKey(CDoc &doc, int64_t ch, int64_t sc);
 extern "C" uint64_t DocEdCpp(CDoc *doc, int64_t dof_flags);
+extern "C" bool EdCpp(const char *link_st, int64_t edf_dof_flags);
+extern "C" int64_t PopUpEdCpp(const char *filename, CTask *parent, CTask **popup);
+extern "C" char *DocEntryLinkCpp(CDoc *doc, CDocEntryBase *entry);
+enum : int64_t
+{
+  LK_FILE, LK_FILE_ANCHOR, LK_FILE_FIND, LK_FILE_LINE, LK_MAN_PAGE,
+  LK_PLAIN, LK_PLAIN_FIND, LK_PLAIN_LINE, LK_BIBLE_FIND, LK_DEF,
+  LK_HELP_INDEX, LK_ADDR, LK_DOC, LK_DOC_ANCHOR, LK_DOC_FIND, LK_DOC_LINE,
+};
+extern "C" int64_t EdLinkCvtCpp(const char *link_st, char **filename,
+                               char **needle, int64_t *num, int64_t flags);
+bool DocFileEd(int64_t type, const char *filename, const char *needle,
+               int64_t *num, int64_t flags);
 extern "C" int64_t PopUpMenuCpp(CDoc *doc, int64_t dof_flags);
 extern "C" bool PopUpOkCpp(const char *header, const char *footer);
+extern "C" bool PopUpCancelOkCpp(const char *header, const char *footer);
 extern "C" uint64_t ViewCpp();
 extern "C" uint64_t PopUpFormCpp(uint8_t *d, const char *class_name,
                                  int64_t dof_flags, const char *header,
