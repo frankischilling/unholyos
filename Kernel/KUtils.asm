@@ -178,6 +178,7 @@ GLOBAL SndShiftHC,AUWriteHC
 GLOBAL SndTaskEndCBHC,tMHC,BeatHC,MusicSetOctaveHC,MusicSetMeterHC,MusicSetNoteLenHC
 GLOBAL SawHC,FullSawHC,CawHC,FullCawHC,TriHC,FullTriHC
 GLOBAL Note2OnaHC,Ona2NoteHC,Ona2OctaveHC,PlayHC,MusicSettingsRstHC
+GLOBAL CurSongTaskHC
 GLOBAL SoundEffectEndTaskCBHC,SoundEffectTaskHC,NoiseHC,SweepHC
 GLOBAL SpawnHC,TaskValidateHC,SuspendHC,IsSuspendedHC,TaskQueInsHC,TaskQueRemHC
 GLOBAL KillHC
@@ -473,6 +474,7 @@ EXTERN SawCpp,FullSawCpp,CawCpp,FullCawCpp,TriCpp,FullTriCpp
 EXTERN SoundEffectEndTaskCBCpp,SoundEffectTaskCpp,NoiseCpp,SweepCpp
 EXTERN SndTaskEndCBCpp,tMCpp,BeatCpp,MusicSetOctaveCpp,MusicSetMeterCpp,MusicSetNoteLenCpp
 EXTERN Note2OnaCpp,Ona2NoteCpp,Ona2OctaveCpp,PlayCpp,MusicSettingsRstCpp
+EXTERN CurSongTaskCpp
 
 SECTION .text
 BITS 64
@@ -1136,6 +1138,7 @@ HOLYC_CPP Ona2NoteHC,Ona2NoteCpp,1
 HOLYC_CPP Ona2OctaveHC,Ona2OctaveCpp,1
 HOLYC_CPP PlayHC,PlayCpp,2
 HOLYC_CPP MusicSettingsRstHC,MusicSettingsRstCpp,0
+HOLYC_CPP CurSongTaskHC,CurSongTaskCpp,0
 HOLYC_CPP SoundEffectEndTaskCBHC,SoundEffectEndTaskCBCpp,0
 HOLYC_CPP SoundEffectTaskHC,SoundEffectTaskCpp,1
 HOLYC_CPP NoiseHC,NoiseCpp,3

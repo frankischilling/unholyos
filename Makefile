@@ -224,6 +224,8 @@ MATH_PROBE := Linux/Fixtures/MathHelpersProbe.HC
 MUSIC_PRECISION_ISO := $(BUILD)/music-precision-test.iso
 MUSIC_PRECISION_PROBE := Linux/Fixtures/MusicPrecision.HC
 WAVEFORM_PROBE := Linux/Fixtures/WaveformProbe.HC
+DOC_SONG_PROBE := Linux/Fixtures/DocSongProbe.HC
+DOC_SONG_TEST_ISO := $(BUILD)/doc-song-test.iso
 WAVEFORM_TEST_ISO := $(BUILD)/waveform-test.iso
 SOUND_EFFECTS_PROBE := Linux/Fixtures/SoundEffectsProbe.HC
 SOUND_EFFECTS_TEST_ISO := $(BUILD)/sound-effects-test.iso
@@ -673,6 +675,9 @@ $(MATH_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(MATH_PROBE) $
 $(FRAME_PTR_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(FRAME_PTR_PROBE) $(FILE_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --dir Home --file $(FRAME_PTR_PROBE) --file $(FILE_WRITE_PROBE)
 
+$(DOC_SONG_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(DOC_SONG_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(DOC_SONG_PROBE)
+
 $(SOUND_EFFECTS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(SOUND_EFFECTS_PROBE) $(FILE_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --dir Home --file $(SOUND_EFFECTS_PROBE) --file $(FILE_WRITE_PROBE)
 
@@ -1013,6 +1018,12 @@ test-frame-ptr: $(FRAME_PTR_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --frame-ptr "$(QEMU)" $(FRAME_PTR_TEST_ISO)
 
 test: test-frame-ptr
+
+.PHONY: test-doc-song
+test-doc-song: $(DOC_SONG_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --doc-song "$(QEMU)" $(DOC_SONG_TEST_ISO)
+
+test: test-doc-song
 
 .PHONY: test-sound-effects
 test-sound-effects: $(SOUND_EFFECTS_TEST_ISO) $(BOOT_TEST)

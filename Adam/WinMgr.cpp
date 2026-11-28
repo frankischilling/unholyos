@@ -1,6 +1,7 @@
 #include "DolDoc/DolDoc.hpp"
 #include "Gr/GrGlbls.hpp"
 #include "Menu.hpp"
+#include "ASnd.hpp"
 #include "Ctrls/CtrlsA.hpp"
 #include <bit>
 
@@ -626,6 +627,9 @@ static uint64_t WinMgrSleep(uint64_t ideal)
 
   static CWinDocMouse left, right;
   WinRefocusCpp(sys_focus_task);
+  if (auto *task = sys_focus_task)
+    __atomic_fetch_and(&task->task_flags, ~uint32_t{TASKF_HAS_SONG},
+                       __ATOMIC_RELAXED);
   WinMsUpdate();
   left.retry_press &= ms.lb;
   right.retry_press &= ms.rb;
@@ -665,6 +669,21 @@ static uint64_t WinMgrSleep(uint64_t ideal)
   if (win_menu.menu && win_menu.keyboard && !sys_cur_submenu_entry)
     win_menu.pos.y = 0;
   __atomic_fetch_and(&refresh, ~uint64_t{1}, __ATOMIC_RELAXED);
+  if (auto *task = sys_focus_task;
+      task && !(__atomic_load_n(&task->task_flags, __ATOMIC_RELAXED) &
+                TASKF_HAS_SONG)) {
+    Free(music.cur_song);
+    music.cur_song = nullptr;
+  }
+  if (music.cur_song) {
+    if (!music.cur_song_task)
+      music.cur_song_task =
+          SpawnCpp(reinterpret_cast<uintptr_t>(CurSongTaskHC), nullptr, "Song",
+                   -1, nullptr, 0, JOBF_ADD_TO_QUE);
+  } else if (music.cur_song_task) {
+    KillTask(music.cur_song_task);
+    music.cur_song_task = nullptr;
+  }
   __atomic_fetch_add(WinMgrUpdates(), 1, __ATOMIC_RELAXED);
   SleepUntilCpp(ideal / 30);
   return ideal;

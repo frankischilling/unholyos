@@ -1631,9 +1631,22 @@ The single-CPU implementation protects beat updates with interrupts
 disabled. `Play` also checks the lower bound of the note index before
 accessing `music.note_map`; the reference only checks the upper bound.
 Characters below `A` outside the notation modifiers therefore become
-rests instead of reading outside that array. SMP synchronization,
-The `CurSongTask` startup path remains pending. Terry A. Davis's
-original song stays in `Demo/Snd/OhGreat.HC`.
+rests instead of reading outside that array. SMP synchronization
+remains pending. Terry A. Davis's original song stays in
+`Demo/Snd/OhGreat.HC`.
+
+`DocRecalc` in `Adam/DolDoc/DocRecalc.cpp` follows the `DOCT_SONG`
+case in `Adam/DolDoc/DocRecalc.HC`. A full screen refresh clears
+the document's song flag. A visited song entry sets the document and
+task flags, while a drawable entry in the focused window can select
+a score. `Adam/WinMgr.cpp` follows `WinMgrSleep` in `Adam/WinMgr.HC`
+and reconciles the `Song` task after the screen refresh.
+
+`CurSongTask` in `Adam/ASnd.cpp` loops through `Play` and uses the
+reference speaker exit callback. A task-owned copy keeps the score
+valid across sleeps while the renderer can replace or free the
+global copy. The task sleeps briefly when a score has no notes so
+the cooperative scheduler can continue refreshing the desktop.
 
 ## Music waveform functions
 

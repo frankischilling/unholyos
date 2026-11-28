@@ -1,4 +1,5 @@
 #include "DolDoc.hpp"
+#include "../ASnd.hpp"
 #include "../Gr/Gr.hpp"
 #include "../Gr/GrExt.hpp"
 #include "../Gr/GrGlbls.hpp"
@@ -313,6 +314,8 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
     find_cursor = true;
   }
   if (screen) {
+    if (full_refresh)
+      doc.flags &= ~DOCF_HAS_SONG;
     if (border_doc)
       doc.line_start_col = doc.top_line_num = 0;
     doc.settings_head.cur_text_attr = doc.settings_head.dft_text_attr =
@@ -545,6 +548,20 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
       doc.flags |= DOCF_BWD_MOVEMENT;
       x += full->attr;
       y += full->right_exp;
+    } else if (type == DOCT_SONG) {
+      if (screen && sys_focus_task == task &&
+          !(entry->de_flags & DOCEF_DONT_DRAW) && full->aux_str &&
+          (!music.cur_song ||
+           StrCmpCpp(reinterpret_cast<const uint8_t *>(music.cur_song),
+                     reinterpret_cast<const uint8_t *>(full->aux_str)))) {
+        if (auto *song = StrNew(full->aux_str, adam_task->data_heap)) {
+          Free(music.cur_song);
+          MusicSettingsRstCpp();
+          music.cur_song = song;
+        }
+      }
+      doc.flags |= DOCF_HAS_SONG;
+      x += len;
     } else if (type == DOCT_SHIFTED_X) {
       settings.shifted_x = full->attr;
     } else if (type == DOCT_SHIFTED_Y) {
@@ -565,6 +582,8 @@ bool DocRecalc(CDoc &doc, uint64_t recalc_flags)
       break;
     entry = entry->next;
   }
+  if (task && (doc.flags & DOCF_HAS_SONG))
+    __atomic_fetch_or(&task->task_flags, TASKF_HAS_SONG, __ATOMIC_RELAXED);
   if (sprite_dc)
     DCDelCpp(sprite_dc);
   if (full_refresh) {

@@ -98,6 +98,10 @@ constexpr std::string_view waveform_output =
     "EFullTri 9DB225FA29725D4F D7E4FCFA299D713D E90225FA29725D4F 9DB225FA29725D4F\n"
     "Wave direct 3FD0000000000000\n"
     "Waveforms done\n";
+constexpr CTextProbe doc_song_probes[]{
+    {"doc-song", "/DocSongProbe.HC", "", "Doc songs ", "Doc songs ",
+     "Doc songs FF\n", {}, true}};
+
 constexpr CTextProbe sound_effects_probes[]{
     {"sound-effects", "/SoundEffectsProbe.HC", "/SoundEffectsProbe.BIN.Z",
      "Sound effects ", "Sound effects 3F", "Sound effects 3F\n"}};
@@ -1398,6 +1402,8 @@ static void DriveCharacterGraphics(
         cmd(std::string("DocClear(,1);ExeFile2(\"") + probe.reference_file + "\");");
       else if (reference)
         upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
+      else if (std::string_view(probe.name) == "doc-song")
+        cmd(std::string("ExeFile2(\"::") + probe.source + "\");0;");
       else
         cmd(std::string("ExeFile(\"::") + probe.source + "\");0;");
       if (std::string_view(probe.name) == "popup-menus") {
