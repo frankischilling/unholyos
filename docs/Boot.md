@@ -4285,8 +4285,19 @@ Run `ACInit;` at the prompt on the regular boot image to start the pane.
 `ACInit(mask)` indexes words from the matching text files. The stock test
 uses a compressed file with repeated words and checks that the pane sorts
 matching words by frequency. Ctrl-F1 inserts the selected suffix into the
-live command line. Dictionary definitions and dictionary suggestions
-remain pending.
+live command line.
+
+The stock test also runs the HolyC dictionary probe, searches for
+`Albatros`, opens the first definition with Ctrl-Shift-0, and inserts
+the final `s` with Ctrl-0. It opens the numbered definition through
+`Ed("DN:Albatross,1")`. The reference mode runs the same probe and
+keyboard actions on the pinned TempleOS DVD.
+
+```sh
+make -j4 test-stock-once
+build/Linux/TestBoot --dictionary-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/dictionary-reference
+```
 
 ## Popup menus and one-time notices
 

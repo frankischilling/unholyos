@@ -1933,6 +1933,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CKbdStateGlbls",
                                        "CKeyDevEntry",
                                        "CKeyDevGlbls",
+                                       "CAutoCompleteDictGlbls",
                                        "CTextGlbls",
                                        "CD3I64",
                                        "CD3",
@@ -1963,7 +1964,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 93);
+  static_assert(class_count == 94);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -6855,6 +6856,8 @@ int main(int argc, char **argv)
                             "InputTrainingProbe.HC");
       VerifyHostModuleMedia(argv[3], "Linux/Fixtures/FileEditorProbe.HC",
                             "FileEditorProbe.HC");
+      VerifyHostModuleMedia(argv[3], "Linux/Fixtures/DictionaryProbe.HC",
+                            "DictionaryProbe.HC");
       for (auto file : {"Tips.DD", "Customize.DD", "HelpIndex.DD", "AboutTempleOS.DD",
                         "Welcome.DD", "DemoIndex.DD", "CmdLineOverview.DD", "Credits.DD"})
         VerifyHostModuleMedia(argv[3], fs::path("Doc") / file, file, "Doc");
@@ -6893,7 +6896,7 @@ int main(int argc, char **argv)
        mode == "--ins-reg-reference" || mode == "--startup-exec" ||
        mode == "--startup-exec-reference" || mode == "--training-input-reference" ||
        mode == "--file-editor-reference" || mode == "--key-map" ||
-       mode == "--key-map-reference")) {
+       mode == "--key-map-reference" || mode == "--dictionary-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
     const bool registry = mode.starts_with("--registry");
@@ -6958,6 +6961,8 @@ int main(int argc, char **argv)
         probes = file_editor_probes;
       else if (key_map)
         probes = key_map_probes;
+      else if (mode == "--dictionary-reference")
+        probes = dictionary_probes;
       else if (aot)
         probes = doc_tree_aot_probes;
       DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
@@ -7871,6 +7876,7 @@ int main(int argc, char **argv)
               << " --training-input-reference qemu image.iso [capture-dir]\n"
               << " --file-editor-reference qemu image.iso [capture-dir]\n"
               << " --key-map[-reference] qemu image.iso [capture-dir]\n"
+              << " --dictionary-reference qemu image.iso [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"

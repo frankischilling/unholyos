@@ -137,9 +137,19 @@ extern "C" int64_t EdLinkCvtCpp(const char *link_st, char **_filename,
                                  edf_dof_flags)
                   : -1;
         filename2 = nullptr;
-      } else if (LK_BIBLE_FIND <= res && res <= LK_ADDR)
+      } else if (res == LK_BIBLE_FIND || res == LK_HELP_INDEX || res == LK_ADDR)
         res = -1;
       switch (res) {
+      case LK_DEF:
+        num = -1;
+        if (auto *ptr = StrLastOccCpp(filename2,
+                                    reinterpret_cast<const uint8_t *>(","))) {
+          *ptr++ = 0;
+          num = Str2I64Cpp(ptr, 10, nullptr);
+        }
+        filename = StrNew(filename2, task->data_heap);
+        filename2 = nullptr;
+        break;
       case LK_FILE_LINE:
       case LK_PLAIN_LINE:
       case LK_DOC_LINE:

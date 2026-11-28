@@ -1,4 +1,5 @@
 #include "DolDoc.hpp"
+#include "../AutoComplete/AutoComplete.hpp"
 
 extern "C" void ViewHC();
 extern "C" int64_t PopUpCpp(const char *src, CTask *parent, CTask **popup);
@@ -112,7 +113,20 @@ extern "C" bool EdCpp(const char *link_st, int64_t edf_dof_flags)
   const int64_t type = EdLinkCvtCpp(link_st, &filename, &needle_str, &num,
                                     edf_dof_flags);
   bool res = false;
-  if (type >= 0 && filename && !IsRawCpp()) {
+  if (type == LK_DEF && filename) {
+    res = !(edf_dof_flags & EDF_WAS_WRITE);
+    if (!(edf_dof_flags & EDF_BAIL)) {
+      auto *doc = DocNewCpp(nullptr, nullptr);
+      if (doc) {
+        doc->desc = 0x0066654474636944; // DictDef
+        ACDDefsPutCpp(doc, filename, num);
+        DocEdCpp(doc, 0);
+        DocDelCpp(doc);
+      } else {
+        res = false;
+      }
+    }
+  } else if (type >= 0 && filename && !IsRawCpp()) {
     const bool in_memory = LK_DOC <= type && type <= LK_DOC_LINE;
     if ((edf_dof_flags & EDF_BAIL) || in_memory || FilesFindMatch(filename, FILEMASK_TXT) ||
         PopUpCancelOkCpp("$RED$$BK,1$WARNING:$FG$$BK,0$ Not Text File\n\n", nullptr))

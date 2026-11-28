@@ -1523,6 +1523,25 @@ struct CAutoCompleteGlbls
 static_assert(sizeof(CAutoCompleteGlbls) == 232 &&
               offsetof(CAutoCompleteGlbls, task) == 32);
 
+constexpr int64_t ACD_BLK_SIZE = 0x4000, ACD_FILLINS_NUM = 10;
+constexpr uint8_t ACD_END_CHAR = 0, ACD_WORD_CHAR = 1, ACD_DEF_CHAR = 2,
+                  ACD_PRONUNCIATION_CHAR = 3, ACD_POS_CHAR = 4,
+                  ACD_EXTRA_CHAR = 5;
+
+#pragma pack(push, 1)
+struct CAutoCompleteDictGlbls
+{
+  uint8_t *word_lst;
+  int64_t word_lst_size, num_words, num_fillins;
+  uint8_t *fillins[ACD_FILLINS_NUM];
+  bool has_words, has_defs;
+};
+#pragma pack(pop)
+
+static_assert(sizeof(CAutoCompleteDictGlbls) == 114 &&
+              offsetof(CAutoCompleteDictGlbls, fillins) == 32 &&
+              offsetof(CAutoCompleteDictGlbls, has_words) == 112);
+
 struct CWinMgrTimingGlbls;
 
 struct [[gnu::packed]] CWinMgrGlbls

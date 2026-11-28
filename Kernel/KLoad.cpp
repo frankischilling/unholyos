@@ -270,6 +270,8 @@ void WinScrollNullHC(), WinScrollRestoreHC();
 void CtrlFindUniqueHC(), CtrlInsideHC(), WinScrollsInitHC();
 void ViewAnglesNewHC(), ViewAnglesDelHC(), D3I32NormHC(), AutoCompleteHC(),
      ACInitHC();
+void ACDWordsLoadHC(), ACDWordPtAtHC(), ACDDefGetHC(), ACDDefsGetHC(),
+     ACDDefsPutHC(), ACDPopUpDefHC();
 void MenuSubEntryFindHC();
 void MenuEntryFindHC();
 void MenuNewHC();
@@ -869,6 +871,7 @@ bool LoadKernel(CTask &task)
       {"mon_start_days2", reinterpret_cast<uintptr_t>(mon_start_days2)},
       {"kbd", reinterpret_cast<uintptr_t>(&kbd)},
       {"keydev", reinterpret_cast<uintptr_t>(&keydev)},
+      {"acd", reinterpret_cast<uintptr_t>(&acd)},
       {"text", reinterpret_cast<uintptr_t>(&text)},
       {"ms", reinterpret_cast<uintptr_t>(&ms)},
       {"ms_hard", reinterpret_cast<uintptr_t>(&ms_hard)},
@@ -1483,6 +1486,12 @@ bool LoadKernel(CTask &task)
       {"ViewAnglesDel", reinterpret_cast<uintptr_t>(ViewAnglesDelHC)},
       {"AutoComplete", reinterpret_cast<uintptr_t>(AutoCompleteHC)},
       {"ACInit", reinterpret_cast<uintptr_t>(ACInitHC)},
+      {"ACDWordsLoad", reinterpret_cast<uintptr_t>(ACDWordsLoadHC)},
+      {"ACDWordPtAt", reinterpret_cast<uintptr_t>(ACDWordPtAtHC)},
+      {"ACDDefGet", reinterpret_cast<uintptr_t>(ACDDefGetHC)},
+      {"ACDDefsGet", reinterpret_cast<uintptr_t>(ACDDefsGetHC)},
+      {"ACDDefsPut", reinterpret_cast<uintptr_t>(ACDDefsPutHC)},
+      {"ACDPopUpDef", reinterpret_cast<uintptr_t>(ACDPopUpDefHC)},
       {"MenuSubEntryFind", reinterpret_cast<uintptr_t>(MenuSubEntryFindHC)},
       {"MenuEntryFind", reinterpret_cast<uintptr_t>(MenuEntryFindHC)},
       {"MenuNew", reinterpret_cast<uintptr_t>(MenuNewHC)},

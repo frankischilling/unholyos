@@ -92,6 +92,9 @@ constexpr CTextProbe file_editor_probes[]{
 constexpr CTextProbe key_map_probes[]{
     {"key-map", "/KeyMapProbe.HC", "", "Key map probe ", "Key map probe 7F",
      "Key map probe 7F\n", {}, true}};
+constexpr CTextProbe dictionary_probes[]{
+    {"dictionary", "/DictionaryProbe.HC", "", "Dictionary probe ",
+     "Dictionary probe 3F", "Dictionary probe 3F\n", {}, true}};
 
 struct CModuleFile
 {
@@ -113,6 +116,9 @@ static void DriveCharacterGraphics(
     std::string_view startup_output = {},
     CStockStartup stock = CStockStartup::None)
 {
+  const bool reference_dictionary = reference && !text_probes.empty() &&
+      std::string_view(text_probes.front().name) == "dictionary";
+  const std::string prompt = reference_dictionary ? "A:/Home>" : "T:/Home>";
   auto in_memory = [memory_limit](uint64_t addr, uint64_t size) {
     return addr && size <= memory_limit && addr <= memory_limit - size;
   };
@@ -277,6 +283,25 @@ static void DriveCharacterGraphics(
     key("shift-esc");
     wait_text("File editor 1FF");
   };
+  auto dictionary_keys = [&] {
+    type("Albatros");
+    wait_text("'0' Albatross");
+    key("ctrl-shift-0");
+    wait_text("A web-footed bird");
+    snapshot("dictionary-definition");
+    key("shift-esc");
+    wait_text("'0' Albatross");
+    key("ctrl-0");
+    wait_text(prompt + "Albatross");
+    snapshot("dictionary-completion");
+    for (size_t i = 0; i < std::string_view("Albatross").size(); ++i)
+      key("backspace");
+    wait_text("AutoComplete is in StandBy");
+    cmd(R"(Ed("DN:Albatross,1");0;)");
+    wait_text("A web-footed bird");
+    snapshot("dictionary-link");
+    key("shift-esc");
+  };
   auto addresses = [&](std::string_view marker,
                        std::array<uint64_t, 3> sizes = {8, 8, 8}) {
     const std::regex pattern(std::string(marker) +
@@ -419,6 +444,11 @@ static void DriveCharacterGraphics(
       key("shift-esc");
       wait_text("AutoComplete is in StandBy");
       std::cout << "AutoComplete ranked and inserted a completion from compressed text\n";
+      cmd("WinMax;");
+      cmd(R"(ExeFile2("::/DictionaryProbe.HC");0;)");
+      wait_text("Dictionary probe 3F");
+      dictionary_keys();
+      std::cout << "Dictionary probe 3F and keyboard actions passed\n";
     }
     return;
   }
@@ -430,6 +460,17 @@ static void DriveCharacterGraphics(
     std::cout << startup_output << '\n';
   }
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
+  if (reference_dictionary) {
+    cmd("CBlkDev *dictbd=BlkDevNextFreeSlot('A',BDT_RAM);");
+    cmd("dictbd->max_blk=131071;BlkDevAdd(dictbd,I64_MIN,FALSE,TRUE);");
+    cmd(R"(Cd("A:/");DirMk("Adam");DirMk("Adam/AutoComplete");DirMk("Home");)");
+    cmd(R"(Copy("::/Adam/AutoComplete/ACDefs.DATA.Z","/Adam/AutoComplete/ACDefs.DATA");)");
+    cmd(R"(Cd("/Home");)");
+    wait([&](const Cells &cells) {
+      return visible(cells).find(prompt) != std::string::npos;
+    }, "The reference dictionary did not finish copying to the RAM drive", 2500);
+    cmd(R"(blkdev.home_dir=AStrNew("A:/Home");)");
+  }
   if (music_demo) {
     vm.ResetDeadline(180s);
     cmd("I64 mu1=&scrncast.snd_head,mu2=&scrncast.ona;");
@@ -748,7 +789,7 @@ static void DriveCharacterGraphics(
             const auto screen = visible(cells);
             const auto finish = screen.find(probe.finish);
             return finish != std::string::npos &&
-                   screen.find("T:/Home>", finish) != std::string::npos;
+                   screen.find(prompt, finish) != std::string::npos;
           },
           "Missing completed reference text probe");
       const auto screen = visible(cells);
@@ -796,15 +837,15 @@ static void DriveCharacterGraphics(
         output.append(terminal_line(row));
         output += '\n';
       }
-      const auto prompt = screen.find("T:/Home>", finish);
-      Check(prompt != std::string::npos && prompt % 81 == first % 81 &&
-                terminal_line(prompt / 81) == "T:/Home>",
+      const auto prompt_pos = screen.find(prompt, finish);
+      Check(prompt_pos != std::string::npos && prompt_pos % 81 == first % 81 &&
+                terminal_line(prompt_pos / 81) == prompt,
             "Reference probe did not return to an empty command prompt");
       bool timed = false;
       const bool answer = !reference || std::string_view(probe.name) == "startup-exec";
       const std::regex timing(answer ? R"([0-9]+\.[0-9]{6}s ans=0x00000000=0)"
                                      : R"([0-9]+\.[0-9]{6}s)");
-      for (size_t row = finish / 81 + 1; row < prompt / 81; row++) {
+      for (size_t row = finish / 81 + 1; row < prompt_pos / 81; row++) {
         const auto line = terminal_line(row);
         if (line.empty())
           continue;
@@ -820,6 +861,11 @@ static void DriveCharacterGraphics(
       if (output != probe.expected)
         failures +=
             std::string("Reference output differs: ") + probe.source + "\n";
+      if (std::string_view(probe.name) == "dictionary" && output == probe.expected) {
+        cmd("AutoComplete(1);");
+        dictionary_keys();
+        std::cout << "Dictionary keyboard actions passed\n";
+      }
     }
     if (!failures.empty())
       throw std::runtime_error(failures);
