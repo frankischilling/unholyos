@@ -131,6 +131,8 @@ extern CMsStateGlbls ms, ms_last, old_ms;
 extern CGridGlbls ms_grid;
 extern "C" void PutKeyCpp(int64_t ch, int64_t sc);
 extern "C" void PutCharsCpp(uint64_t chars);
+extern "C" char *Char2KeyNameCpp(int64_t ch, uint8_t include_ctrl);
+extern "C" char *ScanCode2KeyNameCpp(int64_t sc);
 extern "C" int64_t GetKeyCpp(int64_t *sc, uint8_t echo, uint8_t raw_cursor);
 extern "C" char *GetStrCpp(const char *msg, const char *dft, int64_t flags);
 void JobCtrlInit(CJobCtrl *ctrl);

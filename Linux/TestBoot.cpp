@@ -6789,6 +6789,8 @@ int main(int argc, char **argv)
     const fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
       VerifyHostModuleMedia(argv[3], "Once.HC", "Once.HC");
+      VerifyHostModuleMedia(argv[3], "Linux/Fixtures/InputTrainingProbe.HC",
+                            "InputTrainingProbe.HC");
       for (auto file : {"Tips.DD", "Customize.DD"})
         VerifyHostModuleMedia(argv[3], fs::path("Doc") / file, file, "Doc");
       for (char part : std::string_view("0123456789ABC")) {
@@ -6824,7 +6826,7 @@ int main(int argc, char **argv)
        mode == "--once-reference" || mode == "--popup-menus" ||
        mode == "--popup-menus-reference" || mode == "--ins-reg" ||
        mode == "--ins-reg-reference" || mode == "--startup-exec" ||
-       mode == "--startup-exec-reference")) {
+       mode == "--startup-exec-reference" || mode == "--training-input-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
     const bool registry = mode.starts_with("--registry");
@@ -6879,6 +6881,8 @@ int main(int argc, char **argv)
         probes = ins_reg_probes;
       else if (startup_exec)
         probes = startup_exec_probes;
+      else if (mode == "--training-input-reference")
+        probes = training_input_probes;
       else if (aot)
         probes = doc_tree_aot_probes;
       DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
@@ -7789,6 +7793,7 @@ int main(int argc, char **argv)
               << " --popup-menus[-reference] qemu image.iso [capture-dir]\n"
               << " --ins-reg[-reference] qemu image.iso [capture-dir]\n"
               << " --startup-exec[-reference] qemu image.iso [capture-dir]\n"
+              << " --training-input-reference qemu image.iso [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"

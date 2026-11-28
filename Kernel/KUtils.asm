@@ -2,6 +2,7 @@
 
 GLOBAL CPUStructInit,TaskInit,SET_GS_BASE,SET_FS_BASE,CallModuleMain,CallHolyC0,CallHolyC2
 GLOBAL _MEMCPY,_MEMSET,_MEMSET_U16,_MEMSET_U32,_MEMSET_I64,_MEMCMP,_BEQU,_CALL,_CLAMP_I64
+GLOBAL _LBEQU
 GLOBAL memcpy,memset
 GLOBAL _MALLOC,_FREE,_MSIZE,_MSIZE2,_MHEAP_CTRL,CAllocHC,MAllocIdentHC
 GLOBAL StrNewHC,AStrNewHC,_STRCPY,_STRCMP,_STRIMATCH,StrOccHC
@@ -12,6 +13,7 @@ GLOBAL Str2F64HC,ChkPtrHC,ClassRep2HC,ClassRepHC,ClassRepDHC
 GLOBAL DocMaxHC,DocDataFmtHC,DocDataScanHC
 GLOBAL DocFormHC,DocEdHC,DocFormFwdHC,DocFormBwdHC,ViewHC,HomeSetHC,ToUpperHC
 GLOBAL DocMenuHC,PopUpMenuHC,PopUpFormHC,DocMenuTryHC,DocMenuEndTaskCBHC
+GLOBAL PopUp1HC,PopUpOkHC
 GLOBAL GetI64HC,GetF64HC,GetDateHC
 GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
@@ -125,6 +127,8 @@ GLOBAL InsRegHC,InsReregHC,InsUnregHC
 GLOBAL AOnceFlushHC,OnceFlushHC,AOnceHC,OnceHC,AOnceDrvHC,OnceDrvHC,OnceExeHC
 GLOBAL OnceExeTryHC,XTalkHC
 GLOBAL XTalkWaitHC,InStrHC,InFileHC,InHC,XTalkStrHC,XTalkStrWaitHC
+GLOBAL InGetStrHC,InPrintHC,InGetKeyHC,InGetCharHC,InUntilKeyHC,InUntilCharHC,InViewHC
+GLOBAL InSetMsPlotHC,InSetMsHC
 GLOBAL DocCompileHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC,DocPutKeyHC
 GLOBAL DocPutHC,DocDisplayHC,DocBorderHC,DocRecalcHC,WinHorzHC,WinVertHC
@@ -148,7 +152,7 @@ GLOBAL MenuDelHC
 GLOBAL MenuPushHC
 GLOBAL MenuFilePushHC
 GLOBAL MenuPopHC
-GLOBAL ScanCode2KeyNameHC
+GLOBAL Char2KeyNameHC,ScanCode2KeyNameHC
 GLOBAL WinBorderHC,SettingsPushHC,SettingsPopHC
 GLOBAL DocLockHC,DocUnlockHC,DocEntryRunHC,DocBottomHC,DocClearHC,NowHC
 GLOBAL DocCursorHC,DocHighlightCursorHC,DocScrollHC
@@ -376,6 +380,7 @@ EXTERN Str2F64Cpp,ChkPtrCpp,ClassRep2Cpp,ClassRepCpp,ClassRepDCpp
 EXTERN DocMaxCpp,DocDataFmtCpp,DocDataScanCpp
 EXTERN DocFormCpp,DocEdCpp,DocFormFwdCpp,DocFormBwdCpp,ViewCpp,HomeSetCpp,ToUpperCpp
 EXTERN DocMenuCpp,PopUpMenuCpp,PopUpFormCpp,DocMenuTryCpp,DocMenuEndTaskCBCpp
+EXTERN PopUp1Cpp,PopUpOkCpp
 EXTERN GetI64Cpp,GetF64Cpp,GetDateCpp
 EXTERN FileWriteCpp,BlkDevNextFreeSlotCpp,BlkDevAddCpp,Let2DrvCpp,BlkReadCpp,BlkWriteCpp
 EXTERN FmtCpp
@@ -399,6 +404,8 @@ EXTERN InsRegCpp,InsReregCpp,InsUnregCpp
 EXTERN AOnceFlushCpp,OnceFlushCpp,AOnceCpp,OnceCpp,AOnceDrvCpp,OnceDrvCpp,OnceExeCpp
 EXTERN OnceExeTryCpp,XTalkCpp
 EXTERN XTalkWaitCpp,InStrCpp,InFileCpp,InCpp,XTalkStrCpp,XTalkStrWaitCpp
+EXTERN InGetStrCpp,InPrintCpp,InGetKeyCpp,InGetCharCpp,InUntilKeyCpp,InUntilCharCpp,InViewCpp
+EXTERN InSetMsPlotCpp,InSetMsCpp
 EXTERN DocCompileCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp,DocPutKeyCpp
 EXTERN DocPutCpp,DocDisplayCpp,DocBorderCpp,DocRecalcCpp,WinHorzCpp,WinVertCpp
@@ -422,7 +429,7 @@ EXTERN MenuDelCpp
 EXTERN MenuPushCpp
 EXTERN MenuFilePushCpp
 EXTERN MenuPopCpp
-EXTERN ScanCode2KeyNameCpp
+EXTERN Char2KeyNameCpp,ScanCode2KeyNameCpp
 EXTERN WinBorderCpp,SettingsPushCpp,SettingsPopCpp
 EXTERN DocLockCpp,DocUnlockCpp,DocEntryRunCpp,DocBottomCpp,DocClearCpp,NowCpp
 EXTERN DocCursorCpp,DocHighlightCursorCpp,DocScrollCpp
@@ -816,6 +823,8 @@ HOLYC_CPP DocDataScanHC,DocDataScanCpp,2
 HOLYC_CPP DocFormHC,DocFormCpp,5
 HOLYC_CPP DocMenuHC,DocMenuCpp,2
 HOLYC_CPP PopUpMenuHC,PopUpMenuCpp,2
+HOLYC_CPP PopUp1HC,PopUp1Cpp,4
+HOLYC_CPP PopUpOkHC,PopUpOkCpp,2,1
 HOLYC_CPP PopUpFormHC,PopUpFormCpp,5
 HOLYC_CPP DocMenuTryHC,DocMenuTryCpp,2
 HOLYC_CPP DocMenuEndTaskCBHC,DocMenuEndTaskCBCpp,0
@@ -905,6 +914,7 @@ HOLYC_CPP MenuDelHC,MenuDelCpp,1
 HOLYC_CPP MenuPushHC,MenuPushCpp,1
 HOLYC_CPP MenuFilePushHC,MenuFilePushCpp,1
 HOLYC_CPP MenuPopHC,MenuPopCpp,0
+HOLYC_CPP Char2KeyNameHC,Char2KeyNameCpp,2
 HOLYC_CPP ScanCode2KeyNameHC,ScanCode2KeyNameCpp,1
 HOLYC_CPP WinBorderHC,WinBorderCpp,2,1
 HOLYC_CPP SettingsPushHC,SettingsPushCpp,2
@@ -1067,6 +1077,15 @@ HOLYC_CPP InFileHC,InFileCpp,1
 HOLYC_PRINT InHC,InCpp,1
 HOLYC_PRINT XTalkStrHC,XTalkStrCpp,2
 HOLYC_PRINT XTalkStrWaitHC,XTalkStrWaitCpp,2
+HOLYC_CPP InGetStrHC,InGetStrCpp,1
+HOLYC_PRINT InPrintHC,InPrintCpp,2
+HOLYC_CPP InGetKeyHC,InGetKeyCpp,2
+HOLYC_PRINT InGetCharHC,InGetCharCpp,0
+HOLYC_CPP InUntilKeyHC,InUntilKeyCpp,2
+HOLYC_PRINT InUntilCharHC,InUntilCharCpp,0
+HOLYC_CPP InViewHC,InViewCpp,0,1
+HOLYC_CPP InSetMsPlotHC,InSetMsPlotCpp,4,1
+HOLYC_CPP InSetMsHC,InSetMsCpp,6
 
 DefineLoadHC:
 	HC_FRAME_ENTER
@@ -1238,6 +1257,24 @@ _BEQU:
 	JMP	.old
 .clear:
 	BTR	QWORD [RBX],RCX
+.old:
+	ADC	AL,0
+	POP	RBP
+	RET	24
+
+_LBEQU:
+	PUSH	RBP
+	MOV	RBP,RSP
+	XOR	RAX,RAX
+	MOV	RDX,[RBP+32]
+	MOV	RBX,[RBP+16]
+	MOV	RCX,[RBP+24]
+	TEST	RDX,RDX
+	JZ	.clear
+	LOCK BTS QWORD [RBX],RCX
+	JMP	.old
+.clear:
+	LOCK BTR QWORD [RBX],RCX
 .old:
 	ADC	AL,0
 	POP	RBP

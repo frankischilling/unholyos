@@ -94,6 +94,8 @@ void DocFormBwd(CDoc &doc, bool giveup = false);
 bool DocFormKey(CDoc &doc, int64_t ch, int64_t sc);
 extern "C" uint64_t DocEdCpp(CDoc *doc, int64_t dof_flags);
 extern "C" int64_t PopUpMenuCpp(CDoc *doc, int64_t dof_flags);
+extern "C" bool PopUpOkCpp(const char *header, const char *footer);
+extern "C" uint64_t ViewCpp();
 extern "C" uint64_t PopUpFormCpp(uint8_t *d, const char *class_name,
                                  int64_t dof_flags, const char *header,
                                  const char *footer);

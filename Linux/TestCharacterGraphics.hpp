@@ -83,6 +83,9 @@ constexpr CTextProbe math_probes[]{{"math-helpers", "/MathHelpersProbe.HC",
 constexpr CTextProbe music_precision_probes[]{
     {"music-precision", "/MusicPrecision.HC", "/MusicPrecision.BIN.Z",
      "MP initial ", "MP DONE", music_precision_output}};
+constexpr CTextProbe training_input_probes[]{
+    {"training-input", "/InputTrainingProbe.HC", "",
+     "Training result ", "Training result FF", "Training result FF\n", {}, true}};
 
 struct CModuleFile
 {
@@ -218,6 +221,34 @@ static void DriveCharacterGraphics(
     vm.Command(R"({"execute":"screendump","arguments":{"filename":")" +
                (dir / (std::string(name) + ".ppm")).string() + R"("}})");
   };
+  auto training_input = [&] {
+    const auto training = visible(wait_text("Training string"));
+    Check(training.find("Training output 27") != std::string::npos,
+          "InPrint did not format the training message");
+    key("x");
+    wait_text("Press the <f> key.");
+    key("spc");
+    key("f");
+    key("g");
+    Check(visible(wait_text("Training key")).find("fg") != std::string::npos,
+          "InGetStr did not echo the requested characters");
+    key("x");
+    wait_text("Press the <F1> key");
+    key("spc");
+    key("f1");
+    wait_text("Training choice");
+    key("x");
+    wait_text("Press <a>, <b> or <c>.");
+    key("spc");
+    key("b");
+    wait_text("Training until key");
+    key("right");
+    wait_text("Training until char");
+    key("d");
+    wait_text("Training view");
+    key("esc");
+    wait_text("Training result FF");
+  };
   auto addresses = [&](std::string_view marker,
                        std::array<uint64_t, 3> sizes = {8, 8, 8}) {
     const std::regex pattern(std::string(marker) +
@@ -256,6 +287,10 @@ static void DriveCharacterGraphics(
       wait_text("* Use <CTRL-ALT-f> to toggle between Std Font and Cyrillic Font.");
       snapshot("tip-of-day");
       std::cout << "Displayed the seeded tip from the original Tips.DD\n";
+      cmd(R"(ExeFile2("::/InputTrainingProbe.HC");0;)");
+      training_input();
+      snapshot("training-input");
+      std::cout << "Training result FF\n";
     } else {
       key("y");
       const auto menu = visible(wait_text("Part 12: Test Suite"));
@@ -586,6 +621,8 @@ static void DriveCharacterGraphics(
         key("tab");
         key("spc");
       }
+      if (std::string_view(probe.name) == "training-input")
+        training_input();
       const auto cells = wait(
           [&](const Cells &cells) {
             const auto screen = visible(cells);

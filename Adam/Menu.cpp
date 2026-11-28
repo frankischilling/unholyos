@@ -3,7 +3,6 @@
 #include "Gr/GrExt.hpp"
 
 extern "C" int64_t Char2ScanCodeCpp(int64_t ch, int64_t sc_flags);
-extern "C" char *ScanCode2KeyNameCpp(int64_t sc);
 extern "C" int64_t GrPrintCpp(CDC *dc, int64_t x, int64_t y, const char *fmt,
                               int64_t argc, const uint64_t *argv);
 extern "C" [[noreturn]] void ThrowCpp(int64_t tag, uint8_t no_log,

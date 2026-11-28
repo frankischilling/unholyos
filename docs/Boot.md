@@ -4210,12 +4210,28 @@ configuration. These runs cover declining the installer and opening and
 closing the tour menu. The test also runs `Seed(12345);TipOfDay;` on
 the unmodified `Tips.DD` and checks the same tip about switching between
 the standard and Cyrillic fonts that appears in the reference guest.
-The installer wizard and the tour parts are still pending.
+The installer wizard and full tour chapters still need coverage.
 
 The stock startup files and documentation are by Terry A. Davis.
 `Once.HC` matches blob `d8b4d0d621ed6b3ee8d3d5001b5a00815d541461` and
 `Misc/Tour/Tour.IN` matches `abe48134532155e8be139c6c1a692db3acfe2738`
 at the pinned revision. [TempleOS credits](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Doc/Credits.DD)
+
+The same target runs `InputTrainingProbe.HC` after declining the tour.
+It checks the three wrong-key popups, the echoed string, replayed
+keyboard messages, formatted output, Esc from `InView`, and
+`InSetMs` at a fixed destination. The probe also checks the old bit
+and final value from `LBEqu` across two words. Both native builds
+and pinned TempleOS report `Training result FF` and return to the
+prompt. The original first tour chapter now reaches the F1 prompt and
+accepts F1. The native terminal still needs the binding from
+`Adam/DolDoc/DocPutKey.HC` that opens `HelpIndex.DD`.
+
+```sh
+make -j4 test-stock-once
+build/Linux/TestBoot --training-input-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/training-input-reference
+```
 
 ## Popup menus and one-time notices
 

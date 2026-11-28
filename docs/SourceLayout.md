@@ -2005,6 +2005,18 @@ directory into the input filter before including the script. A call
 from inside the filter executes there, so nested scripts and input text
 reach the same terminal.
 
+`Adam/InFile.cpp` follows the key, character, print, view, and mouse
+procedures in `Adam/InFile.HC`. It sends accepted keys back through
+`Msg` and uses the existing DolDoc menu for the wrong-key prompt.
+`InGetChar` sizes its prompt for the caller's argument count so a long
+list fits. It receives the HolyC inline `argv` without a fixed
+argument, as does `InUntilChar`. `InSetMs` uses the graphics line
+walker and the mouse state from `Kernel/SerialDev/Mouse.HC`.
+`Kernel/SerialDev/Keyboard.cpp` shares `Char2KeyName` between
+the character prompt and `ScanCode2KeyName`. `Kernel/KUtils.asm`
+exports TempleOS's locked bit assignment as `_LBEQU` and returns
+the previous bit.
+
 `Kernel/KLoad.cpp` exports `SYS_BOOT_SRC` for the typed `U32 sys_boot_src`
 alias used by `Once.HC`. `Adam/Training.cpp` follows `TipOfDay` in
 `Adam/Training.HC`. It uses the same random draw and selects the same
@@ -2013,6 +2025,10 @@ reference's unbounded traversal for a file with no tips. The copy skips
 error entries and preserves the remaining DolDoc entries and links.
 
 ## Popup tasks and document menus
+
+`Adam/DolDoc/DocPopUp.cpp` follows `PopUp1` and `PopUpOk` from
+`Adam/DolDoc/DocPopUp.HC`. The button and optional header and footer
+are placed in a document passed to `PopUpMenu`.
 
 `Kernel/Job.cpp` follows `Kernel/Job.HC` for `PopUp` and `PopUpPrint`.
 The servant enters `SrvCmdLine` and runs the standard execute job.

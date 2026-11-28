@@ -1377,7 +1377,8 @@ constexpr uint8_t SC_ENTER = 0x1C, SC_SHIFT = 0x2A, SC_CTRL = 0x1D,
                   SC_SCROLL = 0x46, SC_HOME = 0x47, SC_CURSOR_UP = 0x48,
                   SC_PAGE_UP = 0x49, SC_CURSOR_LEFT = 0x4B, SC_CURSOR_RIGHT = 0x4D,
                   SC_END = 0x4F, SC_CURSOR_DOWN = 0x50, SC_PAGE_DOWN = 0x51,
-                  SC_INS = 0x52, SC_DELETE = 0x53, SC_GUI = 0xDB;
+                  SC_INS = 0x52, SC_DELETE = 0x53, SC_PRTSCRN1 = 0xAA,
+                  SC_GUI = 0xDB;
 constexpr int64_t GSF_SHIFT_ESC_EXIT = 1, GSF_WITH_NEW_LINE = 2;
 
 constexpr int64_t SUF_REM_CTRL_CHARS = 0x001, SUF_REM_LEADING = 0x002,
