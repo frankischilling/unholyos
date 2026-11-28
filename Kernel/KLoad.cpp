@@ -179,6 +179,7 @@ void DefineSubHC(), DefineMatchHC();
 void DefineHC(), DefineLoadHC(), DefineCntHC(), DefinePrintHC();
 void Color2StrHC(), Str2ColorU16HC(), Str2ColorU32HC();
 void HashValHC(), HashDelHC(), HashTableDelHC(), HashSrcFileSetHC();
+void HashPublicHC();
 void HashTablePurgeHC(), KillHC();
 void SpawnHC(), TaskValidateHC(), SuspendHC(), IsSuspendedHC();
 void TaskQueInsHC(), TaskQueRemHC(), SingleUserHC(), IsSingleUserHC();
@@ -245,6 +246,7 @@ void DocTreeWriteHC(), DocTreeAppendHC(), DocTreeFWriteHC(), DocTreeFAppendHC();
 void DocTreeWriteJoinHC(), DocTreeAppendJoinHC(), ExeDocHC(), DocTreeExeHC(),
     DocTreeFExeHC();
 void RegDftHC(), RegExeHC(), RegWriteHC(), RegCntHC(), RegAppendHC(), AdamHC();
+void InsRegHC(), InsReregHC(), InsUnregHC();
 void AOnceFlushHC(), OnceFlushHC(), AOnceHC(), OnceHC(), AOnceDrvHC(),
     OnceDrvHC(), OnceExeHC(), XTalkHC();
 void DocMenuHC(), PopUpMenuHC(), PopUpFormHC(), PopUpHC(), PopUpPrintHC(),
@@ -886,6 +888,7 @@ bool LoadKernel(CTask &task)
       {"sys_registry_doc", reinterpret_cast<uintptr_t>(&sys_registry_doc)},
       {"sys_msg_flags", reinterpret_cast<uintptr_t>(sys_msg_flags)},
       {"registry_version", reinterpret_cast<uintptr_t>(&registry_version)},
+      {"ins_reg", reinterpret_cast<uintptr_t>(&ins_reg)},
       {"blkdev", reinterpret_cast<uintptr_t>(&blkdev)},
       {"blkdev_text_attr", reinterpret_cast<uintptr_t>(blkdev_text_attr)},
       {"drv_text_attr", reinterpret_cast<uintptr_t>(drv_text_attr)},
@@ -963,6 +966,7 @@ bool LoadKernel(CTask &task)
       {"HashAdd", reinterpret_cast<uintptr_t>(_HASH_ADD)},
       {"HashSingleTableFind", reinterpret_cast<uintptr_t>(_HASH_SINGLE_TABLE_FIND)},
       {"HashSrcFileSet", reinterpret_cast<uintptr_t>(HashSrcFileSetHC)},
+      {"HashPublic", reinterpret_cast<uintptr_t>(HashPublicHC)},
       {"_HASH_REM_DEL", reinterpret_cast<uintptr_t>(_HASH_REM_DEL)},
       {"SysSymImportsResolve",
        reinterpret_cast<uintptr_t>(SysSymImportsResolveHC)},
@@ -1520,6 +1524,9 @@ bool LoadKernel(CTask &task)
       {"OnceExe", reinterpret_cast<uintptr_t>(OnceExeHC)},
       {"OneTimePopUp", reinterpret_cast<uintptr_t>(OneTimePopUpHC)},
       {"RegOneTimePopUp", reinterpret_cast<uintptr_t>(RegOneTimePopUpHC)},
+      {"InsReg", reinterpret_cast<uintptr_t>(InsRegHC)},
+      {"InsRereg", reinterpret_cast<uintptr_t>(InsReregHC)},
+      {"InsUnreg", reinterpret_cast<uintptr_t>(InsUnregHC)},
       {"DocType", reinterpret_cast<uintptr_t>(DocTypeHC)},
       {"Type", reinterpret_cast<uintptr_t>(TypeHC)},
       {"DocPrint", reinterpret_cast<uintptr_t>(DocPrintHC)},

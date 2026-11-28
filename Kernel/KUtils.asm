@@ -15,6 +15,7 @@ GLOBAL DocMenuHC,PopUpMenuHC,PopUpFormHC,DocMenuTryHC,DocMenuEndTaskCBHC
 GLOBAL GetI64HC,GetF64HC,GetDateHC
 GLOBAL _HASH_ADD,_HASH_ADD_AFTER,_HASH_FIND,_HASH_SINGLE_TABLE_FIND
 GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymImportsResolveHC
+GLOBAL HashPublicHC
 GLOBAL HashTablePurgeHC
 GLOBAL HashTableNewHC,HashTypeNumHC,CeilU64HC,Pow10I64HC
 GLOBAL ClampHC,MinHC,MaxHC,FloorU64HC,RoundI64HC,FloorI64HC,CeilI64HC
@@ -119,6 +120,7 @@ GLOBAL DocTreeWriteHC,DocTreeAppendHC,DocTreeFWriteHC,DocTreeFAppendHC
 GLOBAL DocTreeWriteJoinHC,DocTreeAppendJoinHC,ExeDocHC,DocTreeExeHC,DocTreeFExeHC
 GLOBAL RegDftHC,RegExeHC,RegWriteHC,RegCntHC,RegAppendHC,AdamHC
 GLOBAL OneTimePopUpHC,RegOneTimePopUpHC,PopUpHC,PopUpPrintHC,SrvCmdLineHC
+GLOBAL InsRegHC,InsReregHC,InsUnregHC
 GLOBAL AOnceFlushHC,OnceFlushHC,AOnceHC,OnceHC,AOnceDrvHC,OnceDrvHC,OnceExeHC
 GLOBAL OnceExeTryHC,XTalkHC
 GLOBAL DocCompileHC
@@ -284,6 +286,7 @@ EXTERN Spaces2TabsCpp,StrUtilCpp,StrFirstOccCpp,StrFirstRemCpp,StrLastOccCpp,Str
 EXTERN StrFindCpp,Tabs2SpacesCpp,ScaleIndentCpp,MStrUtilCpp
 EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
 EXTERN HashRemDelCpp,HashValCpp,HashDelCpp,HashTableDelCpp,HashSrcFileSetCpp,SysSymImportsResolveCpp
+EXTERN HashPublicCpp
 EXTERN HashTablePurgeCpp
 EXTERN HashTableNewCpp,HashTypeNumCpp,CeilU64Cpp,Pow10I64Cpp
 EXTERN ClampCpp,MinCpp,MaxCpp,FloorU64Cpp,RoundI64Cpp,FloorI64Cpp,CeilI64Cpp
@@ -389,6 +392,7 @@ EXTERN DocCutCpp,DocCopyCpp,DocTreeFindCpp,DocTreeFFindCpp,DocTreeMakeCpp
 EXTERN DocTreeWriteCpp,DocTreeAppendCpp,DocTreeFWriteCpp,DocTreeFAppendCpp
 EXTERN ExeDocCpp,DocTreeExeCpp,DocTreeFExeCpp
 EXTERN RegDftCpp,RegExeCpp,RegWriteCpp,RegCntCpp,RegAppendCpp,AdamCpp
+EXTERN InsRegCpp,InsReregCpp,InsUnregCpp
 EXTERN AOnceFlushCpp,OnceFlushCpp,AOnceCpp,OnceCpp,AOnceDrvCpp,OnceDrvCpp,OnceExeCpp
 EXTERN OnceExeTryCpp,XTalkCpp
 EXTERN DocCompileCpp
@@ -660,6 +664,7 @@ HOLYC_CPP HashDelHC,HashDelCpp,1
 HOLYC_CPP HashTableDelHC,HashTableDelCpp,1
 HOLYC_CPP HashTablePurgeHC,HashTablePurgeCpp,1
 HOLYC_CPP HashSrcFileSetHC,HashSrcFileSetCpp,3
+HOLYC_CPP HashPublicHC,HashPublicCpp,3
 HOLYC_CPP SysSymImportsResolveHC,SysSymImportsResolveCpp,2
 HOLYC_CPP HashTableNewHC,HashTableNewCpp,2
 HOLYC_CPP HashTypeNumHC,HashTypeNumCpp,1
@@ -1046,6 +1051,9 @@ HOLYC_CPP PopUpHC,PopUpCpp,3
 HOLYC_PRINT PopUpPrintHC,PopUpPrintCpp,1
 HOLYC_CPP OneTimePopUpHC,OneTimePopUpCpp,3
 HOLYC_CPP RegOneTimePopUpHC,RegOneTimePopUpCpp,2
+HOLYC_CPP InsRegHC,InsRegCpp,2
+HOLYC_CPP InsReregHC,InsReregCpp,1
+HOLYC_CPP InsUnregHC,InsUnregCpp,1
 HOLYC_PRINT AdamErrHC,AdamErrCpp,1
 HOLYC_PRINT XTalkHC,XTalkCpp,2
 

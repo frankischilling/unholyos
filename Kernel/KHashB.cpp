@@ -186,3 +186,21 @@ extern "C" void HashSrcFileSetCpp(const CCmpCtrl *cc, CHashSrcSym *sym,
   Free(const_cast<char *>(sym->idx));
   sym->idx = idx;
 }
+
+extern "C" CHashGeneric *HashPublicCpp(const char *st, uint64_t mask,
+                                       uint8_t val)
+{
+  auto *task = CurrentTask();
+  auto *entry = HashFind(st, task->hash_table, mask);
+  if (!entry)
+    return nullptr;
+  if (val)
+    entry->type |= HTF_PUBLIC;
+  else
+    entry->type &= ~HTF_PUBLIC;
+  auto *cc = task->last_cc;
+  if ((entry->type & HTG_SRC_SYM) &&
+      cc != reinterpret_cast<CCmpCtrl *>(&task->next_cc) && cc->lex_include_stk)
+    HashSrcFileSetCpp(cc, reinterpret_cast<CHashSrcSym *>(entry), 0);
+  return reinterpret_cast<CHashGeneric *>(entry);
+}

@@ -4142,7 +4142,6 @@ The harness boots `build/registry-test.iso` or the pinned DVD with QEMU
 8.2.2 using `-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>` and
 the default single CPU. It runs the source through the guest terminal.
 The builds use GCC 13.3.0 or Clang 20.1.2 and NASM 2.16.01.
-Installer registration is outside these checks.
 
 ## Once queues and first terminal startup
 
@@ -4202,6 +4201,36 @@ The harness boots `build/popup-test.iso` or the pinned DVD with QEMU
 8.2.2 using `-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`
 and the default single CPU. It sends input through the VM keyboard
 and checks the terminal text and return to the prompt.
+
+## Install registration
+
+`InsRegProbe.HC` checks the 33-byte `CInsReg` layout, the startup
+registry branch, the choices for host OS and VM, acceptance of the
+defaults, duplicate registration, cancellation, and unregistration.
+It also checks the public flag and help index on the machine number
+define written by the registry. GCC, Clang, and pinned TempleOS report
+`InsReg probe 7F`.
+
+The harness then drives the form through the VM keyboard. It selects
+Linux and QEMU, enters `ABC` and `4`, and checks the printed registration
+and both stored list values.
+
+```sh
+make -j4 test-ins-reg
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-ins-reg
+build/Linux/TestBoot --ins-reg-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/ins-reg-reference
+```
+
+The harness boots `build/ins-reg-test.iso` or the pinned DVD with QEMU
+8.2.2 using `-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>` and
+the default single CPU.
+
+A separate native check used `InsReg('C')` to save the branch to a copy
+of the FAT32 fixture while the home drive was `T:`. A cold boot configured
+with `C:/Home` replayed the registration before the terminal started.
+The live record held all four selected values, and replay left the disk
+bytes unchanged.
 
 ## Adam device reports
 

@@ -6,7 +6,7 @@ CDoc *sys_registry_doc;
 int64_t sys_msg_flags[1];
 uint64_t registry_version;
 
-static CDoc *RegCache()
+CDoc *RegCache()
 {
   auto *doc = __atomic_load_n(&sys_registry_doc, __ATOMIC_ACQUIRE);
   if (doc)

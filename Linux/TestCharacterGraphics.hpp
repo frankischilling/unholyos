@@ -641,6 +641,41 @@ static void DriveCharacterGraphics(
       wait_text("T:/Home>");
       std::cout << "MenuBttn.HC opened the frequency menu and returned to the prompt\n";
     }
+    if (std::string_view(text_probes.front().name) == "ins-reg") {
+      cmd("InsReg;0;");
+      wait_text("Install Registration");
+      wait_text("Host OS:");
+      wait_text("Host VM:");
+      wait_text("Your Initials:");
+      wait_text("This Machine Num (Choose Any):");
+      snapshot("ins-reg-form");
+      key("spc");
+      wait_text("Windows");
+      key("down");
+      key("down");
+      key("esc");
+      wait_text("[Linux]");
+      key("tab");
+      key("spc");
+      wait_text("VirtualBox");
+      key("down");
+      key("down");
+      key("down");
+      key("esc");
+      wait_text("[QEMU]");
+      key("tab");
+      type("ABC");
+      key("tab");
+      type("4");
+      wait_text("This Machine Num (Choose Any):4");
+      snapshot("ins-reg-filled");
+      key("esc");
+      wait_text("InsReg:ABC:4");
+      cmd(R"("Reg fields %d %d\n",ins_reg.host_os,ins_reg.host_vm;0;)");
+      wait_text("Reg fields 2 3");
+      snapshot("ins-reg-saved");
+      std::cout << "Install registration saved Linux, QEMU, ABC and 4\n";
+    }
     return;
   }
   if (screen_capture) {

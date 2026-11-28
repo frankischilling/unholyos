@@ -209,6 +209,10 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not load Adam sources\r\n");
     return;
   }
+  if (!InsRegInit()) {
+    SerialPutS("UnholyOS: Could not register install form lists\r\n");
+    return;
+  }
   BootKernelCfgReport();
   if (!GrInit2()) {
     SerialPutS("UnholyOS: Could not allocate graphics device contexts\r\n");
@@ -225,9 +229,11 @@ extern "C" void KMainCpp()
   adam_task->win_inhibit |= WIF_SELF_FOCUS;
   SYS_RUN_LEVEL |= RLF_DOC;
   adam_task->display_flags |= DISPLAYF_CHILDREN_NOT_ON_TOP;
-  if (RegInit())
+  if (RegInit()) {
     SYS_RUN_LEVEL |= RLF_REGISTRY;
-  else
+    if (!ins_reg.registered)
+      InsUnregCpp(0);
+  } else
     SerialPutS("UnholyOS: Could not initialize the registry\r\n");
   DbgModeCpp(false);
   if (!StartUpTasks())

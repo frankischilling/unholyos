@@ -365,6 +365,7 @@ static CHashClass *CmpKernelClass(CHashTable *table, const char *name, size_t si
 static bool CmpMemberData(CHashTable *table)
 {
   auto *hash = CmpKernelClass(table, "CHash", sizeof(CHash));
+  auto *generic = CmpKernelClass(table, "CHashGeneric", sizeof(CHashGeneric));
   auto *sym = CmpKernelClass(table, "CHashSrcSym", sizeof(CHashSrcSym));
   auto *define = CmpKernelClass(table, "CHashDefineStr", sizeof(CHashDefineStr));
   auto *ht = CmpKernelClass(table, "CHashTable", sizeof(CHashTable));
@@ -373,8 +374,9 @@ static bool CmpMemberData(CHashTable *table)
   auto *member = CmpKernelClass(table, "CMemberLst", sizeof(CMemberLst));
   auto *cls = CmpKernelClass(table, "CHashClass", sizeof(CHashClass));
   auto *fun = CmpKernelClass(table, "CHashFun", sizeof(CHashFun));
-  if (!hash || !sym || !define || !ht || !dim || !meta || !member || !cls || !fun)
+  if (!hash || !generic || !sym || !define || !ht || !dim || !meta || !member || !cls || !fun)
     return false;
+  generic->base_class = hash;
   sym->base_class = hash;
   define->base_class = sym;
   cls->base_class = sym;
@@ -396,6 +398,9 @@ static bool CmpMemberData(CHashTable *table)
       {"str", hash, ptr, offsetof(CHash, str)},
       {"type", hash, u32, offsetof(CHash, type)},
       {"use_cnt", hash, u32, offsetof(CHash, use_cnt)},
+      {"user_data0", generic, i64, offsetof(CHashGeneric, user_data0)},
+      {"user_data1", generic, i64, offsetof(CHashGeneric, user_data1)},
+      {"user_data2", generic, i64, offsetof(CHashGeneric, user_data2)},
       {"src_link", sym, ptr, offsetof(CHashSrcSym, src_link)},
       {"idx", sym, ptr, offsetof(CHashSrcSym, idx)},
       {"dbg_info", sym, ptr, offsetof(CHashSrcSym, dbg_info)},
@@ -666,6 +671,65 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
                          reinterpret_cast<void *>(CmpSysExport("registry_version"))) &&
          CmpKernelGlobal(table, "sys_os_version", f64,
                          reinterpret_cast<void *>(CmpSysExport("sys_os_version")));
+}
+
+static bool CmpInsRegData(CHashTable *table)
+{
+  auto *cls = CmpKernelClass(table, "CInsReg", sizeof(CInsReg));
+  if (!cls)
+    return false;
+  auto *heap = CurrentTask()->data_heap;
+  auto *i64 = FindType("I64", table);
+  auto *u8 = FindType("U8", table);
+  const struct
+  {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+    const char *format;
+    unsigned count;
+  } fields[]{
+      {"registered", FindType("Bool", table), offsetof(CInsReg, registered), nullptr, 0},
+      {"host_os", i64, offsetof(CInsReg, host_os),
+       "$PURPLE$Install Registration$FG$\n\nHost OS:$LS,D=\"ST_HOST_OSES\"$\n", 0},
+      {"host_vm", i64, offsetof(CInsReg, host_vm),
+       "Host VM:$LS,D=\"ST_HOST_VMS\"$\n", 0},
+      {"initials", u8, offsetof(CInsReg, initials),
+       "$DA-P,A=\"Your Initials:%s\"$\n", sizeof(CInsReg::initials)},
+      {"machine_num", i64, offsetof(CInsReg, machine_num),
+       "$DA-TRM,A=\"This Machine Num (Choose Any):%d\"$\n", 0},
+  };
+  for (const auto &field : fields) {
+    auto *name = StrNew(field.name, heap);
+    auto *member = name ? MemberAdd(*cls, name, *field.type, field.offset) : nullptr;
+    if (!member) {
+      Free(name);
+      return false;
+    }
+    if (field.count) {
+      auto *axis = reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return false;
+      axis->cnt = field.count;
+      axis->total_cnt = 1;
+      member->dim.next = axis;
+      member->dim.total_cnt = field.count;
+      member->size = field.count * field.type->size;
+    }
+    if (field.format) {
+      auto *meta = reinterpret_cast<CMemberLstMeta *>(CAlloc(sizeof(CMemberLstMeta), heap));
+      if (!meta)
+        return false;
+      member->meta = meta;
+      meta->str = StrNew("format", heap);
+      meta->flags = MLMF_IS_STR;
+      meta->user_data = reinterpret_cast<uintptr_t>(StrNew(field.format, heap));
+      if (!meta->str || !meta->user_data)
+        return false;
+    }
+  }
+  return CmpKernelGlobal(table, "ins_reg", cls,
+                         reinterpret_cast<void *>(CmpSysExport("ins_reg")));
 }
 
 static bool CmpQueData(CHashTable *table)
@@ -2128,6 +2192,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     DirEntryPtrPtr,
     U64Ptr,
     TaskPtrPtr,
+    HashGenericPtr,
     PlotFn,
   };
   CHashClass *types[]{
@@ -2176,6 +2241,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       FindType("CDirEntry", table) + 2,
       FindType("U64", table) + 1,
       FindType("CTask", table) + 2,
+      FindType("CHashGeneric", table) + 1,
   };
   auto *task = CurrentTask();
   enum CDefaultKind : uint8_t { Numeric, String, LastClass };
@@ -2373,6 +2439,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"HashFind", HashPtr, FF_RET1,
        {{"needle_str", U8Ptr}, {"haystack_table", HashTablePtr}, {"mask", I64},
         {"instance", I64, true, 1}}, "_HASH_FIND"},
+      {"HashPublic", HashGenericPtr, FF_RET1,
+       {{"st", U8Ptr}, {"mask", I64}, {"val", Bool, true, 1}}},
       {"HashTableNew", HashTablePtr, FF_RET1,
        {{"size", I64}, {"mem_task", TaskPtr, true}}},
       {"HashTableDel", U0, FF_RET1, {{"table", HashTablePtr}}},
@@ -2654,6 +2722,9 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"OneTimePopUp", Bool, FF_RET1,
        {{"_flags", U8Ptr}, {"flag_num", I64}, {"msg", U8Ptr}}},
       {"RegOneTimePopUp", U0, FF_RET1, {{"flag_num", I64}, {"msg", U8Ptr}}},
+      {"InsReg", Bool, FF_RET1, {{"drv_let", U8, true}, {"action", I64, true}}},
+      {"InsRereg", Bool, FF_RET1, {{"drv_let", U8, true}}},
+      {"InsUnreg", Bool, FF_RET1, {{"drv_let", U8, true}}},
       {"DocSave", U8Ptr, FF_RET1, {{"doc", DocPtr}, {"_size", I64Ptr, true}}},
       {"DocType", Bool, FF_RET1,
        {{"doc", DocPtr, true}, {"filename", U8Ptr}, {"trailing_new_lines", I64, true, 1}}},
@@ -3337,6 +3408,7 @@ static bool CmpFillHash(CHashTable *table)
       {"HTT_CLASS", "0x10"}, {"HTT_INTERNAL_TYPE", "0x20"},
       {"HTT_FUN", "0x40"}, {"HTT_EXPORT_SYS_SYM", "0x01"},
       {"HTT_INVALID", "0"}, {"HTT_GLBL_VAR", "0x08"},
+      {"HTT_DEFINE_STR", "0x04"}, {"HTF_PUBLIC", "0x01000000"},
       {"MLMF_IS_STR", "1"},
       {"SUF_REM_CTRL_CHARS", "0x001"}, {"SUF_REM_LEADING", "0x002"},
       {"SUF_REM_TRAILING", "0x004"}, {"SUF_REM_SPACES", "0x008"},
@@ -3403,6 +3475,10 @@ static bool CmpFillHash(CHashTable *table)
       {"DSK_CACHE_HASH_SIZE", "0x2000"}, {"SEMA_DSK_CACHE", "11"},
       {"BDF_INIT_IN_PROGRESS", "128"},
       {"DOF_SIZE_MIN", "1"}, {"DOF_INTERCEPT_TASK_END", "2"},
+      {"OS_OTHER", "0"}, {"OS_NATIVE", "1"}, {"OS_LINUX", "2"}, {"OS_WINDOWS", "3"},
+      {"VM_OTHER", "0"}, {"VM_NATIVE", "1"}, {"VM_VMWARE", "2"},
+      {"VM_QEMU", "3"}, {"VM_VIRTUALBOX", "4"},
+      {"RR_UNREGISTER", "-1"}, {"RR_REGISTER", "0"}, {"RR_REREGISTER", "1"},
       {"DOCM_CANCEL", "-1"},
       {"DOF_DONT_HOME", "4"}, {"DOF_WIN_MAX", "8"}, {"DOF_DONT_TEXT_ATTR", "16"},
       {"DOF_DONT_WINMGR_SYNC", "32"}, {"DOF_DONT_SHOW", "64"},
@@ -3580,7 +3656,8 @@ static bool CmpFillHash(CHashTable *table)
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
          CmpScrnCastData(table) && CmpMusicData(table) &&
          CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
-         CmpCtrlData(table, task) && CmpClassReportData(table, *task) &&
+         CmpCtrlData(table, task) && CmpInsRegData(table) &&
+         CmpClassReportData(table, *task) &&
          CmpRuntimeHeaders(table);
 }
 
