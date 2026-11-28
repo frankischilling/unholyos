@@ -3555,8 +3555,8 @@ constexpr CTextProbe class_records_probes[]{
      class_records_output}};
 
 constexpr CTextProbe bit_field_probes[]{
-    {"bit-field", "/BitFieldProbe.HC", "", "Bit field checks ", "Bit field checks 1F",
-     "Bit field checks 1F\n", {}, true}};
+    {"bit-field", "/BitFieldProbe.HC", "", "Bit field checks ", "Bit field checks 3F",
+     "Bit field checks 3F\n", {}, true}};
 
 constexpr CTextProbe list_utilities_probes[]{
     {"list-utilities", "/ListUtilitiesProbe.HC", "", "LU linked ", "LU DONE",

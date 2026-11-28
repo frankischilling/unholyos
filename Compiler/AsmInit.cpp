@@ -2751,6 +2751,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"LBts", Bool, FF_INTERNAL, {{"bit_field", U8Ptr}, {"bit", I64}}, nullptr, IC_LBTS},
       {"LBtr", Bool, FF_INTERNAL, {{"bit_field", U8Ptr}, {"bit", I64}}, nullptr, IC_LBTR},
       {"LBtc", Bool, FF_INTERNAL, {{"bit_field", U8Ptr}, {"bit", I64}}, nullptr, IC_LBTC},
+      {"BEqu", Bool, FF_RET1, {{"bit_field", U8Ptr}, {"bit", I64}, {"val", Bool}}, "_BEQU"},
       {"BFieldExtU32", U32, FF_RET1,
        {{"bit_field", U8Ptr}, {"bit", I64}, {"size", I64}}, "_BIT_FIELD_EXT_U32"},
       {"BFieldOrU32", U0, FF_RET1,

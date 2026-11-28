@@ -1288,6 +1288,7 @@ offset and access a quadword there. Extraction uses the x86 shift-count
 mask, so widths 0 and 64 both produce zero. Both routines pop 24 bytes
 of arguments. `Kernel/KLoad.cpp` exports the assembly labels and
 `Compiler/AsmInit.cpp` supplies the HolyC declarations from `KernelB.HH`.
+The same tables expose `BEqu` for the existing `_BEQU` entry point.
 
 ## String scanning and transformations
 

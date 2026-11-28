@@ -21,6 +21,9 @@ U0 BitFieldProbe()
     checks|=8;
   if (BFieldExtU32(bits,64,8)==0xF7 && BFieldExtU32(bits,63,65)==1)
     checks|=16;
+  if (!BEqu(bits,42,TRUE) && BEqu(bits,42,TRUE) &&
+      BEqu(bits,42,FALSE) && !BEqu(bits,42,FALSE) && !Bt(bits,42))
+    checks|=32;
   "Bit field checks %X\n",checks;
 }
 

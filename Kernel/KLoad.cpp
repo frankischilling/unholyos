@@ -944,6 +944,7 @@ bool LoadKernel(CTask &task)
       {"_BIT_FIELD_EXT_U32", reinterpret_cast<uintptr_t>(_BIT_FIELD_EXT_U32)},
       {"_BIT_FIELD_OR_U32", reinterpret_cast<uintptr_t>(_BIT_FIELD_OR_U32)},
       {"_LBEQU", reinterpret_cast<uintptr_t>(_LBEQU)},
+      {"BEqu", reinterpret_cast<uintptr_t>(_BEQU)},
       {"BFieldExtU32", reinterpret_cast<uintptr_t>(_BIT_FIELD_EXT_U32)},
       {"BFieldOrU32", reinterpret_cast<uintptr_t>(_BIT_FIELD_OR_U32)},
       {"LBEqu", reinterpret_cast<uintptr_t>(_LBEQU)},
