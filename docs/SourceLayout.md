@@ -70,6 +70,12 @@ reads the function address from its declaration, and the later
 definition updates that slot. `Compiler/CExcept.cpp` and its assembly
 adapter implement the reference's `UndefinedExtern` path.
 
+`PrsTopLevel` follows the `sm_import` and `sm_underscore_import` paths
+in `Compiler/PrsStmt.HC` when `OPTf_EXTERNS_TO_IMPORTS` is enabled.
+Typed `extern` and `_extern` declarations use the existing import paths.
+Forward class and union declarations still use the type parser. During
+JIT compilation, the converted declaration reports `import not needed at`.
+
 ## Public HolyC module loading
 
 `Kernel/KLoad.cpp::LoadCpp` follows `Kernel/KLoad.HC::Load`, sharing the

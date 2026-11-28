@@ -128,7 +128,8 @@ enum class CStockStartup { None, Decline, Tour };
 enum class CDesktopTest {
   None, Progress, DictionaryInstall, DictionaryGenerator, DictionaryGeneratorHolyC,
   MenuDiagnostic, CompilerDiagnostic, CompilerCmpDiagnostic, CompilerWarning,
-  CompilerForwardWarning, CompilerHeaderWarning
+  CompilerForwardWarning, CompilerHeaderWarning,
+  ExternImportOption, ExternImportOptionJIT
 };
 
 // Uses the same QMP input and physical-memory readers as the boot tests.
@@ -559,7 +560,10 @@ static void DriveCharacterGraphics(
   const bool compiler_probe = desktop == CDesktopTest::CompilerDiagnostic ||
                               desktop == CDesktopTest::CompilerCmpDiagnostic ||
                               compiler_warning;
-  if (desktop == CDesktopTest::MenuDiagnostic || compiler_probe)
+  const bool extern_import = desktop == CDesktopTest::ExternImportOption ||
+                             desktop == CDesktopTest::ExternImportOptionJIT;
+  if (desktop == CDesktopTest::MenuDiagnostic || compiler_probe ||
+      desktop == CDesktopTest::ExternImportOptionJIT)
     cmd("I64 dsz;U8 *dout;");
   auto wait_compiler_exception = [&](std::string_view dir_prompt) {
     return wait([&](const Cells &cells) {
@@ -582,7 +586,7 @@ static void DriveCharacterGraphics(
     cmd("Free(dout);");
     return ReadText(output);
   };
-  if (compiler_probe) {
+  if (compiler_probe || (extern_import && !reference)) {
     cmd("CBlkDev *db=BlkDevNextFreeSlot('A',BDT_RAM);");
     cmd("db->max_blk=131071;");
     cmd(R"("DB %X\n",BlkDevAdd(db,I64_MIN,FALSE,TRUE);)");
@@ -1140,6 +1144,42 @@ static void DriveCharacterGraphics(
       cmd(clear ? "DocClear(,1);ExePutS(cgprobe);Free(cgprobe);"
                 : "ExePutS(cgprobe);Free(cgprobe);");
   };
+  if (extern_import) {
+    const bool jit = desktop == CDesktopTest::ExternImportOptionJIT;
+    const auto *name = jit ? "ExternImportOptionInvalid.HC" : "ExternImportOption.PRJ";
+    const std::string source = jit ? "ETO.HC" : "ETO.PRJ";
+    if (reference) {
+      cmd(R"(Cd("B:/");)");
+      wait_text("B:/>");
+      const auto project = fs::absolute(fs::path("Linux/Fixtures") / name);
+      upload(project, false, false);
+      cmd("FileWrite(\"" + source + "\",cgprobe," +
+          std::to_string(fs::file_size(project)) + ");");
+    } else
+      cmd(std::string("Copy(\"::/") + name + "\",\"" + source + "\");");
+    if (jit) {
+      cmd(R"(ExeFile2("ETO.HC");)");
+      wait_compiler_exception(reference ? "B:/>" : "A:/>");
+      const auto doc = save_diagnostic("extern-import-jit.bin");
+      const auto *link = reference ? "FL:B:/ETO.HC,4" : "FL:A:/ETO.HC,4";
+      Check(doc.find(R"(import not needed at ";")") != std::string::npos &&
+                doc.find(link) != std::string::npos,
+            "JIT extern conversion reported a different error");
+      std::cout << "JIT rejected the converted import at the declaration\n";
+      return;
+    }
+    cmd(R"("EC %X\n",Cmp("ETO.PRJ",,"ETO.BIN");)");
+    wait_text("EC 0");
+    cmd("public I64 ETOProvider(I64 n){return n*2;}");
+    cmd("public I64 ETOData=11,_ETOData=13;");
+    cmd(R"hc(if(Load("ETO.BIN"))"EL %X\n",1;)hc");
+    wait_text("EL 1");
+    cmd("_extern _ETORun I64 ETORun(I64 value);");
+    cmd(R"("EV %X\n",ETORun(2);)");
+    wait_text("EV 2A");
+    std::cout << "Cmp and Load matched extern conversion and local forward declarations\n";
+    return;
+  }
   if (compiler_warning) {
     const auto *name = "CompilerWarningProbe.HC";
     const auto *call = R"("WJ %X\n",WarnUnused(42);)";

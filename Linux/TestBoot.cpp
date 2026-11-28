@@ -7326,11 +7326,14 @@ int main(int argc, char **argv)
   if ((argc == 4 || argc == 5) &&
       (mode == "--menu-diagnostic" || mode == "--menu-diagnostic-reference" ||
        mode == "--compiler-diagnostic" || mode == "--compiler-diagnostic-reference" ||
+       mode == "--extern-import-option" || mode == "--extern-import-option-reference" ||
        mode == "--compiler-warning" || mode == "--compiler-warning-reference")) {
     const bool reference = mode.ends_with("-reference");
     auto diagnostic = CDesktopTest::CompilerDiagnostic;
     if (mode.starts_with("--menu-diagnostic"))
       diagnostic = CDesktopTest::MenuDiagnostic;
+    else if (mode.starts_with("--extern-import-option"))
+      diagnostic = CDesktopTest::ExternImportOption;
     else if (mode.starts_with("--compiler-warning"))
       diagnostic = CDesktopTest::CompilerWarning;
     char path[] = "/tmp/unholyos-diagnostic-XXXXXX";
@@ -7338,6 +7341,9 @@ int main(int argc, char **argv)
       return 1;
     const auto dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
+      if (diagnostic == CDesktopTest::ExternImportOption && !reference)
+        for (const auto *source : {"ExternImportOption.PRJ", "ExternImportOptionInvalid.HC"})
+          VerifyHostModuleMedia(argv[3], fs::path("Linux/Fixtures") / source, source);
       if (diagnostic == CDesktopTest::CompilerWarning && !reference)
         for (const auto *source : {"CompilerWarningProbe.HC", "ForwardTypeWarningProbe.HC",
                                    "HeaderWarningProbe.HC"})
@@ -7357,6 +7363,8 @@ int main(int argc, char **argv)
       run(dir, diagnostic);
       if (diagnostic == CDesktopTest::CompilerDiagnostic)
         run(dir / "partial-cmp", CDesktopTest::CompilerCmpDiagnostic);
+      else if (diagnostic == CDesktopTest::ExternImportOption)
+        run(dir / "jit", CDesktopTest::ExternImportOptionJIT);
       else if (diagnostic == CDesktopTest::CompilerWarning) {
         run(dir / "forward-types", CDesktopTest::CompilerForwardWarning);
         run(dir / "function-headers", CDesktopTest::CompilerHeaderWarning);
@@ -8172,6 +8180,7 @@ int main(int argc, char **argv)
               << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"
               << " --menu-diagnostic[-reference] qemu image.iso [capture-dir]\n"
               << " --compiler-diagnostic[-reference] qemu image.iso [capture-dir]\n"
+              << " --extern-import-option[-reference] qemu image.iso [capture-dir]\n"
               << " --compiler-warning[-reference] qemu image.iso [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
