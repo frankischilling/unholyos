@@ -409,8 +409,13 @@ static Bytes VerifyCompilerMedia(const Bytes &disc, uint64_t root,
       Check(record.type == 16 && export_names.insert(record.name).second,
             "Compiler exports must be unique and relative");
     }
-  Check(native_imports == 44 && data_imports == 32 &&
+  Check(native_imports == 48 && data_imports == 33 &&
+            import_names.contains("__unholyos_sysv.AdamErrCpp") &&
             import_names.contains("__unholyos_sysv.DefineLstLoadCpp") &&
+            import_names.contains("__unholyos_sysv.FixSetCpp") &&
+            import_names.contains("__unholyos_sysv.IsRawCpp") &&
+            import_names.contains("__unholyos_sysv.PutFileLinkCpp") &&
+            import_names.contains("char_bmp_displayable") &&
             !import_names.contains("__unholyos_sysv.F64PowerBits"),
         "Compiler native or data import contract differs");
   std::set<std::string> expected_exports{std::string(compiler_status_name),
@@ -1121,7 +1126,7 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
   Check(ReadPhysical<1>(vm, status->second)[0] == expected_status,
         "Compiler initialization status or rejected-entry execution differs");
   if (bindings) {
-    const auto targets = ReadPhysical<16>(vm, bindings);
+    const auto targets = ReadPhysical<std::size(compiler_native_names)>(vm, bindings);
     for (size_t i = 0; i < std::size(compiler_native_names); ++i) {
       const auto found = symbols.exports.find(
           "__unholyos_sysv." + std::string(compiler_native_names[i]));
