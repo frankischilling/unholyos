@@ -287,7 +287,8 @@ CExeResult ExeDoc(CDoc &doc, int64_t flags)
   }
   QueRem(cc);
   LexSourceDel(cc);
-  return {run.okay ? run.value : 0, cc.jit_exception, run.okay};
+  return {run.okay ? run.value : 0, cc.jit_exception, run.okay,
+          cc.parse_error_count != 0};
 }
 
 static uint64_t DocResult(CExeResult result)

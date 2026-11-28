@@ -45,7 +45,8 @@ static_assert(offsetof(CCompilerImports, ExeFile) == 120);
 static_assert(offsetof(CCompilerImports, LexExceptReport) == 128);
 static_assert(sizeof(CExeResult) == 24 && offsetof(CExeResult, value) == 0 &&
               offsetof(CExeResult, exception) == 8 &&
-              offsetof(CExeResult, okay) == 16);
+              offsetof(CExeResult, okay) == 16 &&
+              offsetof(CExeResult, parse_error) == 17);
 
 extern "C" const CCompilerImports *compiler_imports;
 bool CompilerImportsPublish(const CCompilerImports &imports);

@@ -1300,6 +1300,9 @@ struct CCmpCtrl
   int64_t pass, opts;
   int64_t jit_exception;
   char *pmt_buf;
+  const char *parse_error;
+  unsigned parse_error_count;
+  bool expression_error;
 };
 
 static_assert(sizeof(CLexFile) == 80 && offsetof(CLexFile, full_name) == 40);

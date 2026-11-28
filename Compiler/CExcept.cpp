@@ -68,13 +68,14 @@ const char *LexPutLine(const CLexFile &file, const char *start)
   return p;
 }
 
-static void LexPutPos(const CCmpCtrl &cc)
+void LexPutPos(const CCmpCtrl &cc)
 {
   LexPutToken(cc);
   if (const auto *file = cc.lex_include_stk) {
     const uint64_t args[]{reinterpret_cast<uintptr_t>(file->full_name),
                           uint64_t(file->line_num)};
-    FixSetCpp(file->full_name, file->line_num);
+    if (SYS_RUN_LEVEL & RLF_ADAM_SERVER)
+      FixSetCpp(file->full_name, file->line_num);
     if (IsRawCpp())
       PrintCpp("%s,%d ", 2, args);
     else {
@@ -88,6 +89,8 @@ static void LexPutPos(const CCmpCtrl &cc)
 
 void LexExceptReport(const CCmpCtrl &cc, const char *message)
 {
+  if (!(SYS_RUN_LEVEL & RLF_ADAM_SERVER))
+    PutS("Note: Still in boot phase.\n");
   const uint64_t args[]{reinterpret_cast<uintptr_t>(CurrentTask()),
                         reinterpret_cast<uintptr_t>(message)};
   if (message)

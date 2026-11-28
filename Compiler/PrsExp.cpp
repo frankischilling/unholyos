@@ -138,6 +138,13 @@ private:
     return coc.Add(entry);
   }
 
+  uint32_t Error(const char *message)
+  {
+    cc.parse_error = message;
+    cc.expression_error = true;
+    return NO_IC;
+  }
+
   uint32_t Defined()
   {
     unsigned parens = 0;
@@ -429,12 +436,14 @@ private:
         base.data=1;
       value = Deref(value);
     }
-    if (!IsLValue(value) || Lex(cc) != TK_IDENT)
+    if (!IsLValue(value))
       return NO_IC;
+    if (Lex(cc) != TK_IDENT)
+      return Error("Invalid member at ");
     const auto node = coc.code[value];
     auto *member = MemberFind(cc.cur_str, node.cls);
     if (!member)
-      return NO_IC;
+      return Error("Invalid member at ");
     Lex(cc);
     auto address = node.left;
     if (member->offset)
@@ -586,8 +595,10 @@ private:
     if (token == '(') {
       Lex(cc);
       uint32_t value = Expression(PREC_ASSIGN + 1, depth + 1);
-      if (value == NO_IC || cc.token != ')')
+      if (value == NO_IC)
         return NO_IC;
+      if (cc.token != ')')
+        return Error("Missing ')' at ");
       coc.code[value].grouped = true;
       Lex(cc);
       return value;
@@ -690,7 +701,7 @@ private:
         }
       }
     }
-    return NO_IC;
+    return Error("Missing expression at ");
   }
 
   uint32_t Binary(uint32_t left, CBinaryOp op, unsigned depth)

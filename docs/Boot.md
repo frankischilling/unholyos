@@ -4417,6 +4417,26 @@ build/Linux/TestBoot --menu-diagnostic-reference qemu-system-x86_64 \
   /path/to/pinned/TOS_Distro.ISO build/menu-diagnostic-reference
 ```
 
+## HolyC compiler diagnostics
+
+The compiler diagnostic test uses QEMU 8.2.2 with `pc`, `qemu64`, 512 MiB
+and one CPU for both guests. An unknown identifier typed at the prompt
+reports `Undefined identifier at` with the following `;` token, then
+returns to the prompt after `Compiler`.
+
+The test writes malformed input to a RedSea RAM drive. `ExeFile` reports
+the missing expression and enclosing parse error and returns zero.
+`ExeFile2` reports the same pair and raises `Compiler`. Both saved
+terminal documents link to the source line. Ahead-of-time `Cmp` reports
+both errors, repeats the source location, returns two, and leaves no
+BIN file. A valid expression then executes at the prompt.
+
+```sh
+make -j4 test-compiler-diagnostic
+build/Linux/TestBoot --compiler-diagnostic-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/compiler-diagnostic-reference
+```
+
 ## Install registration
 
 `InsRegProbe.HC` checks the 33-byte `CInsReg` layout, the startup

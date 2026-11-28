@@ -805,9 +805,18 @@ evaluator, including lexical includes for menu files. `CMenu` and
 points to the top of the menu stack. Menu parse failures throw the
 `Compiler` exception. `LexExceptReport` follows the source-position report
 in `Compiler/CExcept.HC`. It prints the token, file link and source line,
-and passes the location to `FixSet`. `MenuNew` reports before freeing the
-lexer context and raises the exception after cleanup. The boot-phase
-debugger entry, compiler error counter and other parser callers remain pending.
+and passes the location to `FixSet` after Adam starts. `MenuNew` reports before
+freeing the lexer context and raises the exception after cleanup.
+
+`PrsStmt.cpp` and `PrsExp.cpp` pass parser errors through the same source
+report in `LexStmt2Bin`. The expression error report follows the token
+diagnostic when the original `PrsExpression` would find the operator stack
+still populated. `CmpJoin` repeats the source position and `Cmp` returns
+the number of errors. `ExeFile` returns zero on a parser failure and
+`ExeFile2` raises `Compiler` after native cleanup. Boot failures print
+the source position while the startup namespace can still roll back.
+Boot-phase debugger entry and warnings from partially declared functions
+remain pending.
 
 `Adam/WinMgr.cpp` follows `WinKeyNavMenu` and the mouse menu loop in
 `Adam/WinMgr.HC`. Mouse selection starts at the screen's top edge.

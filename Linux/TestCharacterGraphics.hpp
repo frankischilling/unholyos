@@ -105,7 +105,7 @@ struct CModuleFile
 enum class CStockStartup { None, Decline, Tour };
 enum class CDesktopTest {
   None, Progress, DictionaryInstall, DictionaryGenerator, DictionaryGeneratorHolyC,
-  MenuDiagnostic
+  MenuDiagnostic, CompilerDiagnostic
 };
 
 // Uses the same QMP input and physical-memory readers as the boot tests.
@@ -529,6 +529,85 @@ static void DriveCharacterGraphics(
     std::cout << startup_output << '\n';
   }
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
+  if (desktop == CDesktopTest::MenuDiagnostic ||
+      desktop == CDesktopTest::CompilerDiagnostic)
+    cmd("I64 dsz;U8 *dout;");
+  auto wait_compiler_exception = [&](std::string_view dir_prompt) {
+    return wait([&](const Cells &cells) {
+      const auto screen = visible(cells);
+      const auto exception = screen.find("Except:Compiler");
+      return exception != std::string::npos &&
+             screen.find(dir_prompt, exception) != std::string::npos;
+    }, "The terminal did not return after its Compiler exception");
+  };
+  auto save_diagnostic = [&](const char *filename) {
+    cmd("dout=DocSave(DocPut,&dsz);");
+    cmd(R"("DGP %X %X %X\n",dout,&dsz,&dout;)");
+    const auto fields = addresses("DGP ", {1, 8, 8});
+    const auto size = ReadPhysical<1>(vm, fields[1])[0];
+    Check(size && in_memory(fields[0], size), "Invalid diagnostic document size");
+    const auto output = dir / filename;
+    vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+               std::to_string(fields[0]) + R"(,"size":)" + std::to_string(size) +
+               R"(,"filename":")" + output.string() + R"("}})");
+    cmd("Free(dout);");
+    return ReadText(output);
+  };
+  if (desktop == CDesktopTest::CompilerDiagnostic) {
+    cmd("CBlkDev *db=BlkDevNextFreeSlot('A',BDT_RAM);");
+    cmd("db->max_blk=131071;");
+    cmd(R"("DB %X\n",BlkDevAdd(db,I64_MIN,FALSE,TRUE);)");
+    wait_text("DB 1");
+    cmd(R"(Cd("A:/");)");
+    wait_text("A:/>");
+    cmd("NoSuchParserName; // undefined statement");
+    wait_compiler_exception("A:/>");
+    const auto prompt_doc = save_diagnostic("compiler-prompt.bin");
+    Check(prompt_doc.find(R"(Undefined identifier at ";")") != std::string::npos,
+          "Missing undefined identifier diagnostic or lookahead token");
+    cmd("DocClear(,1);");
+    cmd(R"(U8 *bad="I64 Broke(){return 4+; } // bad expression\n";)");
+    cmd(R"("DW %X\n",FileWrite("Bad.HC",bad,StrLen(bad));)");
+    wait_text("DW ");
+    cmd(R"("DF %X\n",ExeFile("Bad.HC");)");
+    wait_text("DF 0");
+    cmd(R"(ExeFile2("Bad.HC");)");
+    wait_compiler_exception("A:/>");
+    cmd(R"(U8 *bo="4+; // bad AOT expression\n";)");
+    cmd(R"(FileWrite("BadAot.PRJ",bo,StrLen(bo));)");
+    cmd(R"("DA %X\n",Cmp("BadAot.PRJ",,"Bad.BIN");)");
+    wait_text("DA 2");
+    cmd(R"("DR %X %X\n",FileFind("Bad.BIN")==0,6*7;)");
+    wait_text("DR 1 2A");
+    const auto doc = save_diagnostic("compiler-file.bin");
+    size_t next = 0;
+    auto report = [&](std::string_view diagnostic, std::string_view link,
+                      std::string_view line) {
+      const auto message = doc.find(diagnostic, next);
+      const auto file = doc.find(link, message);
+      const auto source = doc.find(line, file);
+      Check(message != std::string::npos && file != std::string::npos &&
+                source != std::string::npos && file < doc.find('\n', message) &&
+                source < doc.find('\n', file),
+            "Missing compiler diagnostic token, link, or source line");
+      next = source + 1;
+    };
+    constexpr std::string_view missing = R"(Missing expression at ";")";
+    constexpr std::string_view parse = R"(Compiler Parse Error at ";")";
+    constexpr std::string_view jit = "FL:A:/Bad.HC,1",
+                               jit_line = "I64 Broke(){return 4+; } // bad expression";
+    for (unsigned i = 0; i < 2; i++) {
+      report(missing, jit, jit_line);
+      report(parse, jit, jit_line);
+    }
+    constexpr std::string_view aot = "FL:A:/BadAot.PRJ,1",
+                               aot_line = "4+; // bad AOT expression";
+    report(missing, aot, aot_line);
+    report(parse, aot, aot_line);
+    report(R"(";" $LK,)", aot, aot_line);
+    std::cout << "HolyC diagnostics matched the prompt, ExeFile, ExeFile2 and Cmp paths\n";
+    return;
+  }
   if (desktop == CDesktopTest::MenuDiagnostic) {
     cmd("CBlkDev *mdb=BlkDevNextFreeSlot('A',BDT_RAM);");
     cmd("mdb->max_blk=131071;");
@@ -543,12 +622,7 @@ static void DriveCharacterGraphics(
     cmd(R"hc(if(oldm)"MS %X\n",1;)hc");
     wait_text("MS 1");
     cmd(R"(MenuFilePush("BadMenu.HC");)");
-    wait([&](const Cells &cells) {
-      const auto screen = visible(cells);
-      const auto exception = screen.find("Except:Compiler");
-      return exception != std::string::npos &&
-             screen.find("A:/>", exception) != std::string::npos;
-    }, "Menu parser did not return after its Compiler exception");
+    wait_compiler_exception("A:/>");
     cmd(R"("Menu intact %X\n",Fs->cur_menu==oldm;)");
     const auto terminal = visible(wait_text("Menu intact 1"));
     std::ofstream(dir / "menu-diagnostic-terminal.txt") << terminal;
@@ -556,21 +630,11 @@ static void DriveCharacterGraphics(
     Check(terminal.find(R"(Missing ';' at"}")") != std::string::npos &&
               terminal.find("Except:Compiler") != std::string::npos,
           "Missing menu parser token or exception");
-    cmd("I64 msz;U8 *mdoc=DocSave(DocPut,&msz);");
-    cmd(R"("MDP %X %X %X\n",mdoc,&msz,&mdoc;)");
-    const auto fields = addresses("MDP ", {1, 8, 8});
-    const auto size = ReadPhysical<1>(vm, fields[1])[0];
-    Check(size && in_memory(fields[0], size), "Invalid menu diagnostic document size");
-    const auto output = dir / "menu-diagnostic-document.bin";
-    vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
-               std::to_string(fields[0]) + R"(,"size":)" + std::to_string(size) +
-               R"(,"filename":")" + output.string() + R"("}})");
-    const auto doc = ReadText(output);
+    const auto doc = save_diagnostic("menu-diagnostic-document.bin");
     const auto link = doc.find("FL:A:/BadMenu.HC,3");
     Check(link != std::string::npos &&
               doc.find("} // End of menu", link) != std::string::npos,
           "Missing menu parser source link or source line");
-    cmd("Free(mdoc);");
     cmd("MenuPop;");
     std::cout << "Malformed menu reported its source and preserved the menu stack\n";
     return;

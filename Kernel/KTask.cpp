@@ -66,8 +66,8 @@ static void UserTaskCont()
       break;
     DocUnlock(*doc);
     DocBottomCpp(doc);
-    if (result.exception) {
-      uint64_t tag = result.exception;
+    if (result.exception || result.parse_error) {
+      uint64_t tag = result.exception ? result.exception : COMPILER_ERROR;
       PrintCpp("Except:%c\n", 1, &tag);
     } else
       PutS("Syntax Error\n");

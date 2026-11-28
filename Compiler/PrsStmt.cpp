@@ -333,8 +333,13 @@ private:
     cc.cur_str = nullptr;
     auto *label = Lex(cc) == ':' ? coc.GoToLabelFind(name, true) : nullptr;
     Free(const_cast<char *>(name));
-    if (!label || label->defined)
+    if (!label || label->defined) {
+      if (cc.token != ':')
+        cc.parse_error = "Undefined identifier at ";
+      else if (label)
+        cc.parse_error = "Duplicate goto label at ";
       return false;
+    }
     label->defined = true;
     coc.Append(label->ic);
     return Consume(':');
@@ -666,6 +671,8 @@ private:
         return false;
       coc.Append(IC_END_EXP, value);
     } while (cc.token == ',' && Consume(','));
+    if (end == ';' && cc.token != ';')
+      cc.parse_error = "Missing ';' at";
     return Consume(end);
   }
 
@@ -1009,7 +1016,7 @@ bool PrsStreamBlk(CCmpCtrl &cc)
   return okay;
 }
 
-bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
+static bool PrsTopLevel(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
 {
   auto *aot = cc.flags & CCF_AOT_COMPILE ? cc.aot : nullptr;
   size_t size;
@@ -1095,6 +1102,14 @@ bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
   }
   if (visibility || flags)
     return false;
+  if (cc.token == TK_IDENT && !cc.hash_entry && !cc.local_var_entry) {
+    if (Lex(cc) == ':') {
+      Lex(cc);
+      cc.parse_error = "No global labels at ";
+    } else
+      cc.parse_error = "Undefined identifier at ";
+    return false;
+  }
   bool print = cc.token == TK_STR || cc.token == TK_CHAR_CONST;
   if (cc.token == '{' || print ||
       keyword == KW_IF || keyword == KW_FOR || keyword == KW_WHILE ||
@@ -1111,9 +1126,12 @@ bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
       return false;
   } else {
     machine = LexStatementExpression2Bin(cc, type, aot, &size);
-    if (!machine || cc.token != ';') {
+    if (!machine)
+      return false;
+    if (cc.token != ';') {
       Free(machine);
       machine = nullptr;
+      cc.parse_error = "Missing ';' at";
       return false;
     }
     Lex(cc);
@@ -1124,4 +1142,21 @@ bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
   Free(machine);
   machine = nullptr;
   return okay;
+}
+
+bool LexStmt2Bin(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
+{
+  if (PrsTopLevel(cc, machine, type))
+    return true;
+  if (!cc.jit_exception && !cc.parse_error_count) {
+    constexpr char parse_failure[] = "Compiler Parse Error at ";
+    LexExceptReport(cc, cc.parse_error ? cc.parse_error : parse_failure);
+    cc.parse_error_count = 1;
+    // PrsExpression reports again when its operator stack did not unwind.
+    if (cc.expression_error) {
+      LexExceptReport(cc, parse_failure);
+      cc.parse_error_count++;
+    }
+  }
+  return false;
 }
