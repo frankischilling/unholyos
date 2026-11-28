@@ -1360,6 +1360,51 @@ static bool CmpKeyDevData(CHashTable *table)
                          reinterpret_cast<void *>(CmpSysExport("keydev")));
 }
 
+static bool CmpACDictData(CHashTable *table)
+{
+  auto *cls = CmpKernelClass(table, "CAutoCompleteDictGlbls",
+                             sizeof(CAutoCompleteDictGlbls));
+  if (!cls)
+    return false;
+  auto *heap = CurrentTask()->data_heap;
+  auto *i64 = FindType("I64", table), *u8 = FindType("U8", table);
+  auto *boolean = FindType("Bool", table);
+  const struct {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+    int64_t count = 0;
+  } members[]{
+      {"word_lst", u8 + 1, offsetof(CAutoCompleteDictGlbls, word_lst)},
+      {"word_lst_size", i64, offsetof(CAutoCompleteDictGlbls, word_lst_size)},
+      {"num_words", i64, offsetof(CAutoCompleteDictGlbls, num_words)},
+      {"num_fillins", i64, offsetof(CAutoCompleteDictGlbls, num_fillins)},
+      {"fillins", u8 + 1, offsetof(CAutoCompleteDictGlbls, fillins), ACD_FILLINS_NUM},
+      {"has_words", boolean, offsetof(CAutoCompleteDictGlbls, has_words)},
+      {"has_defs", boolean, offsetof(CAutoCompleteDictGlbls, has_defs)},
+  };
+  for (const auto &member : members) {
+    auto *name = StrNew(member.name, heap);
+    auto *entry = name ? MemberAdd(*cls, name, *member.type, member.offset) : nullptr;
+    if (!entry) {
+      Free(name);
+      return false;
+    }
+    if (member.count) {
+      auto *axis = reinterpret_cast<CArrayDim *>(CAlloc(sizeof(CArrayDim), heap));
+      if (!axis)
+        return false;
+      axis->cnt = member.count;
+      axis->total_cnt = 1;
+      entry->dim.next = axis;
+      entry->dim.total_cnt = member.count;
+      entry->size = member.type->size * member.count;
+    }
+  }
+  return CmpKernelGlobal(table, "acd", cls,
+                         reinterpret_cast<void *>(CmpSysExport("acd")));
+}
+
 static bool CmpTextData(CHashTable *table)
 {
   auto *cls=CmpKernelClass(table,"CTextGlbls",sizeof(CTextGlbls));
@@ -2732,6 +2777,14 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"ViewAnglesDel", U0, FF_RET1, {{"task", TaskPtr, true}}},
       {"AutoComplete", Bool, FF_RET1, {{"val", Bool, true}}},
       {"ACInit", U0, FF_RET1, {{"mask", U8Ptr, true}}},
+      {"ACDWordsLoad", U0, FF_RET1, {}},
+      {"ACDWordPtAt", U8Ptr, FF_RET1, {{"st", U8Ptr}}},
+      {"ACDDefGet", U8Ptr, FF_RET1, {{"st", U8Ptr}, {"def_num", I64, true, 1}}},
+      {"ACDDefsGet", U8Ptr, FF_RET1, {{"st", U8Ptr}}},
+      {"ACDDefsPut", U0, FF_RET1, {{"doc", DocPtr, true}, {"st", U8Ptr},
+                                  {"num", I64, true, UINT64_MAX}}},
+      {"ACDPopUpDef", U0, FF_RET1, {{"st", U8Ptr}, {"num", I64, true, UINT64_MAX},
+                                    {"parent", TaskPtr, true}}},
       {"MenuSubEntryFind", MenuEntryPtr, FF_RET1, {{"haystack_first", MenuEntryPtr}, {"needle_entry_name", U8Ptr}}},
       {"MenuEntryFind", MenuEntryPtr, FF_RET1, {{"haystack_menu", MenuPtr}, {"needle_full_name", U8Ptr}}},
       {"MenuNew", MenuPtr, FF_RET1, {{"st", U8Ptr}, {"flags", I64, true}, {"task", TaskPtr, true}}},
@@ -3633,6 +3686,12 @@ static bool CmpFillHash(CHashTable *table)
       {"LK_FILE_LINE", "3"}, {"LK_MAN_PAGE", "4"}, {"LK_PLAIN", "5"},
       {"LK_PLAIN_FIND", "6"}, {"LK_PLAIN_LINE", "7"}, {"LK_BIBLE_FIND", "8"},
       {"LK_DEF", "9"}, {"LK_HELP_INDEX", "10"}, {"LK_ADDR", "11"},
+      {"ACD_END_CHAR", "0"}, {"ACD_WORD_CHAR", "1"}, {"ACD_DEF_CHAR", "2"},
+      {"ACD_PRONUNCIATION_CHAR", "3"}, {"ACD_POS_CHAR", "4"}, {"ACD_EXTRA_CHAR", "5"},
+      {"ACD_BLK_SIZE", "0x4000"}, {"ACD_FILLINS_NUM", "10"},
+      {"ACD_WORD_FILENAME", "\"/Adam/AutoComplete/ACWords.DATA.Z\""},
+      {"ACD_DEF_FILENAME", "\"/Adam/AutoComplete/ACDefs.DATA\""},
+      {"ACD_DEF_FILENAME_Z", "\"/Adam/AutoComplete/ACDefs.DATA.Z\""},
       {"LK_DOC", "12"}, {"LK_DOC_ANCHOR", "13"}, {"LK_DOC_FIND", "14"},
       {"LK_DOC_LINE", "15"},
       {"DOCF_FORM", "0x200"}, {"DOCF_SIZE_MIN", "0x400"},
@@ -3811,7 +3870,8 @@ static bool CmpFillHash(CHashTable *table)
          CmpComplexData(table) && CmpQueData(table) && CmpFifoData(table) && CmpDateData(table) &&
          CmpBinData(table) && CmpDirData(table) &&
          CmpDocData(table, *task) && CmpTaskData(table, task) &&
-         CmpKbdData(table) && CmpKeyDevData(table) && CmpTextData(table) &&
+         CmpKbdData(table) && CmpKeyDevData(table) && CmpACDictData(table) &&
+         CmpTextData(table) &&
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
          CmpScrnCastData(table) && CmpMusicData(table) &&
          CmpTaskSettingsData(table) && CmpMenuData(table, task) &&

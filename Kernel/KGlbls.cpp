@@ -5,6 +5,7 @@ CTask *adam_task, *sys_focus_task, *sys_winmgr_task,
 CCPU *cpu_structs;
 int64_t mp_cnt;
 CAutoCompleteGlbls ac;
+CAutoCompleteDictGlbls acd;
 CBlkDevGlbls blkdev;
 CDate local_time_offset;
 CDbgGlbls dbg;

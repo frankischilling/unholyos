@@ -2072,8 +2072,31 @@ the cursor, and ranks up to ten matching words by hit count.
 suffix through the task input queue. Ctrl-Shift with those keys
 looks up the selected symbol's source link.
 
-Dictionary loading and pane link selection remain pending. The pane
-clears its document with `DocClear` and fits the content when shown.
+The regular and stock DVDs carry the pinned `ACWords.DATA` and
+`ACDefs.DATA` byte for byte before packaging. Terry A. Davis credits
+Project Gutenberg for the Webster dictionary in [Credits](../Doc/Credits.DD).
+`ACDWordsLoad` expands the word list and installs its case-folded hash
+entries. The loader accepts entries without a marker, as the original
+does. `ACDWordPtAt` searches the original word bytes and distinguishes the
+word marker from the same byte in a block index. Definition lookup reads
+up to two 16 KiB blocks from the uncompressed definition file and clips
+the final read to the file extent.
+
+The source checkout's word list has 1,238,691 bytes. The pinned DVD
+expands its word list to 1,253,930 bytes. Both load 95,293 words.
+The UnholyOS DVD packages definitions uncompressed so they are available
+in a live session. The reference test expands the original DVD archive
+to a scratch RAM drive and sets that drive as the popup tasks' home.
+
+`ACFill.cpp` provides the HolyC definition and popup calls. A typed
+`acd` global exposes the original packed 114-byte record. Ctrl-0 through Ctrl-9
+insert the dictionary suffixes and Ctrl-Shift with those keys opens
+definitions. `EdLinkCvt` and `Ed` handle `DN:` links with an optional
+definition number. Pane link selection and dictionary generation remain
+pending. Writable-media preparation uses the original move to the
+uncompressed name and currently omits `ACProgressTask`.
+
+The pane clears its document with `DocClear` and fits the content when shown.
 TempleOS calls `DocRst` and handles minimum-window sizing during
 every document recalculation.
 
@@ -2091,7 +2114,7 @@ caller's working directory when the editor returns. `DocFind.cpp`
 supplies the one-based line, tag search, and named-anchor operations.
 `DocTerm.cpp` opens file links through the reference left-click
 callback. Raw-mode editing, the right-click terminal file menu,
-undo, generated help indexes, dictionary, address, and Bible links
+undo, generated help indexes, address, and Bible links
 remain pending.
 
 `Kernel/Job.cpp` follows `Kernel/Job.HC` for `PopUp` and `PopUpPrint`.

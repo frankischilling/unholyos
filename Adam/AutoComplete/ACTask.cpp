@@ -9,6 +9,23 @@ extern "C" void DocClearCpp(CDoc *doc, uint8_t clear_holds);
 extern "C" bool DocCursorCpp(bool show, CDoc *doc);
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 
+static void ACDDictWordsAdd(const char *word)
+{
+  auto *record = ACDWordPtAtCpp(word);
+  if (!record)
+    return;
+  int64_t i = 0;
+  for (; i < ACD_FILLINS_NUM && *record == ACD_WORD_CHAR;
+       i++, record = ACDWordNext(record)) {
+    if (i)
+      PutS("\n");
+    acd.fillins[i] = record;
+    const uint64_t args[]{uint64_t(i), reinterpret_cast<uintptr_t>(record + 1)};
+    PrintCpp("$GREEN$'%d'$FG$ %-23ts", 2, args);
+  }
+  acd.num_fillins = i;
+}
+
 static void ACDocRst(int64_t left, int64_t top)
 {
   auto *task = CurrentTask();
@@ -124,6 +141,8 @@ static void ACPutChoices(CDoc &focus_doc, CDocEntryBase *entry,
       PrintCpp("%s\n", 1, args);
     }
   }
+  if (acd.has_words)
+    ACDDictWordsAdd(word);
 }
 
 static void ACTaskNormal(int64_t sc, int64_t last_sc, CTask *focus_task,

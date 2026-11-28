@@ -8,6 +8,11 @@ static bool DocACKey(int64_t ch, int64_t sc)
          key <= SC_F10;
 }
 
+static bool DocACDigit(int64_t ch, int64_t sc)
+{
+  return '0' <= ch && ch <= '9' && (sc & (SCF_CTRL | SCF_ALT)) == SCF_CTRL;
+}
+
 static void DocKeyDescription(int64_t ch, int64_t sc)
 {
   const char *desc = nullptr;
@@ -29,6 +34,8 @@ static void DocKeyDescription(int64_t ch, int64_t sc)
     desc = "Char  /Back Space";
   else if (DocACKey(ch, sc))
     desc = shift ? "Cmd /Src Code of Sym" : "Edit/Autocomplete Sym";
+  else if (DocACDigit(ch, sc))
+    desc = shift ? "Cmd /Word Definition" : "Edit/Autocomplete Word";
   else if (!ch)
     switch (uint8_t(sc)) {
     case SC_F1:
@@ -72,6 +79,15 @@ extern "C" void DocPutKeyCpp(CDoc *doc, int64_t ch, int64_t sc)
         ACMan(choice, CurrentTask());
       else
         ACFillIn(choice);
+    }
+    return;
+  }
+  if (DocACDigit(ch, sc)) {
+    if (AutoCompleteCpp(true)) {
+      if (sc & SCF_SHIFT)
+        ACDDef(ch - '0', CurrentTask());
+      else
+        ACDFillin(ch - '0');
     }
     return;
   }
