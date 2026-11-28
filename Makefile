@@ -14,7 +14,7 @@ CXXFLAGS := -std=c++20 -Os -Wall -Wextra -Werror -ffreestanding -fno-pie \
 ASM_SRC := Kernel/KStart16.asm Kernel/KStart32.asm Kernel/KStart64.asm Kernel/KUtils.asm \
 	Kernel/KMathA.asm Kernel/StrA.asm Kernel/KInts.asm Kernel/KExcept.asm Kernel/KLoad.asm Kernel/KExts.asm Kernel/Sched.asm Kernel/PCIBIOS.asm \
 	Kernel/Mem/PageTables.asm Kernel/SerialDev/SerialBoot.asm Adam/Opt/Boot/DskISORedSea.asm \
-	Adam/Gr/GrAsm.asm Adam/Gr/GrTextBase.asm
+	Adam/ASnd.asm Adam/Gr/GrAsm.asm Adam/Gr/GrTextBase.asm
 CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp Kernel/KDbg.cpp Kernel/MultiProc.cpp Kernel/Display.cpp Kernel/FontStd.cpp Kernel/FontCyrillic.cpp Kernel/SerialDev/Serial.cpp \
 	Kernel/KTask.cpp Kernel/Sched.cpp Kernel/KHashA.cpp Kernel/KHashB.cpp Kernel/KLoad.cpp Kernel/KMathB.cpp Kernel/StrA.cpp \
 	Kernel/KDataTypes.cpp Kernel/KDate.cpp Kernel/KExcept.cpp Kernel/KExts.cpp Kernel/QSort.cpp \
@@ -223,6 +223,10 @@ MATH_TEST_ISO := $(BUILD)/math-test.iso
 MATH_PROBE := Linux/Fixtures/MathHelpersProbe.HC
 MUSIC_PRECISION_ISO := $(BUILD)/music-precision-test.iso
 MUSIC_PRECISION_PROBE := Linux/Fixtures/MusicPrecision.HC
+WAVEFORM_PROBE := Linux/Fixtures/WaveformProbe.HC
+WAVEFORM_TEST_ISO := $(BUILD)/waveform-test.iso
+FRAME_PTR_PROBE := Linux/Fixtures/FramePtrProbe.HC
+FRAME_PTR_TEST_ISO := $(BUILD)/frame-ptr-test.iso
 STRINGS_TEST_ISO := $(BUILD)/strings-test.iso
 STRINGS_PROBES := Linux/Fixtures/StrScanProbe.HC Linux/Fixtures/DocScanProbe.HC Linux/Fixtures/StringUtilitiesProbe.HC \
 	Linux/Fixtures/FloatScanProbe.HC Linux/Fixtures/DateScanProbe.HC Linux/Fixtures/StringCompareProbe.HC
@@ -276,10 +280,14 @@ STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 COMPILER_WARNING_PROBES := Linux/Fixtures/CompilerWarningProbe.HC \
 	Linux/Fixtures/ForwardTypeWarningProbe.HC Linux/Fixtures/HeaderWarningProbe.HC
 COMPILER_WARNING_TEST_ISO := $(BUILD)/compiler-warning-test.iso
+MEMORY_DUMP_PROBE := Linux/Fixtures/MemoryDumpProbe.HC
+MEMORY_DUMP_TEST_ISO := $(BUILD)/memory-dump-test.iso
 AOT_DATA_HEAP_PROBES := Linux/Fixtures/HeapGlobals.PRJ Linux/Fixtures/HeapGlobalsInvalid.PRJ
 AOT_DATA_HEAP_TEST_ISO := $(BUILD)/aot-data-heap-test.iso
 BIT_FIELD_PROBE := Linux/Fixtures/BitFieldProbe.HC
 BIT_FIELD_TEST_ISO := $(BUILD)/bit-field-test.iso
+EXTERN_IMPORT_PROBES := Linux/Fixtures/ExternImportOption.PRJ Linux/Fixtures/ExternImportOptionInvalid.HC
+EXTERN_IMPORT_TEST_ISO := $(BUILD)/extern-import-test.iso
 
 # Every bootable test image uses the same Adam source initialization.
 $(ISO) $(foreach target,$(filter %_ISO,$(.VARIABLES)),$($(target))): $(ADAM_STARTUP_SOURCES)
@@ -478,7 +486,7 @@ $(AC_GEN_DISK): $(FAT_TOOL) $(AC_GEN_INPUT) Linux/Fixtures/ACDictGen.HC
 
 $(ISO) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(ATA_TEST_ISO) $(FAT_WRITE_ISO) \
 $(FAT_FORMAT_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(BREAK_TEST_ISO) \
-$(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(STRINGS_TEST_ISO) \
+$(MATH_TEST_ISO) $(MUSIC_PRECISION_ISO) $(WAVEFORM_TEST_ISO) $(FRAME_PTR_TEST_ISO) $(STRINGS_TEST_ISO) \
 $(HOST_MODULE_TEST_ISO) $(NATIVE_IMPORT_TEST_ISO) $(LATE_IMPORT_TEST_ISO) $(LOAD_API_TEST_ISO) $(LOAD_PASS2_TEST_ISO) $(COMPILER_DEFINES_TEST_ISO) $(STRING_DEFINES_TEST_ISO) $(SYSTEM_DEFINES_TEST_ISO) $(COLOR_CONVERSIONS_TEST_ISO) $(FORMAT_MISSING_ARGS_TEST_ISO) $(INTERNAL_TYPES_TEST_ISO) $(CLASS_RECORDS_TEST_ISO): $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 
 $(HOST_MODULE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(HOST_MODULE)
@@ -659,6 +667,12 @@ $(BREAK_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(BREAK_PROBE)
 
 $(MATH_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(MATH_PROBE) $(FILE_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(MATH_PROBE) --file $(FILE_WRITE_PROBE)
+
+$(FRAME_PTR_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(FRAME_PTR_PROBE) $(FILE_WRITE_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --dir Home --file $(FRAME_PTR_PROBE) --file $(FILE_WRITE_PROBE)
+
+$(WAVEFORM_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(WAVEFORM_PROBE) $(FILE_WRITE_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --dir Home --file $(WAVEFORM_PROBE) --file $(FILE_WRITE_PROBE)
 
 $(MUSIC_PRECISION_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(MUSIC_PRECISION_PROBE) $(FILE_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(MUSIC_PRECISION_PROBE) --file $(FILE_WRITE_PROBE)
@@ -898,6 +912,24 @@ test-compiler-diagnostic: $(ISO) $(BOOT_TEST)
 
 test: test-compiler-diagnostic
 
+.PHONY: test-memory-dump
+$(MEMORY_DUMP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(MEMORY_DUMP_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(MEMORY_DUMP_PROBE)
+
+test-memory-dump: $(MEMORY_DUMP_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --memory-dump "$(QEMU)" $(MEMORY_DUMP_TEST_ISO)
+
+test: test-memory-dump
+
+.PHONY: test-extern-import-option
+$(EXTERN_IMPORT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(EXTERN_IMPORT_PROBES)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(foreach file,$(EXTERN_IMPORT_PROBES),--file $(file))
+
+test-extern-import-option: $(EXTERN_IMPORT_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --extern-import-option "$(QEMU)" $(EXTERN_IMPORT_TEST_ISO)
+
+test: test-extern-import-option
+
 .PHONY: test-aot-data-heap
 $(AOT_DATA_HEAP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(AOT_DATA_HEAP_PROBES)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(foreach file,$(AOT_DATA_HEAP_PROBES),--file $(file))
@@ -964,6 +996,18 @@ test-optical-image: $(OPTICAL_IMAGE_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --optical-image "$(QEMU)" $(OPTICAL_IMAGE_TEST_ISO)
 
 test: test-nested-redsea test-fat32-image test-optical-image
+
+.PHONY: test-waveform
+test-waveform: $(WAVEFORM_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --waveform "$(QEMU)" $(WAVEFORM_TEST_ISO)
+
+test: test-waveform
+
+.PHONY: test-frame-ptr
+test-frame-ptr: $(FRAME_PTR_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --frame-ptr "$(QEMU)" $(FRAME_PTR_TEST_ISO)
+
+test: test-frame-ptr
 
 run: $(ISO)
 	$(QEMU) -machine pc -cpu qemu64 -m 512 -boot d -cdrom $< -serial stdio

@@ -1138,7 +1138,13 @@ static bool PrsTopLevel(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
   auto *base = PrsClass(cc);
   if (base)
     Lex(cc);
-  bool forward = decl.mode == KW_EXTERN && !base;
+  const bool forward = decl.mode == KW_EXTERN && !base;
+  if (cc.opts & (1ULL << OPTf_EXTERNS_TO_IMPORTS)) {
+    if (decl.mode == KW__EXTERN)
+      decl.mode = KW__IMPORT;
+    else if (decl.mode == KW_EXTERN && base)
+      decl.mode = KW_IMPORT;
+  }
   keyword = Keyword(cc);
   if ((decl.mode < 0 || forward) && (keyword == KW_CLASS || keyword == KW_UNION)) {
     base = PrsClassDef(cc, keyword == KW_UNION, forward, visibility, base);
@@ -1157,6 +1163,10 @@ static bool PrsTopLevel(CCmpCtrl &cc, uint8_t *&machine, CRawType &type)
       CPrsDeclarator parsed;
       if (!PrsType(cc, *base, parsed, flags) || !parsed.name)
         return false;
+      if (decl.Import() && !aot) {
+        cc.parse_error = "import not needed at ";
+        return false;
+      }
       if (!parsed.fun_ptr && first && cc.token == '(')
         return PrsFun(cc, *parsed.cls, parsed.TakeName(), visibility, flags,
                       aot, decl);

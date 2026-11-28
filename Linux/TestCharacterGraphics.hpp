@@ -83,6 +83,24 @@ constexpr CTextProbe math_probes[]{{"math-helpers", "/MathHelpersProbe.HC",
 constexpr CTextProbe music_precision_probes[]{
     {"music-precision", "/MusicPrecision.HC", "/MusicPrecision.BIN.Z",
      "MP initial ", "MP DONE", music_precision_output}};
+constexpr std::string_view waveform_output =
+    "WSaw F6CA3FD7003C2305 B051024DD6A03093 16B9595DFE3B3F05 242941C922C21D8E\n"
+    "ESaw 694225FA29725D4F D7E4FCFA299D713D E90225FA29725D4F 694225FA29725D4F\n"
+    "WFullSaw 1F923FD7003C2305 3DF44450134EF049 A203941113C63005 D598BE45B782038D\n"
+    "EFullSaw C7B225FA29725D4F D7E4FCFA299D713D E90225FA29725D4F C7B225FA29725D4F\n"
+    "WCaw CC8A3FD7003C2305 807ABC3FC562C5CB 0E3E0BA7E4785E63 9138104E791CD438\n"
+    "ECaw 134225FA29725D4F C8A4FCFA299D713D 690225FA29725D4F 134225FA29725D4F\n"
+    "WFullCaw 1F923FD7003C2305 3DF44450134EF049 2203941113C63005 5598BE45B782038D\n"
+    "EFullCaw C7B225FA29725D4F C8A4FCFA299D713D E90225FA29725D4F C7B225FA29725D4F\n"
+    "WTri 3FB23FD7003C2305 BBC74D9C8E65B52D F1F1317325270A8C D11F7326D7B667CF\n"
+    "ETri 9DB225FA29725D4F D7E4FCFA299D713D 690225FA29725D4F 9DB225FA29725D4F\n"
+    "WFullTri 5E723FD7003C2305 425D13C679C6CD3D 7C2A4BCA0BEDAD33 826C54C130AC19E7\n"
+    "EFullTri 9DB225FA29725D4F D7E4FCFA299D713D E90225FA29725D4F 9DB225FA29725D4F\n"
+    "Wave direct 3FD0000000000000\n"
+    "Waveforms done\n";
+constexpr CTextProbe waveform_probes[]{
+    {"waveform", "/WaveformProbe.HC", "/WaveformProbe.BIN.Z", "WSaw ",
+     "Waveforms done", waveform_output}};
 constexpr CTextProbe training_input_probes[]{
     {"training-input", "/InputTrainingProbe.HC", "",
      "Training result ", "Training result FF", "Training result FF\n", {}, true}};
@@ -107,6 +125,7 @@ enum class CDesktopTest {
   None, Progress, DictionaryInstall, DictionaryGenerator, DictionaryGeneratorHolyC,
   MenuDiagnostic, CompilerDiagnostic, CompilerCmpDiagnostic, CompilerWarning,
   CompilerForwardWarning, CompilerHeaderWarning,
+  ExternImportOption, ExternImportOptionJIT,
   AOTDataHeap, AOTDataHeapInvalid
 };
 
@@ -583,8 +602,11 @@ static void DriveCharacterGraphics(
   const bool compiler_probe = desktop == CDesktopTest::CompilerDiagnostic ||
                               desktop == CDesktopTest::CompilerCmpDiagnostic ||
                               compiler_warning;
+  const bool extern_import = desktop == CDesktopTest::ExternImportOption ||
+                             desktop == CDesktopTest::ExternImportOptionJIT;
   if (desktop == CDesktopTest::MenuDiagnostic || compiler_probe ||
-      desktop == CDesktopTest::AOTDataHeapInvalid)
+      desktop == CDesktopTest::AOTDataHeapInvalid ||
+      desktop == CDesktopTest::ExternImportOptionJIT)
     cmd("I64 dsz;U8 *dout;");
   auto wait_compiler_exception = [&](std::string_view dir_prompt) {
     return wait([&](const Cells &cells) {
@@ -608,7 +630,7 @@ static void DriveCharacterGraphics(
     return ReadText(output);
   };
   if (compiler_probe ||
-      (!reference && (desktop == CDesktopTest::AOTDataHeap ||
+      (!reference && (extern_import || desktop == CDesktopTest::AOTDataHeap ||
                       desktop == CDesktopTest::AOTDataHeapInvalid))) {
     cmd("CBlkDev *db=BlkDevNextFreeSlot('A',BDT_RAM);");
     cmd("db->max_blk=131071;");
@@ -1167,6 +1189,42 @@ static void DriveCharacterGraphics(
       cmd(clear ? "DocClear(,1);ExePutS(cgprobe);Free(cgprobe);"
                 : "ExePutS(cgprobe);Free(cgprobe);");
   };
+  if (extern_import) {
+    const bool jit = desktop == CDesktopTest::ExternImportOptionJIT;
+    const auto *name = jit ? "ExternImportOptionInvalid.HC" : "ExternImportOption.PRJ";
+    const std::string source = jit ? "ETO.HC" : "ETO.PRJ";
+    if (reference) {
+      cmd(R"(Cd("B:/");)");
+      wait_text("B:/>");
+      const auto project = fs::absolute(fs::path("Linux/Fixtures") / name);
+      upload(project, false, false);
+      cmd("FileWrite(\"" + source + "\",cgprobe," +
+          std::to_string(fs::file_size(project)) + ");");
+    } else
+      cmd(std::string("Copy(\"::/") + name + "\",\"" + source + "\");");
+    if (jit) {
+      cmd(R"(ExeFile2("ETO.HC");)");
+      wait_compiler_exception(reference ? "B:/>" : "A:/>");
+      const auto doc = save_diagnostic("extern-import-jit.bin");
+      const auto *link = reference ? "FL:B:/ETO.HC,4" : "FL:A:/ETO.HC,4";
+      Check(doc.find(R"(import not needed at ";")") != std::string::npos &&
+                doc.find(link) != std::string::npos,
+            "JIT extern conversion reported a different error");
+      std::cout << "JIT rejected the converted import at the declaration\n";
+      return;
+    }
+    cmd(R"("EC %X\n",Cmp("ETO.PRJ",,"ETO.BIN");)");
+    wait_text("EC 0");
+    cmd("public I64 ETOProvider(I64 n){return n*2;}");
+    cmd("public I64 ETOData=11,_ETOData=13;");
+    cmd(R"hc(if(Load("ETO.BIN"))"EL %X\n",1;)hc");
+    wait_text("EL 1");
+    cmd("_extern _ETORun I64 ETORun(I64 value);");
+    cmd(R"("EV %X\n",ETORun(2);)");
+    wait_text("EV 2A");
+    std::cout << "Cmp and Load matched extern conversion and local forward declarations\n";
+    return;
+  }
   if (desktop == CDesktopTest::AOTDataHeap || desktop == CDesktopTest::AOTDataHeapInvalid) {
     const bool invalid = desktop == CDesktopTest::AOTDataHeapInvalid;
     const auto *name = invalid ? "HeapGlobalsInvalid.PRJ" : "HeapGlobals.PRJ";
@@ -1385,6 +1443,9 @@ static void DriveCharacterGraphics(
       screen_file.close();
       Check(bool(screen_file), "Could not record reference text screen");
       snapshot(probe.name);
+      if (std::string_view(probe.name) == "memory-dump")
+        Check(screen.find(".. $ABCDEFGHIJKL") != std::string::npos,
+              "Memory dump character column differs");
       const auto first = screen.find(probe.first);
       Check(first != std::string::npos,
             "Missing first reference text probe line");

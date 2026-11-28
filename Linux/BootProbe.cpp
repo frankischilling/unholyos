@@ -2348,6 +2348,12 @@ void BootProbe()
     BootVariadicReport(*adam_task->cur_dv, *adam_task, "/MusicPrecision.HC",
                        "/MusicPrecision.BIN.Z",
                        "Cmp(\"::/MusicPrecision.HC\",,\"B:/MusicPrecision.BIN.Z\");");
+    BootVariadicReport(*adam_task->cur_dv, *adam_task, "/WaveformProbe.HC",
+                       "/WaveformProbe.BIN.Z",
+                       "Cmp(\"::/WaveformProbe.HC\",,\"B:/WaveformProbe.BIN.Z\");");
+    BootVariadicReport(*adam_task->cur_dv, *adam_task, "/FramePtrProbe.HC",
+                       "/FramePtrProbe.BIN.Z",
+                       "Cmp(\"::/FramePtrProbe.HC\",,\"B:/FramePtrProbe.BIN.Z\");");
     BootVariadicReport(
         *adam_task->cur_dv, *adam_task, "/StrScanProbe.HC",
         "/StrScanProbe.BIN.Z",

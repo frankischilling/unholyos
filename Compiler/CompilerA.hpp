@@ -116,7 +116,7 @@ constexpr int64_t LFSF_DOC = 1, LFSF_DEFINE = 2;
 constexpr int64_t COMPILER_ERROR = 0x72656C69706D6F43; // Compiler
 constexpr int64_t OPTF_WARN_UNUSED_VAR = 1 << 0x10,
                   OPTF_WARN_HEADER_MISMATCH = 1 << 0x13;
-constexpr int64_t OPTf_NO_REG_VAR = 0x22;
+constexpr int64_t OPTf_EXTERNS_TO_IMPORTS = 0x20, OPTf_NO_REG_VAR = 0x22;
 constexpr int64_t OPTf_GLBLS_ON_DATA_HEAP = 0x23;
 extern "C" uint64_t GetOptionCpp(int64_t num);
 char *CmdLinePmt();

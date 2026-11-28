@@ -70,6 +70,12 @@ reads the function address from its declaration, and the later
 definition updates that slot. `Compiler/CExcept.cpp` and its assembly
 adapter implement the reference's `UndefinedExtern` path.
 
+`PrsTopLevel` follows the `sm_import` and `sm_underscore_import` paths
+in `Compiler/PrsStmt.HC` when `OPTf_EXTERNS_TO_IMPORTS` is enabled.
+Typed `extern` and `_extern` declarations use the existing import paths.
+Forward class and union declarations still use the type parser. During
+JIT compilation, the converted declaration reports `import not needed at`.
+
 `PrsGlobal` follows `PrsGlblVarLst` in `Compiler/PrsStmt.HC` when
 `OPTf_GLBLS_ON_DATA_HEAP` is set. AOT declarations reject initializers
 and record the allocation in `CAOTHeapGlbl`. The generated address uses a
@@ -1310,6 +1316,14 @@ do not yield while held. Full drive-lock release, general
 Ctrl-Alt callback registration and preemptive scheduling remain
 pending.
 
+## Kernel memory dumps
+
+`Kernel/KDbg.cpp` translates `D`, `Dm`, and `Da` from `Kernel/KDbg.HC`.
+The dump retains 16 bytes per row, short-row padding, offset and address
+formats, and the character output through `PutChars`. `Da` uses the
+symbolic formatter for the address stored in each pointer slot. The
+HolyC exports use the defaults and argument order from `KernelC.HH`.
+
 ## Kernel math helpers
 
 `Kernel/KMathB.cpp` follows the function order and branches in
@@ -1618,8 +1632,35 @@ disabled. `Play` also checks the lower bound of the note index before
 accessing `music.note_map`; the reference only checks the upper bound.
 Characters below `A` outside the notation modifiers therefore become
 rests instead of reading outside that array. SMP synchronization,
-`CurSongTask`, the waveform functions, `Noise`, and `Sweep` remain
-pending. Terry A. Davis's original song stays in `Demo/Snd/OhGreat.HC`.
+`CurSongTask`, `Noise`, and `Sweep` remain pending. Terry A. Davis's
+original song stays in `Demo/Snd/OhGreat.HC`.
+
+## Music waveform functions
+
+`Saw`, `FullSaw`, `Caw`, `FullCaw`, `Tri`, and `FullTri` in
+`Adam/ASnd.cpp` follow Terry A. Davis's `Adam/ASnd.HC`. The first
+four compare the sign of the input's raw binary64 word, as the pinned
+compiler does for `t>=0.0`. All six test the period word as an
+integer, so positive and negative zero follow different paths.
+
+`F64RemBits` in `Kernel/KMathA.asm` uses the modulo loop from
+`Compiler/Templates.HC` and stores the remainder as binary64.
+`Adam/ASnd.asm` keeps the subsequent division, scale, and offset
+operations on the x87 stack through the reference's next binary64
+store. The triangle routines store the scaled phase before comparing
+it to their bounds. The public functions use the HolyC stack
+convention and return the binary64 word in RAX.
+
+## Task frame pointers
+
+`FramePtr`, `FramePtrAdd`, `FramePtrSet`, `FramePtrDel`, and
+`HashGenericAdd` in `Kernel/KHashB.cpp` follow Terry A. Davis's
+`Kernel/KHashB.HC`. A frame entry owns a copy of its name and lives in
+the target task's hash table. A lookup follows the table chain.
+`FramePtrSet` exchanges `user_data0` and returns its previous value.
+`FramePtrDel` returns the found value and attempts removal only in the
+requested task's table, so deleting an inherited entry leaves it
+available from the parent.
 
 ## Linked lists and queues
 

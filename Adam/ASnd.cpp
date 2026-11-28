@@ -20,14 +20,101 @@ static int64_t ToI64(uint64_t value)
   return F64ToI64(value, 0x0C00);
 }
 
-CMusicGlbls music{nullptr, nullptr, 4, F64(1.0), {0, 2, 3, 5, 7, 8, 10},
-                  false, 4, 4, F64(2.5), F64(0.9), 0, 0, 0, 0};
-
 extern "C" [[noreturn]] void SndTaskEndCBCpp()
 {
   SndCpp(0);
   Exit();
 }
+
+extern "C" uint64_t SndPhaseAddOne(uint64_t rem,uint64_t period);
+extern "C" uint64_t SndFullPhase(uint64_t rem,uint64_t period,uint64_t scale,
+                                 uint64_t offset);
+extern "C" uint64_t SndOneMinusPhase(uint64_t rem,uint64_t period);
+extern "C" uint64_t SndScaleRem(uint64_t rem,uint64_t period,uint64_t scale);
+
+extern "C" uint64_t SawCpp(uint64_t t,uint64_t period)
+{
+  if (period) {
+    uint64_t rem=F64RemBits(t,period);
+    if (int64_t(t)>=0)
+      return F64DivBits(rem,period);
+    else
+      return SndPhaseAddOne(rem,period);
+  } else
+    return 0;
+}
+
+extern "C" uint64_t FullSawCpp(uint64_t t,uint64_t period)
+{
+  if (period) {
+    uint64_t rem=F64RemBits(t,period);
+    if (int64_t(t)>=0)
+      return SndFullPhase(rem,period,F64(2.0),F64(-1.0));
+    else
+      return SndFullPhase(rem,period,F64(2.0),F64(1.0));
+  } else
+    return 0;
+}
+
+extern "C" uint64_t CawCpp(uint64_t t,uint64_t period)
+{
+  if (period) {
+    uint64_t rem=F64RemBits(t,period);
+    if (int64_t(t)>=0)
+      return SndOneMinusPhase(rem,period);
+    else
+      return F64DivBits(rem^(uint64_t{1}<<63),period);
+  } else
+    return F64(1.0);
+}
+
+extern "C" uint64_t FullCawCpp(uint64_t t,uint64_t period)
+{
+  if (period) {
+    uint64_t rem=F64RemBits(t,period);
+    if (int64_t(t)>=0)
+      return SndFullPhase(rem,period,F64(-2.0),F64(1.0));
+    else
+      return SndFullPhase(rem,period,F64(-2.0),F64(-1.0));
+  } else
+    return F64(1.0);
+}
+
+extern "C" uint64_t TriCpp(uint64_t t,uint64_t period)
+{
+  if (period) {
+    t=SndScaleRem(F64RemBits(F64AbsBits(t),period),period,F64(2.0));
+    if (F64CompareBits(t,F64(1.0))<=0)
+      return t;
+    else
+      return F64SubBits(F64(2.0),t);
+  } else
+    return 0;
+}
+
+extern "C" uint64_t FullTriCpp(uint64_t t,uint64_t period)
+{
+  if (period) {
+    t=SndScaleRem(F64RemBits(t,period),period,F64(4.0));
+    if (F64CompareBits(t,F64(-1.0))<=0) {
+      if (F64CompareBits(t,F64(-3.0))<=0)
+        return F64AddBits(t,F64(4.0));
+      else
+        return F64SubBits(F64(-2.0),t);
+    } else {
+      if (F64CompareBits(t,F64(1.0))<=0)
+        return t;
+      else if (F64CompareBits(t,F64(3.0))<=0)
+        return F64SubBits(F64(2.0),t);
+      else
+        return F64SubBits(t,F64(4.0));
+    }
+  } else
+    return 0;
+}
+
+CMusicGlbls music{nullptr, nullptr, 4, F64(1.0), {0, 2, 3, 5, 7, 8, 10},
+                  false, 4, 4, F64(2.5), F64(0.9), 0, 0, 0, 0};
 
 extern "C" uint64_t tMCpp()
 {
