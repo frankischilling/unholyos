@@ -165,6 +165,7 @@ ONCE_HOME := Linux/Fixtures/OnceHome.HC
 ONCE_BOOT := Linux/Fixtures/OnceBoot.DD
 ONCE_TEST_ISO := $(BUILD)/once-test.iso
 STOCK_ONCE_TEST_ISO := $(BUILD)/stock-once-test.iso
+AC_INSTALL_DISK := $(BUILD)/dictionary-install.img
 INPUT_TRAINING_PROBE := Linux/Fixtures/InputTrainingProbe.HC
 FILE_EDITOR_PROBE := Linux/Fixtures/FileEditorProbe.HC
 STOCK_TOUR := $(wildcard Misc/Tour/*.IN)
@@ -443,9 +444,9 @@ $(LATE_IMPORT_PROVIDER): $(LATE_IMPORT_PROVIDER_OBJECT) Linux/Fixtures/LateImpor
 $(LOAD_API_CONSUMER): $(LOAD_API_CONSUMER_OBJECT) Linux/Fixtures/LoadApiConsumer.bindings $(BIN_TOOL)
 	$(BIN_TOOL) $(LOAD_API_CONSUMER_OBJECT) Linux/Fixtures/LoadApiConsumer.bindings $@
 
-$(FAT_TOOL): Linux/MakeFAT32.cpp
+$(FAT_TOOL): Linux/MakeFAT32.cpp Kernel/Compress.cpp Kernel/Compress.hpp Kernel/KernelA.hpp Kernel/KernelB.hpp
 	mkdir -p $(@D)
-	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $<
+	$(HOSTCXX) $(HOSTCXXFLAGS) -o $@ $(filter %.cpp,$^)
 
 $(FAT_DISK): $(FAT_TOOL)
 	$(FAT_TOOL) $@
@@ -455,6 +456,9 @@ $(FAT_INVALID_DISK): $(FAT_TOOL)
 
 $(FAT_WRITE_DISK): $(FAT_TOOL)
 	$(FAT_TOOL) $@ writable
+
+$(AC_INSTALL_DISK): $(FAT_TOOL) $(AC_DEFS) $(AC_WORDS)
+	$(FAT_TOOL) $@ dictionary $(AC_DEFS) $(AC_WORDS)
 
 $(ISO) $(STARTUP_TEST_ISO) $(FAT_TEST_ISO) $(ATA_TEST_ISO) $(FAT_WRITE_ISO) \
 $(FAT_FORMAT_ISO) $(FAT_STREAM_ISO) $(FAT_TREE_ISO) $(BREAK_TEST_ISO) \
@@ -828,6 +832,12 @@ test-stock-once: $(STOCK_ONCE_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --stock-once "$(QEMU)" $(STOCK_ONCE_TEST_ISO)
 
 test: test-stock-once
+
+.PHONY: test-dictionary-install
+test-dictionary-install: $(ISO) $(AC_INSTALL_DISK) $(BOOT_TEST)
+	$(BOOT_TEST) --dictionary-install "$(QEMU)" $(ISO) $(AC_INSTALL_DISK)
+
+test: test-dictionary-install
 
 .PHONY: test-popup-menus
 test-popup-menus: $(POPUP_TEST_ISO) $(BOOT_TEST)

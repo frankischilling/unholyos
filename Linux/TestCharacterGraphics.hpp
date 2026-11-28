@@ -103,6 +103,7 @@ struct CModuleFile
 };
 
 enum class CStockStartup { None, Decline, Tour };
+enum class CWallpaperTest { None, Progress, DictionaryInstall };
 
 // Uses the same QMP input and physical-memory readers as the boot tests.
 static void DriveCharacterGraphics(
@@ -114,7 +115,8 @@ static void DriveCharacterGraphics(
     std::span<const CModuleFile> module_files = {},
     uint64_t memory_limit = 0x20000000,
     std::string_view startup_output = {},
-    CStockStartup stock = CStockStartup::None, bool progress_demo = false)
+    CStockStartup stock = CStockStartup::None,
+    CWallpaperTest wallpaper = CWallpaperTest::None)
 {
   const bool reference_dictionary = reference && !text_probes.empty() &&
       std::string_view(text_probes.front().name) == "dictionary";
@@ -303,7 +305,8 @@ static void DriveCharacterGraphics(
     key("shift-esc");
   };
   auto addresses = [&](std::string_view marker,
-                       std::array<uint64_t, 3> sizes = {8, 8, 8}) {
+                       std::array<uint64_t, 3> sizes = {8, 8, 8},
+                       unsigned attempts = 180) {
     const std::regex pattern(std::string(marker) +
                              "([0-9A-Fa-f]+) ([0-9A-Fa-f]+) ([0-9A-Fa-f]+)");
     std::smatch match;
@@ -311,7 +314,7 @@ static void DriveCharacterGraphics(
     wait([&](const Cells &cells) {
       screen = visible(cells);
       return std::regex_search(screen, match, pattern);
-    }, "Missing graphics runtime addresses");
+    }, "Missing graphics runtime addresses", attempts);
     std::array<uint64_t, 3> result{};
     for (size_t i = 0; i < result.size(); i++) {
       result[i] = std::stoull(match[i + 1].str(), nullptr, 16);
@@ -523,7 +526,90 @@ static void DriveCharacterGraphics(
     std::cout << startup_output << '\n';
   }
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
-  if (progress_demo) {
+  if (wallpaper == CWallpaperTest::DictionaryInstall) {
+    const auto expected = FileRead("Adam/AutoComplete/ACDefs.DATA");
+    const auto blocks = (expected.size() + 511) / 512;
+    vm.ResetDeadline(420s);
+    if (reference)
+      cmd("ATAMount('C',BDT_ATA,0x1F0,0x3F4,0);");
+    cmd("Let2Drv('C',0)->drv_let;");
+    wait_text("=67");
+    cmd("Let2Drv('C',0)->bd->flags&=~BDF_READ_ONLY;");
+    cmd(R"(Cd("C:/");)");
+    wait_text("C:/>");
+    if (reference)
+      cmd(R"(blkdev.home_dir=AStrNew("C:/");)");
+    cmd(R"(U8 *dcz="/Adam/AutoComplete/ACDefs.DATA.Z";)");
+    cmd(R"hc(if(FileFind(dcz))"DIC staged %X\n",1;)hc");
+    wait_text("DIC staged 1");
+    cmd(R"("ACP %X %X %X\n",&progress1,&progress1_max,progress1_desc;)");
+    const auto progress = addresses("ACP ", {8, 8, 48});
+    Check(progress[1] == progress[0] + 8,
+          "The dictionary progress fields are not adjacent");
+    constexpr char desc[] = "Uncompressing Dictionary";
+    bool named = false, rendered = false;
+    uint64_t written = 0, observed_max = 0;
+    type(R"(ACInit;"DIC ready %X\n",acd.num_words;)");
+    vm.Hmp("sendkey ret 35");
+    const std::regex ready_count(R"((^|\n) {0,4}DIC ready [0-9a-fA-F]+\b)");
+    const auto ready = wait(
+        [&](const Cells &cells) {
+          const auto counters = ReadPhysical<2>(vm, progress[0]);
+          const auto val = counters[0], max = counters[1];
+          observed_max = std::max(observed_max, max);
+          if (max == blocks) {
+            written = std::max(written, val);
+            if (!named) {
+              const auto label =
+                  ReadPhysical<sizeof(desc)>(vm, progress[2], 'b');
+              named = std::equal(label.begin(), label.end(), desc);
+            }
+            if (named && val >= blocks / 10 && !rendered) {
+              snapshot("dictionary-install-progress");
+              const auto rgb = ReadVGA(dir / "dictionary-install-progress.ppm");
+              const auto *pixel = &rgb[(172 * 640 + 105) * 3];
+              rendered = pixel[1] > 200 && pixel[0] < 150 && pixel[2] < 150;
+            }
+          }
+          return std::regex_search(visible(cells), ready_count);
+        },
+        "The writable dictionary did not finish initialization", 10000);
+    if (visible(ready).find("DIC ready 1743D") == std::string::npos)
+      throw std::runtime_error(
+          "The installed dictionary did not load 95,293 words\n" +
+          visible(ready));
+    if (!named || !written || !rendered)
+      throw std::runtime_error(
+          "Did not observe the dictionary write progress (maximum " +
+          std::to_string(observed_max) + ", value " + std::to_string(written) +
+          ")");
+    wait(
+        [&](const Cells &) {
+          return !ReadPhysical<1>(vm, progress[0])[0] &&
+                 !ReadPhysical<1>(vm, progress[1])[0] &&
+                 !ReadPhysical<1>(vm, progress[2], 'b')[0];
+        },
+        "The dictionary progress bar did not clear");
+    cmd("AutoComplete(0);WinMax;");
+    cmd(R"hc(if(FileFind(dcz)==0)"DIC removed %X\n",1;)hc");
+    wait_text("DIC removed 1");
+    cmd(R"(I64 dsz;U8 *dict=FileRead("/Adam/AutoComplete/ACDefs.DATA",&dsz);"DIB %X %X %X\n",dict,&dsz,&progress1;)");
+    const auto data = addresses("DIB ", {expected.size(), 8, 8}, 2200);
+    Check(ReadPhysical<1>(vm, data[1])[0] == expected.size(),
+          "The expanded definitions size differs");
+    auto installed = dir / "installed-definitions.bin";
+    vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+               std::to_string(data[0]) + R"(,"size":)" +
+               std::to_string(expected.size()) + R"(,"filename":")" +
+               installed.string() + R"("}})");
+    Check(FileRead(installed) == expected,
+          "The expanded definitions bytes differ");
+    std::cout
+        << "Dictionary progress reached " << written << " of " << blocks
+        << " blocks and cleared. Expanded definitions and word count matched\n";
+    return;
+  }
+  if (wallpaper == CWallpaperTest::Progress) {
     cmd(R"("PGM %X %X %X\n",&progress1,&sys_progresses[0].val,&progress1_max;)");
     const auto progress = addresses("PGM ");
     Check(progress[0] == progress[1] && progress[2] - progress[0] == 8,

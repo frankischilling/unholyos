@@ -6976,7 +6976,8 @@ int main(int argc, char **argv)
                              reference, false, false, false, false, false,
                              false, false, false, probes, {}, 0x20000000,
                              once && !reference ? "Once startup 2A 2 2" : "",
-                             CStockStartup::None, progress);
+                             CStockStartup::None, progress ? CWallpaperTest::Progress
+                                                           : CWallpaperTest::None);
       vm.Quit();
       if (argc == 4)
         fs::remove_all(dir);
@@ -7158,6 +7159,42 @@ int main(int argc, char **argv)
     } catch (const std::exception &error) {
       std::cerr << ReadText(dir / "serial.log") << error.what() << '\n'
                 << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
+  if ((argc == 5 || argc == 6) &&
+      (mode == "--dictionary-install" || mode == "--dictionary-install-reference")) {
+    const bool reference = mode.ends_with("-reference");
+    char path[] = "/tmp/unholyos-dictionary-install-XXXXXX";
+    if (argc == 5 && !mkdtemp(path))
+      return 1;
+    const auto dir = argc == 6 ? fs::absolute(argv[5]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      const auto original = FileRead(argv[4]);
+      const auto disk = dir / "owned.img";
+      fs::copy_file(argv[4], disk);
+      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, disk, true, reference);
+      vm.Connect();
+      DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
+                             reference, false, false, false, false, false,
+                             false, false, false, {}, {}, 0x20000000, {},
+                             CStockStartup::None, CWallpaperTest::DictionaryInstall);
+      vm.Quit();
+      const auto written = FileRead(disk);
+      constexpr size_t fat1 = 2080 * 512, fat2 = 2593 * 512, fat_bytes = 513 * 512;
+      Check(written.size() == original.size() && written != original,
+            "The dictionary did not reach the scratch disk");
+      Check(written.size() >= fat2 + fat_bytes &&
+                std::equal(written.begin() + fat1, written.begin() + fat2,
+                           written.begin() + fat2),
+            "The dictionary disk FAT mirrors differ");
+      Check(FileRead(argv[4]) == original, "The dictionary disk fixture was modified");
+      if (argc == 5)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
       return 1;
     }
   }
@@ -7885,6 +7922,7 @@ int main(int argc, char **argv)
               << " --file-editor-reference qemu image.iso [capture-dir]\n"
               << " --key-map[-reference] qemu image.iso [capture-dir]\n"
               << " --dictionary-reference qemu image.iso [capture-dir]\n"
+              << " --dictionary-install[-reference] qemu image.iso disk.img [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
