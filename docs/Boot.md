@@ -1870,6 +1870,36 @@ The native test images are `build/gcc/waveform-test.iso` and
 `build/clang/waveform-test.iso`. For the exact arithmetic boundaries,
 see [Source layout](SourceLayout.md#music-waveform-functions).
 
+## DolDoc songs
+
+`DocSongProbe.HC` exercises the `$SO` command from the guest terminal.
+An off-screen recalculation marks the document as containing a song.
+Focusing a score starts a `Song` task and sends the first note to the
+speaker. Updating the score keeps the task and changes the note.
+Moving focus to a blank window stops playback. Returning focus starts a
+new task for the existing score. Clearing the document stops playback
+and resets both song flags.
+
+The same HolyC fixture reports `Doc songs FF` on the pinned TempleOS
+guest and on UnholyOS with GCC 13.3.0 or Clang 20.1.2 and NASM 2.16.01.
+The runner checks the packaged fixture on UnholyOS and reads back the
+uploaded fixture on TempleOS before executing it. All runs use QEMU
+8.2.2 with PC, `qemu64`, one vCPU, 512 MiB, and CD boot. The probe
+reads the speaker note from `scrncast.ona`.
+
+```sh
+make -j6 BUILD=build/gcc test-doc-song
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-doc-song
+build/gcc/Linux/TestBoot --doc-song-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/doc-song-reference
+```
+
+The native images are `build/gcc/doc-song-test.iso` and
+`build/clang/doc-song-test.iso`. The runner launches
+`qemu-system-x86_64 -machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`
+with a QMP monitor, a serial log, and VGA capture. The reference runner
+also uses GDB to upload the fixture.
+
 ## Speaker sound effects
 
 `SoundEffectsProbe.HC` checks that `Noise` and `Sweep` start

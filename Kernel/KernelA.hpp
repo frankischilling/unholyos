@@ -1075,7 +1075,8 @@ constexpr uint64_t DOCF_PLAIN_TEXT = 1, DOCF_PLAIN_TEXT_TABS = 2,
                    DOCF_SIZE_MIN = 0x400, DOCF_HIDE_CURSOR = 0x800,
                    DOCF_DONT_HIGHLIGHT_CURSOR = 0x1000,
                    DOCF_NO_SCROLL_BARS = 0x2000, DOCF_DONT_SHOW = 0x8000,
-                   DOCF_BWD_MOVEMENT = 0x40000, DOCF_DO_FULL_REFRESH = 0x200000,
+                   DOCF_HAS_SONG = 0x10000, DOCF_BWD_MOVEMENT = 0x40000,
+                   DOCF_DO_FULL_REFRESH = 0x200000,
                    DOCF_BREAK_UNLOCKED = 0x400000,
                    DOCF_OVERSTRIKE = 1ull << 32, DOCF_IN_DOLLAR = 0x200000000;
 constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
@@ -1647,7 +1648,8 @@ static_assert(sizeof(CJobCtrl) == 0x28 && offsetof(CJobCtrl, next_done) == 0x10 
 constexpr uint32_t TASKF_KILL_TASK = 1 << 1, TASKF_SUSPENDED = 1 << 2,
                    TASKF_IDLE = 1 << 3, TASKF_CMD_LINE_PMT = 1 << 4,
                    TASKF_INPUT_FILTER_TASK = 1 << 5, TASKF_FILTER_INPUT = 1 << 6,
-                   TASKF_AWAITING_MSG = 1 << 9, TASKF_BREAK_LOCKED = 1 << 10,
+                   TASKF_HAS_SONG = 1 << 7, TASKF_AWAITING_MSG = 1 << 9,
+                   TASKF_BREAK_LOCKED = 1 << 10,
                    TASKF_PENDING_BREAK = 1 << 11, TASKF_BREAK_TO_SHIFT_ESC = 1 << 12,
                    TASKF_NONTIMER_RAND = 1 << 14;
 constexpr int64_t DYING_JIFFIES = JIFFY_FREQ / 5;

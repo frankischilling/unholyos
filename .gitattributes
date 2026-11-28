@@ -27,6 +27,7 @@ Linux/Fixtures/AdamTaskAOTProbe.HC text eol=lf
 Linux/Fixtures/AdamMemProbe.HC text eol=lf
 Linux/Fixtures/AdamMemAOTProbe.HC text eol=lf
 Linux/Fixtures/WaveformProbe.HC text eol=lf
+Linux/Fixtures/DocSongProbe.HC text eol=lf
 Linux/Fixtures/SoundEffectsProbe.HC text eol=lf
 Linux/Fixtures/FramePtrProbe.HC text eol=lf
 Linux/Fixtures/AdamMathProbe.HC text eol=lf
