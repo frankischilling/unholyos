@@ -72,6 +72,25 @@ CHashClass *PrsClassNew()
   return cls;
 }
 
+CHashFun *PrsFunNew()
+{
+  auto *fun = reinterpret_cast<CHashFun *>(
+      CAlloc(sizeof(CHashFun) * (PTR_STARS_NUM + 1), CurrentTask()->code_heap));
+  if (!fun)
+    return nullptr;
+  for (unsigned stars = 0; stars <= PTR_STARS_NUM; ++stars) {
+    auto &type = fun[stars].cls;
+    type.sym.hash.type = HTT_FUN;
+    type.raw_type = RT_I64;
+    type.size = sizeof(uint8_t *);
+    type.ptr_stars_cnt = stars;
+  }
+  fun->cls.last_in_member_lst =
+      reinterpret_cast<CMemberLst *>(&fun->cls.member_lst_and_root);
+  fun->cls.size = 0;
+  return fun;
+}
+
 // The statement stream links only its own nodes. Operand trees share the same
 // storage and use their indices even when the array grows.
 CCodeCtrl::~CCodeCtrl()

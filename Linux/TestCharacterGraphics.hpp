@@ -1198,7 +1198,9 @@ static void DriveCharacterGraphics(
     for (const auto &probe : text_probes) {
       vm.ResetDeadline(150s);
       cmd("DocClear(,1);");
-      if (reference)
+      if (reference && probe.reference_file)
+        cmd(std::string("DocClear(,1);ExeFile2(\"") + probe.reference_file + "\");");
+      else if (reference)
         upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
       else
         cmd(std::string("ExeFile(\"::") + probe.source + "\");0;");
