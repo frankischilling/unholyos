@@ -1634,6 +1634,7 @@ static bool GuestBytesEqual(CMonitor &vm, uint64_t address,
 static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
                                     uint64_t owner, uint64_t &graphics,
                                     uint64_t &winmgr_slot, uint64_t &disk,
+                                    uint64_t &key_device,
                                     const CCompilerState &compiler)
 {
   uint64_t used = 0, count = 0;
@@ -1781,6 +1782,8 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
           graphics = ReadPhysical<1>(vm, addr + 64)[0];
         if (type == 0x08000001 && str == "sys_winmgr_task")
           winmgr_slot = ReadPhysical<1>(vm, addr + 64)[0];
+        if (type == 0x08000001 && str == "keydev")
+          key_device = ReadPhysical<1>(vm, addr + 64)[0];
         if (type == 0x08000001 && str == "blkdev") {
           Check(!disk, "Duplicate boot block device symbol");
           disk = ReadPhysical<1>(vm, addr + 64)[0];
@@ -1791,7 +1794,7 @@ static uint64_t VerifyKernelSymbols(CMonitor &vm, uint64_t table_body,
     }
   }
   Check(kernel && hash_del && hash_src && put_str && graphics && winmgr_slot &&
-            disk,
+            disk && key_device,
         "Missing boot symbols");
   Check(std::all_of(system_seen.begin(), system_seen.end(),
                     [](bool seen) { return seen; }) &&
@@ -1928,6 +1931,8 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CBlkPool",
                                        "CHeapCtrl",
                                        "CKbdStateGlbls",
+                                       "CKeyDevEntry",
+                                       "CKeyDevGlbls",
                                        "CTextGlbls",
                                        "CD3I64",
                                        "CD3",
@@ -1958,7 +1963,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 91);
+  static_assert(class_count == 93);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -2625,10 +2630,64 @@ static uint64_t VerifyRegistryHeap(CMonitor &vm, uint64_t owner, uint64_t adam)
   return used;
 }
 
+static uint64_t VerifyKeyDevHeap(CMonitor &vm, uint64_t head, uint64_t owner,
+                                  bool adam_initialized)
+{
+  const auto fields = ReadPhysical<11>(vm, head);
+  const auto callbacks = fields[6], normal = fields[9], shifted = fields[10];
+  uint64_t used = 0;
+  for (auto table : {callbacks, normal, shifted})
+    used += VerifyCompilerAllocation(vm, table, owner, 26 * sizeof(uint64_t));
+
+  Check(fields[7] == (1 << ('C' - 'A')), "Invalid Ctrl-Alt interrupt flags");
+  auto handlers = ReadPhysical<26>(vm, callbacks);
+  auto no_shift = ReadPhysical<26>(vm, normal);
+  auto with_shift = ReadPhysical<26>(vm, shifted);
+  for (unsigned i = 0; i < 26; ++i) {
+    std::string_view desc, shift_desc;
+    switch ('A' + i) {
+    case 'C': desc = "Cmd /Break Execution"; break;
+    case 'F': desc = "Cmd /Toggle Aux Font"; break;
+    case 'Z':
+      if (adam_initialized) {
+        desc = "Cmd /Zoom In";
+        shift_desc = "Cmd /Zoom Out";
+      }
+      break;
+    }
+    Check(bool(handlers[i]) == !desc.empty(), "Unexpected Ctrl-Alt callback");
+    for (const auto &[address, expected] :
+         {std::pair{no_shift[i], desc}, std::pair{with_shift[i], shift_desc}}) {
+      Check(bool(address) == !expected.empty(), "Unexpected Ctrl-Alt description");
+      if (address) {
+        Check(ReadGuestName(vm, address) == expected, "Wrong Ctrl-Alt description");
+        used += VerifyCompilerAllocation(vm, address, owner, expected.size() + 1);
+      }
+    }
+  }
+
+  const size_t count = adam_initialized ? 3 : 2;
+  constexpr uint64_t priorities[]{0x40000000, 0x60000000, 0x80000000};
+  uint64_t entry = fields[0], last = head;
+  for (size_t i = 0; i < count; ++i) {
+    Check(entry != head, "Missing key device entry");
+    used += VerifyCompilerAllocation(vm, entry, owner, sizeof(CKeyDevEntry));
+    auto record = ReadPhysical<6>(vm, entry);
+    Check(record[1] == last && record[2] == priorities[i] &&
+              record[3] == (i == 2 ? KDF_HAS_DESCS : 0) &&
+              record[4] && record[5],
+          "Invalid key device entry");
+    last = entry;
+    entry = record[0];
+  }
+  Check(entry == head && fields[1] == last, "Invalid key device list");
+  return used;
+}
+
 static void VerifyPools(CMonitor &vm, const fs::path &dir,
                         uint64_t heap, uint64_t ram_end,
                         const std::string &output, uint64_t range_bytes,
-                        uint64_t symbol_used,
+                        uint64_t symbol_used, uint64_t key_device_used,
                         const std::vector<CTestE820> &e820, uint64_t idle,
                         uint64_t graphics, uint64_t disk, uint64_t winmgr, uint64_t left,
                         uint64_t right, bool desktop,
@@ -2743,7 +2802,7 @@ static void VerifyPools(CMonitor &vm, const fs::path &dir,
       desktop ? VerifyRegistryHeap(vm, expected_data_hc, adam) : 0;
   const uint64_t boot_used = range_bytes + late_used + symbol_used +
                              drive_used + initial_message_used + graphics_used +
-                             asm_hash_used + raw_used + fifo_used +
+                             asm_hash_used + raw_used + fifo_used + key_device_used +
                              compiler.data_used + cache_used + sector_cache_used +
                              source_used[1] + registry_used;
   // Default registration executes four statements with inline string data.
@@ -2854,10 +2913,12 @@ static void VerifyFixedArea(CMonitor &vm, const fs::path &dir, uint64_t heap,
   const auto e820 = ReadE820(vm);
   uint64_t range_bytes = VerifyDeviceRanges(vm, output, e820);
   uint64_t owner = ReadPhysical<1>(vm, adam + 0x28)[0];
-  uint64_t graphics = 0, winmgr_slot = 0, disk = 0;
+  uint64_t graphics = 0, winmgr_slot = 0, disk = 0, key_device = 0;
   uint64_t symbol_used =
       VerifyKernelSymbols(vm, top + 0x28, owner, graphics, winmgr_slot,
-                           disk, compiler);
+                           disk, key_device, compiler);
+  const uint64_t key_device_used =
+      VerifyKeyDevHeap(vm, key_device, owner, compiler.initialized);
   uint64_t winmgr = ReadPhysical<1>(vm, winmgr_slot)[0];
   uint64_t left = 0, right = 0;
   if (desktop) {
@@ -2903,8 +2964,9 @@ static void VerifyFixedArea(CMonitor &vm, const fs::path &dir, uint64_t heap,
             ReadPhysical<3>(vm, idle + 0x78) == std::array<uint64_t, 3>{adam, idle, idle} &&
             ReadPhysical<1>(vm, idle + 0x1A8)[0] == boot_cpu,
         "Invalid idle task record");
-  VerifyPools(vm, dir, heap, ram_end, output, range_bytes, symbol_used, e820, idle,
-              graphics, disk, winmgr, left, right, desktop, compiler);
+  VerifyPools(vm, dir, heap, ram_end, output, range_bytes, symbol_used,
+              key_device_used, e820, idle, graphics, disk, winmgr, left, right,
+              desktop, compiler);
 
   constexpr uint64_t task_alloced = 0x44800;
   uint64_t used_block = ram_end - task_alloced;
@@ -6830,7 +6892,8 @@ int main(int argc, char **argv)
        mode == "--popup-menus-reference" || mode == "--ins-reg" ||
        mode == "--ins-reg-reference" || mode == "--startup-exec" ||
        mode == "--startup-exec-reference" || mode == "--training-input-reference" ||
-       mode == "--file-editor-reference")) {
+       mode == "--file-editor-reference" || mode == "--key-map" ||
+       mode == "--key-map-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
     const bool registry = mode.starts_with("--registry");
@@ -6838,6 +6901,7 @@ int main(int argc, char **argv)
     const bool popup = mode.starts_with("--popup-menus");
     const bool ins_reg = mode.starts_with("--ins-reg");
     const bool startup_exec = mode.starts_with("--startup-exec");
+    const bool key_map = mode.starts_with("--key-map");
     char path[] = "/tmp/unholyos-document-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
@@ -6855,6 +6919,9 @@ int main(int argc, char **argv)
       } else if (!reference && startup_exec) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/StartupExecProbe.HC",
                               "StartupExecProbe.HC");
+      } else if (!reference && key_map) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/KeyMapProbe.HC",
+                              "KeyMapProbe.HC");
       } else if (!reference && once) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/OnceProbe.HC",
                               "OnceProbe.HC");
@@ -6889,6 +6956,8 @@ int main(int argc, char **argv)
         probes = training_input_probes;
       else if (mode == "--file-editor-reference")
         probes = file_editor_probes;
+      else if (key_map)
+        probes = key_map_probes;
       else if (aot)
         probes = doc_tree_aot_probes;
       DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
@@ -7801,6 +7870,7 @@ int main(int argc, char **argv)
               << " --startup-exec[-reference] qemu image.iso [capture-dir]\n"
               << " --training-input-reference qemu image.iso [capture-dir]\n"
               << " --file-editor-reference qemu image.iso [capture-dir]\n"
+              << " --key-map[-reference] qemu image.iso [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"

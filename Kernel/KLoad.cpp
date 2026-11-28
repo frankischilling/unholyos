@@ -190,6 +190,7 @@ void PostMsgHC(),PostMsgWaitHC(),MsgHC(),JobsHndlrHC();
 void SrvTaskContHC(),ScanMsgHC(),FlushMsgsHC(),GetMsgHC();
 void InputFilterTaskHC();
 void Char2ScanCodeHC(),ScanCode2CharHC(),KbdTypeMaticHC(),PutKeyHC();
+void KeyDescSetHC(),KeyDevAddHC(),KeyDevRemHC(),CtrlAltCBSetHC();
 void GridInitHC(),MsSetHC();
 void GrPaletteColorSetHC(),GrPaletteColorGetHC();
 void GrPaletteGetHC(),GrPaletteSetHC(),PaletteSetStdHC();
@@ -241,7 +242,7 @@ void _HASH_REM_DEL(), SysSymImportsResolveHC(), LoadPass2HC(), LoadHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
     DocWriteHC();
 void DocReadHC(), DocTypeHC(), TypeHC();
-void TipOfDayHC();
+void KeyMapHC(),TipOfDayHC();
 void DocCutHC(), DocCopyHC(), DocTreeFindHC(), DocTreeFFindHC(), DocTreeMakeHC();
 void DocTreeWriteHC(), DocTreeAppendHC(), DocTreeFWriteHC(), DocTreeFAppendHC();
 void DocTreeWriteJoinHC(), DocTreeAppendJoinHC(), ExeDocHC(), DocTreeExeHC(),
@@ -866,6 +867,7 @@ bool LoadKernel(CTask &task)
       {"mon_start_days1", reinterpret_cast<uintptr_t>(mon_start_days1)},
       {"mon_start_days2", reinterpret_cast<uintptr_t>(mon_start_days2)},
       {"kbd", reinterpret_cast<uintptr_t>(&kbd)},
+      {"keydev", reinterpret_cast<uintptr_t>(&keydev)},
       {"text", reinterpret_cast<uintptr_t>(&text)},
       {"ms", reinterpret_cast<uintptr_t>(&ms)},
       {"ms_hard", reinterpret_cast<uintptr_t>(&ms_hard)},
@@ -1405,6 +1407,10 @@ bool LoadKernel(CTask &task)
       {"Refresh", reinterpret_cast<uintptr_t>(RefreshHC)},
       {"Mat4x4New", reinterpret_cast<uintptr_t>(Mat4x4NewHC)},
       {"PutKey", reinterpret_cast<uintptr_t>(PutKeyHC)},
+      {"KeyDescSet", reinterpret_cast<uintptr_t>(KeyDescSetHC)},
+      {"KeyDevAdd", reinterpret_cast<uintptr_t>(KeyDevAddHC)},
+      {"KeyDevRem", reinterpret_cast<uintptr_t>(KeyDevRemHC)},
+      {"CtrlAltCBSet", reinterpret_cast<uintptr_t>(CtrlAltCBSetHC)},
       {"ScanChar", reinterpret_cast<uintptr_t>(ScanCharHC)},
       {"ScanKey", reinterpret_cast<uintptr_t>(ScanKeyHC)},
       {"GetKey", reinterpret_cast<uintptr_t>(GetKeyHC)},
@@ -1567,6 +1573,7 @@ bool LoadKernel(CTask &task)
       {"InsUnreg", reinterpret_cast<uintptr_t>(InsUnregHC)},
       {"DocType", reinterpret_cast<uintptr_t>(DocTypeHC)},
       {"Type", reinterpret_cast<uintptr_t>(TypeHC)},
+      {"KeyMap", reinterpret_cast<uintptr_t>(KeyMapHC)},
       {"TipOfDay", reinterpret_cast<uintptr_t>(TipOfDayHC)},
       {"DocPrint", reinterpret_cast<uintptr_t>(DocPrintHC)},
       {"Doc2PlainText", reinterpret_cast<uintptr_t>(Doc2PlainTextHC)},

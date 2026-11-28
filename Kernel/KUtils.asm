@@ -119,7 +119,7 @@ GLOBAL DefineHC,DefineLoadHC,DefineCntHC,DefinePrintHC
 GLOBAL Color2StrHC,Str2ColorU16HC,Str2ColorU32HC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
 GLOBAL DocReadHC,DocTypeHC,TypeHC
-GLOBAL TipOfDayHC
+GLOBAL KeyMapHC,TipOfDayHC
 GLOBAL DocCutHC,DocCopyHC,DocTreeFindHC,DocTreeFFindHC,DocTreeMakeHC
 GLOBAL DocTreeWriteHC,DocTreeAppendHC,DocTreeFWriteHC,DocTreeFAppendHC
 GLOBAL DocTreeWriteJoinHC,DocTreeAppendJoinHC,ExeDocHC,DocTreeExeHC,DocTreeFExeHC
@@ -180,6 +180,10 @@ GLOBAL PostMsgHC,PostMsgWaitHC,MsgHC,JobsHndlrHC
 GLOBAL SrvTaskContHC,ScanMsgHC,FlushMsgsHC,GetMsgHC
 GLOBAL InputFilterTaskHC
 GLOBAL Char2ScanCodeHC,ScanCode2CharHC,KbdTypeMaticHC,PutKeyHC
+GLOBAL KeyDescSetHC,KeyDevAddHC,KeyDevRemHC
+GLOBAL CtrlAltCBSetHC,CtrlAltCHC,CtrlAltFHC,CtrlAltZHC
+GLOBAL KDInputFilterPutKeyHC,KDInputFilterPutSHC,KDRawPutKeyHC,KDRawPutSHC
+GLOBAL KDDocPutKeyHC,KDDocPutSHC
 GLOBAL GridInitHC,MsSetHC
 GLOBAL GrPaletteColorSetHC,GrPaletteColorGetHC
 GLOBAL GrPaletteGetHC,GrPaletteSetHC,PaletteSetStdHC,WinMgrTaskEntry
@@ -240,6 +244,10 @@ EXTERN SrvTaskContCpp,ScanMsgCpp,FlushMsgsCpp,GetMsgCpp
 EXTERN PopUpCpp,PopUpPrintCpp,SrvCmdLineCpp,OneTimePopUpCpp,RegOneTimePopUpCpp
 EXTERN InputFilterTaskCpp
 EXTERN Char2ScanCodeCpp,ScanCode2CharCpp,KbdTypeMaticCpp,PutKeyCpp
+EXTERN KeyDescSetCpp,KeyDevAddCpp,KeyDevRemCpp
+EXTERN CtrlAltCBSetCpp,CtrlAltCCpp,CtrlAltFCpp,CtrlAltZCpp
+EXTERN KDInputFilterPutKeyCpp,KDInputFilterPutSCpp,KDRawPutKeyCpp,KDRawPutSCpp
+EXTERN KDDocPutKeyCpp,KDDocPutSCpp
 EXTERN GridInitCpp,MsSetCpp
 EXTERN GrPaletteColorSetCpp,GrPaletteColorGetCpp
 EXTERN GrPaletteGetCpp,GrPaletteSetCpp,PaletteSetStdCpp,WinMgrTask
@@ -399,7 +407,7 @@ EXTERN DefineCpp,DefineLoadCpp,DefineCntCpp,DefinePrintCpp
 EXTERN Color2StrCpp,Str2ColorU16Cpp,Str2ColorU32Cpp
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocReadCpp,DocTypeCpp,TypeCpp
-EXTERN TipOfDayCpp
+EXTERN KeyMapCpp,TipOfDayCpp
 EXTERN DocCutCpp,DocCopyCpp,DocTreeFindCpp,DocTreeFFindCpp,DocTreeMakeCpp
 EXTERN DocTreeWriteCpp,DocTreeAppendCpp,DocTreeFWriteCpp,DocTreeFAppendCpp
 EXTERN ExeDocCpp,DocTreeExeCpp,DocTreeFExeCpp
@@ -620,6 +628,19 @@ HOLYC_CPP RefreshHC,RefreshCpp,2
 HOLYC_CPP Mat4x4EquHC,Mat4x4EquCpp,2
 HOLYC_CPP Mat4x4NewHC,Mat4x4NewCpp,2
 HOLYC_CPP PutKeyHC,PutKeyCpp,2
+HOLYC_PRINT KeyDescSetHC,KeyDescSetCpp,1,1
+HOLYC_CPP KeyDevAddHC,KeyDevAddCpp,4
+HOLYC_CPP KeyDevRemHC,KeyDevRemCpp,1
+HOLYC_CPP CtrlAltCBSetHC,CtrlAltCBSetCpp,5
+HOLYC_CPP CtrlAltCHC,CtrlAltCCpp,1
+HOLYC_CPP CtrlAltFHC,CtrlAltFCpp,1
+HOLYC_CPP CtrlAltZHC,CtrlAltZCpp,1
+HOLYC_CPP KDInputFilterPutKeyHC,KDInputFilterPutKeyCpp,2,1
+HOLYC_CPP KDInputFilterPutSHC,KDInputFilterPutSCpp,1,1
+HOLYC_CPP KDRawPutKeyHC,KDRawPutKeyCpp,2,1
+HOLYC_CPP KDRawPutSHC,KDRawPutSCpp,1,1
+HOLYC_CPP KDDocPutKeyHC,KDDocPutKeyCpp,2,1
+HOLYC_CPP KDDocPutSHC,KDDocPutSCpp,1,1
 HOLYC_CPP ScanCharHC,ScanCharCpp,0
 HOLYC_CPP ScanKeyHC,ScanKeyCpp,3
 HOLYC_CPP GetKeyHC,GetKeyCpp,3
@@ -1036,6 +1057,7 @@ DOC_TREE_PRINT DocTreeFWriteHC,DocTreeFWriteCpp,3
 DOC_TREE_PRINT DocTreeFAppendHC,DocTreeFAppendCpp,3
 HOLYC_CPP DocTypeHC,DocTypeCpp,3
 HOLYC_CPP TypeHC,TypeCpp,2
+HOLYC_CPP KeyMapHC,KeyMapCpp,1
 HOLYC_CPP TipOfDayHC,TipOfDayCpp,1
 HOLYC_CPP Doc2PlainTextHC,Doc2PlainTextCpp,2
 HOLYC_CPP DocBinsValidateHC,DocBinsValidateCpp,1

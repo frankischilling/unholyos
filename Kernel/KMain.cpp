@@ -114,6 +114,10 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not initialize kernel globals\r\n");
     return;
   }
+  if (!KeyDevInit()) {
+    SerialPutS("UnholyOS: Could not initialize keyboard output devices\r\n");
+    return;
+  }
   if (!Mem32DevInit(adam_task->data_heap)) {
     SerialPutS("UnholyOS: Could not initialize device memory ranges\r\n");
     return;
@@ -200,10 +204,11 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not register color names\r\n");
     return;
   }
-  if (!LoadDocDefines()) {
+  if (!MakeDoc()) {
     SerialPutS("UnholyOS: Could not register document definitions\r\n");
     return;
   }
+  GrEnd();
   if (!MakeAdam()) {
     BootPutS("Could not load Adam sources");
     SerialPutS("UnholyOS: Could not load Adam sources\r\n");

@@ -89,6 +89,9 @@ constexpr CTextProbe training_input_probes[]{
 constexpr CTextProbe file_editor_probes[]{
     {"file-editor", "/FileEditorProbe.HC", "",
      "File editor ", "File editor 1FF", "File editor 1FF\n", {}, true}};
+constexpr CTextProbe key_map_probes[]{
+    {"key-map", "/KeyMapProbe.HC", "", "Key map probe ", "Key map probe 7F",
+     "Key map probe 7F\n", {}, true}};
 
 struct CModuleFile
 {
@@ -685,6 +688,13 @@ static void DriveCharacterGraphics(
         training_input();
       if (std::string_view(probe.name) == "file-editor")
         file_editor();
+      if (std::string_view(probe.name) == "key-map") {
+        wait_text("Press the key map probe chord");
+        key("ctrl-alt-q");
+        wait([&](const Cells &cells) {
+          return visible(cells).find("KeyMap Completed.") != std::string::npos;
+        }, "KeyMap did not complete its key description scan", 2700);
+      }
       const auto cells = wait(
           [&](const Cells &cells) {
             const auto screen = visible(cells);

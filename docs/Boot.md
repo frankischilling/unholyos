@@ -4244,6 +4244,26 @@ build/Linux/TestBoot --file-editor-reference qemu-system-x86_64 \
   /path/to/pinned/TOS_Distro.ISO build/file-editor-reference
 ```
 
+## Keyboard output hooks and key maps
+
+`make test-key-map` boots `build/key-map-test.iso` and runs
+`KeyMapProbe.HC`. The probe checks output-hook priority and replacement,
+character and string interception, and description queries against the
+editor and a separate task. It invokes a Ctrl-Alt-Q handler through the
+PS/2 keyboard, then checks the generated map for the guest hook and
+Ctrl-Alt descriptions. GCC, Clang, and pinned TempleOS report
+`Key map probe 7F`.
+
+```sh
+make -j4 test-key-map
+build/Linux/TestBoot --key-map-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/key-map-reference
+```
+
+The probe uses QEMU 8.2.2 with the PC machine, qemu64, 512 MiB, and one
+CPU. The AutoComplete modifier pane and remaining editor bindings
+still need translation.
+
 ## Popup menus and one-time notices
 
 `PopupProbe.HC` checks results from synchronous and asynchronous

@@ -104,7 +104,7 @@ static bool HasMappedSource(const CDbgInfo &info, uintptr_t addr, int64_t count)
   return false;
 }
 
-static char *SrcEdLink(uintptr_t addr, int64_t count)
+char *SrcEdLink(uintptr_t addr, int64_t count)
 {
   uint64_t offset;
   auto *entry = FunSegFind(addr, offset);
