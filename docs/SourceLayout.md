@@ -1280,6 +1280,15 @@ TOSB module; the host driver compares them with the pinned runtime trace.
 Fault delivery for zero divisors and signed division overflow, and
 unmasked floating-point exceptions, remain outside this comparison.
 
+## Kernel bit-field helpers
+
+`Kernel/KUtils.asm` follows `_BIT_FIELD_EXT_U32` and `_BIT_FIELD_OR_U32`
+in `Kernel/KUtils.HC`. Both routines address the byte containing the bit
+offset and access a quadword there. Extraction uses the x86 shift-count
+mask, so widths 0 and 64 both produce zero. Both routines pop 24 bytes
+of arguments. `Kernel/KLoad.cpp` exports the assembly labels and
+`Compiler/AsmInit.cpp` supplies the HolyC declarations from `KernelB.HH`.
+
 ## String scanning and transformations
 
 `StrScan` in `Kernel/StrScan.cpp` follows `Kernel/StrScan.HC`'s format

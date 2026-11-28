@@ -67,6 +67,7 @@ void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
 void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
                  const uintptr_t *frame);
 void _BEQU(), _LBEQU(), _CALL(), _CLAMP_I64();
+void _BIT_FIELD_EXT_U32(), _BIT_FIELD_OR_U32();
 void _MEMCPY(), _MEMSET(), _MEMSET_U16(), _MEMSET_U32(), _MEMSET_I64(), _MEMCMP();
 void _MALLOC(), _FREE(), _MHEAP_CTRL(), _MSIZE(), _MSIZE2();
 void CAllocHC(), MAllocIdentHC(), StrNewHC(), AStrNewHC();
@@ -940,7 +941,11 @@ bool LoadKernel(CTask &task)
       {"dbg", reinterpret_cast<uintptr_t>(&dbg)},
       {"sys_semas", reinterpret_cast<uintptr_t>(sys_semas)},
       {"_BEQU", reinterpret_cast<uintptr_t>(_BEQU)},
+      {"_BIT_FIELD_EXT_U32", reinterpret_cast<uintptr_t>(_BIT_FIELD_EXT_U32)},
+      {"_BIT_FIELD_OR_U32", reinterpret_cast<uintptr_t>(_BIT_FIELD_OR_U32)},
       {"_LBEQU", reinterpret_cast<uintptr_t>(_LBEQU)},
+      {"BFieldExtU32", reinterpret_cast<uintptr_t>(_BIT_FIELD_EXT_U32)},
+      {"BFieldOrU32", reinterpret_cast<uintptr_t>(_BIT_FIELD_OR_U32)},
       {"LBEqu", reinterpret_cast<uintptr_t>(_LBEQU)},
       {"_CALL", reinterpret_cast<uintptr_t>(_CALL)},
       {"Call", reinterpret_cast<uintptr_t>(_CALL)},
