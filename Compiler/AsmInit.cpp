@@ -342,6 +342,8 @@ static bool CmpRuntimeData(CHashTable *table)
   }
 
   return CmpKernelGlobal(table, "cnts", cls, &cnts) &&
+         CmpKernelGlobal(table, "sys_boot_src", FindType("U32", table),
+                         reinterpret_cast<void *>(CmpSysExport("SYS_BOOT_SRC"))) &&
          CmpKernelGlobal(table, "sys_run_level", FindType("U32", table),
                          reinterpret_cast<void *>(CmpSysExport("sys_run_level")));
 }
@@ -2735,6 +2737,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"DocType", Bool, FF_RET1,
        {{"doc", DocPtr, true}, {"filename", U8Ptr}, {"trailing_new_lines", I64, true, 1}}},
       {"Type", Bool, FF_RET1, {{"filename", U8Ptr}, {"trailing_new_lines", I64, true, 1}}},
+      {"TipOfDay", U0, FF_RET1, {{"tip_file", U8Ptr, true, 0, "::/Doc/Tips.DD"}}},
       {"DocPut", DocPtr, FF_RET1, {{"task", TaskPtr, true}}},
       {"DocDisplay", DocPtr, FF_RET1, {{"task", TaskPtr, true}}},
       {"DocBorder", DocPtr, FF_RET1, {{"task", TaskPtr, true}}},
@@ -3522,6 +3525,9 @@ static bool CmpFillHash(CHashTable *table)
       {"DOCF_BWD_MOVEMENT", "0x40000"},
       {"DOCF_DO_FULL_REFRESH", "0x200000"}, {"TASKf_IDLE", "3"},
       {"RECALCt_FIND_CURSOR", "1"},
+      {"BOOT_SRC_NULL", "0"}, {"BOOT_SRC_ROM", "1"}, {"BOOT_SRC_RAM", "2"},
+      {"BOOT_SRC_HARDDRV", "3"}, {"BOOT_SRC_DVD", "4"},
+      {"DOCT_BTTN", "29"}, {"DOCEF_LINK", "(1<<36)"},
       {"DOCT_DATA", "30"}, {"DOCT_CHECK_BOX", "31"}, {"DOCT_LST", "32"},
       {"DOCT_TREE", "36"},
       {"DOCEF_TAG", "1"}, {"DOCEF_AUX_STR", "4"}, {"DOCEF_DEFINE", "8"},
@@ -3536,6 +3542,7 @@ static bool CmpFillHash(CHashTable *table)
       {"RECALCt_TO_SCRN", "2"},
       {"RECALCF_HAS_CURSOR", "0x100"},
       {"DISPLAYf_SHOW", "0"},
+      {"DISPLAYf_WIN_ON_TOP", "4"}, {"BDS_CONST", "0"},
       {"DISPLAYf_NO_BORDER", "3"},
       {"WIF_SELF_FOCUS", "0x1"},
       {"WIF_SELF_CTRLS", "0x4"},

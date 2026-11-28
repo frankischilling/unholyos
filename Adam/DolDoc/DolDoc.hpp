@@ -41,6 +41,7 @@ CDoc *DocRead(const char *name, int64_t flags, const CDocReadContext *parent,
               CTask *task = nullptr);
 extern "C" uint8_t *DocSaveCpp(CDoc *doc, size_t *size);
 extern "C" uint64_t DocWriteCpp(CDoc *doc, uint8_t prompt);
+bool DocInsDoc(CDoc &doc, CDoc &source);
 extern "C" uint64_t DocTypeCpp(CDoc *doc, const char *name,
                                int64_t trailing_new_lines);
 extern "C" uint64_t TypeCpp(const char *name, int64_t trailing_new_lines);

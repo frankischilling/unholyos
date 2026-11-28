@@ -4171,7 +4171,7 @@ The harness boots `build/once-test.iso` or the pinned DVD with QEMU
 8.2.2 using `-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>`
 and the default single CPU. The configured home-script boot check
 runs on the native test DVD. The pinned run checks the shared queue
-operations. The stock install and tour script remains pending.
+operations.
 
 ## Startup file execution and input
 
@@ -4192,6 +4192,30 @@ build/Linux/TestBoot --startup-exec-reference qemu-system-x86_64 \
 The harness uses QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512`
 and the default single CPU for `build/startup-exec-test.iso` and the
 pinned DVD.
+
+## Stock DVD startup
+
+`make test-stock-once` boots `build/stock-once-test.iso` twice. One run
+declines installation and the tour. The other declines installation,
+opens the original tour menu, and returns to the home prompt with
+Shift-Esc. Both runs start with the unmodified `Once.HC` from the DVD
+root. The harness checks the packaged bytes of the startup script, the
+two startup documents, and all thirteen tour scripts against the
+pinned sources included in the checkout.
+
+The test uses QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512 -boot d`
+and the default single CPU. GCC and Clang both pass. The same prompts
+and tour menu were captured on the pinned TempleOS DVD in that VM
+configuration. These runs cover declining the installer and opening and
+closing the tour menu. The test also runs `Seed(12345);TipOfDay;` on
+the unmodified `Tips.DD` and checks the same tip about switching between
+the standard and Cyrillic fonts that appears in the reference guest.
+The installer wizard and the tour parts are still pending.
+
+The stock startup files and documentation are by Terry A. Davis.
+`Once.HC` matches blob `d8b4d0d621ed6b3ee8d3d5001b5a00815d541461` and
+`Misc/Tour/Tour.IN` matches `abe48134532155e8be139c6c1a692db3acfe2738`
+at the pinned revision. [TempleOS credits](https://github.com/cia-foundation/TempleOS/blob/c26482bb6ad3f80106d28504ec5db3c6a360732c/Doc/Credits.DD)
 
 ## Popup menus and one-time notices
 
