@@ -1,4 +1,5 @@
 #include "../Adam/DolDoc/DolDoc.hpp"
+#include "../Adam/God/GodExt.hpp"
 #include "../Adam/Gr/GrGlbls.hpp"
 #include "../Adam/Menu.hpp"
 #include "../Compiler/CompilerA.hpp"
@@ -255,6 +256,7 @@ void DocCutHC(), DocCopyHC(), DocTreeFindHC(), DocTreeFFindHC(), DocTreeMakeHC()
 void DocTreeWriteHC(), DocTreeAppendHC(), DocTreeFWriteHC(), DocTreeFAppendHC();
 void DocTreeWriteJoinHC(), DocTreeAppendJoinHC(), ExeDocHC(), DocTreeExeHC(),
     DocTreeFExeHC();
+void GodBitsInsHC(), GodHexInsHC(), GodBitsHC();
 void RegDftHC(), RegExeHC(), RegWriteHC(), RegCntHC(), RegAppendHC(), AdamHC();
 void InsRegHC(), InsReregHC(), InsUnregHC();
 void AOnceFlushHC(), OnceFlushHC(), AOnceHC(), OnceHC(), AOnceDrvHC(),
@@ -898,6 +900,7 @@ bool LoadKernel(CTask &task)
       {"winmgr", reinterpret_cast<uintptr_t>(&winmgr)},
       {"scrncast", reinterpret_cast<uintptr_t>(&scrncast)},
       {"music", reinterpret_cast<uintptr_t>(&music)},
+      {"god", reinterpret_cast<uintptr_t>(&god)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
       {"SYS_BOOT_SRC", reinterpret_cast<uintptr_t>(&SYS_BOOT_SRC)},
       {"SYS_RUN_LEVEL", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
@@ -1631,6 +1634,9 @@ bool LoadKernel(CTask &task)
       {"RegWrite", reinterpret_cast<uintptr_t>(RegWriteHC)},
       {"RegCnt", reinterpret_cast<uintptr_t>(RegCntHC)},
       {"RegAppend", reinterpret_cast<uintptr_t>(RegAppendHC)},
+      {"GodBitsIns", reinterpret_cast<uintptr_t>(GodBitsInsHC)},
+      {"GodHexIns", reinterpret_cast<uintptr_t>(GodHexInsHC)},
+      {"GodBits", reinterpret_cast<uintptr_t>(GodBitsHC)},
       {"AOnceFlush", reinterpret_cast<uintptr_t>(AOnceFlushHC)},
       {"OnceFlush", reinterpret_cast<uintptr_t>(OnceFlushHC)},
       {"AOnce", reinterpret_cast<uintptr_t>(AOnceHC)},

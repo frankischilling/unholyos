@@ -25,7 +25,7 @@ CXX_SRC := Kernel/KMain.cpp Kernel/KGlbls.cpp Kernel/KInts.cpp Kernel/KMisc.cpp 
 	Kernel/BlkDev/DskATA.cpp Kernel/BlkDev/DskATAId.cpp Kernel/BlkDev/DskAddDev.cpp \
 	Kernel/BlkDev/DskCDDVD.cpp Kernel/BlkDev/DskDrv.cpp Kernel/BlkDev/DskBlkDev.cpp Kernel/BlkDev/FileSysRedSea.cpp Kernel/BlkDev/FileSysFAT.cpp Kernel/BlkDev/DskFile.cpp Kernel/BlkDev/DskCFile.cpp Kernel/BlkDev/DskCopy.cpp \
 	Kernel/BlkDev/DskStrA.cpp Kernel/BlkDev/DskStrB.cpp Kernel/BlkDev/DskDirA.cpp Kernel/BlkDev/DskDirB.cpp Kernel/BlkDev/DskDirContext.cpp Kernel/BlkDev/DskFind.cpp Kernel/BlkDev/DskBlk.cpp Kernel/BlkDev/DskClus.cpp Kernel/BlkDev/DskCache.cpp Kernel/BlkDev/DskFmt.cpp Kernel/Compress.cpp \
-	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ARegistry.cpp Adam/InsReg.cpp Adam/Training.cpp Adam/InFile.cpp Adam/ASnd.cpp Adam/TaskSettings.cpp Adam/CPURep.cpp Adam/DevInfo.cpp Adam/AutoComplete/ACTask.cpp Adam/AutoComplete/ACInit.cpp Adam/AutoComplete/ACFill.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
+	Adam/ADefine.cpp Adam/ADbg.cpp Adam/ARegistry.cpp Adam/InsReg.cpp Adam/Training.cpp Adam/InFile.cpp Adam/ASnd.cpp Adam/God/GodExt.cpp Adam/God/HolySpirit.cpp Adam/TaskSettings.cpp Adam/CPURep.cpp Adam/DevInfo.cpp Adam/AutoComplete/ACTask.cpp Adam/AutoComplete/ACInit.cpp Adam/AutoComplete/ACFill.cpp Adam/Ctrls/CtrlsA.cpp Adam/Menu.cpp Adam/Win.cpp Adam/WinMgr.cpp Adam/Gr/GrGlbls.cpp Adam/Gr/GrPalette.cpp Adam/Gr/GrDC.cpp Adam/Gr/GrInitB.cpp Adam/Gr/GrMath.cpp \
 	Adam/AutoComplete/ACDictGen.cpp Adam/Gr/GrBitMap.cpp Adam/Gr/GrPrimatives.cpp Adam/Gr/GrComposites.cpp Adam/Gr/GrScrn.cpp Adam/Gr/GrEnd.cpp Adam/Gr/GrTextBase.cpp \
 	Adam/Gr/SpriteNew.cpp Adam/Gr/GrSpritePlot.cpp Adam/Gr/ScrnCast.cpp \
 	Adam/DolDoc/DocNew.cpp Adam/DolDoc/DocDblBuf.cpp Adam/DolDoc/DocRecalc.cpp Adam/DolDoc/DocRecalcLib.cpp \
@@ -157,6 +157,9 @@ ADAM_STARTUP_TEST_ISO := $(BUILD)/adam-startup-test.iso
 DOC_TREE_PROBE := Linux/Fixtures/DocTreeProbe.HC
 KEY_MAP_PROBE := Linux/Fixtures/KeyMapProbe.HC
 KEY_MAP_TEST_ISO := $(BUILD)/key-map-test.iso
+GOD_INPUT_PROBE := Linux/Fixtures/GodInputProbe.HC
+GOD_HELP := Adam/God/HSNotes.DD
+GOD_INPUT_TEST_ISO := $(BUILD)/god-input-test.iso
 DOC_TREE_AOT_PROBE := Linux/Fixtures/DocTreeAOTProbe.HC
 DOC_TREE_TEST_ISO := $(BUILD)/doc-tree-test.iso
 REGISTRY_DEMO := Demo/RegistryDemo.HC
@@ -607,6 +610,9 @@ $(DOC_TREE_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(DOC_TREE_
 $(KEY_MAP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(KEY_MAP_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(KEY_MAP_PROBE)
 
+$(GOD_INPUT_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(GOD_INPUT_PROBE) $(GOD_HELP) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --file-at $(GOD_HELP) $(GOD_HELP) --dir Home --file $(GOD_INPUT_PROBE)
+
 $(REGISTRY_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(REGISTRY_PROBE) $(REGISTRY_BOOT) $(REGISTRY_DEMO) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at Home/Registry.HC.Z $(REGISTRY_BOOT) --file $(REGISTRY_PROBE) --file-at $(REGISTRY_DEMO) $(REGISTRY_DEMO)
 
@@ -690,9 +696,9 @@ $(MUSIC_PRECISION_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(MUSIC_P
 $(STRINGS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STRINGS_PROBES) $(FILE_WRITE_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(addprefix --file ,$(STRINGS_PROBES) $(FILE_WRITE_PROBE))
 
-$(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STARTUP_TIPS) $(HELP_DOCS) $(AC_STANDBY) $(AC_WORDS) $(AC_DEFS) $(PCI_DEV_FILE) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS) $(REGISTRY_DEMO)
+$(ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STARTUP_TIPS) $(HELP_DOCS) $(AC_STANDBY) $(AC_WORDS) $(AC_DEFS) $(PCI_DEV_FILE) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS) $(REGISTRY_DEMO) $(GOD_HELP)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at $(AC_STANDBY).Z $(AC_STANDBY) $(AC_DICT_ARGS) --compress-at $(PCI_DEV_FILE).Z $(PCI_DEV_FILE) --dir Home \
-		$(foreach asset,$(STARTUP_TIPS) $(HELP_DOCS) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS) $(REGISTRY_DEMO),--file-at $(asset) $(asset))
+		$(foreach asset,$(STARTUP_TIPS) $(HELP_DOCS) $(GRAPHICS_DEMOS) $(GAME_DEMOS) $(CLASS_META_DEMO) $(APP_FILES) $(FORM_DEMOS) $(SOUND_DEMOS) $(REGISTRY_DEMO) $(GOD_HELP),--file-at $(asset) $(asset))
 
 $(CHARACTER_GRAPHICS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(GAME_DEMOS) $(CHARACTER_GRAPHICS_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(CHARACTER_GRAPHICS_PROBE) \
@@ -872,6 +878,12 @@ test-key-map: $(KEY_MAP_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --key-map "$(QEMU)" $(KEY_MAP_TEST_ISO)
 
 test: test-key-map
+
+.PHONY: test-god-input
+test-god-input: $(GOD_INPUT_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --god-input "$(QEMU)" $(GOD_INPUT_TEST_ISO)
+
+test: test-god-input
 
 .PHONY: test-registry
 test-registry: $(REGISTRY_TEST_ISO) $(BOOT_TEST)

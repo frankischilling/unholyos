@@ -4558,6 +4558,29 @@ build/Linux/TestBoot --key-map-reference qemu-system-x86_64 \
 The probe uses QEMU 8.2.2 with the PC machine, qemu64, 512 MiB, and one
 CPU. Additional editor bindings still need translation.
 
+## God input
+
+`make test-god-input` boots `build/god-input-test.iso` and runs
+`GodInputProbe.HC` from the terminal. The probe checks the global record
+and both FIFOs, integer and hex bit order, and reads shorter and longer
+than a machine word. It then empties the input FIFO, clicks the timer
+dialog's OKAY button, and verifies that the dialog adds 24 bits before
+the caller consumes one.
+
+GCC 13.3.0, Clang 20.1.2, and pinned TempleOS all report
+`God input 7F`. The runs use NASM 2.16.01 for UnholyOS and QEMU 8.2.2
+with PC, `qemu64`, one vCPU, and 512 MiB. The test reads back the
+uploaded TempleOS fixture and verifies the packaged UnholyOS fixture and
+Terry A. Davis's `HSNotes.DD` against the checkout. The timer values depend
+on the input event.
+
+```sh
+make -j6 BUILD=build/gcc test-god-input
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-god-input
+build/gcc/Linux/TestBoot --god-input-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/god-input-reference
+```
+
 ## AutoComplete modifier pane
 
 `make test-stock-once` includes the original `Doc/StandBy.DD` by Terry A.

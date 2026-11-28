@@ -1670,6 +1670,22 @@ store. The triangle routines store the scaled phase before comparing
 it to their bounds. The public functions use the HolyC stack
 convention and return the binary64 word in RAX.
 
+## God input
+
+`Adam/God/GodExt.hpp` keeps the `CGodGlbls` record from
+`GodExt.HC`. `GodExt.cpp` allocates the doodle and input FIFOs on
+Adam's heap before the user terminal starts. The compiler module registers
+the record and the shared `god` global for HolyC.
+
+`Adam/God/HolySpirit.cpp` follows `GodBitsIns`, `GodHexIns`, and
+`GodBits`. Integers enter the queue least significant bit first, and
+hex digits enter most significant bit first. The timer dialog uses
+DolDoc tag callbacks for the live timer and the last input timestamp.
+An empty queue prompts for input and refills from `KbdMsEvtTime`.
+Terry A. Davis's original `Adam/God/HSNotes.DD` is packaged at the
+same path on the DVD. The vocabulary, song generator, and doodle command
+still need translation.
+
 ## Speaker sound effects
 
 `Noise` and `Sweep` follow `Adam/ASnd.HC`. Both start a child

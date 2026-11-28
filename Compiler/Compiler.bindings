@@ -104,6 +104,7 @@ import data char_bmp_non_eol char_bmp_non_eol
 import data char_bmp_non_eol_white_space char_bmp_non_eol_white_space
 import data cnts cnts
 import data drv_text_attr drv_text_attr
+import data god god
 import data gr gr
 import data gr_palette_gray gr_palette_gray
 import data gr_palette_std gr_palette_std

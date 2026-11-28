@@ -409,7 +409,8 @@ static Bytes VerifyCompilerMedia(const Bytes &disc, uint64_t root,
       Check(record.type == 16 && export_names.insert(record.name).second,
             "Compiler exports must be unique and relative");
     }
-  Check(native_imports == 48 && data_imports == 33 &&
+  Check(native_imports == 48 && data_imports == 34 &&
+            import_names.contains("god") &&
             import_names.contains("__unholyos_sysv.AdamErrCpp") &&
             import_names.contains("__unholyos_sysv.DefineLstLoadCpp") &&
             import_names.contains("__unholyos_sysv.FixSetCpp") &&
@@ -1961,6 +1962,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CScrnCastGlbls",
                                        "CMusicGlbls",
                                        "CSoundEffectFrame",
+                                       "CGodGlbls",
                                        "CTaskSettings",
                                        "CMenuEntry",
                                        "CMenu",
@@ -1973,7 +1975,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 97);
+  static_assert(class_count == 98);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -2033,6 +2035,8 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
           if (name == "CSoundEffectFrame")
             Check(block[8] == 14,
                   "Startup CSoundEffectFrame record has the wrong size");
+          if (name == "CGodGlbls")
+            Check(block[8] == 65, "Startup CGodGlbls record has the wrong size");
           Check(((block[10] >> 32) & 255) == 0,
                 "Startup class base has pointer stars");
           for (uint64_t stars = 1; stars <= 4; ++stars) {
@@ -2831,11 +2835,13 @@ static void VerifyPools(CMonitor &vm, const fs::path &dir,
                               pool ? data.ranges : code.ranges);
   const uint64_t registry_used =
       desktop ? VerifyRegistryHeap(vm, expected_data_hc, adam) : 0;
+  // The two God FIFOs each use a 32-byte record and a 16 KiB buffer.
+  const uint64_t god_fifo_used = desktop ? 2 * (32 + 16 + 33 * page - 24) : 0;
   const uint64_t boot_used = range_bytes + late_used + symbol_used +
                              drive_used + initial_message_used + graphics_used +
                              asm_hash_used + raw_used + fifo_used + key_device_used +
                              compiler.data_used + cache_used + sector_cache_used +
-                             source_used[1] + registry_used;
+                             source_used[1] + registry_used + god_fifo_used;
   // Default registration executes four statements with inline string data.
   // The compiler retains the StrCpy, two HashPublic, and Print allocations.
   const uint64_t registry_code_used = desktop ? 64 + 88 + 88 + 96 : 0;
@@ -6972,6 +6978,7 @@ int main(int argc, char **argv)
        mode == "--startup-exec-reference" || mode == "--training-input-reference" ||
        mode == "--file-editor-reference" || mode == "--key-map" ||
        mode == "--key-map-reference" || mode == "--dictionary-reference" ||
+       mode == "--god-input" || mode == "--god-input-reference" ||
        mode == "--progress" || mode == "--progress-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
@@ -6981,6 +6988,7 @@ int main(int argc, char **argv)
     const bool ins_reg = mode.starts_with("--ins-reg");
     const bool startup_exec = mode.starts_with("--startup-exec");
     const bool key_map = mode.starts_with("--key-map");
+    const bool god_input = mode.starts_with("--god-input");
     const bool progress = mode.starts_with("--progress");
     char path[] = "/tmp/unholyos-document-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -7001,6 +7009,11 @@ int main(int argc, char **argv)
       } else if (!reference && startup_exec) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/StartupExecProbe.HC",
                               "StartupExecProbe.HC");
+      } else if (!reference && god_input) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/GodInputProbe.HC",
+                              "GodInputProbe.HC");
+        VerifyHostModuleMedia(argv[3], "Adam/God/HSNotes.DD", "HSNotes.DD",
+                              "Adam/God");
       } else if (!reference && key_map) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/KeyMapProbe.HC",
                               "KeyMapProbe.HC");
@@ -7040,6 +7053,8 @@ int main(int argc, char **argv)
         probes = file_editor_probes;
       else if (key_map)
         probes = key_map_probes;
+      else if (god_input)
+        probes = god_input_probes;
       else if (mode == "--dictionary-reference")
         probes = dictionary_probes;
       else if (aot)
@@ -8191,6 +8206,7 @@ int main(int argc, char **argv)
               << " --training-input-reference qemu image.iso [capture-dir]\n"
               << " --file-editor-reference qemu image.iso [capture-dir]\n"
               << " --key-map[-reference] qemu image.iso [capture-dir]\n"
+              << " --god-input[-reference] qemu image.iso [capture-dir]\n"
               << " --dictionary-reference qemu image.iso [capture-dir]\n"
               << " --dictionary-install[-reference] qemu image.iso disk.img [capture-dir]\n"
               << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"
