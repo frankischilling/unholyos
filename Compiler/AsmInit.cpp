@@ -1,5 +1,5 @@
 #include "../Kernel/KernelB.hpp"
-#include "../Adam/God/GodExt.hpp"
+#include "../Adam/God/GodSong.hpp"
 #include "../Adam/Gr/GrExt.hpp"
 #include "../Adam/Gr/GrGlbls.hpp"
 #include "../Adam/Menu.hpp"
@@ -1993,6 +1993,52 @@ static bool CmpGodData(CHashTable *table)
   return CmpKernelGlobal(table, "god", cls, &god);
 }
 
+static bool CmpMakeSongSettings(CHashTable *table)
+{
+  auto *cls = CmpKernelClass(table, "CMakeSongSettings", sizeof(CMakeSongSettings));
+  if (!cls)
+    return false;
+  auto *heap = CurrentTask()->data_heap;
+  auto *i64 = FindType("I64", table);
+  auto *boolean = FindType("Bool", table);
+  const struct
+  {
+    const char *name;
+    CHashClass *type;
+    size_t offset;
+    const char *format;
+  } fields[]{
+      {"complexity", i64, offsetof(CMakeSongSettings, complexity),
+       "$LS,D=\"ST_RHYTHM_COMPLEXITY\"$\n"},
+      {"rests", boolean, offsetof(CMakeSongSettings, rests), "$CB,\"Rests\"$\n"},
+      {"six_eight", boolean, offsetof(CMakeSongSettings, six_eight),
+       "$CB,\"Six Eight\"$\n"},
+      {"octave", i64, offsetof(CMakeSongSettings, octave),
+       "$DA-TRM,A=\"Octave:%d\"$\n"},
+      {"octave_state", i64, offsetof(CMakeSongSettings, octave_state), nullptr},
+  };
+  for (const auto &field : fields) {
+    auto *name = StrNew(field.name, heap);
+    auto *member = name ? MemberAdd(*cls, name, *field.type, field.offset) : nullptr;
+    if (!member) {
+      Free(name);
+      return false;
+    }
+    if (field.format) {
+      auto *meta = reinterpret_cast<CMemberLstMeta *>(CAlloc(sizeof(CMemberLstMeta), heap));
+      if (!meta)
+        return false;
+      member->meta = meta;
+      meta->str = StrNew("format", heap);
+      meta->flags = MLMF_IS_STR;
+      meta->user_data = reinterpret_cast<uintptr_t>(StrNew(field.format, heap));
+      if (!meta->str || !meta->user_data)
+        return false;
+    }
+  }
+  return true;
+}
+
 static bool CmpTaskSettingsData(CHashTable *table)
 {
   auto *cls = CmpKernelClass(table, "CTaskSettings", sizeof(CTaskSettings));
@@ -3020,6 +3066,8 @@ static bool CmpRuntimeHeaders(CHashTable *table)
                                  {"fu_flags", U8Ptr, true}}},
       {"GodWordStr", U8Ptr, FF_RET1, {{"bits", I64, true, 17}}},
       {"GodWord", U0, FF_RET1, {{"bits", I64, true, 17}}},
+      {"GodSongStr", U8Ptr, FF_RET1, {}},
+      {"GodSong", U0, FF_RET1, {}},
       {"AOnceFlush", U0, FF_RET1, {}},
       {"OnceFlush", U0, FF_RET1, {}},
       {"AOnce", U0, FF_DOT_DOT_DOT, {{"fmt", U8Ptr}}},
@@ -3986,7 +4034,7 @@ static bool CmpFillHash(CHashTable *table)
       {"WIf_FOCUS_TASK_MS_WHEEL", "23"},
       {"WIf_FOCUS_TASK_BORDER", "24"},
       {"WIf_FOCUS_TASK_GRAB_SCROLL", "25"},
-      {"SC_F1", "0x3B"}, {"SC_F7", "0x41"},
+      {"SC_F1", "0x3B"}, {"SC_F6", "0x40"}, {"SC_F7", "0x41"},
       {"SC_CURSOR_UP", "0x48"},
       {"SC_CURSOR_LEFT", "0x4B"},
       {"SC_CURSOR_RIGHT", "0x4D"},
@@ -4067,6 +4115,7 @@ static bool CmpFillHash(CHashTable *table)
          CmpMouseData(table) && CmpPaletteData(table) && CmpDCData(table) &&
          CmpScrnCastData(table) && CmpMusicData(table) &&
          CmpSoundEffectFrameData(table) && CmpGodData(table) &&
+         CmpMakeSongSettings(table) &&
          CmpTaskSettingsData(table) && CmpMenuData(table, task) &&
          CmpCtrlData(table, task) && CmpInsRegData(table) &&
          CmpProgressData(table) &&

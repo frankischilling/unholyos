@@ -126,6 +126,9 @@ constexpr CTextProbe god_vocabulary_probes[]{
      "God vocabulary checks ",
      "God vocabulary 7569 8FAEDDDD52AF79FD\nGod vocabulary checks FF\n",
      {}, true}};
+constexpr CTextProbe god_song_probes[]{
+    {"god-song", "/GodSongProbe.HC", "", "God song checks ",
+     "God song checks ", "God song checks FF\n", {}, true}};
 constexpr CTextProbe dictionary_probes[]{
     {"dictionary", "/DictionaryProbe.HC", "", "Dictionary probe ",
      "Dictionary probe 3F", "Dictionary probe 3F\n", {}, true}};
@@ -1408,8 +1411,9 @@ static void DriveCharacterGraphics(
       vm.ResetDeadline(150s);
       cmd("DocClear(,1);");
       const bool god_input = std::string_view(probe.name) == "god-input";
+      const bool god_song = std::string_view(probe.name) == "god-song";
       std::array<uint64_t, 3> mouse{};
-      if (god_input) {
+      if (god_input || god_song) {
         cmd(R"("GIM %X %X %X\n",&ms.pos.x,&ms.lb,&ms.rb;)");
         mouse = addresses("GIM ", {16, 1, 1});
       }
@@ -1417,7 +1421,7 @@ static void DriveCharacterGraphics(
         cmd(std::string("DocClear(,1);ExeFile2(\"") + probe.reference_file + "\");");
       else if (reference)
         upload(fs::absolute(std::string("Linux/Fixtures") + probe.source), true);
-      else if (god_input || std::string_view(probe.name) == "doc-song" ||
+      else if (god_input || god_song || std::string_view(probe.name) == "doc-song" ||
                std::string_view(probe.name) == "god-vocabulary")
         cmd(std::string("ExeFile2(\"::") + probe.source + "\");0;");
       else
@@ -1447,13 +1451,37 @@ static void DriveCharacterGraphics(
         training_input();
       if (std::string_view(probe.name) == "file-editor")
         file_editor();
-      if (god_input) {
+      auto accept_timer = [&](const char *capture_name) {
         wait_text("a random num from a timer.");
         const auto screen = visible(wait_text("Latch:"));
         const auto button = screen.rfind("OKAY");
         Check(button != screen.find("OKAY"), "Missing timer OKAY button");
-        snapshot("god-input-timer");
+        snapshot(capture_name);
         click_cell(button, mouse);
+      };
+      if (god_input)
+        accept_timer("god-input-timer");
+      if (god_song) {
+        wait_text("Octave:4");
+        snapshot("god-song-settings");
+        key("esc");
+        accept_timer("god-song-first-timer");
+        wait_text("Octave:4");
+        key("home");
+        key("spc");
+        wait_text("Complex");
+        key("home");
+        key("down");
+        key("down");
+        key("esc");
+        wait_text("[Complex]");
+        key("tab");
+        key("spc");
+        key("tab");
+        key("spc");
+        key("tab");
+        key("esc");
+        accept_timer("god-song-second-timer");
       }
       if (std::string_view(probe.name) == "key-map") {
         wait_text("Press the key map probe chord");

@@ -1427,7 +1427,7 @@ constexpr uint32_t SCF_E0_PREFIX = 1 << 7, SCF_KEY_UP = 1 << 8,
                    SCF_NO_SHIFT = 1U << 30, SCF_KEY_DESC = 1U << 31;
 constexpr uint8_t SC_ENTER = 0x1C, SC_SHIFT = 0x2A, SC_CTRL = 0x1D,
                   SC_ALT = 0x38, SC_CAPS = 0x3A, SC_NUM = 0x45,
-                  SC_F1 = 0x3B, SC_F7 = 0x41, SC_F10 = 0x44,
+                  SC_F1 = 0x3B, SC_F6 = 0x40, SC_F7 = 0x41, SC_F10 = 0x44,
                   SC_SCROLL = 0x46, SC_HOME = 0x47, SC_CURSOR_UP = 0x48,
                   SC_PAGE_UP = 0x49, SC_CURSOR_LEFT = 0x4B, SC_CURSOR_RIGHT = 0x4D,
                   SC_END = 0x4F, SC_CURSOR_DOWN = 0x50, SC_PAGE_DOWN = 0x51,

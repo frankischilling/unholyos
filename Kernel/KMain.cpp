@@ -1,4 +1,4 @@
-#include "../Adam/God/GodExt.hpp"
+#include "../Adam/God/GodSong.hpp"
 #include "../Linux/BootProbe.hpp"
 #include "KernelB.hpp"
 
@@ -222,6 +222,10 @@ extern "C" void KMainCpp()
   GodInitCpp(GOD_WORD_FILE_MASK, nullptr);
   if (!InsRegInit()) {
     SerialPutS("UnholyOS: Could not register install form lists\r\n");
+    return;
+  }
+  if (!GodSongInit()) {
+    SerialPutS("UnholyOS: Could not register song rhythm list\r\n");
     return;
   }
   BootKernelCfgReport();

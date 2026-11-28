@@ -135,6 +135,7 @@ Linux/Fixtures/KeyboardProbe.HC text eol=lf
 Linux/Fixtures/KeyMapProbe.HC text eol=lf
 Linux/Fixtures/GodInputProbe.HC text eol=lf
 Linux/Fixtures/GodVocabularyProbe.HC text eol=lf
+Linux/Fixtures/GodSongProbe.HC text eol=lf
 Adam/God/HSNotes.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Adam/God/Vocab.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Linux/Fixtures/MouseProbe.HC text eol=lf

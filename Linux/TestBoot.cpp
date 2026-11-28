@@ -1599,9 +1599,10 @@ constexpr CDefineList adam_defines[]{
      10},
     {"DD_OS_NAME_VERSION", "UnholyOS\0", 1}};
 
-constexpr CDefineList ins_reg_lists[]{
+constexpr CDefineList adam_startup_lists[]{
     {"ST_HOST_OSES", "Other\0Native\0Linux\0Windows\0", 4},
-    {"ST_HOST_VMS", "Other\0Native\0VMware\0QEMU\0VirtualBox\0", 5}};
+    {"ST_HOST_VMS", "Other\0Native\0VMware\0QEMU\0VirtualBox\0", 5},
+    {"ST_RHYTHM_COMPLEXITY", "Simple\0Normal\0Complex\0", 3}};
 
 template <size_t Count>
 constexpr std::array<uint64_t, 3>
@@ -1965,6 +1966,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CMusicGlbls",
                                        "CSoundEffectFrame",
                                        "CGodGlbls",
+                                       "CMakeSongSettings",
                                        "CTaskSettings",
                                        "CMenuEntry",
                                        "CMenu",
@@ -1977,7 +1979,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 98);
+  static_assert(class_count == 99);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -2039,6 +2041,8 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                   "Startup CSoundEffectFrame record has the wrong size");
           if (name == "CGodGlbls")
             Check(block[8] == 65, "Startup CGodGlbls record has the wrong size");
+          if (name == "CMakeSongSettings")
+            Check(block[8] == 26, "Startup song settings record has the wrong size");
           Check(((block[10] >> 32) & 255) == 0,
                 "Startup class base has pointer stars");
           for (uint64_t stars = 1; stars <= 4; ++stars) {
@@ -2081,7 +2085,7 @@ public:
     VerifyTable(table, classes, false);
     VerifyTable(classes, kernel, true);
     Check(sources.size() == 25, "Missing original Adam startup functions");
-    Check(registration_defines.size() == 4, "Missing install registration defines");
+    Check(startup_defines.size() == 5, "Missing Adam startup defines");
     std::cout << "Verified Adam source functions " << sources.size()
               << ", owned code allocations " << used[0]
               << ", owned data allocations " << used[1] << '\n';
@@ -2097,7 +2101,7 @@ private:
   std::map<uint64_t, uint64_t> allocations;
   std::map<uint64_t, Bytes> snapshots;
   std::set<std::string> sources;
-  std::set<std::string> registration_defines;
+  std::set<std::string> startup_defines;
 
   static bool Contains(const std::pair<uint64_t, uint64_t> &range,
                        uint64_t address, uint64_t size)
@@ -2260,28 +2264,28 @@ private:
     Allocation(fun[19], 0);
   }
 
-  void InstallRegistrationDefine(const std::array<uint64_t, 11> &def)
+  void StartupDefine(const std::array<uint64_t, 11> &def)
   {
     String(def[3]);
     String(def[4]);
     const auto name = ReadGuestName(vm, def[1]);
-    Check(registration_defines.insert(name).second,
-          ("Duplicate install registration define " + name).c_str());
-    const auto list = std::find_if(std::begin(ins_reg_lists), std::end(ins_reg_lists),
+    Check(startup_defines.insert(name).second,
+          ("Duplicate startup define " + name).c_str());
+    const auto list = std::find_if(std::begin(adam_startup_lists), std::end(adam_startup_lists),
                                    [&](const auto &item) { return item.name == name; });
-    if (list != std::end(ins_reg_lists)) {
+    if (list != std::end(adam_startup_lists)) {
       Check(uint32_t(def[2]) == 4 && def[10] == list->count && !def[4] &&
                 ReadGuestName(vm, def[3]) == "AD:0x0",
-            ("Invalid install registration list " + name).c_str());
+            ("Invalid Adam startup list " + name).c_str());
       Allocation(def[8], 1, list->data.size());
       Allocation(def[9], 1, list->count * sizeof(uint64_t));
       const auto literal = Read<1>(def[9])[0];
       Check(GuestBytesEqual(vm, def[8], list->data) &&
                 GuestBytesEqual(vm, literal, list->data),
-            "Install registration list bytes differ");
+            "Adam startup list bytes differ");
       for (size_t i = 0, offset = 0; i < list->count; ++i) {
         Check(Read<1>(def[9] + i * sizeof(uint64_t))[0] == literal + offset,
-              "Install registration list offset differs");
+              "Adam startup list offset differs");
         offset = list->data.find('\0', offset) + 1;
       }
       return;
@@ -2362,7 +2366,7 @@ private:
               Check(!def[3] && !def[4] && !def[9] && def[10] == UINT64_MAX,
                     "Unexpected compiler namespace definition");
             } else
-              InstallRegistrationDefine(def);
+              StartupDefine(def);
           } else {
             Check(classes && (type == 1 || type == 0x200),
                   "Unexpected Adam namespace entry type");
@@ -7033,6 +7037,7 @@ int main(int argc, char **argv)
        mode == "--key-map-reference" || mode == "--dictionary-reference" ||
        mode == "--god-input" || mode == "--god-input-reference" ||
        mode == "--god-vocabulary" || mode == "--god-vocabulary-reference" ||
+       mode == "--god-song" || mode == "--god-song-reference" ||
        mode == "--progress" || mode == "--progress-reference")) {
     const bool reference = mode.ends_with("-reference");
     const bool aot = mode.ends_with("-aot");
@@ -7044,6 +7049,7 @@ int main(int argc, char **argv)
     const bool key_map = mode.starts_with("--key-map");
     const bool god_input = mode.starts_with("--god-input");
     const bool god_vocabulary = mode.starts_with("--god-vocabulary");
+    const bool god_song = mode.starts_with("--god-song");
     const bool progress = mode.starts_with("--progress");
     char path[] = "/tmp/unholyos-document-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -7067,6 +7073,9 @@ int main(int argc, char **argv)
       } else if (!reference && god_vocabulary) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/GodVocabularyProbe.HC",
                               "GodVocabularyProbe.HC");
+      } else if (!reference && god_song) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/GodSongProbe.HC",
+                              "GodSongProbe.HC");
       } else if (!reference && god_input) {
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/GodInputProbe.HC",
                               "GodInputProbe.HC");
@@ -7115,6 +7124,8 @@ int main(int argc, char **argv)
         probes = god_input_probes;
       else if (god_vocabulary)
         probes = god_vocabulary_probes;
+      else if (god_song)
+        probes = god_song_probes;
       else if (mode == "--dictionary-reference")
         probes = dictionary_probes;
       else if (aot)
@@ -8268,6 +8279,7 @@ int main(int argc, char **argv)
               << " --key-map[-reference] qemu image.iso [capture-dir]\n"
               << " --god-input[-reference] qemu image.iso [capture-dir]\n"
               << " --god-vocabulary[-reference] qemu image.iso [capture-dir]\n"
+              << " --god-song[-reference] qemu image.iso [capture-dir]\n"
               << " --dictionary-reference qemu image.iso [capture-dir]\n"
               << " --dictionary-install[-reference] qemu image.iso disk.img [capture-dir]\n"
               << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"

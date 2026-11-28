@@ -1693,8 +1693,15 @@ a space. F7 in `Adam/DolDoc/DocPutKey.cpp` seeds the FIFO with
 UnholyOS keeps the vocabulary in Adam's heap so it survives the task
 that reloads it. The old strings stay valid after replacing the pointer
 table, as in the reference. A failed second scan leaves the previous
-vocabulary available. The Bible passage, song generator, and doodle
-command still need translation.
+vocabulary available.
+
+`Adam/God/GodSong.cpp` follows `InsNote`, `GodSongStr`, and `GodSong`
+from `GodSong.HC`. The settings dialog uses the native metadata for
+`CMakeSongSettings` and the original rhythm list. The generator keeps the
+rhythm tables, octave changes, meter prefix, and progress counter.
+F6 in `Adam/DolDoc/DocPutKey.cpp` calls `GodSong`, which writes
+both phrases twice in a DolDoc song entry. The Bible passage and doodle command
+still need translation.
 
 ## Speaker sound effects
 
