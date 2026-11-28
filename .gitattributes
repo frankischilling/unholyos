@@ -238,3 +238,4 @@ Linux/Fixtures/NestedRedSeaNativeProbe.HC text eol=lf
 Linux/Fixtures/OpticalImageProbe.HC text eol=lf
 Misc/Bible.TXT -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Linux/Fixtures/GodBibleProbe.HC text eol=lf
+Linux/Fixtures/GodDoodleProbe.HC text eol=lf

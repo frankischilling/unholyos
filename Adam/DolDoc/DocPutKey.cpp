@@ -1,6 +1,7 @@
 #include "DolDoc.hpp"
 #include "../AutoComplete/AutoComplete.hpp"
 #include "../God/GodBible.hpp"
+#include "../God/GodDoodle.hpp"
 #include "../God/GodSong.hpp"
 
 static bool DocACKey(int64_t ch, int64_t sc)
@@ -45,8 +46,8 @@ static void DocKeyDescription(int64_t ch, int64_t sc)
         desc = shift ? "Cmd /About" : "Cmd /Help";
       break;
     case SC_F6:
-      if (!ctrl && !shift)
-        desc = "Cmd /God Song";
+      if (!ctrl)
+        desc = shift ? "Cmd /God Doodle" : "Cmd /God Song";
       break;
     case SC_F7:
       if (!ctrl)
@@ -107,8 +108,14 @@ extern "C" void DocPutKeyCpp(CDoc *doc, int64_t ch, int64_t sc)
     return;
   }
   if (!ch && uint8_t(sc) == SC_F6 &&
-      !(sc & (SCF_CTRL | SCF_ALT | SCF_SHIFT | SCF_KEY_UP))) {
-    GodSongCpp();
+      !(sc & (SCF_CTRL | SCF_ALT | SCF_KEY_UP))) {
+    if (sc & SCF_SHIFT) {
+      const bool unlock = DocUnlock(*doc);
+      GodDoodleCpp(nullptr);
+      if (unlock)
+        DocLock(*doc);
+    } else
+      GodSongCpp();
     return;
   }
   if (!ch && uint8_t(sc) == SC_F7 &&
