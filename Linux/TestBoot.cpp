@@ -3568,6 +3568,10 @@ constexpr CTextProbe class_records_probes[]{
     {"class-records", "/ClassRecordsProbe.HC", "", "CR heaps ", "CR DONE",
      class_records_output}};
 
+constexpr CTextProbe memory_dump_probes[]{
+    {"memory-dump", "/MemoryDumpProbe.HC", "", "Memory dump probe ",
+     "Memory dump probe ", "Memory dump probe F\n", {}, true}};
+
 constexpr CTextProbe bit_field_probes[]{
     {"bit-field", "/BitFieldProbe.HC", "", "Bit field checks ", "Bit field checks 3F",
      "Bit field checks 3F\n", {}, true}};
@@ -3602,6 +3606,10 @@ constexpr CTextProbe function_records_layout_probes[]{
     {"function-records-layout", "/FunctionRecordLayoutProbe.HC", "",
      "FR layout 840", "FR layout DONE",
      "FR layout 840 856 1 F\nFR layout 840 856 1 F\nFR layout DONE\n", {}, true}};
+
+constexpr CTextProbe frame_ptr_probes[]{
+    {"frame-ptr", "/FramePtrProbe.HC", "/FramePtrProbe.BIN.Z",
+     "Frame pointers ", "Frame pointers 3FF", "Frame pointers 3FF\n"}};
 
 constexpr CTextProbe list_utilities_probes[]{
     {"list-utilities", "/ListUtilitiesProbe.HC", "", "LU linked ", "LU DONE",
@@ -7609,6 +7617,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--music-reference" ||
        std::string_view(argv[1]) == "--music-precision" ||
        std::string_view(argv[1]) == "--music-precision-reference" ||
+       std::string_view(argv[1]) == "--waveform" ||
+       std::string_view(argv[1]) == "--waveform-reference" ||
        std::string_view(argv[1]) == "--strings" ||
        std::string_view(argv[1]) == "--strings-reference" ||
        std::string_view(argv[1]) == "--compiler-defines" ||
@@ -7625,6 +7635,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--internal-types-reference" ||
        std::string_view(argv[1]) == "--class-records" ||
        std::string_view(argv[1]) == "--class-records-reference" ||
+       std::string_view(argv[1]) == "--memory-dump" ||
+       std::string_view(argv[1]) == "--memory-dump-reference" ||
        std::string_view(argv[1]) == "--bit-field" ||
        std::string_view(argv[1]) == "--bit-field-reference" ||
        std::string_view(argv[1]) == "--function-records" ||
@@ -7633,6 +7645,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--function-records-layout-reference" ||
        std::string_view(argv[1]) == "--list-utilities" ||
        std::string_view(argv[1]) == "--list-utilities-reference" ||
+       std::string_view(argv[1]) == "--frame-ptr" ||
+       std::string_view(argv[1]) == "--frame-ptr-reference" ||
        std::string_view(argv[1]) == "--optimizer" ||
        std::string_view(argv[1]) == "--optimizer-reference" ||
        std::string_view(argv[1]) == "--optimizer-aot" ||
@@ -7694,6 +7708,7 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--form")) {
     bool character = std::string_view(argv[1]).starts_with("--character-graphics");
     bool music_precision = std::string_view(argv[1]).starts_with("--music-precision");
+    bool waveform = std::string_view(argv[1]).starts_with("--waveform");
     bool music_demo = std::string_view(argv[1]).starts_with("--music") && !music_precision;
     bool tic = std::string_view(argv[1]).starts_with("--tic-tac-toe");
     bool breaks = std::string_view(argv[1]).starts_with("--break");
@@ -7719,6 +7734,7 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--internal-types");
     bool class_records_probe =
         std::string_view(argv[1]).starts_with("--class-records");
+    bool memory_dump_probe = std::string_view(argv[1]).starts_with("--memory-dump");
     bool bit_field_probe = std::string_view(argv[1]).starts_with("--bit-field");
     bool function_records_probe =
         std::string_view(argv[1]) == "--function-records" ||
@@ -7727,6 +7743,7 @@ int main(int argc, char **argv)
         std::string_view(argv[1]).starts_with("--function-records-layout");
     bool list_utilities_probe =
         std::string_view(argv[1]).starts_with("--list-utilities");
+    bool frame_ptr = std::string_view(argv[1]).starts_with("--frame-ptr");
     bool optimizer_probe = std::string_view(argv[1]).starts_with("--optimizer");
     bool optimizer_aot = std::string_view(argv[1]) == "--optimizer-aot";
     bool register_allocation_probe =
@@ -7770,6 +7787,8 @@ int main(int argc, char **argv)
       text_probes = math_probes;
     else if (music_precision)
       text_probes = music_precision_probes;
+    else if (waveform)
+      text_probes = waveform_probes;
     else if (std::string_view(argv[1]).starts_with("--strings"))
       text_probes = string_probes;
     else if (assert_warning)
@@ -7788,6 +7807,8 @@ int main(int argc, char **argv)
       text_probes = internal_types_probes;
     else if (class_records_probe)
       text_probes = class_records_probes;
+    else if (memory_dump_probe)
+      text_probes = memory_dump_probes;
     else if (bit_field_probe)
       text_probes = bit_field_probes;
     else if (function_records_probe)
@@ -7796,6 +7817,8 @@ int main(int argc, char **argv)
       text_probes = function_records_layout_probes;
     else if (list_utilities_probe)
       text_probes = list_utilities_probes;
+    else if (frame_ptr)
+      text_probes = frame_ptr_probes;
     else if (optimizer_probe)
       text_probes = optimizer_aot ? std::span<const CTextProbe>(optimizer_aot_probes)
                                  : std::span<const CTextProbe>(optimizer_probes);
@@ -7860,11 +7883,17 @@ int main(int argc, char **argv)
       if (character && !reference)
         VerifyHostModuleMedia(argv[3],"Linux/Fixtures/CharPanObserver.HC",
                               "CharPanObserver.HC");
+      if (frame_ptr && !reference)
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/FramePtrProbe.HC",
+                              "FramePtrProbe.HC");
+      if (waveform && !reference)
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/WaveformProbe.HC",
+                              "WaveformProbe.HC");
       if (bit_field_probe && !reference)
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/BitFieldProbe.HC",
                               "BitFieldProbe.HC");
-      if ((source_probe || internal_types_probe || function_records_probe ||
-           function_records_layout_probe) &&
+      if ((source_probe || internal_types_probe || memory_dump_probe ||
+           function_records_probe || function_records_layout_probe) &&
           !reference) {
         const auto sources = function_records_probe ? text_probes.first(1) : text_probes;
         for (const auto &probe:sources)
@@ -7912,7 +7941,7 @@ int main(int argc, char **argv)
                   reference);
       vm.Connect();
       if (!text_probes.empty() && !reference && !bit_field_probe &&
-          !function_records_layout_probe) {
+          !function_records_layout_probe && !memory_dump_probe) {
         auto output = assert_warning
                           ? vm.WaitSerial(dir / "serial.log",
                                           "UnholyOS: finished "
@@ -8103,6 +8132,7 @@ int main(int argc, char **argv)
               << " --internal-types[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --class-records[-reference] qemu image.iso [capture-dir]\n"
+              << " --memory-dump[-reference] qemu image.iso [capture-dir]\n"
               << " --bit-field[-reference] qemu image.iso [capture-dir]\n"
               << " --function-records[-reference] qemu image.iso [capture-dir]\n"
               << " --function-records-layout[-reference] qemu image.iso [capture-dir]\n"
@@ -8174,6 +8204,8 @@ int main(int argc, char **argv)
               << "       " << argv[0] << " --music[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --music-precision[-reference] qemu image.iso [capture-dir]\n"
+              << " --waveform[-reference] qemu image.iso [capture-dir]\n"
+              << " --frame-ptr[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --tic-tac-toe[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]

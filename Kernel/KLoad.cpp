@@ -78,6 +78,7 @@ void StrLastOccHC(), StrLastRemHC(), StrFindHC(), Tabs2SpacesHC(), ScaleIndentHC
 void MStrUtilHC();
 void _HASH_ADD(), _HASH_ADD_AFTER(), _HASH_FIND(), _HASH_SINGLE_TABLE_FIND();
 void HashTableNewHC(), HashTypeNumHC(), CeilU64HC(), Pow10I64HC();
+void HashGenericAddHC(), FramePtrHC(), FramePtrAddHC(), FramePtrSetHC(), FramePtrDelHC();
 void ClampHC(), MinHC(), MaxHC(), FloorU64HC(), RoundI64HC(), FloorI64HC(), CeilI64HC();
 void LinkedLstDelHC(), LinkedLstCopyHC(), LinkedLstCntHC(), LinkedLstSizeHC();
 void QueDelHC(), QueCopyHC(), QueCntHC(), QueSizeHC();
@@ -93,6 +94,7 @@ void CdHC(), IsDirHC(), DirHC(), PutDirLinkHC(), FilesFindHC(), FileFindHC(),
 void DirContextNewHC(), DirContextDelHC(), Str2I64HC(), StrScanHC();
 void Str2DateHC(), GetI64HC(), GetF64HC(), GetDateHC();
 void Str2F64HC(), ChkPtrHC(), ClassRep2HC(), ClassRepHC(), ClassRepDHC();
+void DHC(), DmHC(), DaHC();
 void DocMaxHC(), DocDataFmtHC(), DocDataScanHC();
 void DocFormHC(), DocEdHC(), DocFormFwdHC(), DocFormBwdHC(), ViewHC(),
     HomeSetHC(), ToUpperHC();
@@ -296,6 +298,7 @@ void CPURepHC(), PCIRepHC(), MemBIOSRepHC(), MemPageRepHC();
 void tSHC(), BusyHC(), SleepUntilHC(), SleepHC(), Ona2FreqHC(), Freq2OnaHC();
 void SndHC(), ScrnCastHC(), SndRstHC(), BeepHC(), MuteHC(), IsMuteHC();
 void SndShiftHC(), AUWriteHC();
+void SawHC(), FullSawHC(), CawHC(), FullCawHC(), TriHC(), FullTriHC();
 void SndTaskEndCBHC(), tMHC(), BeatHC(), MusicSetOctaveHC(), MusicSetMeterHC();
 void MusicSetNoteLenHC(), Note2OnaHC(), Ona2NoteHC(), Ona2OctaveHC();
 void PlayHC(), MusicSettingsRstHC();
@@ -1020,6 +1023,11 @@ bool LoadKernel(CTask &task)
       {"HashSingleTableFind", reinterpret_cast<uintptr_t>(_HASH_SINGLE_TABLE_FIND)},
       {"HashSrcFileSet", reinterpret_cast<uintptr_t>(HashSrcFileSetHC)},
       {"HashPublic", reinterpret_cast<uintptr_t>(HashPublicHC)},
+      {"HashGenericAdd", reinterpret_cast<uintptr_t>(HashGenericAddHC)},
+      {"FramePtr", reinterpret_cast<uintptr_t>(FramePtrHC)},
+      {"FramePtrAdd", reinterpret_cast<uintptr_t>(FramePtrAddHC)},
+      {"FramePtrSet", reinterpret_cast<uintptr_t>(FramePtrSetHC)},
+      {"FramePtrDel", reinterpret_cast<uintptr_t>(FramePtrDelHC)},
       {"_HASH_REM_DEL", reinterpret_cast<uintptr_t>(_HASH_REM_DEL)},
       {"SysSymImportsResolve",
        reinterpret_cast<uintptr_t>(SysSymImportsResolveHC)},
@@ -1141,6 +1149,9 @@ bool LoadKernel(CTask &task)
       {"Str2F64", reinterpret_cast<uintptr_t>(Str2F64HC)},
       {"StrScan", reinterpret_cast<uintptr_t>(StrScanHC)},
       {"ChkPtr", reinterpret_cast<uintptr_t>(ChkPtrHC)},
+      {"D", reinterpret_cast<uintptr_t>(DHC)},
+      {"Dm", reinterpret_cast<uintptr_t>(DmHC)},
+      {"Da", reinterpret_cast<uintptr_t>(DaHC)},
       {"ClassRep2", reinterpret_cast<uintptr_t>(ClassRep2HC)},
       {"ClassRep", reinterpret_cast<uintptr_t>(ClassRepHC)},
       {"ClassRepD", reinterpret_cast<uintptr_t>(ClassRepDHC)},
@@ -1470,6 +1481,12 @@ bool LoadKernel(CTask &task)
       {"AUWrite", reinterpret_cast<uintptr_t>(AUWriteHC)},
       {"SndRst", reinterpret_cast<uintptr_t>(SndRstHC)},
       {"SndTaskEndCB", reinterpret_cast<uintptr_t>(SndTaskEndCBHC)},
+      {"Saw", reinterpret_cast<uintptr_t>(SawHC)},
+      {"FullSaw", reinterpret_cast<uintptr_t>(FullSawHC)},
+      {"Caw", reinterpret_cast<uintptr_t>(CawHC)},
+      {"FullCaw", reinterpret_cast<uintptr_t>(FullCawHC)},
+      {"Tri", reinterpret_cast<uintptr_t>(TriHC)},
+      {"FullTri", reinterpret_cast<uintptr_t>(FullTriHC)},
       {"tM", reinterpret_cast<uintptr_t>(tMHC)},
       {"Beat", reinterpret_cast<uintptr_t>(BeatHC)},
       {"MusicSetOctave", reinterpret_cast<uintptr_t>(MusicSetOctaveHC)},

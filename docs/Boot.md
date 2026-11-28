@@ -727,6 +727,26 @@ the timer wakes the idle task when the runnable queue has no ready work.
 The cross-core job queue, window focus and keyboard controls, and task
 end callbacks are pending.
 
+## Task frame pointers
+
+`FramePtrProbe.HC` checks missing names, duplicate entries, default
+arguments, prior values on update and removal, and name ownership.
+A spawned task looks up an inherited value, updates it, creates a
+local entry with the same name, and removes the local entry. The
+parent verifies the value left in its own table.
+
+GCC 13.3.0, Clang 20.1.2, and pinned TempleOS reported
+`Frame pointers 3FF` in QEMU 8.2.2 with PC, `qemu64`, one vCPU,
+and 512 MiB. The UnholyOS tests boot `frame-ptr-test.iso` and
+exercise both source execution and the loaded TOSB module.
+
+```sh
+make -j6 BUILD=build/gcc test-frame-ptr
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-frame-ptr
+build/gcc/Linux/TestBoot --frame-ptr-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/frame-ptr-reference
+```
+
 ## Task jobs and messages
 
 `make -j4 test BUILD=build/jobs` runs `JobProbe.HC` from
@@ -1820,8 +1840,35 @@ build/Linux/TestBoot --music-precision-reference qemu-system-x86_64 \
 ```
 
 Playback uses the actual PIT speaker and task sleep. It is tested on
-one CPU; waveform fidelity, exact wall-clock durations, SMP music
-semaphores, and the remaining sound and media APIs are not established.
+one CPU. Exact wall-clock durations, SMP music semaphores, and the
+remaining sound and media APIs still need verification.
+
+## Music waveform math
+
+`WaveformProbe.HC` calls all six functions through typed HolyC
+function pointers, then calls `Saw` directly. It compares binary64
+results at fractional periods and waveform boundaries, including
+negative periods, signed zero, subnormals, very large exponents,
+infinities, and quiet NaNs. The probe covers 517 calls.
+
+In QEMU 8.2.2 with PC, `qemu64`, one vCPU, and 512 MiB, the pinned
+TempleOS guest and builds made with GCC 13.3.0 and Clang 20.1.2
+produced the same 48 digests and direct-call result. Both UnholyOS
+runs executed the source and then compiled, loaded, and ran the
+same source as a TOSB module. NASM 2.16.01 assembled both images.
+The reference run uploaded the fixture, verified the bytes in guest
+memory, and ran it from the terminal.
+
+```sh
+make -j6 BUILD=build/gcc test-waveform
+make -j6 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-waveform
+build/gcc/Linux/TestBoot --waveform-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/waveform-reference
+```
+
+The native test images are `build/gcc/waveform-test.iso` and
+`build/clang/waveform-test.iso`. For the exact arithmetic boundaries,
+see [Source layout](SourceLayout.md#music-waveform-functions).
 
 ## Wallpaper progress bars
 
@@ -1933,6 +1980,21 @@ guest-built ISO regressions check the same source and module output.
 This evidence covers the listed values and default x87 environment;
 zero-divisor faults, signed division overflow, and unmasked floating-point
 exceptions are not part of the comparison.
+
+## Kernel memory dumps
+
+`MemoryDumpProbe.HC` checks both rows of an 18-byte dump, the absolute
+address printed by `Dm`, and the pointer address and symbol printed by
+`Da`. The keyboard-driven test also reads the rendered character column
+and verifies the control-byte substitution and the single dollar glyph.
+GCC, Clang, and pinned TempleOS report `Memory dump probe F` in QEMU
+8.2.2 with `pc`, `qemu64`, one CPU and 512 MiB.
+
+```sh
+make -j4 test-memory-dump
+build/Linux/TestBoot --memory-dump-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/memory-dump-reference
+```
 
 ## String scanning and transformations
 
@@ -4792,6 +4854,6 @@ parity.
 | Tasking and CPUs | `Kernel/KTask.HC`, `Sched.HC`, `MultiProc.HC` | Core 0 runs Adam, the idle task, and spawned tasks with cooperative switching and PIT wakeups. Starting additional CPUs remains pending. |
 | Storage | `Kernel/BlkDev/DskATA.HC`, `DskATAId.HC`, `DskCDDVD.HC`, `DskBlkDev.HC`, `FileSysRedSea.HC`, `FileSysFAT.HC`, `DskFile.HC`, `DskStrA.HC`, `Kernel/Compress.HC` | Boot DVD identification, task-relative reads, writable RedSea RAM drives, and `.Z` expansion and encoding. ATA block writes, explicitly enabled FAT32 file and directory mutations, and buffered streams persist across cold boots. Fragmented streams, recursive file operations, cluster reclamation, and quick and full formatting of mounted FAT32 primary partitions are tested. Unmounted partitions and full cache and error-path parity remain pending. |
 | Graphics | `Kernel/Display.HC`, `Adam/Gr/GrScrn.HC` | VGA text and graphics composition, 16-color palette, cursor, zoom, and a scheduled refresh task |
-| Input and sound | `Kernel/SerialDev/Keyboard.HC`, `Mouse.HC`, `Message.HC`, `Kernel/KMisc.HC`, `Adam/Gr/ScrnCast.HC`, `Adam/ASnd.HC` | PS/2 keyboard and mouse messages, PC speaker tones, queued sound recording, event shifting, packed AU output, and music notation playback. Full desktop input and remaining media APIs are pending. |
+| Input and sound | `Kernel/SerialDev/Keyboard.HC`, `Mouse.HC`, `Message.HC`, `Kernel/KMisc.HC`, `Adam/Gr/ScrnCast.HC`, `Adam/ASnd.HC` | PS/2 keyboard and mouse messages, PC speaker tones, queued sound recording, event shifting, packed AU output, music notation playback, and waveform math. Full desktop input and remaining media APIs are pending. |
 | Desktop and system tools | `StartOS.HC`, `Adam/MakeAdam.HC`, `Adam/WinMgr.HC`, `Adam/DolDoc`, `Apps` | The refresh task draws visible DolDoc text and borders. The full editor and interactive desktop remain pending. |
 | HolyC | `Compiler/CMain.HC`, `Lex.HC`, `Prs*.HC`, `Back*.HC`, `Kernel/KLoad.HC` | Source execution with `ExeFile` and `ExePutS`, compile-time streams, plain and DolDoc tokenization, scalar expressions and functions, typed pointers, packed classes, unions, fixed arrays and their initializers, print calls, and TOSB module generation and loading for supported source. Full language support and native kernel compilation remain pending. |

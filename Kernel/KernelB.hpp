@@ -117,6 +117,9 @@ extern "C" int64_t F64ToI64(uint64_t value, uint16_t rounding);
 extern "C" uint64_t F64MulBits(uint64_t a, uint64_t b);
 extern "C" uint64_t F64DivBits(uint64_t a, uint64_t b);
 extern "C" uint64_t F64AddBits(uint64_t a, uint64_t b);
+extern "C" uint64_t F64SubBits(uint64_t a, uint64_t b);
+extern "C" uint64_t F64RemBits(uint64_t a, uint64_t b);
+extern "C" uint64_t F64AbsBits(uint64_t value);
 extern "C" uint64_t F64SqrtBits(uint64_t value);
 extern "C" uint64_t F64SinBits(uint64_t value);
 extern "C" uint64_t F64CosBits(uint64_t value);
@@ -833,6 +836,8 @@ CHash *HashFind(const char *name, CHashTable *table, uint32_t mask,
                 uint64_t instance = 1);
 void HashAdd(CHash *entry, CHashTable *table);
 void HashRemove(CHash *entry, CHashTable *table);
+extern "C" uint64_t HashRemDelCpp(CHash *entry,CHashTable *table,
+                                  uint64_t instance);
 void HashDel(CHash *entry);
 CHashTable *HashTableNew(size_t size, CHeapCtrl *hc);
 extern "C" void HashTableDelCpp(CHashTable *table);

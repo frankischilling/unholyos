@@ -11,6 +11,7 @@ GLOBAL Spaces2TabsHC,StrUtilHC,StrFirstOccHC,StrFirstRemHC,StrLastOccHC,StrLastR
 GLOBAL StrFindHC,Tabs2SpacesHC,ScaleIndentHC,MStrUtilHC
 GLOBAL Str2I64HC,Str2DateHC,StrScanHC
 GLOBAL Str2F64HC,ChkPtrHC,ClassRep2HC,ClassRepHC,ClassRepDHC
+GLOBAL DHC,DmHC,DaHC
 GLOBAL DocMaxHC,DocDataFmtHC,DocDataScanHC
 GLOBAL DocFormHC,DocEdHC,DocFormFwdHC,DocFormBwdHC,ViewHC,HomeSetHC,ToUpperHC
 GLOBAL DocMenuHC,PopUpMenuHC,PopUpFormHC,DocMenuTryHC,DocMenuEndTaskCBHC
@@ -23,6 +24,7 @@ GLOBAL _HASH_REM_DEL,HashValHC,HashDelHC,HashTableDelHC,HashSrcFileSetHC,SysSymI
 GLOBAL HashPublicHC
 GLOBAL HashTablePurgeHC
 GLOBAL HashTableNewHC,HashTypeNumHC,CeilU64HC,Pow10I64HC
+GLOBAL HashGenericAddHC,FramePtrHC,FramePtrAddHC,FramePtrSetHC,FramePtrDelHC
 GLOBAL ClampHC,MinHC,MaxHC,FloorU64HC,RoundI64HC,FloorI64HC,CeilI64HC
 GLOBAL LinkedLstDelHC,LinkedLstCopyHC,LinkedLstCntHC,LinkedLstSizeHC
 GLOBAL QueDelHC,QueCopyHC,QueCntHC,QueSizeHC
@@ -174,6 +176,7 @@ GLOBAL tSHC,BusyHC,SleepUntilHC,SleepHC,Ona2FreqHC,Freq2OnaHC,SndHC
 GLOBAL ScrnCastHC,SndRstHC,BeepHC,MuteHC,IsMuteHC
 GLOBAL SndShiftHC,AUWriteHC
 GLOBAL SndTaskEndCBHC,tMHC,BeatHC,MusicSetOctaveHC,MusicSetMeterHC,MusicSetNoteLenHC
+GLOBAL SawHC,FullSawHC,CawHC,FullCawHC,TriHC,FullTriHC
 GLOBAL Note2OnaHC,Ona2NoteHC,Ona2OctaveHC,PlayHC,MusicSettingsRstHC
 GLOBAL SpawnHC,TaskValidateHC,SuspendHC,IsSuspendedHC,TaskQueInsHC,TaskQueRemHC
 GLOBAL KillHC
@@ -309,6 +312,7 @@ EXTERN StrFindCpp,Tabs2SpacesCpp,ScaleIndentCpp,MStrUtilCpp
 EXTERN HashAddCpp,HashAddAfterCpp,HashFindCpp,HashSingleTableFindCpp
 EXTERN HashRemDelCpp,HashValCpp,HashDelCpp,HashTableDelCpp,HashSrcFileSetCpp,SysSymImportsResolveCpp
 EXTERN HashPublicCpp
+EXTERN HashGenericAddCpp,FramePtrCpp,FramePtrAddCpp,FramePtrSetCpp,FramePtrDelCpp
 EXTERN HashTablePurgeCpp
 EXTERN HashTableNewCpp,HashTypeNumCpp,CeilU64Cpp,Pow10I64Cpp
 EXTERN ClampCpp,MinCpp,MaxCpp,FloorU64Cpp,RoundI64Cpp,FloorI64Cpp,CeilI64Cpp
@@ -393,6 +397,7 @@ EXTERN RedSeaDirNewCpp
 EXTERN DirNewCpp
 EXTERN DirContextNewCpp,DirContextDelCpp,Str2I64Cpp,Str2DateCpp,StrScanCpp
 EXTERN Str2F64Cpp,ChkPtrCpp,ClassRep2Cpp,ClassRepCpp,ClassRepDCpp
+EXTERN DCpp,DmCpp,DaCpp
 EXTERN DocMaxCpp,DocDataFmtCpp,DocDataScanCpp
 EXTERN DocFormCpp,DocEdCpp,DocFormFwdCpp,DocFormBwdCpp,ViewCpp,HomeSetCpp,ToUpperCpp
 EXTERN DocMenuCpp,PopUpMenuCpp,PopUpFormCpp,DocMenuTryCpp,DocMenuEndTaskCBCpp
@@ -463,6 +468,7 @@ EXTERN RawCpp,DbgModeCpp,IsDbgModeCpp,PutFileLinkCpp,PutSrcLinkCpp,FixSetCpp,Ada
 EXTERN tSCpp,BusyCpp,SleepUntilCpp,SleepCpp,Ona2FreqCpp,Freq2OnaCpp,SndCpp
 EXTERN ScrnCastCpp,SndRstCpp,BeepCpp,MuteCpp,IsMuteCpp
 EXTERN SndShiftCpp,AUWriteCpp
+EXTERN SawCpp,FullSawCpp,CawCpp,FullCawCpp,TriCpp,FullTriCpp
 EXTERN SndTaskEndCBCpp,tMCpp,BeatCpp,MusicSetOctaveCpp,MusicSetMeterCpp,MusicSetNoteLenCpp
 EXTERN Note2OnaCpp,Ona2NoteCpp,Ona2OctaveCpp,PlayCpp,MusicSettingsRstCpp
 
@@ -711,6 +717,11 @@ HOLYC_CPP HashTableDelHC,HashTableDelCpp,1
 HOLYC_CPP HashTablePurgeHC,HashTablePurgeCpp,1
 HOLYC_CPP HashSrcFileSetHC,HashSrcFileSetCpp,3
 HOLYC_CPP HashPublicHC,HashPublicCpp,3
+HOLYC_CPP HashGenericAddHC,HashGenericAddCpp,6
+HOLYC_CPP FramePtrHC,FramePtrCpp,2
+HOLYC_CPP FramePtrAddHC,FramePtrAddCpp,3
+HOLYC_CPP FramePtrSetHC,FramePtrSetCpp,3
+HOLYC_CPP FramePtrDelHC,FramePtrDelCpp,2
 HOLYC_CPP SysSymImportsResolveHC,SysSymImportsResolveCpp,2
 HOLYC_CPP HashTableNewHC,HashTableNewCpp,2
 HOLYC_CPP HashTypeNumHC,HashTypeNumCpp,1
@@ -849,6 +860,9 @@ HOLYC_CPP Str2DateHC,Str2DateCpp,1
 HOLYC_CPP Str2F64HC,Str2F64Cpp,2
 HOLYC_PRINT StrScanHC,StrScanCpp,2
 HOLYC_CPP ChkPtrHC,ChkPtrCpp,1
+HOLYC_CPP DHC,DCpp,3
+HOLYC_CPP DmHC,DmCpp,2
+HOLYC_CPP DaHC,DaCpp,2
 HOLYC_CPP ClassRep2HC,ClassRep2Cpp,8
 HOLYC_CPP ClassRepHC,ClassRepCpp,5
 HOLYC_CPP ClassRepDHC,ClassRepDCpp,5
@@ -1104,6 +1118,12 @@ HOLYC_CPP SndShiftHC,SndShiftCpp,2
 HOLYC_CPP AUWriteHC,AUWriteCpp,4
 HOLYC_CPP SndRstHC,SndRstCpp,0
 HOLYC_CPP SndTaskEndCBHC,SndTaskEndCBCpp,0
+HOLYC_CPP SawHC,SawCpp,2
+HOLYC_CPP FullSawHC,FullSawCpp,2
+HOLYC_CPP CawHC,CawCpp,2
+HOLYC_CPP FullCawHC,FullCawCpp,2
+HOLYC_CPP TriHC,TriCpp,2
+HOLYC_CPP FullTriHC,FullTriCpp,2
 HOLYC_CPP tMHC,tMCpp,0
 HOLYC_CPP BeatHC,BeatCpp,0
 HOLYC_CPP MusicSetOctaveHC,MusicSetOctaveCpp,1
