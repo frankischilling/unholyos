@@ -4685,6 +4685,26 @@ build/Linux/TestBoot --extern-import-option-reference qemu-system-x86_64 \
   /path/to/pinned/TOS_Distro.ISO build/extern-import-option-reference
 ```
 
+## Ahead-of-time data-heap globals
+
+The data-heap test compiles the same two HolyC projects in QEMU 8.2.2
+with `pc`, `qemu64`, one CPU, and 512 MiB for each guest. GCC, Clang,
+and pinned TempleOS each produce a 288-byte TOSB file from `HeapGlobals.PRJ`.
+The patch table describes 8-byte and 65,536-byte allocations and points
+to the address placeholders used by the generated code. The unused
+array has no record. The test loads the module, calls the exported
+function and reads the value it stored through a second function.
+
+`HeapGlobalsInvalid.PRJ` enables the same option and attempts to
+initialize a global during compilation. Both systems return one error
+and leave the output file absent.
+
+```sh
+make -j4 test-aot-data-heap
+build/Linux/TestBoot --aot-data-heap-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/aot-data-heap-reference
+```
+
 ## HolyC compiler diagnostics
 
 The compiler diagnostic test uses QEMU 8.2.2 with `pc`, `qemu64`, 512 MiB

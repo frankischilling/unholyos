@@ -129,8 +129,54 @@ enum class CDesktopTest {
   None, Progress, DictionaryInstall, DictionaryGenerator, DictionaryGeneratorHolyC,
   MenuDiagnostic, CompilerDiagnostic, CompilerCmpDiagnostic, CompilerWarning,
   CompilerForwardWarning, CompilerHeaderWarning,
-  ExternImportOption, ExternImportOptionJIT
+  ExternImportOption, ExternImportOptionJIT,
+  AOTDataHeap, AOTDataHeapInvalid
 };
+
+static void CheckAOTDataHeapImage(const Bytes &bin)
+{
+  Check(bin.size() > BIN_HEADER_SIZE && bin.size() < 8192 &&
+            ReadLE(bin, offsetof(CBinFile, bin_signature), 4) == BIN_SIGNATURE_VAL &&
+            ReadLE(bin, offsetof(CBinFile, file_size), 8) == bin.size(),
+        "Invalid TOSB image for data-heap globals");
+  const size_t patch = ReadLE(bin, offsetof(CBinFile, patch_table_offset), 8);
+  Check(patch >= BIN_HEADER_SIZE && patch < bin.size(), "Invalid TOSB patch table");
+  std::map<std::string, uint64_t> heap_sizes;
+  size_t pos = patch;
+  while (pos < bin.size() && bin[pos] != IET_END) {
+    const auto type = bin[pos++];
+    const uint64_t count = ReadLE(bin, pos, 4);
+    pos += 4;
+    const auto end = std::find(bin.begin() + pos, bin.end(), 0);
+    Check(end != bin.end(), "Unterminated TOSB record name");
+    const std::string name(bin.begin() + pos, end);
+    pos = end - bin.begin() + 1;
+    if (IET_REL32_EXPORT <= type && type <= IET_IMM64_EXPORT)
+      continue;
+    if (type == IET_MAIN)
+      continue;
+    if (type == IET_ABS_ADDR) {
+      Check(count <= (bin.size() - pos) / 4, "Truncated TOSB absolute offsets");
+      pos += 4 * count;
+      continue;
+    }
+    Check(type == IET_DATA_HEAP && count >= 2, "Unexpected TOSB heap record");
+    const auto size = ReadLE(bin, pos, 8);
+    pos += 8;
+    Check(heap_sizes.emplace(name, size).second && count <= (bin.size() - pos) / 4,
+          "Duplicate or truncated TOSB heap record");
+    for (uint64_t i = 0; i < count; i++, pos += 4) {
+      const auto rip = ReadLE(bin, pos, 4);
+      Check(rip >= 2 && BIN_HEADER_SIZE + rip + 8 <= patch &&
+                ReadLE(bin, BIN_HEADER_SIZE + rip - 2, 2) == 0xB848 &&
+                ReadLE(bin, BIN_HEADER_SIZE + rip, 8) == 0,
+            "Invalid TOSB heap address placeholder");
+    }
+  }
+  Check(pos < bin.size() && heap_sizes == std::map<std::string, uint64_t>{
+            {"HeapCounter", 8}, {"HeapSlots", 65536}},
+        "TOSB heap records have the wrong names or allocation sizes");
+}
 
 // Uses the same QMP input and physical-memory readers as the boot tests.
 static void DriveCharacterGraphics(
@@ -563,6 +609,7 @@ static void DriveCharacterGraphics(
   const bool extern_import = desktop == CDesktopTest::ExternImportOption ||
                              desktop == CDesktopTest::ExternImportOptionJIT;
   if (desktop == CDesktopTest::MenuDiagnostic || compiler_probe ||
+      desktop == CDesktopTest::AOTDataHeapInvalid ||
       desktop == CDesktopTest::ExternImportOptionJIT)
     cmd("I64 dsz;U8 *dout;");
   auto wait_compiler_exception = [&](std::string_view dir_prompt) {
@@ -586,7 +633,9 @@ static void DriveCharacterGraphics(
     cmd("Free(dout);");
     return ReadText(output);
   };
-  if (compiler_probe || (extern_import && !reference)) {
+  if (compiler_probe ||
+      (!reference && (extern_import || desktop == CDesktopTest::AOTDataHeap ||
+                      desktop == CDesktopTest::AOTDataHeapInvalid))) {
     cmd("CBlkDev *db=BlkDevNextFreeSlot('A',BDT_RAM);");
     cmd("db->max_blk=131071;");
     cmd(R"("DB %X\n",BlkDevAdd(db,I64_MIN,FALSE,TRUE);)");
@@ -1178,6 +1227,50 @@ static void DriveCharacterGraphics(
     cmd(R"("EV %X\n",ETORun(2);)");
     wait_text("EV 2A");
     std::cout << "Cmp and Load matched extern conversion and local forward declarations\n";
+    return;
+  }
+  if (desktop == CDesktopTest::AOTDataHeap || desktop == CDesktopTest::AOTDataHeapInvalid) {
+    const bool invalid = desktop == CDesktopTest::AOTDataHeapInvalid;
+    const auto *name = invalid ? "HeapGlobalsInvalid.PRJ" : "HeapGlobals.PRJ";
+    if (reference) {
+      cmd(R"(Cd("B:/");)");
+      wait_text("B:/>");
+      const auto project = fs::absolute(fs::path("Linux/Fixtures") / name);
+      upload(project, false, false);
+      cmd(R"(FileWrite("Heap.PRJ",cgprobe,)" + std::to_string(fs::file_size(project)) + ");");
+    } else
+      cmd(std::string(R"(Copy("::/)") + name + R"(","Heap.PRJ");)");
+    cmd(R"("HC %X\n",Cmp("Heap.PRJ",,"Heap.BIN");)");
+    wait_text(invalid ? "HC 1" : "HC 0");
+    if (invalid) {
+      cmd(R"("HN %X\n",FileFind("Heap.BIN")==0;)");
+      wait_text("HN 1");
+      const auto doc = save_diagnostic("aot-heap-invalid.bin");
+      Check(doc.find("Can't init glbl var on data heap in AOT module") != std::string::npos &&
+                doc.find("Errs:1 Warns:0 Code:0 Size:0") != std::string::npos,
+            "AOT heap initializer reported a different error");
+      std::cout << "Cmp rejected the AOT heap initializer without publishing a module\n";
+      return;
+    }
+    cmd(R"(I64 hs;U8 *hb=FileRead("Heap.BIN",&hs);)");
+    cmd(R"("HB %X %X %X\n",hb,&hs,&hb;)");
+    const auto fields = addresses("HB ", {1, 8, 8});
+    const auto size = ReadPhysical<1>(vm, fields[1])[0];
+    Check(size && size < 8192 && in_memory(fields[0], size), "Invalid TOSB buffer");
+    const auto module = dir / "heap-module.bin";
+    vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+               std::to_string(fields[0]) + R"(,"size":)" + std::to_string(size) +
+               R"(,"filename":")" + module.string() + R"("}})");
+    CheckAOTDataHeapImage(FileRead(module));
+    cmd(R"hc(if(Load("Heap.BIN"))"HL %X\n",1;)hc");
+    wait_text("HL 1");
+    cmd("_extern _HeapProbeRun I64 HeapRun(I64 v);");
+    cmd("_extern _HeapProbeRead I64 HeapRead();");
+    cmd(R"("HV %X\n",HeapRun(40);)");
+    wait_text("HV 2A");
+    cmd(R"("HR %X\n",HeapRead;)");
+    wait_text("HR 28");
+    std::cout << "Cmp and Load matched the AOT data-heap records and runtime results\n";
     return;
   }
   if (compiler_warning) {

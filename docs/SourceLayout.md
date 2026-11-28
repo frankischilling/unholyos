@@ -76,6 +76,14 @@ Typed `extern` and `_extern` declarations use the existing import paths.
 Forward class and union declarations still use the type parser. During
 JIT compilation, the converted declaration reports `import not needed at`.
 
+`PrsGlobal` follows `PrsGlblVarLst` in `Compiler/PrsStmt.HC` when
+`OPTf_GLBLS_ON_DATA_HEAP` is set. AOT declarations reject initializers
+and record the allocation in `CAOTHeapGlbl`. The generated address uses a
+64-bit placeholder, as in `Compiler/OptPass789A.HC::IC_HEAP_GLBL`. `Cmp`
+emits `IET_DATA_HEAP` for referenced globals, and the existing loader
+allocates storage and patches each reference. Unreferenced declarations
+produce no record.
+
 ## Public HolyC module loading
 
 `Kernel/KLoad.cpp::LoadCpp` follows `Kernel/KLoad.HC::Load`, sharing the

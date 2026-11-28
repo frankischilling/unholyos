@@ -1,0 +1,3 @@
+// An initializer is invalid with OPTf_GLBLS_ON_DATA_HEAP in AOT mode.
+#exe {Option(0x23,1);};
+I64i HeapInvalid=1;

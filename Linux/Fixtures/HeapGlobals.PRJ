@@ -1,0 +1,18 @@
+// Data-heap globals from Terry A. Davis's Compiler/PrsStmt.HC and CMain.HC,
+// TempleOS c26482bb6ad3f80106d28504ec5db3c6a360732c.
+#exe {Option(0x23,1);};
+I64i HeapCounter,HeapSlots[8192],HeapUnused[8192];
+#exe {Option(0x23,0);};
+I64i HeapImageValue=1;
+
+public I64i _HeapProbeRun(I64i value)
+{
+  HeapCounter=value;
+  HeapSlots[8191]=HeapCounter+1;
+  return HeapSlots[8191]+HeapImageValue;
+}
+
+public I64i _HeapProbeRead()
+{
+  return HeapCounter;
+}

@@ -263,12 +263,15 @@ static bool Emit(CCodeOut &out, const CIntermediateCode *code, uint32_t index,
   }
   if (op == IC_GLBL_ADDR) {
     auto *var = reinterpret_cast<const CHashGlblVar *>(node.data);
-    if (out.AOT())
-      out.RelAddress(var->flags & GVF_ALIAS
-                         ? static_cast<const void *>(var->data_addr)
-                         : static_cast<const void *>(var),
-                     var->sym.import_name);
-    else if (var->flags & GVF_EXTERN) {
+    if (out.AOT()) {
+      if (var->flags & GVF_DATA_HEAP)
+        out.HeapGlblAddress(*var->heap_glbl);
+      else
+        out.RelAddress(var->flags & GVF_ALIAS
+                           ? static_cast<const void *>(var->data_addr)
+                           : static_cast<const void *>(var),
+                       var->sym.import_name);
+    } else if (var->flags & GVF_EXTERN) {
       out.MoveRAX(reinterpret_cast<uintptr_t>(&var->data_addr));
       out.Load(RT_I64);
     } else
