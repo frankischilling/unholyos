@@ -6,6 +6,7 @@ extern "C" void PrintErrCpp(const char *fmt, int64_t argc, const uint64_t *argv,
 
 extern "C" char *ExtChgCpp(const char *name, const char *ext);
 extern "C" void PrintCpp(const char *fmt, int64_t argc, const uint64_t *argv);
+extern "C" int64_t LastFunCpp(int64_t argc, const uint64_t *argv);
 extern "C" uint64_t FileWriteCpp(const char *name, const uint8_t *data,
                                  uint64_t size, uint64_t date, uint64_t attr);
 
@@ -311,9 +312,65 @@ extern "C" int64_t ExePutSCpp(const char *src, const char *filename,
   return ExeAnswer(ExePutS(src, filename, flags, htc));
 }
 
+static CExeResult ExePrint(const char *fmt, int64_t argc, const uint64_t *argv)
+{
+  auto *source = StrPrintJoin(nullptr, fmt, argc, argv);
+  if (!source)
+    return {};
+  auto result = ExePutS(source, nullptr, 0);
+  Free(source);
+  return result;
+}
+
+extern "C" int64_t ExePrintCpp(const char *fmt, int64_t argc,
+                                const uint64_t *argv)
+{
+  return ExeAnswer(ExePrint(fmt, argc, argv));
+}
+
 extern "C" int64_t ExeFileCpp(const char *name, int64_t flags)
 {
   return ExeAnswer(ExeFile(name, flags));
+}
+
+extern "C" int64_t RunFileCpp(const char *name, int64_t flags, int64_t argc,
+                               const uint64_t *argv)
+{
+  ExeFileCpp(name, flags);
+  return LastFunCpp(argc, argv);
+}
+
+static int64_t ExeAnswer2(const CExeResult &result)
+{
+  if (result.exception)
+    RethrowHolyC();
+  if (!result.okay)
+    RaiseHolyC(COMPILER_ERROR);
+  return static_cast<int64_t>(result.value);
+}
+
+extern "C" int64_t ExePutS2Cpp(const char *src, const char *filename,
+                                int64_t flags)
+{
+  return ExeAnswer2(ExePutS(src, filename, flags));
+}
+
+extern "C" int64_t ExePrint2Cpp(const char *fmt, int64_t argc,
+                                 const uint64_t *argv)
+{
+  return ExeAnswer2(ExePrint(fmt, argc, argv));
+}
+
+extern "C" int64_t ExeFile2Cpp(const char *name, int64_t flags)
+{
+  return ExeAnswer2(ExeFile(name, flags));
+}
+
+extern "C" int64_t RunFile2Cpp(const char *name, int64_t flags, int64_t argc,
+                                const uint64_t *argv)
+{
+  ExeFile2Cpp(name, flags);
+  return LastFunCpp(argc, argv);
 }
 
 extern "C" int64_t StreamExePrintCpp(const char *fmt, int64_t argc,

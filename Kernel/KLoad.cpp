@@ -249,6 +249,7 @@ void RegDftHC(), RegExeHC(), RegWriteHC(), RegCntHC(), RegAppendHC(), AdamHC();
 void InsRegHC(), InsReregHC(), InsUnregHC();
 void AOnceFlushHC(), OnceFlushHC(), AOnceHC(), OnceHC(), AOnceDrvHC(),
     OnceDrvHC(), OnceExeHC(), XTalkHC();
+void XTalkWaitHC(), InStrHC(), InFileHC(), InHC(), XTalkStrHC(), XTalkStrWaitHC();
 void DocMenuHC(), PopUpMenuHC(), PopUpFormHC(), PopUpHC(), PopUpPrintHC(),
     SrvCmdLineHC(), OneTimePopUpHC(), RegOneTimePopUpHC();
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
@@ -1202,6 +1203,12 @@ bool LoadKernel(CTask &task)
       {"JobsHndlr", reinterpret_cast<uintptr_t>(JobsHndlrHC)},
       {"Adam", reinterpret_cast<uintptr_t>(AdamHC)},
       {"XTalk", reinterpret_cast<uintptr_t>(XTalkHC)},
+      {"XTalkWait", reinterpret_cast<uintptr_t>(XTalkWaitHC)},
+      {"InStr", reinterpret_cast<uintptr_t>(InStrHC)},
+      {"InFile", reinterpret_cast<uintptr_t>(InFileHC)},
+      {"In", reinterpret_cast<uintptr_t>(InHC)},
+      {"XTalkStr", reinterpret_cast<uintptr_t>(XTalkStrHC)},
+      {"XTalkStrWait", reinterpret_cast<uintptr_t>(XTalkStrWaitHC)},
       {"SrvTaskCont", reinterpret_cast<uintptr_t>(SrvTaskContHC)},
       {"SrvCmdLine", reinterpret_cast<uintptr_t>(SrvCmdLineHC)},
       {"PopUp", reinterpret_cast<uintptr_t>(PopUpHC)},

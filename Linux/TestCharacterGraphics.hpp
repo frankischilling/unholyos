@@ -601,8 +601,9 @@ static void DriveCharacterGraphics(
                 terminal_line(prompt / 81) == "T:/Home>",
             "Reference probe did not return to an empty command prompt");
       bool timed = false;
-      const std::regex timing(reference ? R"([0-9]+\.[0-9]{6}s)"
-                                        : R"([0-9]+\.[0-9]{6}s ans=0x00000000=0)");
+      const bool answer = !reference || std::string_view(probe.name) == "startup-exec";
+      const std::regex timing(answer ? R"([0-9]+\.[0-9]{6}s ans=0x00000000=0)"
+                                     : R"([0-9]+\.[0-9]{6}s)");
       for (size_t row = finish / 81 + 1; row < prompt / 81; row++) {
         const auto line = terminal_line(row);
         if (line.empty())

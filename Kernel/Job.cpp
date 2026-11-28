@@ -399,9 +399,8 @@ extern "C" void AdamErrCpp(const char *fmt, int64_t argc, const uint64_t *argv)
   Free(message);
 }
 
-bool XTalk(CTask *task, const char *fmt, int64_t argc, const uint64_t *argv)
+static bool TaskInputText(CTask *task, char *text, int64_t flags)
 {
-  auto *text = StrPrintJoin(nullptr, fmt, argc, argv);
   if (!text)
     return false;
   auto *shared = StrNew(text, adam_task->data_heap);
@@ -411,15 +410,92 @@ bool XTalk(CTask *task, const char *fmt, int64_t argc, const uint64_t *argv)
   const uint64_t addr = reinterpret_cast<uintptr_t>(shared);
   const uint64_t args[]{addr, addr};
   auto *source = MStrPrintCpp("\"%%s\",%d;Free(%d);", 2, args);
-  bool posted = source && TaskTextCpp(task, nullptr, source, 0);
+  bool posted = source && TaskTextCpp(task, nullptr, source, flags);
   Free(source);
   if (!posted)
     Free(shared);
   return posted;
 }
 
+bool XTalk(CTask *task, const char *fmt, int64_t argc, const uint64_t *argv)
+{
+  return TaskInputText(task, StrPrintJoin(nullptr, fmt, argc, argv), 0);
+}
+
 extern "C" void XTalkCpp(CTask *task, const char *fmt, int64_t argc,
                          const uint64_t *argv)
 {
   XTalk(task, fmt, argc, argv);
+}
+
+extern "C" void XTalkWaitCpp(CTask *task, const char *fmt, int64_t argc,
+                             const uint64_t *argv)
+{
+  XTalk(task, fmt, argc, argv);
+  TaskWaitCpp(task, false);
+}
+
+static void InStr(char *src)
+{
+  if (!src)
+    return;
+  auto *task = CurrentTask();
+  CExeResult result{};
+  if (task->task_flags & TASKF_INPUT_FILTER_TASK)
+    result = ExePutS(src, nullptr, 0);
+  else
+    TaskTextCpp(task, nullptr, src, JOBF_HIGHEST_PRIORITY);
+  Free(src);
+  constexpr int64_t brk = 0x6B61657242;
+  if (result.exception && result.exception != COMPILER_ERROR &&
+      result.exception != brk)
+    RethrowHolyC();
+}
+
+extern "C" void InStrCpp(const char *fmt, int64_t argc, const uint64_t *argv)
+{
+  InStr(StrPrintJoin(nullptr, fmt, argc, argv));
+}
+
+extern "C" void InFileCpp(const char *filename)
+{
+  auto *name = ExtDftCpp(filename, "IN.Z");
+  if (!name)
+    return;
+  auto *task = CurrentTask();
+  const uint64_t args[]{Drv2LetCpp(task->cur_dv),
+                        reinterpret_cast<uintptr_t>(task->cur_dir),
+                        reinterpret_cast<uintptr_t>(name)};
+  auto *src = MStrPrintCpp("Cd(\"%C:%s\");;#include \"%s\"", 3, args);
+  Free(name);
+  InStr(src);
+}
+
+extern "C" void InCpp(const char *fmt, int64_t argc, const uint64_t *argv)
+{
+  auto *text = StrPrintJoin(nullptr, fmt, argc, argv);
+  if (!text)
+    return;
+  auto *task = CurrentTask();
+  if (task->task_flags & TASKF_INPUT_FILTER_TASK) {
+    PutS(text);
+    Free(text);
+  } else
+    TaskInputText(task, text, JOBF_HIGHEST_PRIORITY);
+}
+
+extern "C" void XTalkStrCpp(CTask *task, const char *fmt, int64_t argc,
+                            const uint64_t *argv)
+{
+  auto *src = StrPrintJoin(nullptr, fmt, argc, argv);
+  if (src)
+    TaskTextCpp(task, nullptr, src, 0);
+  Free(src);
+}
+
+extern "C" void XTalkStrWaitCpp(CTask *task, const char *fmt, int64_t argc,
+                                const uint64_t *argv)
+{
+  XTalkStrCpp(task, fmt, argc, argv);
+  TaskWaitCpp(task, false);
 }

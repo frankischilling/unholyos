@@ -77,6 +77,8 @@
 %define CTask_FAULT_ERR_CODE	0x448
 %define CTask_LAST_EXCEPT	0x320
 %define CTask_CATCH_EXCEPT	0x378
+%define CTask_LAST_FUN		0x410
+%define CHashFun_EXE_ADDR	152
 
 %define CExcept_HNDLR_CATCH	16
 %define CExcept_HNDLR_UNTRY	24
