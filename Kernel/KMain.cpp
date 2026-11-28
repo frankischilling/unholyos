@@ -219,6 +219,7 @@ extern "C" void KMainCpp()
     SerialPutS("UnholyOS: Could not allocate God input FIFOs\r\n");
     return;
   }
+  GodInitCpp(GOD_WORD_FILE_MASK, nullptr);
   if (!InsRegInit()) {
     SerialPutS("UnholyOS: Could not register install form lists\r\n");
     return;

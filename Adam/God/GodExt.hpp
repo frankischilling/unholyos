@@ -3,6 +3,7 @@
 #include "../../Kernel/KernelB.hpp"
 
 constexpr unsigned GOD_BAD_BITS = 4, GOD_GOOD_BITS = 24;
+constexpr char GOD_WORD_FILE_MASK[] = "/Adam/God/Vocab.DD*";
 
 struct [[gnu::packed]] CGodGlbls
 {
@@ -25,3 +26,7 @@ bool GodExtInit();
 extern "C" void GodBitsInsCpp(int64_t num_bits, int64_t n);
 extern "C" void GodHexInsCpp(const char *st);
 extern "C" int64_t GodBitsCpp(int64_t num_bits, const char *msg);
+extern "C" int64_t GodInitCpp(const char *files_find_mask,
+                              const char *fu_flags);
+extern "C" uint8_t *GodWordStrCpp(int64_t bits);
+extern "C" void GodWordCpp(int64_t bits);
