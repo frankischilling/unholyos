@@ -4196,12 +4196,14 @@ pinned DVD.
 ## Stock DVD startup
 
 `make test-stock-once` boots `build/stock-once-test.iso` twice. One run
-declines installation and the tour. The other declines installation,
-opens the original tour menu, and returns to the home prompt with
-Shift-Esc. Both runs start with the unmodified `Once.HC` from the DVD
-root. The harness checks the packaged bytes of the startup script, the
-two startup documents, and all thirteen tour scripts against the
-pinned sources included in the checkout.
+declines installation and the tour, opens Help Index with F1, and
+opens About TempleOS from inside it with Shift-F1. The other declines
+installation, selects the original first tour chapter, opens the help
+pane, performs the six modifier-key holds, and returns to the tour
+menu and then the home prompt. Both runs start with Terry A. Davis's
+unmodified `Once.HC` from the DVD root. The harness checks the bytes of
+the startup script, the startup and help documents, and all thirteen
+tour scripts against the pinned sources included in the checkout.
 
 The test uses QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512 -boot d`
 and the default single CPU. GCC and Clang both pass. The same prompts
@@ -4210,7 +4212,8 @@ configuration. These runs cover declining the installer and opening and
 closing the tour menu. The test also runs `Seed(12345);TipOfDay;` on
 the unmodified `Tips.DD` and checks the same tip about switching between
 the standard and Cyrillic fonts that appears in the reference guest.
-The installer wizard and full tour chapters still need coverage.
+The modifier key-description pane, the installer wizard, and the
+remaining tour chapters still need work.
 
 The stock startup files and documentation are by Terry A. Davis.
 `Once.HC` matches blob `d8b4d0d621ed6b3ee8d3d5001b5a00815d541461` and
@@ -4223,14 +4226,22 @@ keyboard messages, formatted output, Esc from `InView`, and
 `InSetMs` at a fixed destination. The probe also checks the old bit
 and final value from `LBEqu` across two words. Both native builds
 and pinned TempleOS report `Training result FF` and return to the
-prompt. The original first tour chapter now reaches the F1 prompt and
-accepts F1. The native terminal still needs the binding from
-`Adam/DolDoc/DocPutKey.HC` that opens `HelpIndex.DD`.
+prompt.
+
+`FileEditorProbe.HC` checks one-based line selection, case-insensitive
+text search, case-sensitive anchors, and link conversion. The QEMU
+driver types into a plain-text document on a guest RAM drive. Esc writes
+the edited bytes and Shift-Esc discards the second edit. The driver
+follows a DolDoc link to Help Index and dismisses the non-text warning
+for a new filename. Both native builds and pinned TempleOS report
+`File editor 1FF`.
 
 ```sh
 make -j4 test-stock-once
 build/Linux/TestBoot --training-input-reference qemu-system-x86_64 \
   /path/to/pinned/TOS_Distro.ISO build/training-input-reference
+build/Linux/TestBoot --file-editor-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/file-editor-reference
 ```
 
 ## Popup menus and one-time notices

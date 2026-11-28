@@ -1077,7 +1077,7 @@ constexpr uint64_t DOCEF_TAG = 1, DOCEF_LEN = 2, DOCEF_AUX_STR = 4,
                    DOCEF_DEREF_DATA = 1ull << 47,
                    DOCEF_REMALLOC_DATA = 1ull << 48,
                    DOCEF_HAS_TERMINATOR = 1ull << 49, DOCEF_HOLD = 1ull << 51,
-                   DOCEF_TREE = 1ull << 52,
+                   DOCEF_TREE = 1ull << 52, DOCEF_POPUP = 1ull << 55,
                    DOCEF_LST = 1ull << 53, DOCEF_SKIP = 1ull << 54,
                    DOCEF_SKIP_IN_FORM = 1ull << 56,
                    DOCEF_FILTER_SKIP = 1ull << 57, DOCEF_NO_CLICK_ON = 1ull << 58,
@@ -1097,6 +1097,8 @@ constexpr uint64_t DOF_SIZE_MIN = 1, DOF_INTERCEPT_TASK_END = 2,
                    DOF_DONT_HOME = 4, DOF_WIN_MAX = 8,
                    DOF_DONT_TEXT_ATTR = 16, DOF_DONT_WINMGR_SYNC = 32,
                    DOF_DONT_SHOW = 64;
+constexpr uint64_t EDF_BAIL = 1 << 8, EDF_COLLAPSE = 1 << 9,
+                   EDF_UNCOLLAPSE = 1 << 10, EDF_WAS_WRITE = 1 << 11;
 
 struct CDocSettings
 {
@@ -1213,10 +1215,12 @@ static_assert(sizeof(CDocBin) == 56 && offsetof(CDocBin, num) == 32 &&
               offsetof(CDocBin, data) == 48);
 static_assert(sizeof(CDocEntryBase) == 88 &&
               offsetof(CDocEntryBase, tag) == 16 &&
+              offsetof(CDocEntryBase, x) == 40 && offsetof(CDocEntryBase, y) == 44 &&
               offsetof(CDocEntryBase, settings) == 56 &&
               sizeof(CDocEntry) == 208 && offsetof(CDocEntry, left_exp) == 88 &&
               offsetof(CDocEntry, right_exp) == 104 && offsetof(CDocEntry, bin_data) == 192);
 static_assert(sizeof(CDoc) == 768 && offsetof(CDoc, cur_entry) == 104 &&
+              offsetof(CDoc, x) == 184 && offsetof(CDoc, y) == 188 &&
               offsetof(CDoc, filename) == 304 &&
               offsetof(CDoc, bin_head) == 632);
 
@@ -1374,6 +1378,7 @@ constexpr uint32_t SCF_E0_PREFIX = 1 << 7, SCF_KEY_UP = 1 << 8,
                    SCF_NO_SHIFT = 1U << 30, SCF_KEY_DESC = 1U << 31;
 constexpr uint8_t SC_ENTER = 0x1C, SC_SHIFT = 0x2A, SC_CTRL = 0x1D,
                   SC_ALT = 0x38, SC_CAPS = 0x3A, SC_NUM = 0x45,
+                  SC_F1 = 0x3B,
                   SC_SCROLL = 0x46, SC_HOME = 0x47, SC_CURSOR_UP = 0x48,
                   SC_PAGE_UP = 0x49, SC_CURSOR_LEFT = 0x4B, SC_CURSOR_RIGHT = 0x4D,
                   SC_END = 0x4F, SC_CURSOR_DOWN = 0x50, SC_PAGE_DOWN = 0x51,

@@ -277,6 +277,9 @@ void MenuPushHC();
 void MenuFilePushHC();
 void MenuPopHC();
 void Char2KeyNameHC(), ScanCode2KeyNameHC(), PopUp1HC(), PopUpOkHC();
+void PopUp2HC(), PopUpCancelOkHC(), EdHC(), PopUpEdHC(), DocEntryLinkHC(),
+     EdLinkCvtHC(), DocGoToLineHC(), DocFindHC(), DocAnchorFindHC(), DocCenterHC(),
+     DocCollapseHC();
 void WinBorderHC(), SettingsPushHC(), SettingsPopHC();
 void PutFileLinkHC(), PutSrcLinkHC(), FixSetHC(), AdamErrHC();
 void RawHC(), DbgModeHC(), IsDbgModeHC();
@@ -1105,9 +1108,18 @@ bool LoadKernel(CTask &task)
       {"DocMenu", reinterpret_cast<uintptr_t>(DocMenuHC)},
       {"PopUpMenu", reinterpret_cast<uintptr_t>(PopUpMenuHC)},
       {"PopUp1", reinterpret_cast<uintptr_t>(PopUp1HC)},
+      {"PopUp2", reinterpret_cast<uintptr_t>(PopUp2HC)},
       {"PopUpOk", reinterpret_cast<uintptr_t>(PopUpOkHC)},
+      {"PopUpCancelOk", reinterpret_cast<uintptr_t>(PopUpCancelOkHC)},
       {"PopUpForm", reinterpret_cast<uintptr_t>(PopUpFormHC)},
       {"DocEd", reinterpret_cast<uintptr_t>(DocEdHC)},
+      {"Ed", reinterpret_cast<uintptr_t>(EdHC)},
+      {"PopUpEd", reinterpret_cast<uintptr_t>(PopUpEdHC)},
+      {"DocEntryLink", reinterpret_cast<uintptr_t>(DocEntryLinkHC)},
+      {"EdLinkCvt", reinterpret_cast<uintptr_t>(EdLinkCvtHC)},
+      {"DocGoToLine", reinterpret_cast<uintptr_t>(DocGoToLineHC)},
+      {"DocFind", reinterpret_cast<uintptr_t>(DocFindHC)},
+      {"DocAnchorFind", reinterpret_cast<uintptr_t>(DocAnchorFindHC)},
       {"DocFormFwd", reinterpret_cast<uintptr_t>(DocFormFwdHC)},
       {"DocFormBwd", reinterpret_cast<uintptr_t>(DocFormBwdHC)},
       {"View", reinterpret_cast<uintptr_t>(ViewHC)},
@@ -1500,6 +1512,8 @@ bool LoadKernel(CTask &task)
       {"DocUnlock", reinterpret_cast<uintptr_t>(DocUnlockHC)},
       {"DocEntryRun", reinterpret_cast<uintptr_t>(DocEntryRunHC)},
       {"DocBottom", reinterpret_cast<uintptr_t>(DocBottomHC)},
+      {"DocCenter", reinterpret_cast<uintptr_t>(DocCenterHC)},
+      {"DocCollapse", reinterpret_cast<uintptr_t>(DocCollapseHC)},
       {"DocClear", reinterpret_cast<uintptr_t>(DocClearHC)},
       {"DocCursor", reinterpret_cast<uintptr_t>(DocCursorHC)},
       {"DocHighlightCursor", reinterpret_cast<uintptr_t>(DocHighlightCursorHC)},

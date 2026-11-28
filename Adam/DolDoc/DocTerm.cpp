@@ -1,4 +1,16 @@
 #include "DolDoc.hpp"
+
+extern "C" int64_t EdLeftClickLinkCpp(CDoc *doc, CDocEntryBase *entry)
+{
+  auto *st = DocEntryLinkCpp(doc, entry);
+  if (!st)
+    return 0;
+  const bool popup = entry->de_flags & DOCEF_POPUP;
+  DocUnlock(*doc);
+  const auto res = popup ? PopUpEdCpp(st, nullptr, nullptr) : EdCpp(st, 0);
+  Free(st);
+  return res;
+}
 #include "../Ctrls/CtrlsA.hpp"
 
 static CDoc *DocBorderNew(CTask *task)

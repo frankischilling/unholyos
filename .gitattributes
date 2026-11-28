@@ -2,6 +2,12 @@ Doc/Start.DD -text
 Once.HC -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Doc/Tips.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Doc/Customize.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+Doc/HelpIndex.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+Doc/AboutTempleOS.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+Doc/Welcome.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+Doc/DemoIndex.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+Doc/CmdLineOverview.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+Doc/Credits.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Misc/Tour/*.IN -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Misc/PCIDevices.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Adam/AMath.HC -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof

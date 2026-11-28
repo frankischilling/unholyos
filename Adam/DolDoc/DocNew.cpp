@@ -1,5 +1,7 @@
 #include "DolDoc.hpp"
 
+extern "C" void EdLeftClickLinkHC();
+
 bool DocCanLock(const CDoc &doc)
 {
   return !(__atomic_load_n(&doc.locked_flags, __ATOMIC_ACQUIRE) & 1) ||
@@ -248,6 +250,7 @@ extern "C" CDoc *DocNewCpp(const char *filename, CTask *task)
   doc->find_replace->scan_fwd = doc->find_replace->match_case =
       doc->find_replace->pmt = true;
   doc->mem_task = doc->win_task = task;
+  doc->left_click_link = reinterpret_cast<uintptr_t>(EdLeftClickLinkHC);
   doc->max_entries = doc->best_d = INT64_MAX;
   doc->head.type = DOCT_ERROR;
   doc->cur_entry = &doc->head;

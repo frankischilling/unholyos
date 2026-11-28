@@ -47,6 +47,18 @@ void DocDelToEntry(CDoc &doc, CDocEntryBase *clear_entry, bool clear_holds)
   }
 }
 
+extern "C" void DocCenterCpp(CDoc *doc, int64_t recalc_flags)
+{
+  if (!doc)
+    doc = DocPut();
+  if (!doc || doc->doc_signature != DOC_SIGNATURE_VAL)
+    return;
+  CDocLock lock(*doc);
+  DocRecalc(*doc, recalc_flags);
+  if (!(doc->flags & DOCF_BORDER_DOC))
+    doc->top_line_num = doc->y - ((doc->win_task->win_height + 1) >> 1);
+}
+
 extern "C" void DocBottomCpp(CDoc *doc)
 {
   if (!doc)
@@ -56,6 +68,23 @@ extern "C" void DocBottomCpp(CDoc *doc)
   CDocLock lock(*doc);
   doc->cur_entry = &doc->head;
   doc->cur_col = 0;
+  DocRecalc(*doc);
+}
+
+extern "C" void DocCollapseCpp(uint8_t collapse, CDoc *doc)
+{
+  if (!doc)
+    doc = DocPut();
+  if (!doc || doc->doc_signature != DOC_SIGNATURE_VAL)
+    return;
+  CDocLock lock(*doc);
+  for (auto *entry = doc->head.next; entry != &doc->head; entry = entry->next)
+    if (entry->de_flags & DOCEF_TREE) {
+      if (collapse)
+        entry->de_flags |= DOCEF_CHECKED_COLLAPSED;
+      else
+        entry->de_flags &= ~DOCEF_CHECKED_COLLAPSED;
+    }
   DocRecalc(*doc);
 }
 

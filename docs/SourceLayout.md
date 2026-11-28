@@ -1990,7 +1990,9 @@ file search as the compiler, preserving Adam's working directory.
 The native stock startup test DVD includes Terry A. Davis's original
 `Once.HC` at the root and all thirteen `Misc/Tour/*.IN` files. The live
 DVD prompt and the tour entry menu run through the original scripts.
-The installation wizard and the individual tour parts still need work.
+The first chapter runs through the help pane and modifier-key holds.
+The key-description pane, installer wizard, and remaining chapters
+still need work.
 
 `Compiler/CMain.cpp` runs the compiled file before forwarding the caller's
 arguments to its last declared function. `Compiler/CMisc.asm` bridges
@@ -2026,9 +2028,20 @@ error entries and preserves the remaining DolDoc entries and links.
 
 ## Popup tasks and document menus
 
-`Adam/DolDoc/DocPopUp.cpp` follows `PopUp1` and `PopUpOk` from
-`Adam/DolDoc/DocPopUp.HC`. The button and optional header and footer
-are placed in a document passed to `PopUpMenu`.
+`Adam/DolDoc/DocPopUp.cpp` follows `PopUp1`, `PopUp2`, `PopUpOk`,
+and `PopUpCancelOk` from `Adam/DolDoc/DocPopUp.HC`. The buttons and
+optional header and footer are placed in a document passed to `PopUpMenu`.
+
+`Adam/DolDoc/DocPutKey.cpp` dispatches F1 and Shift-F1 to `Ed` using
+the same Help Index and About TempleOS paths as `DocPutKey.HC`.
+`Ed` and `PopUpEd` live in `DocEd.cpp`. `DocLink.cpp` resolves
+file, plain-text, in-memory, and symbol-source links and restores the
+caller's working directory when the editor returns. `DocFind.cpp`
+supplies the one-based line, tag search, and named-anchor operations.
+`DocTerm.cpp` opens file links through the reference left-click
+callback. Raw-mode editing, the right-click terminal file menu,
+undo, generated help indexes, dictionary, address, and Bible links
+remain pending.
 
 `Kernel/Job.cpp` follows `Kernel/Job.HC` for `PopUp` and `PopUpPrint`.
 The servant enters `SrvCmdLine` and runs the standard execute job.
