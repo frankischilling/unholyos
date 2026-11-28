@@ -41,7 +41,9 @@ export _Z12LexAttachDocR8CCmpCtrlR4CDocP8CLexFileP13CDocEntryBasej __unholyos_sy
 export _Z6LexRawR8CCmpCtrl __unholyos_sysv.LexRaw
 export _Z17LexExpression2BinR8CCmpCtrlR8CRawType __unholyos_sysv.LexExpression2Bin
 export _Z7ExeFilePKcl __unholyos_sysv.ExeFile
+export _Z15LexExceptReportRK8CCmpCtrlPKc __unholyos_sysv.LexExceptReport
 
+import native AdamErrCpp __unholyos_sysv.AdamErrCpp
 import native DefineLstLoadCpp __unholyos_sysv.DefineLstLoadCpp
 import native DirCurCpp __unholyos_sysv.DirCurCpp
 import native DirFileCpp __unholyos_sysv.DirFileCpp
@@ -55,10 +57,12 @@ import native ExtChgCpp __unholyos_sysv.ExtChgCpp
 import native ExtDftCpp __unholyos_sysv.ExtDftCpp
 import native FileReadCpp __unholyos_sysv.FileReadCpp
 import native FileWriteCpp __unholyos_sysv.FileWriteCpp
+import native FixSetCpp __unholyos_sysv.FixSetCpp
 import native GetStrCpp __unholyos_sysv.GetStrCpp
 import native HashSrcFileSetCpp __unholyos_sysv.HashSrcFileSetCpp
 import native HashTableDelCpp __unholyos_sysv.HashTableDelCpp
 import native I64MulF64Bits __unholyos_sysv.I64MulF64Bits
+import native IsRawCpp __unholyos_sysv.IsRawCpp
 import native LinkedLstDelCpp __unholyos_sysv.LinkedLstDelCpp
 import native LstMatchCpp __unholyos_sysv.LstMatchCpp
 import native MStrPrintCpp __unholyos_sysv.MStrPrintCpp
@@ -66,6 +70,7 @@ import native Pow10I64Cpp __unholyos_sysv.Pow10I64Cpp
 import native PrintCpp __unholyos_sysv.PrintCpp
 import native PrintErrCpp __unholyos_sysv.PrintErrCpp
 import native PrintWarnCpp __unholyos_sysv.PrintWarnCpp
+import native PutFileLinkCpp __unholyos_sysv.PutFileLinkCpp
 import native PutS __unholyos_sysv.PutS
 import native RaiseHolyC __unholyos_sysv.RaiseHolyC
 import native StrCmpCpp __unholyos_sysv.StrCmpCpp
@@ -94,6 +99,7 @@ import data blkdev_text_attr blkdev_text_attr
 import data char_bmp_alpha char_bmp_alpha
 import data char_bmp_alpha_numeric char_bmp_alpha_numeric
 import data char_bmp_alpha_numeric_no_at char_bmp_alpha_numeric_no_at
+import data char_bmp_displayable char_bmp_displayable
 import data char_bmp_non_eol char_bmp_non_eol
 import data char_bmp_non_eol_white_space char_bmp_non_eol_white_space
 import data cnts cnts

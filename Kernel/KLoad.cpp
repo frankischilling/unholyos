@@ -55,6 +55,8 @@ void CallModuleMain(const uint8_t *entry);
 void ACDictGenHC();
 char *DirFileCpp(const char *dirname, const char *name, const char *extension);
 CDocEntryBase *DocPutLineCpp(CDoc *doc, CDocEntryBase *entry);
+void AdamErrCpp(const char *fmt, int64_t argc, const uint64_t *argv);
+void FixSetCpp(const char *filename, int64_t line);
 char *ExtChgCpp(const char *name, const char *ext);
 uint64_t F64PowerBits(uint64_t base, uint64_t exponent);
 void SYS_POW();
@@ -651,6 +653,7 @@ bool LoadCompilerImports(CLoadedModule &module, const int64_t *&status)
   COMPILER_BIND(LexRaw);
   COMPILER_BIND(LexExpression2Bin);
   COMPILER_BIND(ExeFile);
+  COMPILER_BIND(LexExceptReport);
 #undef COMPILER_BIND
 
   auto address = CompilerExport(module, "__unholyos_compiler.CInitStatus",
@@ -1649,6 +1652,7 @@ bool LoadKernel(CTask &task)
        reinterpret_cast<uintptr_t>(char_bmp_safe_dollar)},
       {"char_bmp_non_eol", reinterpret_cast<uintptr_t>(char_bmp_non_eol)},
       // System V entries used by host-built C++ modules.
+      {"__unholyos_sysv.AdamErrCpp", reinterpret_cast<uintptr_t>(AdamErrCpp)},
       {"__unholyos_sysv.CAlloc", reinterpret_cast<uintptr_t>(CAlloc)},
       {"__unholyos_sysv.CmpCall", reinterpret_cast<uintptr_t>(CmpCall)},
       {"__unholyos_sysv.DefineLstLoadCpp",
@@ -1673,6 +1677,7 @@ bool LoadKernel(CTask &task)
       {"__unholyos_sysv.FileReadCpp", reinterpret_cast<uintptr_t>(FileReadCpp)},
       {"__unholyos_sysv.FileWriteCpp",
        reinterpret_cast<uintptr_t>(FileWriteCpp)},
+      {"__unholyos_sysv.FixSetCpp", reinterpret_cast<uintptr_t>(FixSetCpp)},
       {"__unholyos_sysv.Free", reinterpret_cast<uintptr_t>(Free)},
       {"__unholyos_sysv.GetStrCpp", reinterpret_cast<uintptr_t>(GetStrCpp)},
       {"__unholyos_sysv.HashAdd", reinterpret_cast<uintptr_t>(HashAdd)},
@@ -1689,6 +1694,7 @@ bool LoadKernel(CTask &task)
        reinterpret_cast<uintptr_t>(HashTableNew)},
       {"__unholyos_sysv.I64MulF64Bits",
        reinterpret_cast<uintptr_t>(I64MulF64Bits)},
+      {"__unholyos_sysv.IsRawCpp", reinterpret_cast<uintptr_t>(IsRawCpp)},
       {"__unholyos_sysv.LinkedLstDelCpp",
        reinterpret_cast<uintptr_t>(LinkedLstDelCpp)},
       {"__unholyos_sysv.LstMatchCpp", reinterpret_cast<uintptr_t>(LstMatchCpp)},
@@ -1700,6 +1706,7 @@ bool LoadKernel(CTask &task)
       {"__unholyos_sysv.PrintErrCpp", reinterpret_cast<uintptr_t>(PrintErrCpp)},
       {"__unholyos_sysv.PrintWarnCpp",
        reinterpret_cast<uintptr_t>(PrintWarnCpp)},
+      {"__unholyos_sysv.PutFileLinkCpp", reinterpret_cast<uintptr_t>(PutFileLinkCpp)},
       {"__unholyos_sysv.PutS", reinterpret_cast<uintptr_t>(PutS)},
       {"__unholyos_sysv.RaiseHolyC", reinterpret_cast<uintptr_t>(RaiseHolyC)},
       {"__unholyos_sysv.RethrowHolyC",

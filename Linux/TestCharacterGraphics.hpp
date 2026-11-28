@@ -104,7 +104,8 @@ struct CModuleFile
 
 enum class CStockStartup { None, Decline, Tour };
 enum class CDesktopTest {
-  None, Progress, DictionaryInstall, DictionaryGenerator, DictionaryGeneratorHolyC
+  None, Progress, DictionaryInstall, DictionaryGenerator, DictionaryGeneratorHolyC,
+  MenuDiagnostic
 };
 
 // Uses the same QMP input and physical-memory readers as the boot tests.
@@ -528,6 +529,52 @@ static void DriveCharacterGraphics(
     std::cout << startup_output << '\n';
   }
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
+  if (desktop == CDesktopTest::MenuDiagnostic) {
+    cmd("CBlkDev *mdb=BlkDevNextFreeSlot('A',BDT_RAM);");
+    cmd("mdb->max_blk=131071;");
+    cmd(R"("MB %X\n",BlkDevAdd(mdb,I64_MIN,FALSE,TRUE);)");
+    wait_text("MB 1");
+    cmd(R"(Cd("A:/");)");
+    wait_text("A:/>");
+    cmd(R"(U8 *bad="Root {\nLeaf(1)\n} // End of menu\n";)");
+    cmd(R"("MW %X\n",FileWrite("BadMenu.HC",bad,StrLen(bad));)");
+    wait_text("MW ");
+    cmd(R"(CMenu *oldm=MenuPush("Root {Leaf(1);}");)");
+    cmd(R"hc(if(oldm)"MS %X\n",1;)hc");
+    wait_text("MS 1");
+    cmd(R"(MenuFilePush("BadMenu.HC");)");
+    wait([&](const Cells &cells) {
+      const auto screen = visible(cells);
+      const auto exception = screen.find("Except:Compiler");
+      return exception != std::string::npos &&
+             screen.find("A:/>", exception) != std::string::npos;
+    }, "Menu parser did not return after its Compiler exception");
+    cmd(R"("Menu intact %X\n",Fs->cur_menu==oldm;)");
+    const auto terminal = visible(wait_text("Menu intact 1"));
+    std::ofstream(dir / "menu-diagnostic-terminal.txt") << terminal;
+    snapshot("menu-diagnostic");
+    Check(terminal.find(R"(Missing ';' at"}")") != std::string::npos &&
+              terminal.find("Except:Compiler") != std::string::npos,
+          "Missing menu parser token or exception");
+    cmd("I64 msz;U8 *mdoc=DocSave(DocPut,&msz);");
+    cmd(R"("MDP %X %X %X\n",mdoc,&msz,&mdoc;)");
+    const auto fields = addresses("MDP ", {1, 8, 8});
+    const auto size = ReadPhysical<1>(vm, fields[1])[0];
+    Check(size && in_memory(fields[0], size), "Invalid menu diagnostic document size");
+    const auto output = dir / "menu-diagnostic-document.bin";
+    vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+               std::to_string(fields[0]) + R"(,"size":)" + std::to_string(size) +
+               R"(,"filename":")" + output.string() + R"("}})");
+    const auto doc = ReadText(output);
+    const auto link = doc.find("FL:A:/BadMenu.HC,3");
+    Check(link != std::string::npos &&
+              doc.find("} // End of menu", link) != std::string::npos,
+          "Missing menu parser source link or source line");
+    cmd("Free(mdoc);");
+    cmd("MenuPop;");
+    std::cout << "Malformed menu reported its source and preserved the menu stack\n";
+    return;
+  }
   if (desktop == CDesktopTest::DictionaryGenerator ||
       desktop == CDesktopTest::DictionaryGeneratorHolyC) {
     vm.ResetDeadline(1200s);

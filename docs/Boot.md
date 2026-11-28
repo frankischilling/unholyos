@@ -4404,6 +4404,19 @@ The harness boots `build/popup-test.iso` or the pinned DVD with QEMU
 and the default single CPU. It sends input through the VM keyboard
 and checks the terminal text and return to the prompt.
 
+The malformed-menu probe writes `A:/BadMenu.HC` to a scratch RedSea RAM
+drive and starts with a valid menu on the stack. Both guests report
+`Missing ';' at`, show the `}` token, and throw `Compiler`. The saved
+terminal DolDoc links to `FL:A:/BadMenu.HC,3` and shows the linked source line.
+The same active menu remains on the stack after the exception. Symbolic
+backtrace rendering depends on the guest's own symbol information.
+
+```sh
+make -j4 test-menu-diagnostic
+build/Linux/TestBoot --menu-diagnostic-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/menu-diagnostic-reference
+```
+
 ## Install registration
 
 `InsRegProbe.HC` checks the 33-byte `CInsReg` layout, the startup

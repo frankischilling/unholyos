@@ -131,6 +131,7 @@ bool LexAttachDoc(CCmpCtrl &cc, CDoc &doc, CLexFile *root = nullptr,
                   CDocEntryBase *entry = nullptr, uint32_t col = 0);
 int64_t LexGetChar(CCmpCtrl &cc);
 const char *LexPutLine(const CLexFile &file, const char *start);
+void LexExceptReport(const CCmpCtrl &cc, const char *message);
 int64_t LexRaw(CCmpCtrl &cc);
 int64_t Lex(CCmpCtrl &cc);
 char *LexExtStr(CCmpCtrl &cc, size_t &size);
