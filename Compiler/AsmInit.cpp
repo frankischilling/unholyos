@@ -550,10 +550,11 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
   static_assert(offsetof(CDocEntry,define_str)==128 &&
                 offsetof(CDocEntry,my_fmt_data)==160);
   auto *doc = CmpKernelClass(table, "CDoc", sizeof(CDoc));
+  auto *base = CmpKernelClass(table, "CDocEntryBase", sizeof(CDocEntryBase));
   auto *entry = CmpKernelClass(table, "CDocEntry", sizeof(CDocEntry));
   auto *bin = CmpKernelClass(table, "CDocBin", sizeof(CDocBin));
   auto *filename = CmpKernelClass(table, "CEdFileName", sizeof(CEdFileName));
-  if (!doc || !entry || !bin || !filename)
+  if (!doc || !base || !entry || !bin || !filename)
     return false;
   auto *i32 = FindType("I32", table);
   auto *i64 = FindType("I64", table);
@@ -567,6 +568,7 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
     CHashClass *record, *type;
     size_t offset, count = 0;
   } members[]{
+      {"head", doc, base, offsetof(CDoc, head)},
       {"flags", doc, u64, offsetof(CDoc, flags)},
       {"locked_flags", doc, u64, offsetof(CDoc, locked_flags)},
       {"cur_entry", doc, entry + 1, offsetof(CDoc, cur_entry)},
@@ -586,6 +588,10 @@ static bool CmpDocData(CHashTable *table, CHashClass &task)
        offsetof(CDoc, doc_signature)},
       {"user_put_data", doc, u8ptr, offsetof(CDoc, user_put_data)},
       {"bin_head", doc, bin, offsetof(CDoc, bin_head)},
+      {"next", base, base + 1, offsetof(CDocEntryBase, next)},
+      {"last", base, base + 1, offsetof(CDocEntryBase, last)},
+      {"tag", base, u8ptr, offsetof(CDocEntryBase, tag)},
+      {"type_u8", base, u8, offsetof(CDocEntryBase, type)},
       {"de_flags", entry, u64,
        offsetof(CDocEntry, base) + offsetof(CDocEntryBase, de_flags)},
       {"tag", entry, u8ptr,
@@ -2370,6 +2376,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
     PutKeyFn,
     PutSFn,
     CtrlAltFn,
+    SortCmpFn,
   };
   CHashClass *types[]{
       FindType("U0", table),     FindType("U64", table),
@@ -2668,6 +2675,10 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"Tabs2Spaces", U8Ptr, FF_RET1, {{"src", U8Ptr}}},
       {"StrCpy", U0, FF_RET1, {{"dst", U8Ptr}, {"src", U8Ptr}}, "_STRCPY"},
       {"StrLen", I64, FF_INTERNAL, {{"st", U8Ptr}}, nullptr, IC_STRLEN},
+      {"LstMatch", I64, FF_RET1,
+       {{"needle", U8Ptr}, {"haystack_lst", U8Ptr}, {"flags", I64, true}}},
+      {"QSortI64", U0, FF_RET1,
+       {{"base", I64Ptr}, {"num", I64}, {"fp_compare", SortCmpFn}}},
       {"QueInit", U0, FF_INTERNAL, {{"head", QuePtr}}, nullptr, IC_QUE_INIT},
       {"QueIns", U0, FF_INTERNAL, {{"entry", QuePtr}, {"pred", QuePtr}}, nullptr, IC_QUE_INS},
       {"QueInsRev", U0, FF_INTERNAL, {{"entry", QuePtr}, {"succ", QuePtr}}, nullptr, IC_QUE_INS_REV},
@@ -2845,6 +2856,7 @@ static bool CmpRuntimeHeaders(CHashTable *table)
       {"ViewAnglesDel", U0, FF_RET1, {{"task", TaskPtr, true}}},
       {"AutoComplete", Bool, FF_RET1, {{"val", Bool, true}}},
       {"ACInit", U0, FF_RET1, {{"mask", U8Ptr, true}}},
+      {"ACDictGen", U0, FF_RET1, {}},
       {"ACDWordsLoad", U0, FF_RET1, {}},
       {"ACDWordPtAt", U8Ptr, FF_RET1, {{"st", U8Ptr}}},
       {"ACDDefGet", U8Ptr, FF_RET1, {{"st", U8Ptr}, {"def_num", I64, true, 1}}},
@@ -3478,6 +3490,12 @@ static bool CmpRuntimeHeaders(CHashTable *table)
           signature[0] = types[I64];
           result = types[U0];
           count = 1;
+        } else if (arg.type == SortCmpFn) {
+          names[0] = "e1";
+          names[1] = "e2";
+          signature[0] = types[I64];
+          result = types[I64];
+          count = 2;
         }
         if (!CmpKernelCallback(table, fun->cls, arg.name, 16 + 8 * fun->arg_cnt,
                                *result, count, names, signature)) {
@@ -3757,6 +3775,9 @@ static bool CmpFillHash(CHashTable *table)
       {"ACD_END_CHAR", "0"}, {"ACD_WORD_CHAR", "1"}, {"ACD_DEF_CHAR", "2"},
       {"ACD_PRONUNCIATION_CHAR", "3"}, {"ACD_POS_CHAR", "4"}, {"ACD_EXTRA_CHAR", "5"},
       {"ACD_BLK_SIZE", "0x4000"}, {"ACD_FILLINS_NUM", "10"},
+      {"ACD_H1", "0"}, {"ACD_H1_END", "1"}, {"ACD_DEF", "2"}, {"ACD_DEF_END", "3"},
+      {"ACD_PRONUNCIATION", "4"}, {"ACD_PRONUNCIATION_END", "5"},
+      {"ACD_POS", "6"}, {"ACD_POS_END", "7"}, {"ACD_EXTRA", "8"}, {"ACD_EXTRA_END", "9"},
       {"ACD_WORD_FILENAME", "\"/Adam/AutoComplete/ACWords.DATA.Z\""},
       {"ACD_DEF_FILENAME", "\"/Adam/AutoComplete/ACDefs.DATA\""},
       {"ACD_DEF_FILENAME_Z", "\"/Adam/AutoComplete/ACDefs.DATA.Z\""},
@@ -3764,6 +3785,7 @@ static bool CmpFillHash(CHashTable *table)
       {"LK_DOC", "12"}, {"LK_DOC_ANCHOR", "13"}, {"LK_DOC_FIND", "14"},
       {"LK_DOC_LINE", "15"},
       {"DOCF_FORM", "0x200"}, {"DOCF_SIZE_MIN", "0x400"},
+      {"DOCF_PLAIN_TEXT_TABS", "2"}, {"DOCF_DBL_DOLLARS", "32"}, {"DOCT_TEXT", "0"},
       {"DOCF_OVERSTRIKE", "0x100000000"},
       {"RS_ATTR_DIR", "0x10"}, {"RS_ATTR_DELETED", "0x100"},
       {"BDF_READ_ONLY", "4"}, {"BDF_READ_ONLY_OVERRIDE", "8"},

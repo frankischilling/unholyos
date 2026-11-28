@@ -1906,6 +1906,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CJob",
                                        "CJobCtrl",
                                        "CDoc",
+                                       "CDocEntryBase",
                                        "CDocEntry",
                                        "CDocBin",
                                        "CEdFileName",
@@ -1965,7 +1966,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 95);
+  static_assert(class_count == 96);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -2020,6 +2021,8 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
           const auto block = ReadPhysical<80>(vm, address);
           if (name == "CProgress")
             Check(block[8] == 80, "Startup CProgress record has the wrong size");
+          if (name == "CDocEntryBase")
+            Check(block[8] == 88, "Startup CDocEntryBase record has the wrong size");
           Check(((block[10] >> 32) & 255) == 0,
                 "Startup class base has pointer stars");
           for (uint64_t stars = 1; stars <= 4; ++stars) {
@@ -6976,8 +6979,8 @@ int main(int argc, char **argv)
                              reference, false, false, false, false, false,
                              false, false, false, probes, {}, 0x20000000,
                              once && !reference ? "Once startup 2A 2 2" : "",
-                             CStockStartup::None, progress ? CWallpaperTest::Progress
-                                                           : CWallpaperTest::None);
+                             CStockStartup::None, progress ? CDesktopTest::Progress
+                                                           : CDesktopTest::None);
       vm.Quit();
       if (argc == 4)
         fs::remove_all(dir);
@@ -7179,7 +7182,7 @@ int main(int argc, char **argv)
       DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
                              reference, false, false, false, false, false,
                              false, false, false, {}, {}, 0x20000000, {},
-                             CStockStartup::None, CWallpaperTest::DictionaryInstall);
+                             CStockStartup::None, CDesktopTest::DictionaryInstall);
       vm.Quit();
       const auto written = FileRead(disk);
       constexpr size_t fat1 = 2080 * 512, fat2 = 2593 * 512, fat_bytes = 513 * 512;
@@ -7190,6 +7193,59 @@ int main(int argc, char **argv)
                            written.begin() + fat2),
             "The dictionary disk FAT mirrors differ");
       Check(FileRead(argv[4]) == original, "The dictionary disk fixture was modified");
+      if (argc == 5)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
+  if ((argc == 5 || argc == 6) &&
+      (mode == "--dictionary-generator" || mode == "--dictionary-generator-check" ||
+       mode == "--dictionary-generator-reference" || mode == "--dictionary-generator-reference-check" ||
+       mode == "--dictionary-generator-holyc" || mode == "--dictionary-generator-holyc-check")) {
+    const bool reference = mode.starts_with("--dictionary-generator-reference");
+    char path[] = "/tmp/unholyos-dictionary-generator-XXXXXX";
+    if (argc == 5 && !mkdtemp(path))
+      return 1;
+    const auto dir = argc == 6 ? fs::absolute(argv[5]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      CMonitor vm(argv[2], argv[3], dir, "pc", "1536", false, argv[4], false, reference);
+      vm.Connect();
+      const auto test = mode.starts_with("--dictionary-generator-holyc")
+                            ? CDesktopTest::DictionaryGeneratorHolyC
+                            : CDesktopTest::DictionaryGenerator;
+      DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
+                             reference, false, false, false, false, false,
+                             false, false, false, {}, {}, 0x60000000, {},
+                             CStockStartup::None, test);
+      vm.Quit();
+      if (mode.ends_with("-check")) {
+        // Captured from the unmodified generator on the pinned TempleOS DVD.
+        const auto terminal = ReadText(dir / "generator-terminal.txt");
+        Check(terminal.find("Largest Entry :63") != std::string::npos &&
+                  terminal.find("Word Count    :5") != std::string::npos,
+              "The dictionary generator diagnostics differ from TempleOS");
+        const struct {
+          const char *name;
+          size_t size;
+          uint64_t hash;
+        } expected[]{
+            {"DICTIONARY2.DD", 475, 0x700e401cd58283eaULL},
+            {"ACDefs.DATA", 233, 0x23620a3dec91e945ULL},
+            {"ACWords.DATA", 40, 0xd1bbb700dc38302bULL}};
+        for (const auto &file : expected) {
+          const auto bytes = FileRead(dir / file.name);
+          uint64_t hash = 14695981039346656037ULL;
+          for (auto ch : bytes)
+            hash = (hash ^ ch) * 1099511628211ULL;
+          if (bytes.size() != file.size || hash != file.hash)
+            throw std::runtime_error(std::string(file.name) + " differs from TempleOS");
+        }
+        std::cout << "All three dictionary generator fixture outputs match TempleOS\n";
+      }
       if (argc == 5)
         fs::remove_all(dir);
       return 0;
@@ -7923,6 +7979,7 @@ int main(int argc, char **argv)
               << " --key-map[-reference] qemu image.iso [capture-dir]\n"
               << " --dictionary-reference qemu image.iso [capture-dir]\n"
               << " --dictionary-install[-reference] qemu image.iso disk.img [capture-dir]\n"
+              << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"

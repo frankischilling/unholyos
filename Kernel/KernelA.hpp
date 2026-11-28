@@ -1240,7 +1240,8 @@ static_assert(sizeof(CDocEntryBase) == 88 &&
               offsetof(CDocEntryBase, settings) == 56 &&
               sizeof(CDocEntry) == 208 && offsetof(CDocEntry, left_exp) == 88 &&
               offsetof(CDocEntry, right_exp) == 104 && offsetof(CDocEntry, bin_data) == 192);
-static_assert(sizeof(CDoc) == 768 && offsetof(CDoc, cur_entry) == 104 &&
+static_assert(sizeof(CDoc) == 768 && offsetof(CDoc, head) == 0 &&
+              offsetof(CDoc, cur_entry) == 104 &&
               offsetof(CDoc, x) == 184 && offsetof(CDoc, y) == 188 &&
               offsetof(CDoc, filename) == 304 &&
               offsetof(CDoc, bin_head) == 632);
@@ -1536,6 +1537,9 @@ static_assert(sizeof(CAutoCompleteGlbls) == 232 &&
               offsetof(CAutoCompleteGlbls, task) == 32);
 
 constexpr int64_t ACD_BLK_SIZE = 0x4000, ACD_FILLINS_NUM = 10;
+constexpr int64_t ACD_H1 = 0, ACD_H1_END = 1, ACD_DEF = 2, ACD_DEF_END = 3,
+                  ACD_PRONUNCIATION = 4, ACD_PRONUNCIATION_END = 5,
+                  ACD_POS = 6, ACD_POS_END = 7, ACD_EXTRA = 8, ACD_EXTRA_END = 9;
 constexpr uint8_t ACD_END_CHAR = 0, ACD_WORD_CHAR = 1, ACD_DEF_CHAR = 2,
                   ACD_PRONUNCIATION_CHAR = 3, ACD_POS_CHAR = 4,
                   ACD_EXTRA_CHAR = 5;

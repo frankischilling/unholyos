@@ -141,6 +141,7 @@ GLOBAL CtrlInsideHC
 GLOBAL WinScrollsInitHC,ViewAnglesNewHC,ViewAnglesDelHC
 GLOBAL DrawViewAnglesCtrlHC,UpdateDerivedViewAnglesCtrlHC,LeftClickViewAnglesHC
 GLOBAL D3I32NormHC,AutoCompleteHC,ACInitHC,ACTaskHC,ACTaskEndCBHC
+GLOBAL ACDictGenHC
 GLOBAL ACProgressTaskHC
 GLOBAL ACDWordsLoadHC,ACDWordPtAtHC,ACDDefGetHC,ACDDefsGetHC,ACDDefsPutHC,ACDPopUpDefHC
 GLOBAL WinDerivedScrollValsUpdateHC
@@ -432,6 +433,7 @@ EXTERN CtrlInsideCpp
 EXTERN WinScrollsInitCpp,ViewAnglesNewCpp,ViewAnglesDelCpp
 EXTERN DrawViewAnglesCtrlCpp,UpdateDerivedViewAnglesCtrlCpp,LeftClickViewAnglesCpp
 EXTERN D3I32NormCpp,AutoCompleteCpp,ACInitCpp,ACTaskCpp,ACTaskEndCBCpp
+EXTERN ACDictGenCpp
 EXTERN ACProgressTaskCpp
 EXTERN ACDWordsLoadCpp,ACDWordPtAtCpp,ACDDefGetCpp,ACDDefsGetCpp,ACDDefsPutCpp,ACDPopUpDefCpp
 EXTERN WinDerivedScrollValsUpdateCpp
@@ -947,6 +949,7 @@ HOLYC_CPP ViewAnglesDelHC,ViewAnglesDelCpp,1
 HOLYC_CPP AutoCompleteHC,AutoCompleteCpp,1
 HOLYC_CPP ACProgressTaskHC,ACProgressTaskCpp,1
 HOLYC_CPP ACInitHC,ACInitCpp,1
+HOLYC_CPP ACDictGenHC,ACDictGenCpp,0
 HOLYC_CPP ACTaskHC,ACTaskCpp,1
 HOLYC_CPP ACTaskEndCBHC,ACTaskEndCBCpp,0
 HOLYC_CPP ACDWordsLoadHC,ACDWordsLoadCpp,0

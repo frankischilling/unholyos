@@ -103,7 +103,9 @@ struct CModuleFile
 };
 
 enum class CStockStartup { None, Decline, Tour };
-enum class CWallpaperTest { None, Progress, DictionaryInstall };
+enum class CDesktopTest {
+  None, Progress, DictionaryInstall, DictionaryGenerator, DictionaryGeneratorHolyC
+};
 
 // Uses the same QMP input and physical-memory readers as the boot tests.
 static void DriveCharacterGraphics(
@@ -116,7 +118,7 @@ static void DriveCharacterGraphics(
     uint64_t memory_limit = 0x20000000,
     std::string_view startup_output = {},
     CStockStartup stock = CStockStartup::None,
-    CWallpaperTest wallpaper = CWallpaperTest::None)
+    CDesktopTest desktop = CDesktopTest::None)
 {
   const bool reference_dictionary = reference && !text_probes.empty() &&
       std::string_view(text_probes.front().name) == "dictionary";
@@ -526,7 +528,83 @@ static void DriveCharacterGraphics(
     std::cout << startup_output << '\n';
   }
   cmd("WinMax;AutoComplete(0);DocClear(,1);");
-  if (wallpaper == CWallpaperTest::DictionaryInstall) {
+  if (desktop == CDesktopTest::DictionaryGenerator ||
+      desktop == CDesktopTest::DictionaryGeneratorHolyC) {
+    vm.ResetDeadline(1200s);
+    const bool holyc = reference || desktop == CDesktopTest::DictionaryGeneratorHolyC;
+    cmd("CBlkDev *genbd=BlkDevNextFreeSlot('A',BDT_RAM);");
+    auto wait_number = [&](std::string_view prefix, unsigned attempts) {
+      const std::regex number("(^|\n) {0,4}" + std::string(prefix) +
+                              " [1-9A-Fa-f][0-9A-Fa-f]*\\b");
+      return wait([&](const Cells &cells) {
+        return std::regex_search(visible(cells), number);
+      }, "Missing dictionary generator transfer result", attempts);
+    };
+    cmd("genbd->max_blk=262143;");
+    cmd(R"("GB %X\n",BlkDevAdd(genbd,I64_MIN,FALSE,TRUE);)");
+    try {
+      wait_number("GB", 1200);
+      cmd(R"(Cd("A:/");)");
+      wait_text("A:/>");
+    } catch (...) {
+      snapshot("ram-disk-terminal");
+      throw;
+    }
+    if (reference) {
+      cmd(R"("GM %X\n",ATAMount('C',BDT_ATA,0x1F0,0x3F4,0);)");
+      wait_number("GM", 1200);
+    }
+    cmd(R"(DirMk("Adam");DirMk("Adam/AutoComplete");)");
+    cmd(R"(Cd("Adam/AutoComplete");)");
+    wait_text("A:/Adam/AutoComplete>");
+    cmd("I64 gn;U8 *gp;");
+    cmd(R"(gp=FileRead("C:/DICTIONARY.DD",&gn);"GR %X\n",gn;)");
+    wait_number("GR", 6000);
+    cmd(R"("GW %X\n",FileWrite("DICTIONARY.DD",gp,gn);)");
+    wait_number("GW", 6000);
+    cmd("Free(gp);");
+    if (holyc)
+      cmd(R"(Copy("C:/ACDictGen.HC","ACDictGen.HC");)");
+    cmd(holyc ? R"(ExeFile2("ACDictGen.HC");"DGG return %X\n",1;)"
+              : R"(ACDictGen;"DGG return %X\n",1;)");
+    const auto done = wait([&](const Cells &cells) {
+      const auto screen = visible(cells);
+      return screen.find("DGG return 1") != std::string::npos ||
+             screen.find("Except:Compiler") != std::string::npos;
+    }, "The dictionary generator did not finish", 28000);
+    const auto terminal = visible(done);
+    std::ofstream(dir / "generator-terminal.txt") << terminal;
+    if (terminal.find("Word File Size:") == std::string::npos ||
+        terminal.find("Word Count") == std::string::npos)
+      throw std::runtime_error(
+          "The dictionary generator returned without writing the files\n" + terminal);
+    snapshot("dictionary-generator");
+    struct CGeneratedFile {
+      const char *name, *evidence, *marker;
+    };
+    constexpr CGeneratedFile files[]{
+        {"DICTIONARY2.DD", "DICTIONARY2.DD", "GPP "},
+        {"ACDefs.DATA", "ACDefs.DATA", "GDF "},
+        {"ACWords.DATA.Z", "ACWords.DATA", "GWD "}};
+    for (const auto &file : files) {
+      cmd(std::string(R"(gp=FileRead(")") + file.name + R"(",&gn);")" +
+          file.marker + R"(read %X\n",gn;)");
+      wait_number(std::string(file.marker) + "read", 6000);
+      cmd(std::string("\"") + file.marker + R"(%X %X %X\n",gp,&gn,&gp;)");
+      const auto fields = addresses(file.marker, {1, 8, 8}, 6000);
+      const auto size = ReadPhysical<1>(vm, fields[1])[0];
+      Check(size && in_memory(fields[0], size), "Invalid generated dictionary file size");
+      const auto output = dir / file.evidence;
+      vm.Command(R"({"execute":"pmemsave","arguments":{"val":)" +
+                 std::to_string(fields[0]) + R"(,"size":)" +
+                 std::to_string(size) + R"(,"filename":")" + output.string() + R"("}})");
+      Check(fs::file_size(output) == size, "Incomplete generated dictionary file capture");
+      cmd("Free(gp);");
+      std::cout << file.evidence << " has " << size << " bytes\n";
+    }
+    return;
+  }
+  if (desktop == CDesktopTest::DictionaryInstall) {
     const auto expected = FileRead("Adam/AutoComplete/ACDefs.DATA");
     const auto blocks = (expected.size() + 511) / 512;
     vm.ResetDeadline(420s);
@@ -609,7 +687,7 @@ static void DriveCharacterGraphics(
         << " blocks and cleared. Expanded definitions and word count matched\n";
     return;
   }
-  if (wallpaper == CWallpaperTest::Progress) {
+  if (desktop == CDesktopTest::Progress) {
     cmd(R"("PGM %X %X %X\n",&progress1,&sys_progresses[0].val,&progress1_max;)");
     const auto progress = addresses("PGM ");
     Check(progress[0] == progress[1] && progress[2] - progress[0] == 8,
