@@ -6782,6 +6782,41 @@ static void TestKernelCfgBoot(const char *qemu,const fs::path &iso,
 int main(int argc, char **argv)
 {
   std::string_view mode = argc > 1 ? argv[1] : "";
+  if ((argc == 4 || argc == 5) && mode == "--stock-once") {
+    char path[] = "/tmp/unholyos-stock-once-XXXXXX";
+    if (argc == 4 && !mkdtemp(path))
+      return 1;
+    const fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
+    try {
+      VerifyHostModuleMedia(argv[3], "Once.HC", "Once.HC");
+      for (auto file : {"Tips.DD", "Customize.DD"})
+        VerifyHostModuleMedia(argv[3], fs::path("Doc") / file, file, "Doc");
+      for (char part : std::string_view("0123456789ABC")) {
+        std::string file = "Tour";
+        if (part != '0')
+          file += part;
+        file += ".IN";
+        VerifyHostModuleMedia(argv[3], fs::path("Misc/Tour") / file,
+                              file.c_str(), "Misc/Tour");
+      }
+      for (auto stock : {CStockStartup::Decline, CStockStartup::Tour}) {
+        const auto run = dir / (stock == CStockStartup::Decline ? "decline" : "tour");
+        fs::create_directories(run);
+        CMonitor vm(argv[2], argv[3], run, "pc", "512", false);
+        vm.Connect();
+        DriveCharacterGraphics(vm, run, vm.Boot(run / "serial.log"), false,
+                               false, false, false, false, false, false,
+                               false, false, {}, {}, 0x20000000, {}, stock);
+        vm.Quit();
+      }
+      if (argc == 4)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
   if ((argc == 4 || argc == 5) &&
       (mode == "--doc-tree" || mode == "--doc-tree-reference" ||
        mode == "--doc-tree-aot" || mode == "--registry" ||
@@ -7754,6 +7789,7 @@ int main(int argc, char **argv)
               << " --popup-menus[-reference] qemu image.iso [capture-dir]\n"
               << " --ins-reg[-reference] qemu image.iso [capture-dir]\n"
               << " --startup-exec[-reference] qemu image.iso [capture-dir]\n"
+              << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"

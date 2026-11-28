@@ -1,4 +1,8 @@
 Doc/Start.DD -text
+Once.HC -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+Doc/Tips.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+Doc/Customize.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+Misc/Tour/*.IN -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Misc/PCIDevices.DD -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Adam/AMath.HC -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
 Adam/AMem.HC -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof

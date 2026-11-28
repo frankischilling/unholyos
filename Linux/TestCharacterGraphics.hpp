@@ -90,6 +90,8 @@ struct CModuleFile
   const char *guest_name, *evidence_name;
 };
 
+enum class CStockStartup { None, Decline, Tour };
+
 // Uses the same QMP input and physical-memory readers as the boot tests.
 static void DriveCharacterGraphics(
     CMonitor &vm, const fs::path &dir, const std::string &boot, bool reference,
@@ -99,7 +101,8 @@ static void DriveCharacterGraphics(
     std::span<const CTextProbe> text_probes = {},
     std::span<const CModuleFile> module_files = {},
     uint64_t memory_limit = 0x20000000,
-    std::string_view startup_output = {})
+    std::string_view startup_output = {},
+    CStockStartup stock = CStockStartup::None)
 {
   auto in_memory = [memory_limit](uint64_t addr, uint64_t size) {
     return addr && size <= memory_limit && addr <= memory_limit - size;
@@ -233,6 +236,46 @@ static void DriveCharacterGraphics(
     return result;
   };
   wait_text("T:/Home>");
+  if (stock != CStockStartup::None) {
+    const auto prompt = visible(wait_text("Install onto hard drive (y or n)?"));
+    Check(prompt.find("the live CD without installing.") != std::string::npos,
+          "The live DVD option is missing");
+    snapshot("install-prompt");
+    key("n");
+    wait_text("Take Tour(y or n)?");
+    snapshot("take-tour");
+    if (stock == CStockStartup::Decline) {
+      key("n");
+      const auto screen = visible(wait_text("Take Tour(y or n)? NO"));
+      Check(screen.find("Install onto hard drive (y or n)? NO") != std::string::npos,
+            "The install prompt did not accept No");
+      wait_text("T:/Home>");
+      snapshot("live-prompt");
+      std::cout << "Declined installation and tour on the stock Once script\n";
+      cmd("WinMax;DocClear(,1);Seed(12345);TipOfDay;");
+      wait_text("* Use <CTRL-ALT-f> to toggle between Std Font and Cyrillic Font.");
+      snapshot("tip-of-day");
+      std::cout << "Displayed the seeded tip from the original Tips.DD\n";
+    } else {
+      key("y");
+      const auto menu = visible(wait_text("Part 12: Test Suite"));
+      Check(menu.find("TempleOS Tours") != std::string::npos &&
+                menu.find("Part  1: The help system") != std::string::npos &&
+                menu.find("Done") != std::string::npos,
+            "The original tour menu is incomplete");
+      snapshot("tour-menu");
+      key("shift-esc");
+      wait([&](const Cells &cells) {
+        const auto screen = visible(cells);
+        return screen.find("TempleOS Tours") == std::string::npos &&
+               screen.find("Directory of T:/Home") != std::string::npos &&
+               screen.find("T:/Home>") != std::string::npos;
+      }, "The stock tour did not return to the home prompt");
+      snapshot("tour-exit");
+      std::cout << "Opened the original tour menu and returned to the prompt\n";
+    }
+    return;
+  }
   if (!startup_output.empty()) {
     auto screen = visible(wait_text(startup_output));
     Check(screen.find(startup_output) == screen.rfind(startup_output),

@@ -10,7 +10,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 69 | 7 |
 | `Compiler` | 33 | 33 | 0 |
-| `Adam` | 132 | 55 | 77 |
+| `Adam` | 132 | 56 | 76 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 24 | 179 |
 
@@ -131,7 +131,8 @@ part of the full rewrite.
   `XTalk`. The registry's one-time notice uses a modal servant and writes
   the selected suppression bit. `Adam/InsReg.cpp` runs the registration
   form and replays its saved registry branch during startup. The stock
-  install prompt and tour remain pending.
+  startup test DVD runs the install prompt and opens the original tour
+  menu. The installer wizard and individual tour parts remain pending.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal
   and system tools in their respective reference subsystems.
 - Include the remaining applications, demos, documentation and assets,

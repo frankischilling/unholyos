@@ -1987,7 +1987,10 @@ compiles and executes the command. Adam posts the input without waiting
 and can service the resulting job as soon as it enters server mode.
 The startup lookup uses the first terminal's directory and the same
 file search as the compiler, preserving Adam's working directory.
-The reference's stock `Once.HC` installer and tour workflow remains pending.
+The native stock startup test DVD includes Terry A. Davis's original
+`Once.HC` at the root and all thirteen `Misc/Tour/*.IN` files. The live
+DVD prompt and the tour entry menu run through the original scripts.
+The installation wizard and the individual tour parts still need work.
 
 `Compiler/CMain.cpp` runs the compiled file before forwarding the caller's
 arguments to its last declared function. `Compiler/CMisc.asm` bridges
@@ -2001,6 +2004,13 @@ in `Kernel/Job.HC`. `InFile` carries the caller's current drive and
 directory into the input filter before including the script. A call
 from inside the filter executes there, so nested scripts and input text
 reach the same terminal.
+
+`Kernel/KLoad.cpp` exports `SYS_BOOT_SRC` for the typed `U32 sys_boot_src`
+alias used by `Once.HC`. `Adam/Training.cpp` follows `TipOfDay` in
+`Adam/Training.HC`. It uses the same random draw and selects the same
+star-delimited DolDoc section. Counting the sections first avoids the
+reference's unbounded traversal for a file with no tips. The copy skips
+error entries and preserves the remaining DolDoc entries and links.
 
 ## Popup tasks and document menus
 

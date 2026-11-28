@@ -216,7 +216,7 @@ extern "C" uint64_t DocWriteCpp(CDoc *doc, uint8_t prompt)
   return 1;
 }
 
-static bool DocInsDoc(CDoc &doc, CDoc &source)
+bool DocInsDoc(CDoc &doc, CDoc &source)
 {
   CDocLock lock_source(source);
   CDocLock lock(doc);

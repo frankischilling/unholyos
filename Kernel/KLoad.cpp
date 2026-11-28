@@ -241,6 +241,7 @@ void _HASH_REM_DEL(), SysSymImportsResolveHC(), LoadPass2HC(), LoadHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
     DocWriteHC();
 void DocReadHC(), DocTypeHC(), TypeHC();
+void TipOfDayHC();
 void DocCutHC(), DocCopyHC(), DocTreeFindHC(), DocTreeFFindHC(), DocTreeMakeHC();
 void DocTreeWriteHC(), DocTreeAppendHC(), DocTreeFWriteHC(), DocTreeFAppendHC();
 void DocTreeWriteJoinHC(), DocTreeAppendJoinHC(), ExeDocHC(), DocTreeExeHC(),
@@ -876,6 +877,7 @@ bool LoadKernel(CTask &task)
       {"scrncast", reinterpret_cast<uintptr_t>(&scrncast)},
       {"music", reinterpret_cast<uintptr_t>(&music)},
       {"MEM_BOOT_BASE", reinterpret_cast<uintptr_t>(&MEM_BOOT_BASE)},
+      {"SYS_BOOT_SRC", reinterpret_cast<uintptr_t>(&SYS_BOOT_SRC)},
       {"SYS_RUN_LEVEL", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
       {"sys_run_level", reinterpret_cast<uintptr_t>(&SYS_RUN_LEVEL)},
       {"SYS_MEM_INIT_FLAG", reinterpret_cast<uintptr_t>(&sys_mem_init_flag)},
@@ -1536,6 +1538,7 @@ bool LoadKernel(CTask &task)
       {"InsUnreg", reinterpret_cast<uintptr_t>(InsUnregHC)},
       {"DocType", reinterpret_cast<uintptr_t>(DocTypeHC)},
       {"Type", reinterpret_cast<uintptr_t>(TypeHC)},
+      {"TipOfDay", reinterpret_cast<uintptr_t>(TipOfDayHC)},
       {"DocPrint", reinterpret_cast<uintptr_t>(DocPrintHC)},
       {"Doc2PlainText", reinterpret_cast<uintptr_t>(Doc2PlainTextHC)},
       {"DocBinsValidate", reinterpret_cast<uintptr_t>(DocBinsValidateHC)},

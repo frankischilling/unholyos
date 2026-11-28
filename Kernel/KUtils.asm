@@ -115,6 +115,7 @@ GLOBAL DefineHC,DefineLoadHC,DefineCntHC,DefinePrintHC
 GLOBAL Color2StrHC,Str2ColorU16HC,Str2ColorU32HC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
 GLOBAL DocReadHC,DocTypeHC,TypeHC
+GLOBAL TipOfDayHC
 GLOBAL DocCutHC,DocCopyHC,DocTreeFindHC,DocTreeFFindHC,DocTreeMakeHC
 GLOBAL DocTreeWriteHC,DocTreeAppendHC,DocTreeFWriteHC,DocTreeFAppendHC
 GLOBAL DocTreeWriteJoinHC,DocTreeAppendJoinHC,ExeDocHC,DocTreeExeHC,DocTreeFExeHC
@@ -389,6 +390,7 @@ EXTERN DefineCpp,DefineLoadCpp,DefineCntCpp,DefinePrintCpp
 EXTERN Color2StrCpp,Str2ColorU16Cpp,Str2ColorU32Cpp
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocReadCpp,DocTypeCpp,TypeCpp
+EXTERN TipOfDayCpp
 EXTERN DocCutCpp,DocCopyCpp,DocTreeFindCpp,DocTreeFFindCpp,DocTreeMakeCpp
 EXTERN DocTreeWriteCpp,DocTreeAppendCpp,DocTreeFWriteCpp,DocTreeFAppendCpp
 EXTERN ExeDocCpp,DocTreeExeCpp,DocTreeFExeCpp
@@ -1008,6 +1010,7 @@ DOC_TREE_PRINT DocTreeFWriteHC,DocTreeFWriteCpp,3
 DOC_TREE_PRINT DocTreeFAppendHC,DocTreeFAppendCpp,3
 HOLYC_CPP DocTypeHC,DocTypeCpp,3
 HOLYC_CPP TypeHC,TypeCpp,2
+HOLYC_CPP TipOfDayHC,TipOfDayCpp,1
 HOLYC_CPP Doc2PlainTextHC,Doc2PlainTextCpp,2
 HOLYC_CPP DocBinsValidateHC,DocBinsValidateCpp,1
 HOLYC_CPP DocPutLineHC,DocPutLineCpp,2
