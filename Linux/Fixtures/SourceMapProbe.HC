@@ -135,6 +135,47 @@ I64 MapProbeCompile(Bool reference_headers)
   return checks;
 }
 
+Bool map_probe_child_ready, map_probe_child_stop;
+
+U0 MapProbeChild(I64)
+{
+  ExeFile2("B:/MapProbeLocal.HC");
+  map_probe_child_ready=TRUE;
+  while (!map_probe_child_stop)
+    Yield;
+}
+
+Bool MapProbeTask()
+{
+  U8 *src="I64 MapProbeLocal(I64 x) {return x+5;}\n",*addr,*link=NULL;
+  CTask *child;
+  CHash *local;
+  I64 offset,i;
+  Bool mode,okay=FALSE;
+  if (!FileWrite("B:/MapProbeLocal.HC",src,StrLen(src)))
+    return FALSE;
+  map_probe_child_ready=map_probe_child_stop=FALSE;
+  child=Spawn(&MapProbeChild,0,"Source map child",,Fs);
+  if (!child)
+    return FALSE;
+  for (i=0;i<2048 && !map_probe_child_ready && TaskValidate(child);i++)
+    Yield;
+  if (map_probe_child_ready &&
+      (local=HashFind("MapProbeLocal",child->hash_table,HTT_FUN))) {
+    addr=HashVal(local);
+    mode=DbgMode(FALSE);
+    okay=addr && FunSegFind(addr,&offset)!=local;
+    DbgMode(TRUE);
+    if (okay && FunSegFind(addr,&offset)==local && !offset)
+      link=SrcEdLink(addr);
+    DbgMode(mode);
+    okay=link && !StrCmp(link,"FL:B:/MapProbeLocal.HC,1");
+    Free(link);
+  }
+  map_probe_child_stop=TRUE;
+  return okay;
+}
+
 U0 MapProbeMain(Bool reference_headers=FALSE)
 {
   CBlkDev *bd;
@@ -147,6 +188,8 @@ U0 MapProbeMain(Bool reference_headers=FALSE)
   }
   checks=MapProbeCompile(reference_headers);
   checks|=MapProbeSynthetic;
+  if (MapProbeTask)
+    checks|=0x400;
   "Source map checks %X\n",checks;
 }
 

@@ -5059,6 +5059,8 @@ address expressions through `EdLinkCvt`. The same probe compiles a small
 HolyC module with `Cmp`, loads the module and its generated map, and
 checks the source lines for the entry point and two statements. It opens
 the source through `Ed("AD:...")` and returns to the prompt on Shift-Esc.
+The probe also compiles a private function in a child task. It finds that
+function and its source link from the parent when debugger mode is set.
 The TempleOS AOT project includes its kernel type declarations before
 the shared module source.
 

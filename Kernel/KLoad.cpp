@@ -263,7 +263,7 @@ void GodBiblePassageHC(), BibleLine2VerseHC(), BookLinesHC(), BibleVerseHC();
 void BibleDocHC(), BibleViewHC();
 void GodDoodleSpriteHC(), GodDoodleHC();
 void WhoHC(), HashDepthRepHC(), DocHelpIdxHC(), PopUpHelpIndexHC(), MapFileLoadHC();
-void SrcLineNumHC(), SrcFileNameHC(), SrcEdLinkHC();
+void FunSegFindHC(), SrcLineNumHC(), SrcFileNameHC(), SrcEdLinkHC();
 void RegDftHC(), RegExeHC(), RegWriteHC(), RegCntHC(), RegAppendHC(), AdamHC();
 void InsRegHC(), InsReregHC(), InsUnregHC();
 void AOnceFlushHC(), OnceFlushHC(), AOnceHC(), OnceHC(), AOnceDrvHC(),
@@ -1525,6 +1525,7 @@ bool LoadKernel(CTask &task)
       {"MemBIOSRep", reinterpret_cast<uintptr_t>(MemBIOSRepHC)},
       {"MemPageRep", reinterpret_cast<uintptr_t>(MemPageRepHC)},
       {"PutFileLink", reinterpret_cast<uintptr_t>(PutFileLinkHC)},
+      {"FunSegFind", reinterpret_cast<uintptr_t>(FunSegFindHC)},
       {"SrcLineNum", reinterpret_cast<uintptr_t>(SrcLineNumHC)},
       {"SrcFileName", reinterpret_cast<uintptr_t>(SrcFileNameHC)},
       {"SrcEdLink", reinterpret_cast<uintptr_t>(SrcEdLinkHC)},
