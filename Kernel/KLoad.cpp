@@ -240,6 +240,10 @@ void _HASH_REM_DEL(), SysSymImportsResolveHC(), LoadPass2HC(), LoadHC();
 void DocNewHC(), DocDelHC(), DocLoadHC(), DocSizeHC(), DocSaveHC(),
     DocWriteHC();
 void DocReadHC(), DocTypeHC(), TypeHC();
+void DocCutHC(), DocCopyHC(), DocTreeFindHC(), DocTreeFFindHC(), DocTreeMakeHC();
+void DocTreeWriteHC(), DocTreeAppendHC(), DocTreeFWriteHC(), DocTreeFAppendHC();
+void DocTreeWriteJoinHC(), DocTreeAppendJoinHC(), ExeDocHC(), DocTreeExeHC(),
+    DocTreeFExeHC();
 void DocPrintHC(), Doc2PlainTextHC(), DocBinsValidateHC(), DocPutLineHC();
 void DocPutHC(), DocDisplayHC(), DocBorderHC(), DocRecalcHC(), DocPutKeyHC();
 void DocLockHC(), DocUnlockHC(), DocEntryRunHC(), DocBottomHC(), DocClearHC(), NowHC();
@@ -1470,6 +1474,20 @@ bool LoadKernel(CTask &task)
       {"DocSave", reinterpret_cast<uintptr_t>(DocSaveHC)},
       {"DocWrite", reinterpret_cast<uintptr_t>(DocWriteHC)},
       {"DocRead", reinterpret_cast<uintptr_t>(DocReadHC)},
+      {"DocCut", reinterpret_cast<uintptr_t>(DocCutHC)},
+      {"DocCopy", reinterpret_cast<uintptr_t>(DocCopyHC)},
+      {"DocTreeFind", reinterpret_cast<uintptr_t>(DocTreeFindHC)},
+      {"DocTreeFFind", reinterpret_cast<uintptr_t>(DocTreeFFindHC)},
+      {"DocTreeMake", reinterpret_cast<uintptr_t>(DocTreeMakeHC)},
+      {"DocTreeWrite", reinterpret_cast<uintptr_t>(DocTreeWriteHC)},
+      {"DocTreeAppend", reinterpret_cast<uintptr_t>(DocTreeAppendHC)},
+      {"DocTreeFWrite", reinterpret_cast<uintptr_t>(DocTreeFWriteHC)},
+      {"DocTreeFAppend", reinterpret_cast<uintptr_t>(DocTreeFAppendHC)},
+      {"DocTreeWriteJoin", reinterpret_cast<uintptr_t>(DocTreeWriteJoinHC)},
+      {"DocTreeAppendJoin", reinterpret_cast<uintptr_t>(DocTreeAppendJoinHC)},
+      {"ExeDoc", reinterpret_cast<uintptr_t>(ExeDocHC)},
+      {"DocTreeExe", reinterpret_cast<uintptr_t>(DocTreeExeHC)},
+      {"DocTreeFExe", reinterpret_cast<uintptr_t>(DocTreeFExeHC)},
       {"DocType", reinterpret_cast<uintptr_t>(DocTypeHC)},
       {"Type", reinterpret_cast<uintptr_t>(TypeHC)},
       {"DocPrint", reinterpret_cast<uintptr_t>(DocPrintHC)},

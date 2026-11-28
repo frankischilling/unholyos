@@ -1939,6 +1939,20 @@ option bits are stored, but not all their reference effects are implemented.
 `Kernel/KHashB.cpp` implements the same-table purge of superseded raw
 exports and invalid entries without modifying inherited tables.
 
+## Document trees
+
+`Adam/DolDoc/DocTree.cpp` follows the reference tree paths and relative
+indent records. It finds existing branches, creates nested missing branches,
+rewrites and appends formatted text, and reads and writes the DolDoc files
+through the ordinary filesystem. `DocClipBoard.cpp` copies inclusive
+entry ranges with owned payloads and cuts ranges without deleting the
+document sentinel. The native `ExeDoc` attaches a root document to a
+compiler context, executes it through the normal statement compiler and
+restores the context and document lock on failure. Branch execution copies
+the selected range before compiling it. Unlike the reference, it releases
+the original document lock before executing the copy. The registry can
+use these operations once its remaining runtime dependencies are available.
+
 ## Original Adam memory inspection
 
 `Adam/AMem.HC` is preserved from the pinned reference. `CmpHeapData`

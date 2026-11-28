@@ -3447,6 +3447,13 @@ constexpr CTextProbe adam_startup_probes[]{
     {"adam-startup","/AdamStartupProbe.HC","","Adam startup ","Adam startup ",
      "Adam startup FF\n",{},true}};
 
+constexpr CTextProbe doc_tree_probes[]{
+    {"doc-tree","/DocTreeProbe.HC","","Tree disk ","Doc tree ",
+     "Tree disk 0 1 61 1 73\nDoc tree 3FF\n",{},true}};
+constexpr CTextProbe doc_tree_aot_probes[]{
+    {"doc-tree-aot","/DocTreeAOTProbe.HC","","Tree disk ","Tree AOT done",
+     "Tree disk 0 1 61 1 73\nDoc tree 3FF\nTree AOT done\n",{},true}};
+
 constexpr CTextProbe dev_info_probes[]{
     {"dev-info", "/DevInfoProbe.HC", "", "Device reports ", "Device reports ",
      "Device reports 3FF\n", {}, true}};
@@ -6649,6 +6656,39 @@ static void TestKernelCfgBoot(const char *qemu,const fs::path &iso,
 int main(int argc, char **argv)
 {
   std::string_view mode = argc > 1 ? argv[1] : "";
+  if ((argc == 4 || argc == 5) &&
+      (mode == "--doc-tree" || mode == "--doc-tree-reference" ||
+       mode == "--doc-tree-aot")) {
+    const bool reference = mode.ends_with("-reference");
+    const bool aot = mode.ends_with("-aot");
+    char path[] = "/tmp/unholyos-doc-tree-XXXXXX";
+    if (argc == 4 && !mkdtemp(path))
+      return 1;
+    const fs::path dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      if (!reference) {
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/DocTreeProbe.HC",
+                              "DocTreeProbe.HC");
+        if (aot)
+          VerifyHostModuleMedia(argv[3], "Linux/Fixtures/DocTreeAOTProbe.HC",
+                                "DocTreeAOTProbe.HC");
+      }
+      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
+      vm.Connect();
+      DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
+                             reference, false, false, false, false, false,
+                             false, false, false, aot ? doc_tree_aot_probes
+                                                       : doc_tree_probes);
+      vm.Quit();
+      if (argc == 4)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
   if ((argc == 4 || argc == 5) &&
       (mode == "--adam-startup" || mode == "--adam-startup-reference" ||
        mode == "--dev-info" || mode == "--dev-info-reference" ||

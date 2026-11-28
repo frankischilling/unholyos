@@ -10,7 +10,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 69 | 7 |
 | `Compiler` | 33 | 33 | 0 |
-| `Adam` | 132 | 51 | 81 |
+| `Adam` | 132 | 53 | 79 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 22 | 181 |
 
@@ -117,6 +117,13 @@ part of the full rewrite.
   now operate on the current compiler context, including the no-register
   optimization gate, and `HashTablePurge` removes superseded entries in
   its own table. Complete option effects and source header support remain
+  outstanding.
+- `Adam/DolDoc/DocTree.cpp` implements nested branch lookup, creation,
+  replacement, append, file persistence and execution from the actual
+  document entries. `DocClipBoard.cpp` supplies inclusive range copy and
+  cut. Both native toolchains execute the shared tree fixture in JIT and
+  AOT mode, including a caught Break and read-only media. Registry startup,
+  the remaining clipboard operations, and popup/menu integration remain
   outstanding.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal
   and system tools in their respective reference subsystems.

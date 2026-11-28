@@ -113,6 +113,10 @@ GLOBAL DefineHC,DefineLoadHC,DefineCntHC,DefinePrintHC
 GLOBAL Color2StrHC,Str2ColorU16HC,Str2ColorU32HC
 GLOBAL DocNewHC,DocDelHC,DocLoadHC,DocSizeHC,DocSaveHC,DocWriteHC
 GLOBAL DocReadHC,DocTypeHC,TypeHC
+GLOBAL DocCutHC,DocCopyHC,DocTreeFindHC,DocTreeFFindHC,DocTreeMakeHC
+GLOBAL DocTreeWriteHC,DocTreeAppendHC,DocTreeFWriteHC,DocTreeFAppendHC
+GLOBAL DocTreeWriteJoinHC,DocTreeAppendJoinHC,ExeDocHC,DocTreeExeHC,DocTreeFExeHC
+GLOBAL DocCompileHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC,DocPutKeyHC
 GLOBAL DocPutHC,DocDisplayHC,DocBorderHC,DocRecalcHC,WinHorzHC,WinVertHC
 GLOBAL WinRefocusHC,WinToTopHC,WinFocusHC,WinTileHorzHC,WinTileVertHC,WinMaxHC
@@ -374,6 +378,10 @@ EXTERN DefineCpp,DefineLoadCpp,DefineCntCpp,DefinePrintCpp
 EXTERN Color2StrCpp,Str2ColorU16Cpp,Str2ColorU32Cpp
 EXTERN DocNewCpp,DocDelCpp,DocLoadCpp,DocSizeCpp,DocSaveCpp,DocWriteCpp
 EXTERN DocReadCpp,DocTypeCpp,TypeCpp
+EXTERN DocCutCpp,DocCopyCpp,DocTreeFindCpp,DocTreeFFindCpp,DocTreeMakeCpp
+EXTERN DocTreeWriteCpp,DocTreeAppendCpp,DocTreeFWriteCpp,DocTreeFAppendCpp
+EXTERN ExeDocCpp,DocTreeExeCpp,DocTreeFExeCpp
+EXTERN DocCompileCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp,DocPutKeyCpp
 EXTERN DocPutCpp,DocDisplayCpp,DocBorderCpp,DocRecalcCpp,WinHorzCpp,WinVertCpp
 EXTERN WinRefocusCpp,WinToTopCpp,WinFocusCpp,WinTileHorzCpp,WinTileVertCpp,WinMaxCpp
@@ -930,6 +938,38 @@ HOLYC_CPP DocSizeHC,DocSizeCpp,1
 HOLYC_CPP DocSaveHC,DocSaveCpp,2
 HOLYC_CPP DocWriteHC,DocWriteCpp,2
 HOLYC_CPP DocReadHC,DocReadCpp,2
+HOLYC_CPP DocCutHC,DocCutCpp,3
+HOLYC_CPP DocCopyHC,DocCopyCpp,3
+HOLYC_CPP DocTreeFindHC,DocTreeFindCpp,5
+HOLYC_CPP DocTreeFFindHC,DocTreeFFindCpp,2
+HOLYC_CPP DocTreeMakeHC,DocTreeMakeCpp,2
+HOLYC_CPP DocTreeWriteJoinHC,DocTreeWriteCpp,6
+HOLYC_CPP DocTreeAppendJoinHC,DocTreeAppendCpp,6
+HOLYC_CPP ExeDocHC,ExeDocCpp,2
+HOLYC_CPP DocCompileHC,DocCompileCpp,1
+HOLYC_CPP DocTreeExeHC,DocTreeExeCpp,2
+HOLYC_CPP DocTreeFExeHC,DocTreeFExeCpp,2
+; Fixed arguments followed by the HolyC inline variadic arguments.
+%macro DOC_TREE_PRINT 3
+%1:
+	HC_FRAME_ENTER
+	MOV	RDI,[RBP+16]
+	MOV	RSI,[RBP+24]
+	MOV	RDX,[RBP+32]
+	MOV	RCX,[RBP+40]
+%if %3=4
+	MOV	R8,[RBP+48]
+	LEA	R9,[RBP+56]
+%else
+	LEA	R8,[RBP+48]
+%endif
+	HC_FRAME_CALL %2
+	RET
+%endmacro
+DOC_TREE_PRINT DocTreeWriteHC,DocTreeWriteCpp,4
+DOC_TREE_PRINT DocTreeAppendHC,DocTreeAppendCpp,4
+DOC_TREE_PRINT DocTreeFWriteHC,DocTreeFWriteCpp,3
+DOC_TREE_PRINT DocTreeFAppendHC,DocTreeFAppendCpp,3
 HOLYC_CPP DocTypeHC,DocTypeCpp,3
 HOLYC_CPP TypeHC,TypeCpp,2
 HOLYC_CPP Doc2PlainTextHC,Doc2PlainTextCpp,2
