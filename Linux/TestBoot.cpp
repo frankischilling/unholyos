@@ -7307,16 +7307,22 @@ int main(int argc, char **argv)
   }
   if ((argc == 4 || argc == 5) &&
       (mode == "--menu-diagnostic" || mode == "--menu-diagnostic-reference" ||
-       mode == "--compiler-diagnostic" || mode == "--compiler-diagnostic-reference")) {
+       mode == "--compiler-diagnostic" || mode == "--compiler-diagnostic-reference" ||
+       mode == "--aot-data-heap" || mode == "--aot-data-heap-reference")) {
     const bool reference = mode.ends_with("-reference");
-    const auto diagnostic = mode.starts_with("--menu-diagnostic")
-                                ? CDesktopTest::MenuDiagnostic
-                                : CDesktopTest::CompilerDiagnostic;
+    auto diagnostic = CDesktopTest::CompilerDiagnostic;
+    if (mode.starts_with("--menu-diagnostic"))
+      diagnostic = CDesktopTest::MenuDiagnostic;
+    else if (mode.starts_with("--aot-data-heap"))
+      diagnostic = CDesktopTest::AOTDataHeap;
     char path[] = "/tmp/unholyos-diagnostic-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
       return 1;
     const auto dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
     try {
+      if (diagnostic == CDesktopTest::AOTDataHeap && !reference)
+        for (const auto *source : {"HeapGlobals.PRJ", "HeapGlobalsInvalid.PRJ"})
+          VerifyHostModuleMedia(argv[3], fs::path("Linux/Fixtures") / source, source);
       auto run = [&](const fs::path &capture, CDesktopTest test) {
         fs::create_directories(capture);
         CMonitor vm(argv[2], argv[3], capture, "pc", "512", false, {}, false,
@@ -7332,6 +7338,8 @@ int main(int argc, char **argv)
       run(dir, diagnostic);
       if (diagnostic == CDesktopTest::CompilerDiagnostic)
         run(dir / "partial-cmp", CDesktopTest::CompilerCmpDiagnostic);
+      else if (diagnostic == CDesktopTest::AOTDataHeap)
+        run(dir / "invalid", CDesktopTest::AOTDataHeapInvalid);
       if (argc == 4)
         fs::remove_all(dir);
       return 0;
@@ -8103,6 +8111,7 @@ int main(int argc, char **argv)
               << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"
               << " --menu-diagnostic[-reference] qemu image.iso [capture-dir]\n"
               << " --compiler-diagnostic[-reference] qemu image.iso [capture-dir]\n"
+              << " --aot-data-heap[-reference] qemu image.iso [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"

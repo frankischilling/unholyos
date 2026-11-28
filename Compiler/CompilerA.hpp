@@ -117,6 +117,7 @@ constexpr int64_t COMPILER_ERROR = 0x72656C69706D6F43; // Compiler
 constexpr int64_t OPTF_WARN_UNUSED_VAR = 1 << 0x10,
                   OPTF_WARN_HEADER_MISMATCH = 1 << 0x13;
 constexpr int64_t OPTf_NO_REG_VAR = 0x22;
+constexpr int64_t OPTf_GLBLS_ON_DATA_HEAP = 0x23;
 extern "C" uint64_t GetOptionCpp(int64_t num);
 char *CmdLinePmt();
 
@@ -607,6 +608,7 @@ struct CAOT
 {
   CAOTBinBlk *first = nullptr, *last = nullptr;
   CAOTImportExport *first_ie = nullptr, *last_ie = nullptr;
+  CAOTHeapGlbl *heap_glbls = nullptr;
   size_t size = 0, warning_cnt = 0;
   uint8_t max_align_bits = 3;
   uint64_t org = INVALID_PTR;
@@ -667,6 +669,7 @@ bool AOTStore(CAOT &aot, const void *symbol, const char *name,
 bool AOTLabel(CAOT &aot, const void *symbol, const char *name, size_t rip);
 bool AOTRelAdd(CAOT &aot, size_t rip, const void *symbol, const char *name,
                 uint8_t type = IET_IMM_I64);
+bool AOTHeapGlblRefAdd(CAOTHeapGlbl &glbl, int64_t rip);
 bool IsAsmStatement(const CCmpCtrl &cc);
 bool PrsAsmBlk(CCmpCtrl &cc, CAOT *aot, CCodeCtrl *coc = nullptr,
                bool bare = false);

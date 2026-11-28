@@ -927,6 +927,30 @@ static bool PrsGlobalDecl(CCmpCtrl &cc, CHashGlblVar &var, const CPrsDecl &decl,
   return true;
 }
 
+static bool PrsAOTHeapGlbl(CCmpCtrl &cc, CAOT &aot, CHashGlblVar &var)
+{
+  if (cc.token == '=') {
+    cc.parse_error = "Can't init glbl var on data heap in AOT module ";
+    return false;
+  }
+  if (HashSingleTableFind(var.sym.hash.str, cc.htc.glbl_hash_table, HTT_GLBL_VAR)) {
+    cc.parse_error = "Feature not implemented ";
+    return false;
+  }
+  auto *heap = CurrentTask()->data_heap;
+  auto *glbl = reinterpret_cast<CAOTHeapGlbl *>(MAlloc(sizeof(CAOTHeapGlbl), heap));
+  if (!glbl)
+    return false;
+  auto *name = StrNew(var.sym.hash.str, heap);
+  if (!name) {
+    Free(glbl);
+    return false;
+  }
+  *glbl = {aot.heap_glbls, name, var.size, nullptr};
+  aot.heap_glbls = var.heap_glbl = glbl;
+  return true;
+}
+
 static bool PrsGlobal(CCmpCtrl &cc, CPrsDeclarator &parsed, uint32_t visibility,
                       CAOT *aot, const CPrsDecl &decl)
 {
@@ -945,16 +969,26 @@ static bool PrsGlobal(CCmpCtrl &cc, CPrsDeclarator &parsed, uint32_t visibility,
     var->flags |= GVF_FUN;
   var->sym.hash.type = HTT_GLBL_VAR | visibility;
   var->var_class = &type;
-  if (!PrsArrayDims(cc, var->dim, type.size) ||
-      !(decl.mode < 0 ? PrsVarInit(cc, type, var->dim, var->data_addr, heap)
-                      : PrsGlobalDecl(cc, *var, decl, aot)) ||
+  if (!PrsArrayDims(cc, var->dim, type.size)) {
+    HashDel(&var->sym.hash);
+    return false;
+  }
+  const bool on_data_heap = decl.mode < 0 &&
+                            (cc.opts & (1ULL << OPTf_GLBLS_ON_DATA_HEAP));
+  const bool aot_heap = aot && on_data_heap;
+  const bool okay = decl.mode >= 0
+      ? PrsGlobalDecl(cc, *var, decl, aot)
+      : aot_heap || PrsVarInit(cc, type, var->dim, var->data_addr, heap);
+  var->size = type.size * var->dim.total_cnt;
+  if (!okay || (aot_heap && !PrsAOTHeapGlbl(cc, *aot, *var)) ||
       (cc.token != ',' && cc.token != ';')) {
     HashDel(&var->sym.hash);
     return false;
   }
+  if (on_data_heap)
+    var->flags |= GVF_DATA_HEAP;
   if (var->dim.next)
     var->flags |= GVF_ARRAY;
-  var->size = type.size * var->dim.total_cnt;
   HashSrcFileSetCpp(&cc, &var->sym, 0);
   auto *table = cc.htc.glbl_hash_table;
   if (aot && (var->flags & GVF_ALIAS) && (visibility & HTF_PUBLIC)) {
@@ -968,8 +1002,8 @@ static bool PrsGlobal(CCmpCtrl &cc, CPrsDeclarator &parsed, uint32_t visibility,
   if (decl.mode >= 0)
     return true;
   if (aot)
-    return AOTStore(*aot, var, visibility & HTF_PUBLIC ? name : nullptr,
-                    var->data_addr, var->size);
+    return aot_heap || AOTStore(*aot, var, visibility & HTF_PUBLIC ? name : nullptr,
+                               var->data_addr, var->size);
   for (uint64_t i = 2;; ++i) {
     auto *entry = HashSingleTableFind(name, table, HTT_GLBL_VAR, i);
     if (!entry || !(entry->type & HTF_UNRESOLVED))

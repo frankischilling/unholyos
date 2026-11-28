@@ -70,6 +70,14 @@ reads the function address from its declaration, and the later
 definition updates that slot. `Compiler/CExcept.cpp` and its assembly
 adapter implement the reference's `UndefinedExtern` path.
 
+`PrsGlobal` follows `PrsGlblVarLst` in `Compiler/PrsStmt.HC` when
+`OPTf_GLBLS_ON_DATA_HEAP` is set. AOT declarations reject initializers
+and record the allocation in `CAOTHeapGlbl`. The generated address uses a
+64-bit placeholder, as in `Compiler/OptPass789A.HC::IC_HEAP_GLBL`. `Cmp`
+emits `IET_DATA_HEAP` for referenced globals, and the existing loader
+allocates storage and patches each reference. Unreferenced declarations
+produce no record.
+
 ## Public HolyC module loading
 
 `Kernel/KLoad.cpp::LoadCpp` follows `Kernel/KLoad.HC::Load`, sharing the

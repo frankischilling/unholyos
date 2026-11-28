@@ -694,7 +694,8 @@ private:
         bool aot = cc.aot && (cc.flags & CCF_AOT_COMPILE);
         if (cls && TypeSize(static_cast<CRawType>(cls->raw_type)) &&
             (var->data_addr ||
-             (aot ? var->flags & GVF_IMPORT : var->flags & GVF_EXTERN))) {
+             (aot ? var->flags & (GVF_IMPORT | GVF_DATA_HEAP)
+                  : var->flags & GVF_EXTERN))) {
           Lex(cc);
           auto address = Add({reinterpret_cast<uintptr_t>(var), NO_IC, NO_IC,
                               IC_GLBL_ADDR, RT_I64, false, false, true});

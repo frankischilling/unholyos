@@ -273,6 +273,8 @@ DOC_BIN_LINK := Linux/Fixtures/DocBinLink.DD
 QUEUE_PROBE := Linux/Fixtures/QueueProbe.HC
 TIME_CLOCK_PROBE := Linux/Fixtures/TimeClockProbe.HC Linux/Fixtures/TimeClockInputProbe.HC
 STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
+AOT_DATA_HEAP_PROBES := Linux/Fixtures/HeapGlobals.PRJ Linux/Fixtures/HeapGlobalsInvalid.PRJ
+AOT_DATA_HEAP_TEST_ISO := $(BUILD)/aot-data-heap-test.iso
 
 # Every bootable test image uses the same Adam source initialization.
 $(ISO) $(foreach target,$(filter %_ISO,$(.VARIABLES)),$($(target))): $(ADAM_STARTUP_SOURCES)
@@ -881,6 +883,15 @@ test-compiler-diagnostic: $(ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --compiler-diagnostic "$(QEMU)" $(ISO)
 
 test: test-compiler-diagnostic
+
+.PHONY: test-aot-data-heap
+$(AOT_DATA_HEAP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(AOT_DATA_HEAP_PROBES)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home $(foreach file,$(AOT_DATA_HEAP_PROBES),--file $(file))
+
+test-aot-data-heap: $(AOT_DATA_HEAP_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --aot-data-heap "$(QEMU)" $(AOT_DATA_HEAP_TEST_ISO)
+
+test: test-aot-data-heap
 
 .PHONY: test-progress
 test-progress: $(ISO) $(BOOT_TEST)
