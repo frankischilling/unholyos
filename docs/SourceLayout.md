@@ -1989,6 +1989,19 @@ The startup lookup uses the first terminal's directory and the same
 file search as the compiler, preserving Adam's working directory.
 The reference's stock `Once.HC` installer and tour workflow remains pending.
 
+`Compiler/CMain.cpp` runs the compiled file before forwarding the caller's
+arguments to its last declared function. `Compiler/CMisc.asm` bridges
+the reference `_LAST_FUN` stack call to the current compiler module's
+native code. It copies the argument slots in order and restores the
+native frame after the HolyC function returns. The `2` entry points
+propagate compiler and runtime exceptions.
+
+`Kernel/Job.cpp` follows `InStr`, `InFile`, `In`, and the `XTalk` variants
+in `Kernel/Job.HC`. `InFile` carries the caller's current drive and
+directory into the input filter before including the script. A call
+from inside the filter executes there, so nested scripts and input text
+reach the same terminal.
+
 ## Popup tasks and document menus
 
 `Kernel/Job.cpp` follows `Kernel/Job.HC` for `PopUp` and `PopUpPrint`.

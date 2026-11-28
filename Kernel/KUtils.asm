@@ -123,6 +123,7 @@ GLOBAL OneTimePopUpHC,RegOneTimePopUpHC,PopUpHC,PopUpPrintHC,SrvCmdLineHC
 GLOBAL InsRegHC,InsReregHC,InsUnregHC
 GLOBAL AOnceFlushHC,OnceFlushHC,AOnceHC,OnceHC,AOnceDrvHC,OnceDrvHC,OnceExeHC
 GLOBAL OnceExeTryHC,XTalkHC
+GLOBAL XTalkWaitHC,InStrHC,InFileHC,InHC,XTalkStrHC,XTalkStrWaitHC
 GLOBAL DocCompileHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC,DocPutKeyHC
 GLOBAL DocPutHC,DocDisplayHC,DocBorderHC,DocRecalcHC,WinHorzHC,WinVertHC
@@ -395,6 +396,7 @@ EXTERN RegDftCpp,RegExeCpp,RegWriteCpp,RegCntCpp,RegAppendCpp,AdamCpp
 EXTERN InsRegCpp,InsReregCpp,InsUnregCpp
 EXTERN AOnceFlushCpp,OnceFlushCpp,AOnceCpp,OnceCpp,AOnceDrvCpp,OnceDrvCpp,OnceExeCpp
 EXTERN OnceExeTryCpp,XTalkCpp
+EXTERN XTalkWaitCpp,InStrCpp,InFileCpp,InCpp,XTalkStrCpp,XTalkStrWaitCpp
 EXTERN DocCompileCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp,DocPutKeyCpp
 EXTERN DocPutCpp,DocDisplayCpp,DocBorderCpp,DocRecalcCpp,WinHorzCpp,WinVertCpp
@@ -1056,6 +1058,12 @@ HOLYC_CPP InsReregHC,InsReregCpp,1
 HOLYC_CPP InsUnregHC,InsUnregCpp,1
 HOLYC_PRINT AdamErrHC,AdamErrCpp,1
 HOLYC_PRINT XTalkHC,XTalkCpp,2
+HOLYC_PRINT XTalkWaitHC,XTalkWaitCpp,2
+HOLYC_PRINT InStrHC,InStrCpp,1
+HOLYC_CPP InFileHC,InFileCpp,1
+HOLYC_PRINT InHC,InCpp,1
+HOLYC_PRINT XTalkStrHC,XTalkStrCpp,2
+HOLYC_PRINT XTalkStrWaitHC,XTalkStrWaitCpp,2
 
 DefineLoadHC:
 	HC_FRAME_ENTER

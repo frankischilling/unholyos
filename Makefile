@@ -167,6 +167,8 @@ POPUP_DEMO := Demo/DolDoc/MenuBttn.HC
 POPUP_TEST_ISO := $(BUILD)/popup-test.iso
 INS_REG_PROBE := Linux/Fixtures/InsRegProbe.HC
 INS_REG_TEST_ISO := $(BUILD)/ins-reg-test.iso
+STARTUP_EXEC_PROBE := Linux/Fixtures/StartupExecProbe.HC
+STARTUP_EXEC_TEST_ISO := $(BUILD)/startup-exec-test.iso
 UASM_PROBES := $(addprefix Linux/Fixtures/,UAsmProbe.HC UAsmNativeProbe.HC)
 UASM_TEST_ISO := $(BUILD)/uasm-test.iso
 UASM_AOT_PROBE := Linux/Fixtures/UAsmAOTProbe.HC
@@ -565,6 +567,9 @@ $(POPUP_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(POPUP_PROBE)
 $(INS_REG_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(INS_REG_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(INS_REG_PROBE)
 
+$(STARTUP_EXEC_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(STARTUP_EXEC_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(STARTUP_EXEC_PROBE)
+
 $(DEV_INFO_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(PCI_DEV_FILE) $(DEV_INFO_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --compress-at $(PCI_DEV_FILE).Z $(PCI_DEV_FILE) --dir Home --file $(DEV_INFO_PROBE)
 
@@ -801,6 +806,12 @@ test-ins-reg: $(INS_REG_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --ins-reg "$(QEMU)" $(INS_REG_TEST_ISO)
 
 test: test-ins-reg
+
+.PHONY: test-startup-exec
+test-startup-exec: $(STARTUP_EXEC_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --startup-exec "$(QEMU)" $(STARTUP_EXEC_TEST_ISO)
+
+test: test-startup-exec
 
 .PHONY: test-dev-info
 test-dev-info: $(DEV_INFO_TEST_ISO) $(BOOT_TEST)

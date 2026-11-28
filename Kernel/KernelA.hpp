@@ -1725,6 +1725,7 @@ static_assert(offsetof(CTask, win_left) == 0x48 &&
               offsetof(CTask, scroll_z) == 0x110);
 static_assert(offsetof(CTask, fault_num) == 0x440 &&
               offsetof(CTask, fault_err_code) == 0x448);
+static_assert(offsetof(CTask, last_fun) == 0x410);
 static_assert(offsetof(CCPU, cpu_flags) == 0x10 &&
               offsetof(CCPU, idle_pt_hits) == 0x20);
 static_assert(offsetof(CCPU, total_jiffies) == 0x30 &&

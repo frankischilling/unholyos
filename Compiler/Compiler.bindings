@@ -4,7 +4,15 @@ export internal_types_table internal_types_table
 
 export CmpHC Cmp
 export ExePutSHC ExePutS
+export ExePrintHC ExePrint
 export ExeFileHC ExeFile
+export RunFileHC RunFile
+export ExePutS2HC ExePutS2
+export ExePrint2HC ExePrint2
+export ExeFile2HC ExeFile2
+export RunFile2HC RunFile2
+export _LAST_FUN _LAST_FUN
+export LastFunHC LastFun
 export StreamExePrintHC StreamExePrint
 export StreamPrintHC StreamPrint
 export StreamDirHC StreamDir

@@ -4173,6 +4173,26 @@ and the default single CPU. The configured home-script boot check
 runs on the native test DVD. The pinned run checks the shared queue
 operations. The stock install and tour script remains pending.
 
+## Startup file execution and input
+
+`StartupExecProbe.HC` checks formatted execution, `LastFun`, extension
+lookup and argument order in `RunFile` and `RunFile2`, and the two ways
+the execution calls handle Break. The same probe also runs a nested
+`InStr`, includes a relative `.IN` file from a RAM drive, and submits a
+command through the terminal input queue. GCC, Clang, and pinned
+TempleOS report `Startup exec 3F input F` and return to the prompt.
+
+```sh
+make -j4 test-startup-exec test-once
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-startup-exec test-once
+build/Linux/TestBoot --startup-exec-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/startup-exec-reference
+```
+
+The harness uses QEMU 8.2.2 with `-machine pc -cpu qemu64 -m 512`
+and the default single CPU for `build/startup-exec-test.iso` and the
+pinned DVD.
+
 ## Popup menus and one-time notices
 
 `PopupProbe.HC` checks results from synchronous and asynchronous
