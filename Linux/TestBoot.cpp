@@ -1591,6 +1591,10 @@ constexpr CDefineList adam_defines[]{
      10},
     {"DD_OS_NAME_VERSION", "UnholyOS\0", 1}};
 
+constexpr CDefineList ins_reg_lists[]{
+    {"ST_HOST_OSES", "Other\0Native\0Linux\0Windows\0", 4},
+    {"ST_HOST_VMS", "Other\0Native\0VMware\0QEMU\0VirtualBox\0", 5}};
+
 template <size_t Count>
 constexpr std::array<uint64_t, 3>
 DefineListTotals(const CDefineList (&lists)[Count])
@@ -1886,6 +1890,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
   constexpr std::string_view records[]{"Complex",
                                        "CCntsGlbls",
                                        "CHash",
+                                       "CHashGeneric",
                                        "CHashSrcSym",
                                        "CHashDefineStr",
                                        "CHashTable",
@@ -1900,6 +1905,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CDocEntry",
                                        "CDocBin",
                                        "CEdFileName",
+                                       "CInsReg",
                                        "CQue",
                                        "CFifoU8",
                                        "CFifoI64",
@@ -1951,7 +1957,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
                                        "CTask"};
   constexpr size_t class_count = std::size(compiler_internal_types) +
                                  std::size(views) + std::size(records);
-  static_assert(class_count == 89);
+  static_assert(class_count == 91);
   std::map<std::string, uint32_t> expected;
   for (const auto &type : compiler_internal_types)
     expected.emplace(type.name, 0x20);
@@ -1996,7 +2002,7 @@ static void VerifyAdamClassRecords(CMonitor &vm, uint64_t class_table,
           const auto found = expected.find(name);
           Check(ended && found != expected.end() && found->second == type &&
                     CompilerAllocationSize(name.size() + 1) == name_header[1],
-                "Unexpected, duplicated or mistyped startup class name");
+                ("Unexpected, duplicated or mistyped startup class " + name).c_str());
           uint64_t hash = 0;
           for (unsigned char ch : name)
             hash = std::rotl(hash, 1) + ch;
@@ -2046,6 +2052,7 @@ public:
     VerifyTable(table, classes, false);
     VerifyTable(classes, kernel, true);
     Check(sources.size() == 25, "Missing original Adam startup functions");
+    Check(registration_defines.size() == 4, "Missing install registration defines");
     std::cout << "Verified Adam source functions " << sources.size()
               << ", owned code allocations " << used[0]
               << ", owned data allocations " << used[1] << '\n';
@@ -2061,6 +2068,7 @@ private:
   std::map<uint64_t, uint64_t> allocations;
   std::map<uint64_t, Bytes> snapshots;
   std::set<std::string> sources;
+  std::set<std::string> registration_defines;
 
   static bool Contains(const std::pair<uint64_t, uint64_t> &range,
                        uint64_t address, uint64_t size)
@@ -2209,6 +2217,45 @@ private:
     Allocation(fun[19], 0);
   }
 
+  void InstallRegistrationDefine(const std::array<uint64_t, 11> &def)
+  {
+    String(def[3]);
+    String(def[4]);
+    const auto name = ReadGuestName(vm, def[1]);
+    Check(registration_defines.insert(name).second,
+          ("Duplicate install registration define " + name).c_str());
+    const auto list = std::find_if(std::begin(ins_reg_lists), std::end(ins_reg_lists),
+                                   [&](const auto &item) { return item.name == name; });
+    if (list != std::end(ins_reg_lists)) {
+      Check(uint32_t(def[2]) == 4 && def[10] == list->count && !def[4] &&
+                ReadGuestName(vm, def[3]) == "AD:0x0",
+            ("Invalid install registration list " + name).c_str());
+      Allocation(def[8], 1, list->data.size());
+      Allocation(def[9], 1, list->count * sizeof(uint64_t));
+      const auto literal = Read<1>(def[9])[0];
+      Check(GuestBytesEqual(vm, def[8], list->data) &&
+                GuestBytesEqual(vm, literal, list->data),
+            "Install registration list bytes differ");
+      for (size_t i = 0, offset = 0; i < list->count; ++i) {
+        Check(Read<1>(def[9] + i * sizeof(uint64_t))[0] == literal + offset,
+              "Install registration list offset differs");
+        offset = list->data.find('\0', offset) + 1;
+      }
+      return;
+    }
+
+    String(def[8]);
+    const auto idx = ReadGuestName(vm, def[4]);
+    const auto link = ReadGuestName(vm, def[3]);
+    const auto value = ReadGuestName(vm, def[8]);
+    Check((name == "INS_REG_PERSONAL_INITIALS" || name == "INS_REG_MACHINE_NUM") &&
+              uint32_t(def[2]) == 0x01000004 && def[10] == UINT64_MAX && !def[9] &&
+              idx == "Registry/Install Registration" &&
+              link.starts_with("FL:~/Tmp.DD.Z,") &&
+              value == (name == "INS_REG_MACHINE_NUM" ? "0" : "\"\""),
+          ("Invalid startup registration define " + name).c_str());
+  }
+
   void VerifyTable(uint64_t table, uint64_t parent, bool classes)
   {
     Allocation(table, 1, 32);
@@ -2262,14 +2309,17 @@ private:
             if (var[11])
               Callback(var[11], 0);
           } else if (type == 4) {
-            Check(classes, "Define in the wrong Adam table");
             Allocation(address, 1, 88);
             const auto def = Read<11>(address);
             String(def[1]);
-            String(def[8]);
-            Check(!def[3] && !def[4] && !def[5] && !def[6] &&
-                      !def[7] && !def[9] && def[10] == UINT64_MAX,
-                  "Unexpected compiler namespace definition");
+            Check(!def[5] && !def[6] && !def[7],
+                  "Unexpected Adam define relocation metadata");
+            if (classes) {
+              String(def[8]);
+              Check(!def[3] && !def[4] && !def[9] && def[10] == UINT64_MAX,
+                    "Unexpected compiler namespace definition");
+            } else
+              InstallRegistrationDefine(def);
           } else {
             Check(classes && (type == 1 || type == 0x200),
                   "Unexpected Adam namespace entry type");
@@ -2547,7 +2597,7 @@ static uint64_t VerifyRegistryHeap(CMonitor &vm, uint64_t owner, uint64_t adam)
   const auto head = doc + offsetof(CDoc, head);
   auto last = head;
   auto entry = ReadPhysical<1>(vm, head)[0];
-  unsigned trees = 0;
+  std::set<std::string> trees;
   for (unsigned count = 0; entry != head; count++) {
     Check(count < 64 && entry >= 16, "Invalid registry entry list");
     auto links = ReadPhysical<4>(vm, entry);
@@ -2559,16 +2609,17 @@ static uint64_t VerifyRegistryHeap(CMonitor &vm, uint64_t owner, uint64_t adam)
         extended ? sizeof(CDocEntry) : sizeof(CDocEntryBase));
     if (links[2]) {
       Check(flags & DOCEF_TAG, "Unexpected registry tag");
-      const auto allocation = ReadPhysical<2>(vm, links[2] - 16);
-      Check(allocation[0] == owner && allocation[1] >= 24 && allocation[1] <= 80,
-            "Invalid registry tag allocation");
-      used += allocation[1];
+      const auto tag = ReadGuestName(vm, links[2]);
+      used += VerifyCompilerAllocation(vm, links[2], owner, tag.size() + 1);
+      if (type == DOCT_TREE)
+        Check(tag.size() >= 3 && trees.insert(tag.substr(3)).second,
+              ("Invalid or duplicate default registry branch " + tag).c_str());
     }
-    trees += type == DOCT_TREE;
     last = entry;
     entry = links[0];
   }
-  Check(trees == 3 && ReadPhysical<2>(vm, head)[1] == last,
+  Check(trees == std::set<std::string>{"Adam", "InsReg", "SysMsgFlags", "SysRegVer"} &&
+            ReadPhysical<2>(vm, head)[1] == last,
         "Missing default registry branches");
   return used;
 }
@@ -2694,8 +2745,11 @@ static void VerifyPools(CMonitor &vm, const fs::path &dir,
                              asm_hash_used + raw_used + fifo_used +
                              compiler.data_used + cache_used + sector_cache_used +
                              source_used[1] + registry_used;
+  // Default registration executes four statements with inline string data.
+  // The compiler retains the StrCpy, two HashPublic, and Print allocations.
+  const uint64_t registry_code_used = desktop ? 64 + 88 + 88 + 96 : 0;
   uint64_t code_used = 0x42840 + fault_used + compiler.code_used + source_used[0] +
-                       (pool ? 0x5E8 : boot_used);
+                       registry_code_used + (pool ? 0x5E8 : boot_used);
   uint64_t data_used = boot_used, data_alloced = 0;
   BlockRanges data_used_ranges;
   for (auto task : {idle, winmgr, left, right}) {
