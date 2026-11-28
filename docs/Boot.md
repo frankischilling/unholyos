@@ -4616,6 +4616,13 @@ forward class or union declaration. A type used in a pointer declaration
 before its definition does not warn. `Cmp` reports two warnings and no
 errors, and the source probe reads back 42 through the completed types.
 
+`HeaderWarningProbe.HC` checks return-class warnings and changes to
+parameter names, classes, counts and defaults. It covers repeated
+forward headers, equal string defaults, the variadic comparison limit
+and disabling the mismatch warnings through `OPTf_WARN_HEADER_MISMATCH`.
+`Cmp` reports 25 warnings and no errors. `ExeFile` emits the same
+warnings, and the latest definition and default values produce 42.
+
 ```sh
 make -j4 test-compiler-warning
 build/Linux/TestBoot --compiler-warning-reference qemu-system-x86_64 \
