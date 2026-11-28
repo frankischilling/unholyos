@@ -70,6 +70,8 @@ static CHashClass *PrsClassDef(CCmpCtrl &cc, bool overlay, bool forward,
   auto *cls = reinterpret_cast<CHashClass *>(
       HashSingleTableFind(cc.cur_str, table, HTT_CLASS));
   bool reuse = cls && (cls->flags & CF_EXTERN);
+  if (reuse && !forward && cls->sym.hash.use_cnt < 3)
+    UnusedExternWarning(cc, *cls);
   if (!reuse) {
     cls = PrsClassNew();
     if (!cls)

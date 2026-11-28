@@ -4610,6 +4610,12 @@ unexpected return values, and the warning for a forward declaration with
 no uses. `Cmp` reports five warnings and no errors. `ExeFile` reports
 the same warnings, and the resolved function returns 42 at the prompt.
 
+`ForwardTypeWarningProbe.HC` runs in a fresh VM with the same settings.
+Both `Cmp` and `ExeFile` warn when the compiler completes an unused
+forward class or union declaration. A type used in a pointer declaration
+before its definition does not warn. `Cmp` reports two warnings and no
+errors, and the source probe reads back 42 through the completed types.
+
 ```sh
 make -j4 test-compiler-warning
 build/Linux/TestBoot --compiler-warning-reference qemu-system-x86_64 \
