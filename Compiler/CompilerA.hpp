@@ -253,6 +253,15 @@ CMemberLst *MemberAdd(CHashClass &owner, const char *name, CHashClass &cls,
 CHashClass *PrsClass(const CCmpCtrl &cc);
 CHashClass *PrsStars(CCmpCtrl &cc, CHashClass *cls);
 CHashClass *PrsClassNew();
+static_assert(sizeof(CHashFun) == 168 && offsetof(CHashFun, cls) == 0 &&
+              offsetof(CHashFun, return_class) == 128 &&
+              offsetof(CHashFun, arg_cnt) == 136 &&
+              offsetof(CHashFun, pad) == 140 &&
+              offsetof(CHashFun, used_reg_mask) == 144 &&
+              offsetof(CHashFun, clobbered_reg_mask) == 148 &&
+              offsetof(CHashFun, exe_addr) == 152 &&
+              offsetof(CHashFun, ext_lst) == 160);
+CHashFun *PrsFunNew();
 constexpr int8_t REG_UNDEF = INT8_MIN, REG_NONE = 32, REG_ALLOC = 33;
 bool PrsReg(CCmpCtrl &cc, int8_t &reg);
 struct CPrsDeclarator

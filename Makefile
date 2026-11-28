@@ -98,6 +98,9 @@ INTERNAL_TYPES_PROBE := Linux/Fixtures/InternalTypesProbe.HC
 INTERNAL_TYPES_TEST_ISO := $(BUILD)/internal-types-test.iso
 CLASS_RECORDS_PROBE := Linux/Fixtures/ClassRecordsProbe.HC
 CLASS_RECORDS_TEST_ISO := $(BUILD)/class-records-test.iso
+FUNCTION_RECORDS_PROBE := Linux/Fixtures/FunctionRecordsProbe.HC
+FUNCTION_RECORD_LAYOUT_PROBE := Linux/Fixtures/FunctionRecordLayoutProbe.HC
+FUNCTION_RECORDS_TEST_ISO := $(BUILD)/function-records-test.iso
 LIST_UTILITIES_PROBE := Linux/Fixtures/ListUtilitiesProbe.HC
 LIST_UTILITIES_TEST_ISO := $(BUILD)/list-utilities-test.iso
 STORAGE_SERVICES_PROBES := $(addprefix Linux/Fixtures/,DriveServicesProbe.HC PathNamesProbe.HC DirectoryServicesProbe.HC)
@@ -275,6 +278,7 @@ STARTUP_TEST_ISO := $(BUILD)/unholyos-startup-test.iso
 $(ISO) $(foreach target,$(filter %_ISO,$(.VARIABLES)),$($(target))): $(ADAM_STARTUP_SOURCES)
 
 .PHONY: all run test test-host-modules test-native-imports test-late-imports test-load-api test-load-pass2 test-compiler-defines test-string-defines test-system-defines test-color-conversions test-format-missing-args test-internal-types test-class-records
+.PHONY: test-function-records
 all: $(ISO)
 
 $(LOADER): Adam/Opt/Boot/BootDVD.asm Kernel/KernelA.inc
@@ -506,6 +510,9 @@ $(INTERNAL_TYPES_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(INT
 $(CLASS_RECORDS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(CLASS_RECORDS_PROBE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(CLASS_RECORDS_PROBE)
 
+$(FUNCTION_RECORDS_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(COMPILER_RESOURCE) $(COMPILER_MODULE) $(FUNCTION_RECORDS_PROBE) $(FUNCTION_RECORD_LAYOUT_PROBE) $(FILE_WRITE_PROBE)
+	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(FUNCTION_RECORDS_PROBE) --file $(FUNCTION_RECORD_LAYOUT_PROBE) --file $(FILE_WRITE_PROBE)
+
 $(LIST_UTILITIES_TEST_ISO): $(LOADER) $(KERNEL) $(ISO_TOOL) $(STARTUP_DOC) $(LIST_UTILITIES_PROBE) $(COMPILER_RESOURCE) $(COMPILER_MODULE)
 	$(ISO_TOOL) $(LOADER) $(KERNEL) $@ $(COMPILER_ISO_ARGS) --compress-at $(STARTUP_DOC).Z $(STARTUP_DOC) --dir Home --file $(LIST_UTILITIES_PROBE)
 
@@ -708,6 +715,12 @@ test-internal-types: $(INTERNAL_TYPES_TEST_ISO) $(BOOT_TEST)
 
 test-class-records: $(CLASS_RECORDS_TEST_ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --class-records "$(QEMU)" $(CLASS_RECORDS_TEST_ISO)
+
+test-function-records: $(FUNCTION_RECORDS_TEST_ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --function-records "$(QEMU)" $(FUNCTION_RECORDS_TEST_ISO)
+	$(BOOT_TEST) --function-records-layout "$(QEMU)" $(FUNCTION_RECORDS_TEST_ISO)
+
+test: test-function-records
 
 .PHONY: test-list-utilities
 test-list-utilities: $(LIST_UTILITIES_TEST_ISO) $(BOOT_TEST)

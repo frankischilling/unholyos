@@ -6,6 +6,7 @@ struct CTextProbe
   std::string_view first, finish, expected;
   std::span<const std::string_view> exceptions{};
   bool allow_prefix=false;
+  const char *reference_file=nullptr;
 };
 
 constexpr std::string_view str_scan_exceptions[]{
