@@ -774,9 +774,28 @@ private:
   int sock;
 };
 
-static uint64_t VerifyHandoff(const std::string &output,
+template <size_t Count>
+static std::array<uint64_t, Count> ReadPhysical(CMonitor &vm, uint64_t addr,
+                                                char width = 'g')
+{
+  std::ostringstream command;
+  command << "xp /" << Count << width << "x 0x" << std::hex << addr;
+  std::string reply = vm.Hmp(command.str());
+  const std::regex hex(R"(0x([0-9a-f]+))");
+  std::array<uint64_t, Count> values;
+  auto token = std::sregex_iterator(reply.begin(), reply.end(), hex);
+  for (auto &value : values) {
+    Check(token != std::sregex_iterator(), "QEMU physical memory read failed");
+    value = std::stoull((*token)[1].str(), nullptr, 16);
+    ++token;
+  }
+  Check(token == std::sregex_iterator(), "QEMU physical memory read overflow");
+  return values;
+}
+
+static uint64_t VerifyHandoff(CMonitor &vm, const std::string &output,
                               const CBootMedia &media,
-                              const std::string &registers)
+                              const std::string &registers, bool desktop)
 {
   const std::regex handoff(
       R"(DVD LBA (0x[0-9a-f]+), source (0x[0-9a-f]+), shift (0x[0-9a-f]+), )"
@@ -808,28 +827,15 @@ static uint64_t VerifyHandoff(const std::string &output,
         "QEMU registers disagree with kernel long mode handoff");
   Check(registers.find("GS =0060 0000000000100200") != std::string::npos,
         "GS does not point to the bootstrap CPU");
-  Check(registers.find("FS =0060 0000000000100300") != std::string::npos,
-        "FS does not point to Adam");
+  constexpr uint64_t boot_cpu_idle_task = 0x100200 + 0x40;
+  const auto expected_task =
+      desktop ? ReadPhysical<1>(vm, boot_cpu_idle_task)[0] : 0x100300;
+  Check(expected_task && std::regex_search(registers, match,
+                                          std::regex(R"(FS =0060 ([0-9a-f]+))")) &&
+            std::stoull(match[1].str(), nullptr, 16) == expected_task,
+        desktop ? "Idle FS does not point to the bootstrap CPU's idle task"
+                : "FS does not point to Adam before server startup");
   return heap;
-}
-
-template <size_t Count>
-static std::array<uint64_t, Count> ReadPhysical(CMonitor &vm, uint64_t addr,
-                                                char width = 'g')
-{
-  std::ostringstream command;
-  command << "xp /" << Count << width << "x 0x" << std::hex << addr;
-  std::string reply = vm.Hmp(command.str());
-  const std::regex hex(R"(0x([0-9a-f]+))");
-  std::array<uint64_t, Count> values;
-  auto token = std::sregex_iterator(reply.begin(), reply.end(), hex);
-  for (auto &value : values) {
-    Check(token != std::sregex_iterator(), "QEMU physical memory read failed");
-    value = std::stoull((*token)[1].str(), nullptr, 16);
-    ++token;
-  }
-  Check(token == std::sregex_iterator(), "QEMU physical memory read overflow");
-  return values;
 }
 
 struct CBootSymbols
@@ -978,7 +984,7 @@ static CCompilerState VerifyCompiler(CMonitor &vm, const fs::path &dir,
   const auto level = symbols.exports.find("SYS_RUN_LEVEL");
   Check(level != symbols.exports.end(), "Missing live compiler run level");
   Check(ReadPhysical<1>(vm, level->second, 'w')[0] ==
-            (phase == CBootPhase::Desktop ? 0x32FFu
+            (phase == CBootPhase::Desktop ? 0x432FFu
              : CompilerInitialized(phase) ? 0x12FFu : 0x2FFu),
         "Compiler run level was published before successful initialization");
   std::smatch match;
@@ -2564,17 +2570,27 @@ static void VerifyPools(CMonitor &vm, const fs::path &dir,
   Check(adam_heaps == std::array<uint64_t, 2>{adam_hc, expected_data_hc},
         "Invalid Adam heap selection");
   const uint64_t srv = adam + 0x3D8;
-  const auto waiting = ReadPhysical<2>(vm, srv);
-  Check(waiting[0] > 16 && waiting[0] != srv && waiting[0] == waiting[1],
-        "Missing the initial mouse position message");
-  auto initial = ReadPhysical<14>(vm, waiting[0]);
-  Check(initial[0] == srv && initial[1] == srv && initial[2] == srv &&
-            initial[3] == 1 && initial[5] == 4 && initial[9] == 320 &&
-            initial[10] == 240 && !initial[13],
-        "Invalid initial mouse position message");
-  auto allocation = ReadPhysical<2>(vm, waiting[0] - 16);
-  Check(allocation[0] == expected_data_hc && allocation[1] == 0x80,
-        "Invalid mouse message allocation");
+  const auto queues = ReadPhysical<4>(vm, srv);
+  uint64_t initial_message_used = 0;
+  if (desktop) {
+    constexpr uint64_t idle_and_awaiting = (1 << 3) | (1 << 9);
+    Check(queues == std::array<uint64_t, 4>{srv, srv, srv + 16, srv + 16} &&
+              (ReadPhysical<1>(vm, adam + 0x18)[0] & idle_and_awaiting) ==
+                  idle_and_awaiting,
+          "Adam did not flush its startup message and wait for jobs");
+  } else {
+    Check(queues[0] > 16 && queues[0] != srv && queues[0] == queues[1],
+          "Missing the initial mouse position message");
+    auto initial = ReadPhysical<14>(vm, queues[0]);
+    Check(initial[0] == srv && initial[1] == srv && initial[2] == srv &&
+              initial[3] == 1 && initial[5] == 4 && initial[9] == 320 &&
+              initial[10] == 240 && !initial[13],
+          "Invalid initial mouse position message");
+    auto allocation = ReadPhysical<2>(vm, queues[0] - 16);
+    Check(allocation[0] == expected_data_hc && allocation[1] == 0x80,
+          "Invalid mouse message allocation");
+    initial_message_used = allocation[1];
+  }
   uint64_t graphics_used = 0;
   if (desktop)
     graphics_used = VerifyGraphicsContexts(vm, graphics, expected_data_hc, true);
@@ -2625,7 +2641,7 @@ static void VerifyPools(CMonitor &vm, const fs::path &dir,
       VerifyDriveSectorCaches(vm, disk, expected_data_hc,
                               pool ? data.ranges : code.ranges);
   const uint64_t boot_used = range_bytes + late_used + symbol_used +
-                             drive_used + allocation[1] + graphics_used +
+                             drive_used + initial_message_used + graphics_used +
                              asm_hash_used + raw_used + fifo_used +
                              compiler.data_used + cache_used + sector_cache_used +
                              source_used[1];
@@ -2793,7 +2809,8 @@ static void VerifyFixedArea(CMonitor &vm, const fs::path &dir, uint64_t heap,
             ReadPhysical<1>(vm, adam + 8)[0] == 0x0052F3FF536B7354,
         "Invalid Adam task header");
   auto saved = ReadPhysical<2>(vm, adam + 0x120);
-  Check((saved[0] & 0x200) && saved[1] > stk + 24 && saved[1] <= top &&
+  Check(bool(saved[0] & 0x200) == !desktop && saved[1] > stk + 24 &&
+            saved[1] <= top &&
             ReadPhysical<1>(vm, adam + 0x310)[0] == stk &&
             ReadPhysical<3>(vm, stk) ==
                 std::array<uint64_t, 3>{0, top - stk - 24, 0},
@@ -2802,7 +2819,19 @@ static void VerifyFixedArea(CMonitor &vm, const fs::path &dir, uint64_t heap,
   Check(std::regex_search(registers, match, std::regex(R"(RSP=([0-9a-f]+))")),
         "Missing kernel stack pointer");
   uint64_t rsp = std::stoull(match[1].str(), nullptr, 16);
-  Check(rsp > stk + 24 && rsp <= top, "Kernel is not running on Adam's stack");
+  if (desktop) {
+    const auto idle_stk = ReadPhysical<1>(vm, idle + 0x310)[0];
+    Check(idle_stk > 16, "Missing idle task stack");
+    const auto idle_header = ReadPhysical<3>(vm, idle_stk);
+    const auto allocation = ReadPhysical<2>(vm, idle_stk - 16);
+    const auto data_heap = ReadPhysical<1>(vm, idle + 0x28)[0];
+    Check(idle_header[0] == 0 && idle_header[1] >= 0x40000 &&
+              idle_header[2] == 0 &&
+              allocation == std::array<uint64_t, 2>{data_heap, idle_header[1] + 40} &&
+              rsp == idle_stk + 24 + idle_header[1],
+          "Halted CPU is not on the idle task's stack");
+  } else
+    Check(rsp > stk + 24 && rsp <= top, "Kernel is not running on Adam's stack");
 
   uint64_t cur_dir = ram_end - 0x260, fpu = ram_end - 0x210;
   uint64_t hash = ram_end - 0x248;
@@ -3421,6 +3450,10 @@ constexpr CTextProbe adam_startup_probes[]{
 constexpr CTextProbe dev_info_probes[]{
     {"dev-info", "/DevInfoProbe.HC", "", "Device reports ", "Device reports ",
      "Device reports 3FF\n", {}, true}};
+
+constexpr CTextProbe cpu_rep_probes[]{
+    {"cpu-rep", "/CPURepProbe.HC", "", "CPU reports ", "CPU reports ",
+     "CPU reports FF\n", {}, true}};
 
 constexpr CTextProbe uasm_probes[]{
     {"uasm","/UAsmProbe.HC","","UAsm probe ","UAsm probe ",
@@ -5811,7 +5844,7 @@ static void VerifyGuestISO(const char *qemu, CMonitor &vm,
     CheckFontText(boot);
     auto registers = StopAtIdle(rebuilt);
     rebuilt.ResetDeadline(60s);
-    VerifyHandoff(boot, media, registers);
+    VerifyHandoff(rebuilt, boot, media, registers, true);
     VerifyBootDrive(rebuilt, boot, media, true, false);
     VerifyCompiler(rebuilt, reboot, boot, media, CBootPhase::Desktop);
     rebuilt.Command(R"({"execute":"cont"})");
@@ -5874,7 +5907,7 @@ static void TestBoot(const char *qemu, const fs::path &iso,
                 output.find("UnholyOS: Adam source failed /Adam/TaskRep.HC\r\n") != std::string::npos &&
                 output.find("UnholyOS: Adam source rollback, code bytes 0x0000000000000000, data bytes 0x0000000000000000\r\n") != std::string::npos,
             "Failed Adam startup did not discard its private source namespace");
-    uint64_t heap = VerifyHandoff(output, media, registers);
+    uint64_t heap = VerifyHandoff(vm, output, media, registers, desktop);
     const auto compiler = VerifyCompiler(vm, dir, output, media, phase);
     if (!startup)
       VerifyFixedArea(vm, dir, heap, registers, output, desktop, compiler);
@@ -6618,11 +6651,14 @@ int main(int argc, char **argv)
   std::string_view mode = argc > 1 ? argv[1] : "";
   if ((argc == 4 || argc == 5) &&
       (mode == "--adam-startup" || mode == "--adam-startup-reference" ||
-       mode == "--dev-info" || mode == "--dev-info-reference")) {
+       mode == "--dev-info" || mode == "--dev-info-reference" ||
+       mode == "--cpu-rep" || mode == "--cpu-rep-reference")) {
     const bool reference = mode.ends_with("-reference");
-    std::span<const CTextProbe> probes = mode.starts_with("--dev-info")
-                                           ? dev_info_probes
-                                           : adam_startup_probes;
+    std::span<const CTextProbe> probes = adam_startup_probes;
+    if (mode.starts_with("--dev-info"))
+      probes = dev_info_probes;
+    else if (mode.starts_with("--cpu-rep"))
+      probes = cpu_rep_probes;
     const auto &probe = probes.front();
     char path[] = "/tmp/unholyos-adam-startup-XXXXXX";
     if (argc == 4 && !mkdtemp(path))
@@ -7502,6 +7538,7 @@ int main(int argc, char **argv)
               << " --adam-mem-large[-reference|-aot] qemu image.iso [capture-dir]\n"
               << " --adam-task[-reference|-aot] qemu image.iso [capture-dir]\n"
               << " --dev-info[-reference] qemu image.iso [capture-dir]\n"
+              << " --cpu-rep[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
               << " --storage-services[-reference] qemu image.iso [capture-dir]\n"

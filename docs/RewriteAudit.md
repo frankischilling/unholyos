@@ -10,7 +10,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 69 | 7 |
 | `Compiler` | 33 | 33 | 0 |
-| `Adam` | 132 | 50 | 82 |
+| `Adam` | 132 | 51 | 81 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 22 | 181 |
 
@@ -105,6 +105,9 @@ part of the full rewrite.
 - `Adam/DevInfo.cpp` restores the three public device reports. The
   standard DVD includes the pinned PCI database, and the memory reports
   read the kernel's live boot and page-table records.
+- `Adam/CPURep.cpp` reports clock frequency and samples CPU yields and
+  TSC cycles. Adam enters the server loop after terminal startup so it can
+  service jobs. Application-processor startup remains outstanding.
 - `Adam/MakeAdam.cpp` compiles the unchanged math, memory and task-report
   sources during ordinary boot. Child tasks inherit the resulting Adam
   namespace instead of rebuilding compiler types independently. Missing
