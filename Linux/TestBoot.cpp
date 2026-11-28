@@ -7601,6 +7601,8 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--music-reference" ||
        std::string_view(argv[1]) == "--music-precision" ||
        std::string_view(argv[1]) == "--music-precision-reference" ||
+       std::string_view(argv[1]) == "--waveform" ||
+       std::string_view(argv[1]) == "--waveform-reference" ||
        std::string_view(argv[1]) == "--strings" ||
        std::string_view(argv[1]) == "--strings-reference" ||
        std::string_view(argv[1]) == "--compiler-defines" ||
@@ -7686,6 +7688,7 @@ int main(int argc, char **argv)
        std::string_view(argv[1]) == "--form")) {
     bool character = std::string_view(argv[1]).starts_with("--character-graphics");
     bool music_precision = std::string_view(argv[1]).starts_with("--music-precision");
+    bool waveform = std::string_view(argv[1]).starts_with("--waveform");
     bool music_demo = std::string_view(argv[1]).starts_with("--music") && !music_precision;
     bool tic = std::string_view(argv[1]).starts_with("--tic-tac-toe");
     bool breaks = std::string_view(argv[1]).starts_with("--break");
@@ -7762,6 +7765,8 @@ int main(int argc, char **argv)
       text_probes = math_probes;
     else if (music_precision)
       text_probes = music_precision_probes;
+    else if (waveform)
+      text_probes = waveform_probes;
     else if (std::string_view(argv[1]).starts_with("--strings"))
       text_probes = string_probes;
     else if (assert_warning)
@@ -7852,6 +7857,9 @@ int main(int argc, char **argv)
       if (character && !reference)
         VerifyHostModuleMedia(argv[3],"Linux/Fixtures/CharPanObserver.HC",
                               "CharPanObserver.HC");
+      if (waveform && !reference)
+        VerifyHostModuleMedia(argv[3], "Linux/Fixtures/WaveformProbe.HC",
+                              "WaveformProbe.HC");
       if (bit_field_probe && !reference)
         VerifyHostModuleMedia(argv[3], "Linux/Fixtures/BitFieldProbe.HC",
                               "BitFieldProbe.HC");
@@ -8165,6 +8173,7 @@ int main(int argc, char **argv)
               << "       " << argv[0] << " --music[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --music-precision[-reference] qemu image.iso [capture-dir]\n"
+              << " --waveform[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]
               << " --tic-tac-toe[-reference] qemu image.iso [capture-dir]\n"
               << "       " << argv[0]

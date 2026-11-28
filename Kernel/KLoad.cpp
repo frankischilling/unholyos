@@ -296,6 +296,7 @@ void CPURepHC(), PCIRepHC(), MemBIOSRepHC(), MemPageRepHC();
 void tSHC(), BusyHC(), SleepUntilHC(), SleepHC(), Ona2FreqHC(), Freq2OnaHC();
 void SndHC(), ScrnCastHC(), SndRstHC(), BeepHC(), MuteHC(), IsMuteHC();
 void SndShiftHC(), AUWriteHC();
+void SawHC(), FullSawHC(), CawHC(), FullCawHC(), TriHC(), FullTriHC();
 void SndTaskEndCBHC(), tMHC(), BeatHC(), MusicSetOctaveHC(), MusicSetMeterHC();
 void MusicSetNoteLenHC(), Note2OnaHC(), Ona2NoteHC(), Ona2OctaveHC();
 void PlayHC(), MusicSettingsRstHC();
@@ -1470,6 +1471,12 @@ bool LoadKernel(CTask &task)
       {"AUWrite", reinterpret_cast<uintptr_t>(AUWriteHC)},
       {"SndRst", reinterpret_cast<uintptr_t>(SndRstHC)},
       {"SndTaskEndCB", reinterpret_cast<uintptr_t>(SndTaskEndCBHC)},
+      {"Saw", reinterpret_cast<uintptr_t>(SawHC)},
+      {"FullSaw", reinterpret_cast<uintptr_t>(FullSawHC)},
+      {"Caw", reinterpret_cast<uintptr_t>(CawHC)},
+      {"FullCaw", reinterpret_cast<uintptr_t>(FullCawHC)},
+      {"Tri", reinterpret_cast<uintptr_t>(TriHC)},
+      {"FullTri", reinterpret_cast<uintptr_t>(FullTriHC)},
       {"tM", reinterpret_cast<uintptr_t>(tMHC)},
       {"Beat", reinterpret_cast<uintptr_t>(BeatHC)},
       {"MusicSetOctave", reinterpret_cast<uintptr_t>(MusicSetOctaveHC)},
