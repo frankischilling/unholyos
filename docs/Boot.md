@@ -4085,6 +4085,31 @@ no additional live code or data allocations. Neither reaches Adam
 graphics or terminal initialization. The original complete `StartOS.HC`
 and `MakeAdam.HC` project sequence has not yet been executed.
 
+## Adam device reports
+
+`DevInfoProbe.HC` calls `PCIRep`, `MemBIOSRep` and `MemPageRep` from
+the HolyC terminal and examines the saved DolDoc output. It checks the
+Intel host bridge and IDE controller names and class codes, the
+`Unknown` fallback, repeated PCI output, the 32-bit device window, the
+E801 and E820 memory ranges, and all three page counts. The standard
+DVD ships the pinned `Misc/PCIDevices.DD` at its compressed path.
+
+```sh
+make -j2 test-dev-info
+make -j2 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-dev-info
+build/Linux/TestBoot --dev-info-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/dev-info-reference
+```
+
+GCC 13.3.0, Clang 20.1.2 and the pinned TempleOS distribution all
+reported `Device reports 3FF` with QEMU 8.2.2, `pc`, `qemu64`,
+512 MiB and one vCPU. In WSL, use a copy of the reference ISO on the
+Linux filesystem so the installer and tour prompts arrive in time
+for the harness. The run used the distribution with SHA-256
+`3c68ca395d0b64f779f1ffa330e2685798b17862e3c36ae4e349537fd676b40b`.
+The probe covers the report fields above on that VM configuration.
+[Pinned device report source and database](https://github.com/cia-foundation/TempleOS/tree/c26482bb6ad3f80106d28504ec5db3c6a360732c)
+
 ## Nested images, FAT32 backing, and mounted ISO generation
 
 The shared `NestedRedSeaProbe.HC`, `RedSeaFreeListProbe.HC`, and `Fat32ImageProbe.HC` fixtures run on
