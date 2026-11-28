@@ -116,6 +116,7 @@ GLOBAL DocReadHC,DocTypeHC,TypeHC
 GLOBAL DocCutHC,DocCopyHC,DocTreeFindHC,DocTreeFFindHC,DocTreeMakeHC
 GLOBAL DocTreeWriteHC,DocTreeAppendHC,DocTreeFWriteHC,DocTreeFAppendHC
 GLOBAL DocTreeWriteJoinHC,DocTreeAppendJoinHC,ExeDocHC,DocTreeExeHC,DocTreeFExeHC
+GLOBAL RegDftHC,RegExeHC,RegWriteHC,RegCntHC,RegAppendHC,AdamHC
 GLOBAL DocCompileHC
 GLOBAL DocPrintHC,Doc2PlainTextHC,DocBinsValidateHC,DocPutLineHC,DocPutKeyHC
 GLOBAL DocPutHC,DocDisplayHC,DocBorderHC,DocRecalcHC,WinHorzHC,WinVertHC
@@ -381,6 +382,7 @@ EXTERN DocReadCpp,DocTypeCpp,TypeCpp
 EXTERN DocCutCpp,DocCopyCpp,DocTreeFindCpp,DocTreeFFindCpp,DocTreeMakeCpp
 EXTERN DocTreeWriteCpp,DocTreeAppendCpp,DocTreeFWriteCpp,DocTreeFAppendCpp
 EXTERN ExeDocCpp,DocTreeExeCpp,DocTreeFExeCpp
+EXTERN RegDftCpp,RegExeCpp,RegWriteCpp,RegCntCpp,RegAppendCpp,AdamCpp
 EXTERN DocCompileCpp
 EXTERN DocPrintCpp,Doc2PlainTextCpp,DocBinsValidateCpp,DocPutLineCpp,DocPutKeyCpp
 EXTERN DocPutCpp,DocDisplayCpp,DocBorderCpp,DocRecalcCpp,WinHorzCpp,WinVertCpp
@@ -949,6 +951,11 @@ HOLYC_CPP ExeDocHC,ExeDocCpp,2
 HOLYC_CPP DocCompileHC,DocCompileCpp,1
 HOLYC_CPP DocTreeExeHC,DocTreeExeCpp,2
 HOLYC_CPP DocTreeFExeHC,DocTreeFExeCpp,2
+HOLYC_CPP RegDftHC,RegDftCpp,3
+HOLYC_CPP RegExeHC,RegExeCpp,1
+HOLYC_PRINT RegWriteHC,RegWriteCpp,2
+HOLYC_CPP RegCntHC,RegCntCpp,1
+HOLYC_PRINT RegAppendHC,RegAppendCpp,2
 ; Fixed arguments followed by the HolyC inline variadic arguments.
 %macro DOC_TREE_PRINT 3
 %1:
@@ -1012,6 +1019,7 @@ HOLYC_CPP IsMuteHC,IsMuteCpp,0
 HOLYC_CPP PutFileLinkHC,PutFileLinkCpp,4
 HOLYC_CPP PutSrcLinkHC,PutSrcLinkCpp,3
 HOLYC_CPP FixSetHC,FixSetCpp,2
+HOLYC_PRINT AdamHC,AdamCpp,1
 HOLYC_PRINT AdamErrHC,AdamErrCpp,1
 
 DefineLoadHC:

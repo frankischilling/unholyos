@@ -225,6 +225,10 @@ extern "C" void KMainCpp()
   adam_task->win_inhibit |= WIF_SELF_FOCUS;
   SYS_RUN_LEVEL |= RLF_DOC;
   adam_task->display_flags |= DISPLAYF_CHILDREN_NOT_ON_TOP;
+  if (RegInit())
+    SYS_RUN_LEVEL |= RLF_REGISTRY;
+  else
+    SerialPutS("UnholyOS: Could not initialize the registry\r\n");
   DbgModeCpp(false);
   if (!StartUpTasks())
     SerialPutS("UnholyOS: Could not start the user task\r\n");

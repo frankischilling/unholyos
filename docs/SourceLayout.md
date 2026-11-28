@@ -1949,9 +1949,26 @@ entry ranges with owned payloads and cuts ranges without deleting the
 document sentinel. The native `ExeDoc` attaches a root document to a
 compiler context, executes it through the normal statement compiler and
 restores the context and document lock on failure. Branch execution copies
-the selected range before compiling it. Unlike the reference, it releases
-the original document lock before executing the copy. The registry can
-use these operations once its remaining runtime dependencies are available.
+the selected range before compiling it and releases the original document
+lock before executing the copy.
+
+## Registry
+
+`Adam/ARegistry.cpp` follows `Adam/ARegistry.HC` for the cached
+`~/Registry.HC.Z` document, branch defaults, execution, counts, writes, and
+appends. The document belongs to Adam's heap. `Kernel/KMain.cpp` initializes
+it after DolDoc is available and before spawning the user terminals, at
+the registry stage of the reference's `StartOS.HC`. The compiler exposes
+the registry document pointer, message flags array, and version fields with
+their HolyC types. The guest stores the two F64 version values as their
+64-bit representations on the C++ side.
+
+`RegDft` releases the document lock before dispatching an Adam entry and
+reacquires it to save. A caller waiting for Adam then allows Adam to enter
+the registry. `Kernel/Job.cpp` uses its existing execute job and
+`JobResGet` to wait and reap the result. `RegWrite` and `RegAppend` share
+the DolDoc tree writers. The Once queue, installer registration, and
+one-time popups remain pending.
 
 ## Original Adam memory inspection
 

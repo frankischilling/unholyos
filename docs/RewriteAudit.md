@@ -10,7 +10,7 @@ in UnholyOS. It includes include-only and project-organization files.
 | --- | ---: | ---: | ---: |
 | `Kernel` | 76 | 69 | 7 |
 | `Compiler` | 33 | 33 | 0 |
-| `Adam` | 132 | 53 | 79 |
+| `Adam` | 132 | 54 | 78 |
 | `Apps` | 71 | 3 | 68 |
 | `Demo` | 203 | 22 | 181 |
 
@@ -122,9 +122,12 @@ part of the full rewrite.
   replacement, append, file persistence and execution from the actual
   document entries. `DocClipBoard.cpp` supplies inclusive range copy and
   cut. Both native toolchains execute the shared tree fixture in JIT and
-  AOT mode, including a caught Break and read-only media. Registry startup,
-  the remaining clipboard operations, and popup/menu integration remain
-  outstanding.
+  AOT mode, including a caught Break and read-only media. The remaining
+  clipboard operations and popup/menu integration remain outstanding.
+- `Adam/ARegistry.cpp` initializes the registry before user startup and
+  implements the original branch defaults, execution, counts, writes,
+  and appends. The Once queue, installer registration, and one-time
+  popups remain pending.
   Complete the window manager, DolDoc, editor, graphics, audio, terminal
   and system tools in their respective reference subsystems.
 - Include the remaining applications, demos, documentation and assets,

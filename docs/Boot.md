@@ -4114,6 +4114,37 @@ build/Linux/TestBoot --doc-tree-reference qemu-system-x86_64 \
   /path/to/pinned/TOS_Distro.ISO build/doc-tree-reference
 ```
 
+## Registry startup and demo
+
+Adam opens `~/Registry.HC.Z` and executes its `Adam` branch before the
+user terminals start. The packaged `Demo/RegistryDemo.HC` is Terry A.
+Davis's original file from TempleOS revision
+`c26482bb6ad3f80106d28504ec5db3c6a360732c`. It prints
+`High Score:1.23000` and `Val:1234` on its first run in both guests.
+The probe then reads back the incremented value and tests branch defaults,
+counts, replacement, append, execution in Adam, and saving and reopening
+a compressed registry on a writable RedSea RAM drive.
+
+The native test ISO boots with a read-only registry containing version
+4.0 and message flags 123. The check requires the cached version to
+match the running OS and the saved flags to survive initialization.
+The pinned distribution starts with no registry file and flags 0.
+Both guests report `Registry probe 7F` with their respective starting flags.
+
+```sh
+make -j4 test-registry
+make -j4 BUILD=build/clang CXX=clang++-20 HOSTCXX=clang++-20 test-registry
+build/Linux/TestBoot --registry-reference qemu-system-x86_64 \
+  /path/to/pinned/TOS_Distro.ISO build/registry-reference
+```
+
+The harness boots `build/registry-test.iso` or the pinned DVD with QEMU
+8.2.2 using `-machine pc -cpu qemu64 -m 512 -boot d -cdrom <iso>` and
+the default single CPU. It runs the source through the guest terminal.
+The builds use GCC 13.3.0 or Clang 20.1.2 and NASM 2.16.01.
+The Once queue and installer
+registration are outside these checks.
+
 ## Adam device reports
 
 `DevInfoProbe.HC` calls `PCIRep`, `MemBIOSRep` and `MemPageRep` from

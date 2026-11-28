@@ -1,8 +1,6 @@
 #include "DolDoc.hpp"
 #include "../../Compiler/CompilerA.hpp"
 
-extern "C" uint64_t DocWriteCpp(CDoc *doc, uint8_t prompt);
-
 static bool TreeName(const CDocEntryBase &entry, const char *name)
 {
   return (entry.de_flags & DOCEF_TREE) && entry.tag &&
