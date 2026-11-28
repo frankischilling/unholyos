@@ -857,6 +857,12 @@ test-popup-menus: $(POPUP_TEST_ISO) $(BOOT_TEST)
 
 test: test-popup-menus
 
+.PHONY: test-menu-diagnostic
+test-menu-diagnostic: $(ISO) $(BOOT_TEST)
+	$(BOOT_TEST) --menu-diagnostic "$(QEMU)" $(ISO)
+
+test: test-menu-diagnostic
+
 .PHONY: test-progress
 test-progress: $(ISO) $(BOOT_TEST)
 	$(BOOT_TEST) --progress "$(QEMU)" $(ISO)

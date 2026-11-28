@@ -150,6 +150,8 @@ static CMenu *MenuNew(const char *st, int64_t flags, CTask *task,
     okay = false;
   }
   exception = cc.jit_exception;
+  if (!okay && !exception)
+    LexExceptReport(cc, error);
   QueRem(cc);
   LexSourceDel(cc);
   if (!okay) {
@@ -163,11 +165,8 @@ static void MenuExcept(const char *error, uint64_t exception)
 {
   if (exception)
     RethrowHolyC();
-  if (error) {
-    PutS(error);
-    PutS("\n");
+  if (error)
     ThrowCpp(COMPILER_ERROR, true, nullptr);
-  }
 }
 
 extern "C" CMenu *MenuNewCpp(const char *st, int64_t flags, CTask *task)

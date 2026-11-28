@@ -803,8 +803,11 @@ code in `Adam/Menu.HC`. Menu arguments use the HolyC lexer and expression
 evaluator, including lexical includes for menu files. `CMenu` and
 `CMenuEntry` keep the reference record layouts and `CTask.cur_menu`
 points to the top of the menu stack. Menu parse failures throw the
-`Compiler` exception. The source-position report in
-`Compiler/CExcept.HC`'s `LexExcept` remains pending.
+`Compiler` exception. `LexExceptReport` follows the source-position report
+in `Compiler/CExcept.HC`. It prints the token, file link and source line,
+and passes the location to `FixSet`. `MenuNew` reports before freeing the
+lexer context and raises the exception after cleanup. The boot-phase
+debugger entry, compiler error counter and other parser callers remain pending.
 
 `Adam/WinMgr.cpp` follows `WinKeyNavMenu` and the mouse menu loop in
 `Adam/WinMgr.HC`. Mouse selection starts at the screen's top edge.

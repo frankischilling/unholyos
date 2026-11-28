@@ -140,7 +140,8 @@ constexpr std::string_view compiler_native_names[]{"AsmHashLoad",
                                                    "LexAttachDoc",
                                                    "LexRaw",
                                                    "LexExpression2Bin",
-                                                   "ExeFile"};
+                                                   "ExeFile",
+                                                   "LexExceptReport"};
 constexpr std::string_view compiler_public_names[]{
     "Cmp", "ExePutS", "ExePrint", "ExeFile", "RunFile", "ExePutS2",
     "ExePrint2", "ExeFile2", "RunFile2", "_LAST_FUN", "LastFun", "StreamExePrint",
@@ -7254,6 +7255,30 @@ int main(int argc, char **argv)
       return 1;
     }
   }
+  if ((argc == 4 || argc == 5) &&
+      (mode == "--menu-diagnostic" || mode == "--menu-diagnostic-reference")) {
+    const bool reference = mode.ends_with("-reference");
+    char path[] = "/tmp/unholyos-menu-diagnostic-XXXXXX";
+    if (argc == 4 && !mkdtemp(path))
+      return 1;
+    const auto dir = argc == 5 ? fs::absolute(argv[4]) : fs::path(path);
+    try {
+      fs::create_directories(dir);
+      CMonitor vm(argv[2], argv[3], dir, "pc", "512", false, {}, false, reference);
+      vm.Connect();
+      DriveCharacterGraphics(vm, dir, reference ? "" : vm.Boot(dir / "serial.log"),
+                             reference, false, false, false, false, false,
+                             false, false, false, {}, {}, 0x20000000, {},
+                             CStockStartup::None, CDesktopTest::MenuDiagnostic);
+      vm.Quit();
+      if (argc == 4)
+        fs::remove_all(dir);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n' << "Evidence: " << dir << '\n';
+      return 1;
+    }
+  }
   if ((argc==5 || argc==6) &&
       (std::string_view(argv[1])=="--database-persistent" ||
        std::string_view(argv[1])=="--database-persistent-reference")) {
@@ -7980,6 +8005,7 @@ int main(int argc, char **argv)
               << " --dictionary-reference qemu image.iso [capture-dir]\n"
               << " --dictionary-install[-reference] qemu image.iso disk.img [capture-dir]\n"
               << " --dictionary-generator[-reference|-holyc][-check] qemu image.iso disk.img [capture-dir]\n"
+              << " --menu-diagnostic[-reference] qemu image.iso [capture-dir]\n"
               << " --stock-once qemu image.iso [capture-dir]\n"
               << " --uasm[-reference] qemu image.iso [capture-dir]\n"
               << " --uasm-aot qemu image.iso [capture-dir]\n"
